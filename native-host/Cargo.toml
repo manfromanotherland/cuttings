@@ -15,3 +15,6 @@ read-later-core = { path = "../core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"

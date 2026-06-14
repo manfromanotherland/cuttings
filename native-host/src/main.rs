@@ -141,3 +141,166 @@ mod tests {
         assert_eq!(resp.error.as_deref(), Some("invalid_request"));
     }
 }
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    // Serialize all tests that touch READ_LATER_LIBRARY to avoid races.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn save_message(url: &str) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "protocol_version": 1,
+            "action": "save",
+            "metadata": {
+                "url": url,
+                "canonical_url": url,
+                "title": "Test Article",
+                "saved_at": "2026-06-13T15:00:00Z"
+            },
+            "markdown": "# Test Article\n\nSome content here.\n",
+            "image_urls": []
+        }))
+        .unwrap()
+    }
+
+    fn with_library<F, R>(f: F) -> R
+    where
+        F: FnOnce(&TempDir) -> R,
+    {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("READ_LATER_LIBRARY", dir.path());
+        let result = f(&dir);
+        std::env::remove_var("READ_LATER_LIBRARY");
+        result
+    }
+
+    #[test]
+    fn save_writes_article_to_disk() {
+        with_library(|dir| {
+            let resp = dispatch(&save_message("https://example.com/article-1"));
+            assert!(resp.ok, "expected ok, got error: {:?}", resp.error);
+
+            let id = resp.id.as_deref().unwrap();
+            let article_path = dir.path().join("articles").join(format!("{id}.md"));
+            assert!(
+                article_path.exists(),
+                "article file was not written to disk"
+            );
+
+            let content = std::fs::read_to_string(&article_path).unwrap();
+            assert!(
+                content.contains("format_version: 1"),
+                "missing format_version in frontmatter"
+            );
+            assert!(content.contains("Test Article"), "missing title in file");
+            assert!(
+                content.contains("Some content here."),
+                "missing body in file"
+            );
+        });
+    }
+
+    #[test]
+    fn success_response_shape() {
+        with_library(|_dir| {
+            let resp = dispatch(&save_message("https://example.com/resp-shape"));
+            assert!(resp.ok);
+
+            let id = resp
+                .id
+                .as_deref()
+                .expect("id missing from success response");
+            assert_eq!(id.len(), 26, "ULID must be 26 chars");
+
+            let path = resp
+                .path
+                .as_deref()
+                .expect("path missing from success response");
+            assert_eq!(path, format!("articles/{id}.md"));
+        });
+    }
+
+    #[test]
+    fn duplicate_url_returns_duplicate_error() {
+        with_library(|_dir| {
+            let msg = save_message("https://example.com/dup");
+            dispatch(&msg);
+            let resp = dispatch(&msg);
+            assert!(!resp.ok, "second save with same canonical_url should fail");
+            assert_eq!(resp.error.as_deref(), Some("duplicate"));
+            assert!(
+                resp.message
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("already exists"),
+                "duplicate message should mention the conflict"
+            );
+        });
+    }
+
+    #[test]
+    fn no_library_returns_library_not_configured() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("READ_LATER_LIBRARY");
+
+        let resp = dispatch(&save_message("https://example.com/no-lib"));
+        assert!(!resp.ok);
+        assert_eq!(resp.error.as_deref(), Some("library_not_configured"));
+    }
+
+    #[test]
+    fn failed_image_download_leaves_comment_in_markdown() {
+        with_library(|dir| {
+            let msg = serde_json::to_vec(&serde_json::json!({
+                "protocol_version": 1,
+                "action": "save",
+                "metadata": {
+                    "url": "https://example.com/img-test",
+                    "canonical_url": "https://example.com/img-test",
+                    "title": "Image Fail Test",
+                    "saved_at": "2026-06-13T15:00:00Z"
+                },
+                "markdown": "# Image Fail Test\n\n![Photo](http://127.0.0.1:1/photo.jpg)\n",
+                "image_urls": ["http://127.0.0.1:1/photo.jpg"]
+            }))
+            .unwrap();
+
+            let resp = dispatch(&msg);
+            assert!(
+                resp.ok,
+                "save should succeed even when image download fails"
+            );
+
+            let id = resp.id.as_deref().unwrap();
+            let content =
+                std::fs::read_to_string(dir.path().join("articles").join(format!("{id}.md")))
+                    .unwrap();
+            assert!(
+                content.contains("asset-fetch-failed"),
+                "expected <!-- asset-fetch-failed --> comment for unreachable image"
+            );
+        });
+    }
+
+    #[test]
+    fn missing_required_field_returns_invalid_request() {
+        // canonical_url, title, and saved_at are all absent — serde must reject this.
+        let msg = serde_json::to_vec(&serde_json::json!({
+            "protocol_version": 1,
+            "action": "save",
+            "metadata": { "url": "https://example.com" },
+            "markdown": "# Test",
+            "image_urls": []
+        }))
+        .unwrap();
+
+        let resp = dispatch(&msg);
+        assert!(!resp.ok);
+        assert_eq!(resp.error.as_deref(), Some("invalid_request"));
+    }
+}

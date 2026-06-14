@@ -685,6 +685,7 @@ dependencies = [
  "read-later-core",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
