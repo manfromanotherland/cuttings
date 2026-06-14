@@ -103,6 +103,8 @@ struct MarkdownWebView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.libraryURL = libraryURL
+        // Re-assert the delegate on every render in case the view was recreated.
+        webView.navigationDelegate = context.coordinator
         webView.loadHTMLString(wrappedHTML, baseURL: nil)
     }
 
