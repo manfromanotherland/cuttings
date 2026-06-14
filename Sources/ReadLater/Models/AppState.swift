@@ -20,6 +20,7 @@ final class AppState: ObservableObject {
 
     private var core: CoreBridge?
     private var accessedURL: URL?
+    private var watcher: LibraryWatcher?
 
     init() {
         if let url = LibraryBookmark.resolve() {
@@ -65,6 +66,7 @@ final class AppState: ObservableObject {
             core = bridge
             libraryURL = url
             HostInstaller.installIfNeeded()
+            startWatcher(libraryPath: url.path)
             await loadReadings()
         } catch {
             self.error = error.localizedDescription
@@ -99,6 +101,26 @@ final class AppState: ObservableObject {
             }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    // ── Incremental sync (called by FSEvents watcher) ─────────────────────
+
+    func sync() async {
+        guard let core else { return }
+        do {
+            let changed = try await core.sync()
+            if changed > 0 { await loadReadings() }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func startWatcher(libraryPath: String) {
+        watcher = LibraryWatcher(libraryPath: libraryPath) { [weak self] in
+            Task { @MainActor [weak self] in
+                await self?.sync()
+            }
         }
     }
 
