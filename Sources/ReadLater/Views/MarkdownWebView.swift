@@ -3,14 +3,67 @@
 import SwiftUI
 import WebKit
 
-/// A SwiftUI view that renders an HTML string in a WKWebView.
-///
-/// `baseURL` should point to the article's parent directory (`articles/`) so
-/// that relative image paths like `../assets/<id>/<hash>.jpg` resolve correctly.
+// Custom URL scheme used to serve local article assets.
+// Registered once per WKWebView; the handler is updated with the current
+// library URL before each page load.
+private let assetScheme = "readlater"
+
+final class AssetSchemeHandler: NSObject, WKURLSchemeHandler {
+    var libraryURL: URL?
+
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        guard
+            let libraryURL,
+            let url = task.request.url,
+            url.scheme == assetScheme
+        else {
+            task.didFailWithError(URLError(.fileDoesNotExist))
+            return
+        }
+
+        // URL is readlater://assets/<id>/<filename>
+        // url.host = "assets", url.path = "/<id>/<filename>"
+        let relative = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+        let fileURL = libraryURL
+            .appendingPathComponent("assets")
+            .appendingPathComponent(relative)
+
+        guard let data = try? Data(contentsOf: fileURL) else {
+            task.didFailWithError(URLError(.fileDoesNotExist))
+            return
+        }
+
+        let mime: String
+        switch fileURL.pathExtension.lowercased() {
+        case "png":  mime = "image/png"
+        case "gif":  mime = "image/gif"
+        case "webp": mime = "image/webp"
+        case "svg":  mime = "image/svg+xml"
+        default:     mime = "image/jpeg"
+        }
+
+        let response = URLResponse(
+            url: url, mimeType: mime,
+            expectedContentLength: data.count,
+            textEncodingName: nil
+        )
+        task.didReceive(response)
+        task.didReceive(data)
+        task.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+}
+
 struct MarkdownWebView: NSViewRepresentable {
     let html: String
+    let libraryURL: URL?
     var font: ReaderFont = .system
     var fontSize: ReaderFontSize = .medium
+
+    func makeCoordinator() -> AssetSchemeHandler {
+        AssetSchemeHandler()
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         let prefs = WKWebpagePreferences()
@@ -18,6 +71,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences = prefs
+        config.setURLSchemeHandler(context.coordinator, forURLScheme: assetScheme)
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
@@ -25,6 +79,7 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        context.coordinator.libraryURL = libraryURL
         webView.loadHTMLString(wrappedHTML, baseURL: nil)
     }
 
