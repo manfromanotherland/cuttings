@@ -80,7 +80,10 @@ fn content_type_to_ext(ct: &str) -> Option<&'static str> {
 fn url_ext(url: &str) -> Option<String> {
     let path = url.split('?').next()?;
     let filename = path.rsplit('/').next()?;
-    let ext = filename.rsplit('.').next()?;
+    // rsplitn(2) gives [ext, stem]; if there's no dot we only get one part → None
+    let mut parts = filename.rsplitn(2, '.');
+    let ext = parts.next()?;
+    parts.next()?; // require a stem before the dot
     if ext.len() <= 5 && ext.chars().all(|c| c.is_ascii_alphanumeric()) {
         Some(ext.to_ascii_lowercase())
     } else {
