@@ -3,8 +3,6 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 
-use crate::Metadata;
-
 /// Smart-view filter applied when listing readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -82,48 +80,46 @@ pub struct ReadingRow {
 
 /// List readings from the index according to `opts`.
 pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
-    let (view_clause, archived_val, read_val) = match opts.view {
-        View::All => ("archived = 0", None, None),
-        View::Unread => ("archived = 0 AND read = 0", None, None),
-        View::Archive => ("archived = 1", None, None),
-        View::Favorites => ("favorite = 1", None, None),
+    let view_clause = match opts.view {
+        View::All => "archived = 0",
+        View::Unread => "archived = 0 AND read = 0",
+        View::Archive => "archived = 1",
+        View::Favorites => "favorite = 1",
     };
-    let _ = (archived_val, read_val); // consumed via view_clause string
 
     let order = match opts.sort {
         SortOrder::NewestFirst => "saved_at DESC",
         SortOrder::OldestFirst => "saved_at ASC",
     };
 
-    // Build WHERE clauses dynamically. Using a fixed SQL template with
-    // optional placeholders keeps the query simple and avoids string injection.
-    let tag_clause = if opts.tag.is_some() {
-        // tags_json is a JSON array; EXISTS with json_each is safe and index-free.
-        "AND EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3)"
-    } else {
-        ""
-    };
-    let since_clause = if opts.since.is_some() { "AND saved_at >= ?4" } else { "" };
-    let until_clause = if opts.until.is_some() { "AND saved_at <= ?5" } else { "" };
-
+    // Optional filters use empty-string sentinels so the SQL is always static
+    // with exactly 5 bound parameters — no dynamic param count issues.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 read, archived, favorite, excerpt, word_count, lang, tags_json
          FROM readings
-         WHERE {view_clause} {tag_clause} {since_clause} {until_clause}
+         WHERE {view_clause}
+           AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
+           AND (?4 = '' OR saved_at >= ?4)
+           AND (?5 = '' OR saved_at <= ?5)
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
 
     let mut stmt = conn.prepare(&sql)?;
 
-    // Bind the fixed params first, then optionals at known positions.
     let tag_val = opts.tag.as_deref().unwrap_or("");
     let since_val = opts.since.as_deref().unwrap_or("");
     let until_val = opts.until.as_deref().unwrap_or("");
 
     let rows = stmt.query_map(
-        params![opts.limit as i64, opts.offset as i64, tag_val, since_val, until_val],
+        params![
+            opts.limit as i64,
+            opts.offset as i64,
+            tag_val,
+            since_val,
+            until_val
+        ],
         parse_row,
     )?;
 
@@ -227,8 +223,14 @@ mod tests {
 
         rebuild(&conn, &lib).unwrap();
 
-        let rows = list_readings(&conn, &ListOptions { view: View::All, ..Default::default() })
-            .unwrap();
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::All,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "A");
     }
@@ -238,7 +240,12 @@ mod tests {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
 
-        write_reading(&lib, meta(&new_id(), "https://a.com", "Unread"), "body".into()).unwrap();
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://a.com", "Unread"),
+            "body".into(),
+        )
+        .unwrap();
 
         let mut read_meta = meta(&new_id(), "https://b.com", "Read");
         read_meta.read = true;
@@ -246,9 +253,14 @@ mod tests {
 
         rebuild(&conn, &lib).unwrap();
 
-        let rows =
-            list_readings(&conn, &ListOptions { view: View::Unread, ..Default::default() })
-                .unwrap();
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Unread,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Unread");
     }
@@ -258,16 +270,26 @@ mod tests {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
 
-        write_reading(&lib, meta(&new_id(), "https://a.com", "Active"), "body".into()).unwrap();
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://a.com", "Active"),
+            "body".into(),
+        )
+        .unwrap();
         let mut m = meta(&new_id(), "https://b.com", "Archived");
         m.archived = true;
         write_reading(&lib, m, "body".into()).unwrap();
 
         rebuild(&conn, &lib).unwrap();
 
-        let rows =
-            list_readings(&conn, &ListOptions { view: View::Archive, ..Default::default() })
-                .unwrap();
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Archive,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Archived");
     }
@@ -280,13 +302,23 @@ mod tests {
         let mut m = meta(&new_id(), "https://a.com", "Fav");
         m.favorite = true;
         write_reading(&lib, m, "body".into()).unwrap();
-        write_reading(&lib, meta(&new_id(), "https://b.com", "Normal"), "body".into()).unwrap();
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://b.com", "Normal"),
+            "body".into(),
+        )
+        .unwrap();
 
         rebuild(&conn, &lib).unwrap();
 
-        let rows =
-            list_readings(&conn, &ListOptions { view: View::Favorites, ..Default::default() })
-                .unwrap();
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Favorites,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Fav");
     }
@@ -299,7 +331,12 @@ mod tests {
         let mut m = meta(&new_id(), "https://a.com", "Tagged");
         m.tags = vec!["rust".into()];
         write_reading(&lib, m, "body".into()).unwrap();
-        write_reading(&lib, meta(&new_id(), "https://b.com", "Untagged"), "body".into()).unwrap();
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://b.com", "Untagged"),
+            "body".into(),
+        )
+        .unwrap();
 
         rebuild(&conn, &lib).unwrap();
 
@@ -324,7 +361,11 @@ mod tests {
         for i in 0..5u32 {
             write_reading(
                 &lib,
-                meta(&new_id(), &format!("https://example.com/{i}"), &format!("Article {i}")),
+                meta(
+                    &new_id(),
+                    &format!("https://example.com/{i}"),
+                    &format!("Article {i}"),
+                ),
                 "body".into(),
             )
             .unwrap();
@@ -333,12 +374,22 @@ mod tests {
 
         let page1 = list_readings(
             &conn,
-            &ListOptions { view: View::All, limit: 3, offset: 0, ..Default::default() },
+            &ListOptions {
+                view: View::All,
+                limit: 3,
+                offset: 0,
+                ..Default::default()
+            },
         )
         .unwrap();
         let page2 = list_readings(
             &conn,
-            &ListOptions { view: View::All, limit: 3, offset: 3, ..Default::default() },
+            &ListOptions {
+                view: View::All,
+                limit: 3,
+                offset: 3,
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -356,8 +407,12 @@ mod tests {
         let lib = make_library(&dir);
 
         let id = new_id();
-        write_reading(&lib, meta(&id, "https://example.com", "My Article"), "hello world".into())
-            .unwrap();
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "My Article"),
+            "hello world".into(),
+        )
+        .unwrap();
         rebuild(&conn, &lib).unwrap();
 
         let result = get_reading(&conn, &id).unwrap();
