@@ -3,6 +3,8 @@
 import SwiftUI
 
 struct ArticleDetailView: View {
+    let articleId: String
+
     @EnvironmentObject private var appState: AppState
     @AppStorage("readerFont") private var readerFont: ReaderFont = .system
     @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
@@ -15,78 +17,78 @@ struct ArticleDetailView: View {
 
     var body: some View {
         Group {
-            if let selectedId = appState.selectedId {
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let row {
-                    articleView(row: row)
-                }
-            } else {
-                emptyDetail
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let row {
+                articleView(row: row)
             }
         }
-        .onChange(of: appState.selectedId) { _, id in
-            Task { await load(id: id) }
-        }
+        .task(id: articleId) { await load(id: articleId) }
         .toolbar { toolbarItems }
     }
 
     // ── Article content ───────────────────────────────────────────────────
 
     private func articleView(row: FfiReadingRow) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(row.title.isEmpty ? "Untitled" : row.title)
-                        .font(.largeTitle.bold())
-                    HStack(spacing: 12) {
-                        if let site = row.site, !site.isEmpty {
-                            Label(site, systemImage: "globe")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let author = row.author, !author.isEmpty {
-                            Label(author, systemImage: "person")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let wc = row.wordCount, wc > 0 {
-                            Label("\(wc) words", systemImage: "text.alignleft")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+        VStack(alignment: .leading, spacing: 0) {
+            // Header (fixed height, not scrolled by WKWebView)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(row.title.isEmpty ? "Untitled" : row.title)
+                    .font(.largeTitle.bold())
+                HStack(spacing: 12) {
+                    if let site = row.site, !site.isEmpty {
+                        Label(site, systemImage: "globe")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                    tagBar(row: row)
+                    if let author = row.author, !author.isEmpty {
+                        Label(author, systemImage: "person")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let wc = row.wordCount, wc > 0 {
+                        Label("\(wc) words", systemImage: "text.alignleft")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Divider()
+                tagBar(row: row)
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
+            .padding(.bottom, 16)
 
-            // Body rendered in WKWebView so images and formatting work
+            Divider()
+
+            // WKWebView handles its own scrolling and fills all remaining height
             if let articleHTML {
                 MarkdownWebView(
                     html: articleHTML,
-                    baseURL: articlesBaseURL,
+                    baseURL: libraryBaseURL,
                     font: readerFont,
                     fontSize: readerFontSize
                 )
-                .frame(maxWidth: .infinity, minHeight: 400)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let excerpt = row.excerpt, !excerpt.isEmpty {
-                Text(excerpt)
-                    .foregroundStyle(.secondary)
-                    .italic()
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
+                ScrollView {
+                    Text(excerpt)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                        .padding(24)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                Spacer()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(row.title.isEmpty ? "Article" : row.title)
     }
 
-    private var articlesBaseURL: URL? {
-        appState.libraryURL?.appendingPathComponent("articles", isDirectory: true)
+    // Library root as baseURL so WKWebView can read assets/ alongside articles/
+    private var libraryBaseURL: URL? {
+        appState.libraryURL
     }
 
     private func tagBar(row: FfiReadingRow) -> some View {
@@ -195,14 +197,18 @@ struct ArticleDetailView: View {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private func load(id: String?) async {
-        guard let id else { row = nil; articleHTML = nil; return }
+    private func load(id: String) async {
         isLoading = true
         showTagInput = false
         newTag = ""
+        appState.selectedId = id
         row = appState.readings.first(where: { $0.id == id })
         if let markdown = await appState.getBody(id: id) {
-            articleHTML = markdownToHtml(markdown: markdown)
+            // Paths in the Markdown are "../assets/…" relative to articles/.
+            // Since baseURL is the library root, rewrite them to "assets/…".
+            var html = markdownToHtml(markdown: markdown)
+            html = html.replacingOccurrences(of: "src=\"../assets/", with: "src=\"assets/")
+            articleHTML = html
         } else {
             articleHTML = nil
         }
