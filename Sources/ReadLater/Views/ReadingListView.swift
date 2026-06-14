@@ -25,11 +25,16 @@ struct ReadingListView: View {
 
     private var list: some View {
         List(appState.readings, id: \.id, selection: $appState.selectedId) { row in
-            ReadingRowView(row: row)
+            ReadingRowView(row: row, snippet: snippet(for: row.id))
                 .tag(row.id)
                 .contextMenu { contextMenu(for: row) }
         }
         .listStyle(.inset)
+    }
+
+    private func snippet(for id: String) -> String? {
+        guard !appState.searchQuery.isEmpty else { return nil }
+        return appState.searchResults.first(where: { $0.id == id })?.snippet
     }
 
     // ── Empty state ───────────────────────────────────────────────────────
@@ -90,6 +95,10 @@ struct ReadingListView: View {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private var navigationTitle: String {
+        if !appState.searchQuery.isEmpty {
+            let n = appState.readings.count
+            return "\(n) result\(n == 1 ? "" : "s")"
+        }
         if let tag = appState.selectedTag { return "#\(tag)" }
         return appState.activeView.label
     }
@@ -99,6 +108,7 @@ struct ReadingListView: View {
 
 struct ReadingRowView: View {
     let row: FfiReadingRow
+    var snippet: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -133,8 +143,13 @@ struct ReadingRowView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            // Excerpt
-            if let excerpt = row.excerpt, !excerpt.isEmpty {
+            // Snippet (search) or excerpt (browse)
+            if let snippet {
+                Text(snippet.strippingMarkTags())
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+            } else if let excerpt = row.excerpt, !excerpt.isEmpty {
                 Text(excerpt)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -161,5 +176,15 @@ struct ReadingRowView: View {
         let rel = RelativeDateTimeFormatter()
         rel.unitsStyle = .abbreviated
         return rel.localizedString(for: date, relativeTo: .now)
+    }
+}
+
+// ── String helper ─────────────────────────────────────────────────────────────
+
+private extension String {
+    /// Remove `<mark>` and `</mark>` tags produced by FTS5 snippet().
+    func strippingMarkTags() -> String {
+        replacingOccurrences(of: "<mark>", with: "")
+            .replacingOccurrences(of: "</mark>", with: "")
     }
 }

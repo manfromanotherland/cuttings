@@ -8,6 +8,7 @@ final class AppState: ObservableObject {
     // ── Navigation state ──────────────────────────────────────────────────
     @Published var libraryURL: URL?
     @Published var readings: [FfiReadingRow] = []
+    @Published var searchResults: [FfiSearchResult] = []
     @Published var selectedId: String?
     @Published var searchQuery: String = ""
     @Published var activeView: SidebarItem = .all
@@ -92,6 +93,7 @@ final class AppState: ObservableObject {
         guard let core else { return }
         do {
             if searchQuery.isEmpty {
+                searchResults = []
                 let opts = FfiListOptions(
                     view: activeView.ffiView,
                     sortNewestFirst: sortNewestFirst,
@@ -102,14 +104,21 @@ final class AppState: ObservableObject {
                 readings = try await core.listReadings(opts: opts)
             } else {
                 let results = try await core.search(query: searchQuery, limit: 50)
+                searchResults = results
+                let ids = Set(results.map(\.id))
                 let opts = FfiListOptions(
                     view: .all, sortNewestFirst: true,
                     tag: nil, since: nil, until: nil,
                     limit: 1000, offset: 0
                 )
                 let all = try await core.listReadings(opts: opts)
-                let ids = Set(results.map(\.id))
                 readings = all.filter { ids.contains($0.id) }
+                    .sorted { a, b in
+                        // Preserve search rank order.
+                        let ai = results.firstIndex(where: { $0.id == a.id }) ?? Int.max
+                        let bi = results.firstIndex(where: { $0.id == b.id }) ?? Int.max
+                        return ai < bi
+                    }
             }
         } catch {
             self.error = error.localizedDescription
