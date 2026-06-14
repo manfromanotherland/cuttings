@@ -15,7 +15,8 @@ targets:
         optional: true   # populated by `make bindings`
     dependencies:
       - framework: Frameworks/ReadLaterCore.xcframework
-        embed: true
+        embed: false
+      - sdk: SystemConfiguration.framework
     settings:
       base:
         SWIFT_VERSION: "6.0"
@@ -25,5 +26,7 @@ targets:
         INFOPLIST_FILE: Sources/ReadLater/App/Info.plist
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
+        HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/read_later_coreFFI.modulemap
     entitlements:
       path: Sources/ReadLater/App/ReadLater.entitlements

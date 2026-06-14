@@ -4,7 +4,6 @@
 // All calls are dispatched to a background actor so the UI stays responsive.
 
 import Foundation
-import ReadLaterCore
 
 actor CoreBridge {
     private let db: Database

@@ -24,6 +24,8 @@ xcframework:
 bindings: xcframework
 	mkdir -p $(BINDINGS_DIR)
 	cp $(CORE_DIR)/dist/swift/*.swift $(BINDINGS_DIR)/
+	cp $(CORE_DIR)/dist/swift/*.h $(BINDINGS_DIR)/
+	cp $(CORE_DIR)/dist/swift/*.modulemap $(BINDINGS_DIR)/
 
 ## Regenerate the Xcode project from project.yml
 xcodegen:

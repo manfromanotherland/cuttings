@@ -6,7 +6,7 @@ struct ArticleDetailView: View {
     @EnvironmentObject private var appState: AppState
 
     @State private var row: FfiReadingRow?
-    @State private var body: String?
+    @State private var articleBody: String?
     @State private var isLoading = false
     @State private var newTag = ""
     @State private var showTagInput = false
@@ -60,8 +60,8 @@ struct ArticleDetailView: View {
                 }
                 Divider()
                 // Body
-                if let body {
-                    Text(body)
+                if let articleBody {
+                    Text(articleBody)
                         .font(.body)
                         .textSelection(.enabled)
                         .frame(maxWidth: 700, alignment: .leading)
@@ -167,12 +167,12 @@ struct ArticleDetailView: View {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private func load(id: String?) async {
-        guard let id else { row = nil; body = nil; return }
+        guard let id else { row = nil; articleBody = nil; return }
         isLoading = true
         showTagInput = false
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
-        body = await appState.getBody(id: id)
+        articleBody = await appState.getBody(id: id)
         isLoading = false
     }
 
