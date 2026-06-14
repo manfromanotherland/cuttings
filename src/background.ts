@@ -5,6 +5,18 @@ import type { SaveRequest, SaveResponse } from "./protocol.js";
 
 const HOST_ID = "com.readlater.host";
 const CONTEXT_MENU_ID = "save-page";
+const NOTIF_HOST_MISSING = "host-missing";
+
+// Substrings Chrome uses when the native host binary is absent or unregistered.
+const HOST_MISSING_ERRORS = [
+  "Specified native messaging host not found",
+  "Access to the specified native messaging host is forbidden",
+  "Native host has exited",
+];
+
+function isHostMissing(err: Error): boolean {
+  return HOST_MISSING_ERRORS.some((phrase) => err.message.includes(phrase));
+}
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 
@@ -96,8 +108,12 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
   try {
     response = await sendNativeMessage(request);
   } catch (err) {
-    await showBadge(tabId, "error");
-    console.error("read-later: native host error:", err);
+    if (err instanceof Error && isHostMissing(err)) {
+      await notifyHostMissing(tabId);
+    } else {
+      await showBadge(tabId, "error");
+      console.error("read-later: native host error:", err);
+    }
     return;
   }
 
@@ -122,6 +138,36 @@ chrome.commands.onCommand.addListener((command) => {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (tab) savePage(tab);
     });
+  }
+});
+
+// ── Host-missing notification ────────────────────────────────────────────────
+
+const NOTIF_ICON =
+  "data:image/svg+xml;charset=utf-8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">' +
+      '<rect width="48" height="48" rx="8" fill="#3B82F6"/>' +
+      '<path d="M14 12h20v28l-10-7-10 7z" fill="white"/>' +
+      "</svg>",
+  );
+
+async function notifyHostMissing(tabId: number): Promise<void> {
+  await showBadge(tabId, "error");
+  await chrome.notifications.create(NOTIF_HOST_MISSING, {
+    type: "basic",
+    iconUrl: NOTIF_ICON,
+    title: "Read Later — Native Host Not Found",
+    message:
+      "The native helper isn't installed yet. Click this notification to see how to install it.",
+    requireInteraction: true,
+  });
+}
+
+chrome.notifications.onClicked.addListener((id) => {
+  if (id === NOTIF_HOST_MISSING) {
+    void chrome.tabs.create({ url: chrome.runtime.getURL("install.html") });
+    void chrome.notifications.clear(id);
   }
 });
 

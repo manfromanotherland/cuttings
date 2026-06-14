@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read Later — Install Native Host</title>
+    <style>
+      :root {
+        --blue: #3b82f6;
+        --blue-dark: #1d4ed8;
+        --red: #ef4444;
+        --text: #111827;
+        --text-muted: #6b7280;
+        --bg: #ffffff;
+        --bg-muted: #f9fafb;
+        --border: #e5e7eb;
+        --radius: 8px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text: #f9fafb;
+          --text-muted: #9ca3af;
+          --bg: #111827;
+          --bg-muted: #1f2937;
+          --border: #374151;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        padding: 48px 16px;
+      }
+
+      .card {
+        max-width: 560px;
+        width: 100%;
+      }
+
+      .logo {
+        width: 48px;
+        height: 48px;
+        background: var(--blue);
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+      }
+
+      .logo svg {
+        width: 28px;
+        height: 28px;
+        fill: white;
+      }
+
+      h1 {
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .subtitle {
+        color: var(--text-muted);
+        font-size: 15px;
+        margin-bottom: 36px;
+        line-height: 1.5;
+      }
+
+      .section {
+        margin-bottom: 28px;
+      }
+
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+      }
+
+      .step {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 16px;
+      }
+
+      .step-num {
+        min-width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: white;
+        font-size: 13px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+
+      .step-body {
+        flex: 1;
+      }
+
+      .step-title {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .step-desc {
+        font-size: 14px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      code {
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        background: var(--bg-muted);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+
+      .divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 28px 0;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 20px;
+        background: #fef9c3;
+        color: #92400e;
+        border: 1px solid #fde68a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .badge {
+          background: #292524;
+          color: #fbbf24;
+          border-color: #44403c;
+        }
+      }
+
+      .note {
+        font-size: 13px;
+        color: var(--text-muted);
+        background: var(--bg-muted);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo">
+        <svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 3h20v24l-10-7L4 27z" />
+        </svg>
+      </div>
+
+      <h1>Install the Native Host</h1>
+      <p class="subtitle">
+        The Read Later extension needs a small helper app installed on your Mac to save pages to
+        your library. Here's how to set it up.
+      </p>
+
+      <div class="section">
+        <h2>Option A — Using the macOS app (recommended)</h2>
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Open the Read Later app</div>
+            <div class="step-desc">
+              Launch <strong>Read Later</strong> from your Applications folder. The app installs the
+              native host automatically on first launch.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Choose your library folder</div>
+            <div class="step-desc">
+              If prompted, pick or create a folder where your saved articles will live.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Try saving a page again</div>
+            <div class="step-desc">
+              Click the Read Later toolbar button (or press
+              <code>⌃⇧S</code>) on any page.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="section">
+        <h2>Option B — Manual install via Terminal</h2>
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Open Terminal</div>
+            <div class="step-desc">
+              Find it in <strong>Applications → Utilities → Terminal</strong>, or press
+              <code>⌘Space</code> and type "Terminal".
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Run the install command</div>
+            <div class="step-desc">
+              Navigate to the Read Later app bundle and run the native host binary with the install
+              flag:
+            </div>
+          </div>
+        </div>
+
+        <div class="note">
+          Open the Read Later app, then go to
+          <strong>Settings → Extensions</strong> and click
+          <strong>Reinstall Manifest</strong>. This runs the install for you.
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <p class="note">
+        <strong>Still not working?</strong> Make sure the Read Later app has been opened at least
+        once after installation. The host manifest must point to the exact location of the app on
+        disk — if you moved the app, reinstall the manifest from
+        <strong>Settings → Extensions</strong>.
+      </p>
+    </div>
+  </body>
+</html>
