@@ -208,22 +208,55 @@ struct ArticleDetailView: View {
         row = appState.readings.first(where: { $0.id == id })
         if let markdown = await appState.getBody(id: id) {
             var html = markdownToHtml(markdown: markdown)
-            // Rewrite relative asset paths to absolute file:// URLs so
-            // loadHTMLString can resolve them without any baseURL tricks.
             if let libraryURL = appState.libraryURL {
-                let assetsPrefix = libraryURL
-                    .appendingPathComponent("assets", isDirectory: true)
-                    .absoluteString  // e.g. "file:///Users/…/ReadLater/assets/"
-                html = html.replacingOccurrences(
-                    of: "src=\"../assets/",
-                    with: "src=\"\(assetsPrefix)"
-                )
+                html = inlineAssets(in: html, libraryURL: libraryURL)
             }
             articleHTML = html
         } else {
             articleHTML = nil
         }
         isLoading = false
+    }
+
+    // Replaces src="../assets/…" with data URIs so WKWebView can display
+    // images without needing file:// access (blocked by WebKit in loadHTMLString).
+    private func inlineAssets(in html: String, libraryURL: URL) -> String {
+        let prefix = #"src="../assets/"#
+        guard html.contains(prefix) else { return html }
+
+        var result = html
+        var searchFrom = result.startIndex
+        var matches: [(range: Range<String.Index>, relativePath: String)] = []
+
+        while let found = result.range(of: prefix, range: searchFrom..<result.endIndex) {
+            let pathStart = found.upperBound
+            guard let closing = result[pathStart...].firstIndex(of: "\"") else { break }
+            let path = String(result[pathStart..<closing])
+            matches.append((found.lowerBound..<result.index(after: closing), path))
+            searchFrom = closing
+        }
+
+        for match in matches.reversed() {
+            let fileURL = libraryURL
+                .appendingPathComponent("assets")
+                .appendingPathComponent(match.relativePath)
+            guard let data = try? Data(contentsOf: fileURL) else { continue }
+
+            let mime: String
+            switch fileURL.pathExtension.lowercased() {
+            case "png":  mime = "image/png"
+            case "gif":  mime = "image/gif"
+            case "webp": mime = "image/webp"
+            case "svg":  mime = "image/svg+xml"
+            default:     mime = "image/jpeg"
+            }
+
+            result.replaceSubrange(
+                match.range,
+                with: #"src="data:\#(mime);base64,\#(data.base64EncodedString())""#
+            )
+        }
+        return result
     }
 
     private func commitTag(id: String) {
