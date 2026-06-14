@@ -197,6 +197,12 @@ final class AppState: ObservableObject {
         await refresh()
     }
 
+    func unarchive(_ row: FfiReadingRow) async {
+        guard let core else { return }
+        try? await core.setArchived(id: row.id, archived: false)
+        await refresh()
+    }
+
     func addTag(id: String, tag: String) async {
         guard let core else { return }
         try? await core.addTag(id: id, tag: tag)

@@ -158,6 +158,22 @@ struct ArticleDetailView: View {
                 }
                 .help(row.favorite ? "Remove from favorites" : "Add to favorites")
 
+                if row.archived {
+                    Button {
+                        Task { await appState.unarchive(row) }
+                    } label: {
+                        Label("Move to Library", systemImage: "tray.and.arrow.up")
+                    }
+                    .help("Move back to library")
+                } else {
+                    Button {
+                        Task { await appState.archive(row) }
+                    } label: {
+                        Label("Archive", systemImage: "archivebox")
+                    }
+                    .help("Archive this article")
+                }
+
                 Button {
                     if let url = URL(string: row.url) {
                         NSWorkspace.shared.open(url)

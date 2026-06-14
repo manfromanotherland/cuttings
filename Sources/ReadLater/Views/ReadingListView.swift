@@ -81,14 +81,24 @@ struct ReadingListView: View {
         Button(row.read ? "Mark as Unread" : "Mark as Read") {
             Task { await appState.toggleRead(row) }
         }
+        .keyboardShortcut("u", modifiers: .command)
+
         Button(row.favorite ? "Remove from Favorites" : "Add to Favorites") {
             Task { await appState.toggleFavorite(row) }
         }
-        if !row.archived {
-            Divider()
+        .keyboardShortcut("f", modifiers: [.command, .shift])
+
+        Divider()
+
+        if row.archived {
+            Button("Move to Library") {
+                Task { await appState.unarchive(row) }
+            }
+        } else {
             Button("Archive") {
                 Task { await appState.archive(row) }
             }
+            .keyboardShortcut(.delete, modifiers: .command)
         }
     }
 

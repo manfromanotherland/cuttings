@@ -16,6 +16,7 @@ struct ReadLaterApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            ArticleCommands(appState: appState)
         }
     }
 }
