@@ -208,11 +208,14 @@ struct ArticleDetailView: View {
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
         if let markdown = await appState.getBody(id: id) {
-            var html = markdownToHtml(markdown: markdown)
-            // pulldown-cmark fails to parse linked images whose outer URL
-            // contains CDN characters like $ or !, emitting raw Markdown
-            // syntax as text: [<img>](url). Strip the wrapper, keep the image.
-            html = stripLinkedImages(in: html)
+            // Unwrap Markdown linked images BEFORE conversion. pulldown-cmark
+            // sometimes fails to parse `[![alt](img)](url)` when the outer URL
+            // contains CDN characters like $ or !, leaving raw `[ ]( )` syntax
+            // in the rendered output. Stripping the wrapper at the Markdown
+            // level is deterministic and independent of how pulldown-cmark
+            // renders the broken link.
+            let cleaned = unwrapLinkedImages(in: markdown)
+            var html = markdownToHtml(markdown: cleaned)
             // Rewrite local asset paths to the custom scheme for AssetSchemeHandler.
             html = html.replacingOccurrences(
                 of: "src=\"../assets/",
@@ -225,13 +228,15 @@ struct ArticleDetailView: View {
         isLoading = false
     }
 
-    private func stripLinkedImages(in html: String) -> String {
+    /// Convert Markdown linked images `[![alt](img)](url)` into plain images
+    /// `![alt](img)`, dropping the surrounding link. Common on Substack/Medium.
+    private func unwrapLinkedImages(in markdown: String) -> String {
         guard let regex = try? NSRegularExpression(
-            pattern: #"\[(<img\s[^>]+>)\]\([^)]*\)"#
-        ) else { return html }
+            pattern: #"\[\s*(!\[[^\]]*\]\([^)]*\))\s*\]\([^)]*\)"#
+        ) else { return markdown }
         return regex.stringByReplacingMatches(
-            in: html,
-            range: NSRange(html.startIndex..., in: html),
+            in: markdown,
+            range: NSRange(markdown.startIndex..., in: markdown),
             withTemplate: "$1"
         )
     }
