@@ -26,7 +26,20 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        webView.loadHTMLString(wrappedHTML, baseURL: baseURL)
+        guard let baseURL else {
+            webView.loadHTMLString(wrappedHTML, baseURL: nil)
+            return
+        }
+
+        // loadHTMLString restricts file access to baseURL's own directory.
+        // Writing to a real file and using loadFileURL grants WebKit access
+        // to the full library root, so assets/ resolves next to articles/.
+        let tmpFile = baseURL.appendingPathComponent(".reader_preview.html")
+        if (try? wrappedHTML.write(to: tmpFile, atomically: true, encoding: .utf8)) != nil {
+            webView.loadFileURL(tmpFile, allowingReadAccessTo: baseURL)
+        } else {
+            webView.loadHTMLString(wrappedHTML, baseURL: baseURL)
+        }
     }
 
     // ── HTML template ─────────────────────────────────────────────────────
