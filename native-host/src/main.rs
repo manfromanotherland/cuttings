@@ -92,7 +92,7 @@ fn write_message(w: &mut impl Write, msg: &[u8]) -> Result<()> {
 
 fn is_eof_error(e: &anyhow::Error) -> bool {
     e.downcast_ref::<std::io::Error>()
-        .map_or(false, |e| e.kind() == std::io::ErrorKind::UnexpectedEof)
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::UnexpectedEof)
 }
 
 #[cfg(test)]
