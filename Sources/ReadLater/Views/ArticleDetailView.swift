@@ -4,6 +4,8 @@ import SwiftUI
 
 struct ArticleDetailView: View {
     @EnvironmentObject private var appState: AppState
+    @AppStorage("readerFont") private var readerFont: ReaderFont = .system
+    @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
 
     @State private var row: FfiReadingRow?
     @State private var articleHTML: String?
@@ -65,8 +67,13 @@ struct ArticleDetailView: View {
 
             // Body rendered in WKWebView so images and formatting work
             if let articleHTML {
-                MarkdownWebView(html: articleHTML, baseURL: articlesBaseURL)
-                    .frame(maxWidth: .infinity, minHeight: 400)
+                MarkdownWebView(
+                    html: articleHTML,
+                    baseURL: articlesBaseURL,
+                    font: readerFont,
+                    fontSize: readerFontSize
+                )
+                .frame(maxWidth: .infinity, minHeight: 400)
             } else if let excerpt = row.excerpt, !excerpt.isEmpty {
                 Text(excerpt)
                     .foregroundStyle(.secondary)

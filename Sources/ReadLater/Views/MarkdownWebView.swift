@@ -10,6 +10,8 @@ import WebKit
 struct MarkdownWebView: NSViewRepresentable {
     let html: String
     let baseURL: URL?
+    var font: ReaderFont = .system
+    var fontSize: ReaderFontSize = .medium
 
     func makeNSView(context: Context) -> WKWebView {
         let prefs = WKWebpagePreferences()
@@ -39,8 +41,8 @@ struct MarkdownWebView: NSViewRepresentable {
           :root { color-scheme: light dark; }
           *, *::before, *::after { box-sizing: border-box; }
           body {
-            font-family: -apple-system, system-ui, sans-serif;
-            font-size: 17px;
+            font-family: \(font.cssFamily);
+            font-size: \(fontSize.rawValue)px;
             line-height: 1.75;
             max-width: 680px;
             margin: 0 auto;
