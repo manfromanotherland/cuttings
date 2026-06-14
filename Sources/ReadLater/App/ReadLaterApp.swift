@@ -22,5 +22,10 @@ struct ReadLaterApp: App {
             AppearanceCommands(appearanceMode: $appearanceMode)
             TypographyCommands()
         }
+
+        Settings {
+            SettingsView()
+                .environmentObject(appState)
+        }
     }
 }
