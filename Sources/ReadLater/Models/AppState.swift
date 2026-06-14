@@ -69,6 +69,7 @@ final class AppState: ObservableObject {
             try await bridge.rebuild()
             core = bridge
             libraryURL = url
+            writeLibraryPathConfig(url.path)
             HostInstaller.installIfNeeded()
             startWatcher(libraryPath: url.path)
             await refresh()
@@ -76,6 +77,18 @@ final class AppState: ObservableObject {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Write the library path to ~/.config/read-later/library so the native
+    /// messaging host can find it without needing a security-scoped bookmark.
+    private func writeLibraryPathConfig(_ path: String) {
+        let configDir = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".config/read-later", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: configDir, withIntermediateDirectories: true)
+        try? (path + "\n").write(
+            to: configDir.appendingPathComponent("library"),
+            atomically: true, encoding: .utf8)
     }
 
     // ── Refresh (list + sidebar) ──────────────────────────────────────────

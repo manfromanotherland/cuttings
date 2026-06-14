@@ -123,7 +123,7 @@ private struct NativeHostSettingsTab: View {
             LabeledContent("Binary") {
                 Text(hostPath ?? "Not found in bundle")
                     .font(.caption)
-                    .foregroundStyle(hostPath != nil ? .secondary : .red)
+                    .foregroundStyle(hostPath != nil ? Color.secondary : Color.red)
                     .lineLimit(2)
                     .truncationMode(.middle)
             }
