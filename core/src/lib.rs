@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT
 
+uniffi::setup_scaffolding!();
+
+pub mod ffi;
 mod frontmatter;
 mod id;
 mod images;

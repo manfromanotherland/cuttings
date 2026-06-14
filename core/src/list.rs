@@ -17,17 +17,12 @@ pub enum View {
 }
 
 /// Sort order for listing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortOrder {
     /// Newest `saved_at` first (default).
+    #[default]
     NewestFirst,
     OldestFirst,
-}
-
-impl Default for SortOrder {
-    fn default() -> Self {
-        Self::NewestFirst
-    }
 }
 
 /// Options for `list_readings`.
