@@ -6,7 +6,7 @@ struct ArticleDetailView: View {
     @EnvironmentObject private var appState: AppState
 
     @State private var row: FfiReadingRow?
-    @State private var articleBody: String?
+    @State private var articleHTML: String?
     @State private var isLoading = false
     @State private var newTag = ""
     @State private var showTagInput = false
@@ -59,21 +59,27 @@ struct ArticleDetailView: View {
                     tagBar(row: row)
                 }
                 Divider()
-                // Body
-                if let articleBody {
-                    Text(articleBody)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: 700, alignment: .leading)
-                } else if let excerpt = row.excerpt, !excerpt.isEmpty {
-                    Text(excerpt)
-                        .foregroundStyle(.secondary)
-                        .italic()
-                }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+
+            // Body rendered in WKWebView so images and formatting work
+            if let articleHTML {
+                MarkdownWebView(html: articleHTML, baseURL: articlesBaseURL)
+                    .frame(maxWidth: .infinity, minHeight: 400)
+            } else if let excerpt = row.excerpt, !excerpt.isEmpty {
+                Text(excerpt)
+                    .foregroundStyle(.secondary)
+                    .italic()
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+            }
         }
         .navigationTitle(row.title.isEmpty ? "Article" : row.title)
+    }
+
+    private var articlesBaseURL: URL? {
+        appState.libraryURL?.appendingPathComponent("articles", isDirectory: true)
     }
 
     private func tagBar(row: FfiReadingRow) -> some View {
@@ -167,12 +173,16 @@ struct ArticleDetailView: View {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private func load(id: String?) async {
-        guard let id else { row = nil; articleBody = nil; return }
+        guard let id else { row = nil; articleHTML = nil; return }
         isLoading = true
         showTagInput = false
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
-        articleBody = await appState.getBody(id: id)
+        if let markdown = await appState.getBody(id: id) {
+            articleHTML = markdownToHtml(markdown: markdown)
+        } else {
+            articleHTML = nil
+        }
         isLoading = false
     }
 
