@@ -3,18 +3,22 @@
 import Foundation
 import SwiftUI
 
-/// Central observable state shared across the app via `@EnvironmentObject`.
-///
-/// On first launch `libraryURL` is nil; the UI shows the onboarding sheet.
-/// Once the user picks a folder, `chooseLibrary()` saves a security-scoped
-/// bookmark so the app re-opens it on every subsequent launch without prompting.
 @MainActor
 final class AppState: ObservableObject {
+    // ── Navigation state ──────────────────────────────────────────────────
     @Published var libraryURL: URL?
     @Published var readings: [FfiReadingRow] = []
     @Published var selectedId: String?
     @Published var searchQuery: String = ""
     @Published var activeView: SidebarItem = .all
+    @Published var selectedTag: String?
+    @Published var sortNewestFirst: Bool = true
+
+    // ── Sidebar metadata ──────────────────────────────────────────────────
+    @Published var viewCounts: [SidebarItem: Int] = [:]
+    @Published var allTags: [FfiTagCount] = []
+
+    // ── Status ────────────────────────────────────────────────────────────
     @Published var isLoading: Bool = false
     @Published var error: String?
 
@@ -38,7 +42,6 @@ final class AppState: ObservableObject {
         panel.canCreateDirectories = true
         panel.prompt = "Choose Library Folder"
         panel.message = "Select or create a folder to store your articles."
-
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await pickLibrary(url: url) }
     }
@@ -67,11 +70,20 @@ final class AppState: ObservableObject {
             libraryURL = url
             HostInstaller.installIfNeeded()
             startWatcher(libraryPath: url.path)
-            await loadReadings()
+            await refresh()
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    // ── Refresh (list + sidebar) ──────────────────────────────────────────
+
+    func refresh() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.loadReadings() }
+            group.addTask { await self.loadSidebar() }
+        }
     }
 
     // ── List / search ─────────────────────────────────────────────────────
@@ -82,18 +94,18 @@ final class AppState: ObservableObject {
             if searchQuery.isEmpty {
                 let opts = FfiListOptions(
                     view: activeView.ffiView,
-                    sortNewestFirst: true,
-                    tag: nil, since: nil, until: nil,
-                    limit: 100, offset: 0
+                    sortNewestFirst: sortNewestFirst,
+                    tag: selectedTag,
+                    since: nil, until: nil,
+                    limit: 200, offset: 0
                 )
                 readings = try await core.listReadings(opts: opts)
             } else {
                 let results = try await core.search(query: searchQuery, limit: 50)
                 let opts = FfiListOptions(
-                    view: .all,
-                    sortNewestFirst: true,
+                    view: .all, sortNewestFirst: true,
                     tag: nil, since: nil, until: nil,
-                    limit: 200, offset: 0
+                    limit: 1000, offset: 0
                 )
                 let all = try await core.listReadings(opts: opts)
                 let ids = Set(results.map(\.id))
@@ -104,13 +116,47 @@ final class AppState: ObservableObject {
         }
     }
 
-    // ── Incremental sync (called by FSEvents watcher) ─────────────────────
+    // ── Sidebar counts & tags ─────────────────────────────────────────────
+
+    func loadSidebar() async {
+        guard let core else { return }
+        do {
+            var counts: [SidebarItem: Int] = [:]
+            for item in SidebarItem.allCases {
+                let opts = FfiListOptions(
+                    view: item.ffiView, sortNewestFirst: true,
+                    tag: nil, since: nil, until: nil,
+                    limit: 9999, offset: 0
+                )
+                counts[item] = try await core.listReadings(opts: opts).count
+            }
+            viewCounts = counts
+            allTags = try await core.listTags()
+        } catch {
+            // Sidebar counts are non-critical; don't surface as an error.
+        }
+    }
+
+    // ── Tag navigation ────────────────────────────────────────────────────
+
+    func selectTag(_ tag: String) async {
+        selectedTag = tag
+        activeView = .all
+        await loadReadings()
+    }
+
+    func clearTag() async {
+        selectedTag = nil
+        await loadReadings()
+    }
+
+    // ── Incremental sync (FSEvents) ───────────────────────────────────────
 
     func sync() async {
         guard let core else { return }
         do {
             let changed = try await core.sync()
-            if changed > 0 { await loadReadings() }
+            if changed > 0 { await refresh() }
         } catch {
             self.error = error.localizedDescription
         }
@@ -118,9 +164,7 @@ final class AppState: ObservableObject {
 
     private func startWatcher(libraryPath: String) {
         watcher = LibraryWatcher(libraryPath: libraryPath) { [weak self] in
-            Task { @MainActor [weak self] in
-                await self?.sync()
-            }
+            Task { @MainActor [weak self] in await self?.sync() }
         }
     }
 
@@ -129,31 +173,31 @@ final class AppState: ObservableObject {
     func toggleRead(_ row: FfiReadingRow) async {
         guard let core else { return }
         try? await core.setRead(id: row.id, read: !row.read)
-        await loadReadings()
+        await refresh()
     }
 
     func toggleFavorite(_ row: FfiReadingRow) async {
         guard let core else { return }
         try? await core.setFavorite(id: row.id, favorite: !row.favorite)
-        await loadReadings()
+        await refresh()
     }
 
     func archive(_ row: FfiReadingRow) async {
         guard let core else { return }
         try? await core.setArchived(id: row.id, archived: true)
-        await loadReadings()
+        await refresh()
     }
 
     func addTag(id: String, tag: String) async {
         guard let core else { return }
         try? await core.addTag(id: id, tag: tag)
-        await loadReadings()
+        await refresh()
     }
 
     func removeTag(id: String, tag: String) async {
         guard let core else { return }
         try? await core.removeTag(id: id, tag: tag)
-        await loadReadings()
+        await refresh()
     }
 
     func getBody(id: String) async -> String? {

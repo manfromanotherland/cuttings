@@ -16,9 +16,12 @@ struct ReadingListView: View {
                 list
             }
         }
-        .navigationTitle(appState.activeView.label)
+        .navigationTitle(navigationTitle)
         .task { await appState.loadReadings() }
+        .toolbar { toolbarItems }
     }
+
+    // ── List ──────────────────────────────────────────────────────────────
 
     private var list: some View {
         List(appState.readings, id: \.id, selection: $appState.selectedId) { row in
@@ -29,6 +32,8 @@ struct ReadingListView: View {
         .listStyle(.inset)
     }
 
+    // ── Empty state ───────────────────────────────────────────────────────
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "tray")
@@ -36,9 +41,35 @@ struct ReadingListView: View {
                 .foregroundStyle(.tertiary)
             Text("Nothing here yet")
                 .foregroundStyle(.secondary)
+            if appState.selectedTag != nil {
+                Button("Clear tag filter") {
+                    Task { await appState.clearTag() }
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // ── Toolbar ───────────────────────────────────────────────────────────
+
+    @ToolbarContentBuilder
+    private var toolbarItems: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                appState.sortNewestFirst.toggle()
+                Task { await appState.loadReadings() }
+            } label: {
+                Label(
+                    appState.sortNewestFirst ? "Newest first" : "Oldest first",
+                    systemImage: appState.sortNewestFirst ? "arrow.down" : "arrow.up"
+                )
+            }
+            .help(appState.sortNewestFirst ? "Sort: newest first" : "Sort: oldest first")
+        }
+    }
+
+    // ── Context menu ──────────────────────────────────────────────────────
 
     @ViewBuilder
     private func contextMenu(for row: FfiReadingRow) -> some View {
@@ -48,48 +79,87 @@ struct ReadingListView: View {
         Button(row.favorite ? "Remove from Favorites" : "Add to Favorites") {
             Task { await appState.toggleFavorite(row) }
         }
-        Divider()
-        Button("Archive") {
-            Task { await appState.archive(row) }
+        if !row.archived {
+            Divider()
+            Button("Archive") {
+                Task { await appState.archive(row) }
+            }
         }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private var navigationTitle: String {
+        if let tag = appState.selectedTag { return "#\(tag)" }
+        return appState.activeView.label
     }
 }
 
 // ── Row ───────────────────────────────────────────────────────────────────────
 
-private struct ReadingRowView: View {
+struct ReadingRowView: View {
     let row: FfiReadingRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(row.title.isEmpty ? row.url : row.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                Spacer()
-                if row.favorite {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.caption)
-                }
+            // Title + indicators
+            HStack(alignment: .top, spacing: 6) {
                 if !row.read {
                     Circle()
                         .fill(.blue)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
+                        .padding(.top, 5)
+                }
+                Text(row.title.isEmpty ? row.url : row.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                if row.favorite {
+                    Image(systemName: "star.fill")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
                 }
             }
-            if let site = row.site, !site.isEmpty {
-                Text(site)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+            // Site + date
+            HStack(spacing: 6) {
+                if let site = row.site, !site.isEmpty {
+                    Text(site)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(relativeDate(row.savedAt))
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            // Excerpt
+            if let excerpt = row.excerpt, !excerpt.isEmpty {
+                Text(excerpt)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+            }
+
+            // Tags
             if !row.tags.isEmpty {
-                Text(row.tags.map { "#\($0)" }.joined(separator: " "))
+                Text(row.tags.map { "#\($0)" }.joined(separator: "  "))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func relativeDate(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: iso)
+            ?? ISO8601DateFormatter().date(from: iso)
+        else { return iso }
+        let rel = RelativeDateTimeFormatter()
+        rel.unitsStyle = .abbreviated
+        return rel.localizedString(for: date, relativeTo: .now)
     }
 }
