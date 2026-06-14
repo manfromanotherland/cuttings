@@ -2,21 +2,10 @@
 
 import type { ExtractionResult } from "./extraction.js";
 import type { SaveRequest, SaveResponse } from "./protocol.js";
+import { HOST_ID, isHostMissing } from "./host.js";
 
-const HOST_ID = "com.readlater.host";
 const CONTEXT_MENU_ID = "save-page";
 const NOTIF_HOST_MISSING = "host-missing";
-
-// Substrings Chrome uses when the native host binary is absent or unregistered.
-const HOST_MISSING_ERRORS = [
-  "Specified native messaging host not found",
-  "Access to the specified native messaging host is forbidden",
-  "Native host has exited",
-];
-
-function isHostMissing(err: Error): boolean {
-  return HOST_MISSING_ERRORS.some((phrase) => err.message.includes(phrase));
-}
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 
@@ -63,7 +52,7 @@ async function setIcon(active = false): Promise<void> {
 // ── Startup ───────────────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
-  setIcon();
+  void setIcon();
   chrome.contextMenus.create({
     id: CONTEXT_MENU_ID,
     title: "Save to Read Later",
@@ -72,7 +61,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  setIcon();
+  void setIcon();
 });
 
 // ── Save pipeline ─────────────────────────────────────────────────────────────
@@ -96,10 +85,12 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     return;
   }
 
+  const { defaultTags } = await chrome.storage.sync.get({ defaultTags: [] as string[] });
+
   const request: SaveRequest = {
     protocol_version: 1,
     action: "save",
-    metadata: extraction.metadata,
+    metadata: { ...extraction.metadata, tags: defaultTags.length ? defaultTags : undefined },
     markdown: extraction.markdown,
     image_urls: extraction.image_urls,
   };
@@ -127,21 +118,21 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
 
 // ── Triggers ──────────────────────────────────────────────────────────────────
 
-chrome.action.onClicked.addListener((tab) => savePage(tab));
+chrome.action.onClicked.addListener((tab) => void savePage(tab));
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === CONTEXT_MENU_ID && tab) savePage(tab);
+  if (info.menuItemId === CONTEXT_MENU_ID && tab) void savePage(tab);
 });
 
 chrome.commands.onCommand.addListener((command) => {
   if (command === "save-page") {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (tab) savePage(tab);
+      if (tab) void savePage(tab);
     });
   }
 });
 
-// ── Host-missing notification ────────────────────────────────────────────────
+// ── Host-missing notification ─────────────────────────────────────────────────
 
 const NOTIF_ICON =
   "data:image/svg+xml;charset=utf-8," +

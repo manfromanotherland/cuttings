@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read Later — Options</title>
+    <style>
+      :root {
+        --blue: #3b82f6;
+        --green: #22c55e;
+        --red: #ef4444;
+        --amber: #f59e0b;
+        --text: #111827;
+        --text-muted: #6b7280;
+        --bg: #ffffff;
+        --bg-muted: #f9fafb;
+        --border: #e5e7eb;
+        --radius: 8px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text: #f9fafb;
+          --text-muted: #9ca3af;
+          --bg: #111827;
+          --bg-muted: #1f2937;
+          --border: #374151;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        padding: 40px 16px;
+      }
+
+      .page {
+        max-width: 480px;
+        width: 100%;
+      }
+
+      .logo-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 32px;
+      }
+
+      .logo {
+        width: 36px;
+        height: 36px;
+        background: var(--blue);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .logo svg {
+        width: 20px;
+        height: 20px;
+        fill: white;
+      }
+
+      .logo-row h1 {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .section {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+
+      .section-header {
+        padding: 10px 16px;
+        background: var(--bg-muted);
+        border-bottom: 1px solid var(--border);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+      }
+
+      .section-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      /* Connection status */
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .dot.connected {
+        background: var(--green);
+      }
+      .dot.missing {
+        background: var(--red);
+      }
+      .dot.error {
+        background: var(--amber);
+      }
+
+      #status-label {
+        flex: 1;
+        font-weight: 500;
+      }
+
+      .btn-ghost {
+        font-size: 13px;
+        color: var(--blue);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .btn-ghost:hover {
+        text-decoration: underline;
+      }
+
+      .install-hint {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      .install-hint a {
+        color: var(--blue);
+      }
+
+      /* Form fields */
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .label-text {
+        font-weight: 600;
+        font-size: 13px;
+      }
+
+      .label-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      input[type="text"]:focus {
+        border-color: var(--blue);
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .checkbox-row input[type="checkbox"] {
+        margin-top: 2px;
+        accent-color: var(--blue);
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+      }
+
+      .checkbox-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      /* Footer row */
+
+      .footer-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .btn-primary {
+        padding: 8px 18px;
+        background: var(--blue);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        transition: opacity 0.15s;
+      }
+
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+
+      .saved-msg {
+        font-size: 13px;
+        color: var(--green);
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="logo-row">
+        <div class="logo">
+          <svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 3h20v24l-10-7L4 27z" />
+          </svg>
+        </div>
+        <h1>Read Later</h1>
+      </div>
+
+      <!-- Connection -->
+      <div class="section">
+        <div class="section-header">Native Host</div>
+        <div class="section-body">
+          <div class="status-row">
+            <div id="status-dot" class="dot"></div>
+            <span id="status-label">Checking…</span>
+            <button id="check-btn" class="btn-ghost">Check again</button>
+          </div>
+          <p id="install-link" class="install-hint" hidden>
+            The native host isn't installed.
+            <a href="install.html" target="_blank">See install instructions →</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Defaults -->
+      <div class="section">
+        <div class="section-header">Save Defaults</div>
+        <div class="section-body">
+          <label>
+            <span class="label-text">Default tags</span>
+            <span class="label-hint">Comma-separated tags added to every saved page.</span>
+            <input
+              type="text"
+              id="default-tags"
+              placeholder="e.g. reading, tech, later"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+
+          <div class="checkbox-row">
+            <input type="checkbox" id="keep-original-html" />
+            <div class="checkbox-body">
+              <span class="label-text">Keep original HTML</span>
+              <span class="label-hint"
+                >Save a copy of the raw HTML in <code>originals/</code> alongside the Markdown.
+                Requires a compatible version of the native host.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save button -->
+      <div class="footer-row">
+        <button id="save-btn" class="btn-primary">Save</button>
+        <span id="saved-msg" class="saved-msg" hidden>Saved!</span>
+      </div>
+    </div>
+
+    <script src="dist/options.js"></script>
+  </body>
+</html>

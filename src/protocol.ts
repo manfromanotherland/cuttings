@@ -11,6 +11,8 @@ export interface SaveRequestMetadata {
   excerpt?: string;
   word_count?: number;
   saved_at: string;
+  /** Default tags to apply on save. Ignored by host versions that don't support it. */
+  tags?: string[];
 }
 
 /** Message sent from the extension to the native host. */
