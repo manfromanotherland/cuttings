@@ -1,0 +1,25 @@
+{
+  "name": "read-later-extension",
+  "version": "0.1.0",
+  "description": "Browser plugin for the read-later system.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/background.ts --bundle --outdir=dist --target=chrome120",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit && eslint src --max-warnings 0 && prettier --check src",
+    "lint:fix": "eslint src --fix && prettier --write src",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/chrome": "^0.0.290",
+    "@types/node": "^25.9.3",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

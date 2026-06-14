@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "read-later",
+  "version": "0.1.0",
+  "description": "Save pages to read later, locally.",
+  "permissions": ["activeTab", "nativeMessaging"],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Save to read-later"
+  }
+}
