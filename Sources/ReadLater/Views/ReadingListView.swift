@@ -24,16 +24,12 @@ struct ReadingListView: View {
     // ── List ──────────────────────────────────────────────────────────────
 
     private var list: some View {
-        List(appState.readings, id: \.id) { row in
-            NavigationLink(value: row.id) {
-                ReadingRowView(row: row, snippet: snippet(for: row.id))
-            }
-            .contextMenu { contextMenu(for: row) }
+        List(appState.readings, id: \.id, selection: $appState.selectedId) { row in
+            ReadingRowView(row: row, snippet: snippet(for: row.id))
+                .tag(row.id)
+                .contextMenu { contextMenu(for: row) }
         }
         .listStyle(.inset)
-        .navigationDestination(for: String.self) { id in
-            ArticleDetailView(articleId: id)
-        }
     }
 
     private func snippet(for id: String) -> String? {

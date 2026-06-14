@@ -3,8 +3,6 @@
 import SwiftUI
 
 struct ArticleDetailView: View {
-    let articleId: String
-
     @EnvironmentObject private var appState: AppState
     @AppStorage("readerFont") private var readerFont: ReaderFont = .system
     @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
@@ -17,14 +15,24 @@ struct ArticleDetailView: View {
 
     var body: some View {
         Group {
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let row {
-                articleView(row: row)
+            if let selectedId = appState.selectedId {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let row {
+                    articleView(row: row)
+                } else if !isLoading {
+                    // selectedId set but row not loaded yet — happens on first render
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                emptyDetail
             }
         }
-        .task(id: articleId) { await load(id: articleId) }
+        .onChange(of: appState.selectedId) { _, id in
+            Task { await load(id: id) }
+        }
         .toolbar { toolbarItems }
     }
 
@@ -197,11 +205,11 @@ struct ArticleDetailView: View {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private func load(id: String) async {
+    private func load(id: String?) async {
+        guard let id else { row = nil; articleHTML = nil; return }
         isLoading = true
         showTagInput = false
         newTag = ""
-        appState.selectedId = id
         row = appState.readings.first(where: { $0.id == id })
         if let markdown = await appState.getBody(id: id) {
             // Paths in the Markdown are "../assets/…" relative to articles/.

@@ -19,10 +19,11 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+        } content: {
+            ReadingListView()
+                .navigationSplitViewColumnWidth(min: 260, ideal: 320)
         } detail: {
-            NavigationStack {
-                ReadingListView()
-            }
+            ArticleDetailView()
         }
         .searchable(text: $appState.searchQuery, placement: .toolbar, prompt: "Search")
         .onChange(of: appState.searchQuery) { _, _ in
