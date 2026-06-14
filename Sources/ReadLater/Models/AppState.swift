@@ -64,6 +64,7 @@ final class AppState: ObservableObject {
             try await bridge.rebuild()
             core = bridge
             libraryURL = url
+            HostInstaller.installIfNeeded()
             await loadReadings()
         } catch {
             self.error = error.localizedDescription
