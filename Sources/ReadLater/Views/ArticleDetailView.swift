@@ -208,18 +208,32 @@ struct ArticleDetailView: View {
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
         if let markdown = await appState.getBody(id: id) {
-            // Rewrite relative asset paths to the custom URL scheme served
-            // by AssetSchemeHandler in MarkdownWebView.
-            let html = markdownToHtml(markdown: markdown)
-                .replacingOccurrences(
-                    of: "src=\"../assets/",
-                    with: "src=\"readlater://assets/"
-                )
+            var html = markdownToHtml(markdown: markdown)
+            // pulldown-cmark fails to parse linked images whose outer URL
+            // contains CDN characters like $ or !, emitting raw Markdown
+            // syntax as text: [<img>](url). Strip the wrapper, keep the image.
+            html = stripLinkedImages(in: html)
+            // Rewrite local asset paths to the custom scheme for AssetSchemeHandler.
+            html = html.replacingOccurrences(
+                of: "src=\"../assets/",
+                with: "src=\"readlater://assets/"
+            )
             articleHTML = html
         } else {
             articleHTML = nil
         }
         isLoading = false
+    }
+
+    private func stripLinkedImages(in html: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\[(<img\s[^>]+>)\]\([^)]*\)"#
+        ) else { return html }
+        return regex.stringByReplacingMatches(
+            in: html,
+            range: NSRange(html.startIndex..., in: html),
+            withTemplate: "$1"
+        )
     }
 
     private func commitTag(id: String) {
