@@ -7,7 +7,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if appState.libraryPath == nil {
+            if appState.libraryURL == nil {
                 OnboardingView()
             } else {
                 mainContent
@@ -39,6 +39,7 @@ struct ContentView: View {
                         .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 8))
                         .padding()
                 }
+                .transition(.move(edge: .bottom))
             }
         }
     }
@@ -47,6 +48,8 @@ struct ContentView: View {
 // ── Onboarding placeholder (fleshed out in MAC-2) ─────────────────────────────
 
 private struct OnboardingView: View {
+    @EnvironmentObject private var appState: AppState
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "tray.and.arrow.down")
@@ -54,12 +57,13 @@ private struct OnboardingView: View {
                 .foregroundStyle(.secondary)
             Text("Welcome to Read Later")
                 .font(.title)
-            Text("Choose a library folder to get started.")
+            Text("Choose an existing library folder or create a new one.")
                 .foregroundStyle(.secondary)
             Button("Choose Library…") {
-                // MAC-2 will wire this up.
+                appState.chooseLibrary()
             }
             .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

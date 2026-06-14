@@ -25,3 +25,5 @@ targets:
         INFOPLIST_FILE: Sources/ReadLater/App/Info.plist
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
+    entitlements:
+      path: Sources/ReadLater/App/ReadLater.entitlements

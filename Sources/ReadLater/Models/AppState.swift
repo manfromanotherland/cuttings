@@ -5,11 +5,12 @@ import SwiftUI
 
 /// Central observable state shared across the app via `@EnvironmentObject`.
 ///
-/// On first launch the library folder hasn't been chosen yet; `libraryPath`
-/// will be nil and the UI shows the onboarding sheet (MAC-2).
+/// On first launch `libraryURL` is nil; the UI shows the onboarding sheet.
+/// Once the user picks a folder, `chooseLibrary()` saves a security-scoped
+/// bookmark so the app re-opens it on every subsequent launch without prompting.
 @MainActor
 final class AppState: ObservableObject {
-    @Published var libraryPath: String? = Self.storedLibraryPath()
+    @Published var libraryURL: URL?
     @Published var readings: [FfiReadingRow] = []
     @Published var selectedId: String?
     @Published var searchQuery: String = ""
@@ -18,25 +19,51 @@ final class AppState: ObservableObject {
     @Published var error: String?
 
     private var core: CoreBridge?
+    private var accessedURL: URL?
 
     init() {
-        if let path = libraryPath {
-            Task { await boot(libraryPath: path) }
+        if let url = LibraryBookmark.resolve() {
+            accessedURL = url
+            Task { await boot(url: url) }
+        }
+    }
+
+    // ── Onboarding ────────────────────────────────────────────────────────
+
+    func chooseLibrary() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose Library Folder"
+        panel.message = "Select or create a folder to store your articles."
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await pickLibrary(url: url) }
+    }
+
+    private func pickLibrary(url: URL) async {
+        do {
+            try LibrarySetup.scaffold(at: url)
+            try LibraryBookmark.save(url: url)
+            stopAccessing()
+            accessedURL = LibraryBookmark.resolve()
+            await boot(url: url)
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
     // ── Boot ──────────────────────────────────────────────────────────────
 
-    func boot(libraryPath path: String) async {
+    func boot(url: URL) async {
         isLoading = true
         error = nil
         do {
-            let dbPath = Self.dbPath()
-            let bridge = try CoreBridge(libraryPath: path, dbPath: dbPath)
+            let bridge = try CoreBridge(libraryPath: url.path, dbPath: Self.dbPath())
             try await bridge.rebuild()
             core = bridge
-            libraryPath = path
-            Self.storeLibraryPath(path)
+            libraryURL = url
             await loadReadings()
         } catch {
             self.error = error.localizedDescription
@@ -53,16 +80,12 @@ final class AppState: ObservableObject {
                 let opts = FfiListOptions(
                     view: activeView.ffiView,
                     sortNewestFirst: true,
-                    tag: nil,
-                    since: nil,
-                    until: nil,
-                    limit: 100,
-                    offset: 0
+                    tag: nil, since: nil, until: nil,
+                    limit: 100, offset: 0
                 )
                 readings = try await core.listReadings(opts: opts)
             } else {
                 let results = try await core.search(query: searchQuery, limit: 50)
-                // Convert search results to display rows via a light list fetch.
                 let opts = FfiListOptions(
                     view: .all,
                     sortNewestFirst: true,
@@ -115,17 +138,14 @@ final class AppState: ObservableObject {
         return try? await core.getBody(id: id)
     }
 
-    // ── Persistence helpers ────────────────────────────────────────────────
+    // ── Security-scoped resource ──────────────────────────────────────────
 
-    private static let libraryPathKey = "libraryPath"
-
-    private static func storedLibraryPath() -> String? {
-        UserDefaults.standard.string(forKey: libraryPathKey)
+    private func stopAccessing() {
+        accessedURL?.stopAccessingSecurityScopedResource()
+        accessedURL = nil
     }
 
-    private static func storeLibraryPath(_ path: String) {
-        UserDefaults.standard.set(path, forKey: libraryPathKey)
-    }
+    // ── Helpers ───────────────────────────────────────────────────────────
 
     static func dbPath() -> String {
         let support = FileManager.default
