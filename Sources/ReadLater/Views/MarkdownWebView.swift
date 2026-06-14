@@ -116,7 +116,7 @@ struct MarkdownWebView: NSViewRepresentable {
           h3 { font-size: 1.1em; }
           a { color: #0066cc; text-decoration: none; }
           a:hover { text-decoration: underline; }
-          img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 1em 0; }
+          img { max-width: 100%; height: auto; display: block; margin: 1em 0; }
           pre {
             overflow-x: auto;
             background: rgba(0,0,0,.04);
