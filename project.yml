@@ -1,0 +1,27 @@
+name: ReadLater
+options:
+  bundleIdPrefix: com.readlater
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+targets:
+  ReadLater:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/ReadLater
+      - path: GeneratedBindings
+        optional: true   # populated by `make bindings`
+    dependencies:
+      - framework: Frameworks/ReadLaterCore.xcframework
+        embed: true
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.readlater.app
+        PRODUCT_NAME: ReadLater
+        INFOPLIST_FILE: Sources/ReadLater/App/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
