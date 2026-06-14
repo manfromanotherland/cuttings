@@ -1,0 +1,16 @@
+[package]
+name = "read-later-cli"
+description = "Developer CLI for exercising read-later-core without a UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "rl"
+path = "src/main.rs"
+
+[dependencies]
+read-later-core = { path = "../core" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
