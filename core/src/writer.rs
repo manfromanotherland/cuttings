@@ -13,7 +13,11 @@ use crate::types::{LibraryRoot, Metadata, Reading};
 ///
 /// Computes and sets `source_hash` from the body before writing.
 /// Creates `articles/` and `assets/<id>/` if they don't exist.
-pub fn write_reading(library: &LibraryRoot, mut metadata: Metadata, body: String) -> Result<Reading> {
+pub fn write_reading(
+    library: &LibraryRoot,
+    mut metadata: Metadata,
+    body: String,
+) -> Result<Reading> {
     metadata.source_hash = format!("sha256:{}", sha256_hex(body.as_bytes()));
 
     let reading = Reading { metadata, body };

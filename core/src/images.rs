@@ -36,10 +36,7 @@ pub fn download_images(
             }
             Err(_) => {
                 let marker = format!("\n<!-- asset-fetch-failed: {url} -->");
-                result = result.replace(
-                    &format!("]({url})"),
-                    &format!("]({url}){marker}"),
-                );
+                result = result.replace(&format!("]({url})"), &format!("]({url}){marker}"));
             }
         }
     }
@@ -97,9 +94,18 @@ mod tests {
 
     #[test]
     fn url_ext_extracts_extension() {
-        assert_eq!(url_ext("https://example.com/img/photo.jpg"), Some("jpg".to_string()));
-        assert_eq!(url_ext("https://example.com/img/photo.JPG"), Some("jpg".to_string()));
-        assert_eq!(url_ext("https://example.com/img/photo.jpg?size=large"), Some("jpg".to_string()));
+        assert_eq!(
+            url_ext("https://example.com/img/photo.jpg"),
+            Some("jpg".to_string())
+        );
+        assert_eq!(
+            url_ext("https://example.com/img/photo.JPG"),
+            Some("jpg".to_string())
+        );
+        assert_eq!(
+            url_ext("https://example.com/img/photo.jpg?size=large"),
+            Some("jpg".to_string())
+        );
         assert_eq!(url_ext("https://example.com/image"), None);
     }
 
@@ -107,7 +113,10 @@ mod tests {
     fn content_type_mapping() {
         assert_eq!(content_type_to_ext("image/jpeg"), Some("jpg"));
         assert_eq!(content_type_to_ext("image/png"), Some("png"));
-        assert_eq!(content_type_to_ext("image/jpeg; charset=utf-8"), Some("jpg"));
+        assert_eq!(
+            content_type_to_ext("image/jpeg; charset=utf-8"),
+            Some("jpg")
+        );
         assert_eq!(content_type_to_ext("text/html"), None);
     }
 }

@@ -38,9 +38,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
     if let Some(existing_id) = find_duplicate(&library, &req.metadata.canonical_url)? {
         return Ok(SaveResponse::error(
             "duplicate",
-            &format!(
-                "A reading with this URL already exists (id: {existing_id})"
-            ),
+            &format!("A reading with this URL already exists (id: {existing_id})"),
         ));
     }
 

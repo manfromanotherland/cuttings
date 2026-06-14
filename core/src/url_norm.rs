@@ -84,8 +84,7 @@ mod tests {
 
     #[test]
     fn strips_exact_tracking_params() {
-        let normalized =
-            normalize_url("https://example.com/post?ref=twitter&page=3").unwrap();
+        let normalized = normalize_url("https://example.com/post?ref=twitter&page=3").unwrap();
         assert_eq!(normalized, "https://example.com/post?page=3");
     }
 

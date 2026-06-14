@@ -27,8 +27,8 @@ pub fn parse_reading(content: &str) -> Result<Reading> {
     let after_fence = &rest[close + 5..]; // skip "\n---\n"
     let body = after_fence.trim_start_matches('\n').to_string();
 
-    let metadata: Metadata = serde_yaml::from_str(yaml_str)
-        .map_err(|e| anyhow!("invalid frontmatter: {e}"))?;
+    let metadata: Metadata =
+        serde_yaml::from_str(yaml_str).map_err(|e| anyhow!("invalid frontmatter: {e}"))?;
 
     Ok(Reading { metadata, body })
 }
