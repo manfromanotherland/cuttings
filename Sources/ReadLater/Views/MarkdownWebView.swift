@@ -8,8 +8,27 @@ import WebKit
 // library URL before each page load.
 private let assetScheme = "readlater"
 
-final class AssetSchemeHandler: NSObject, WKURLSchemeHandler {
+final class AssetSchemeHandler: NSObject, WKURLSchemeHandler, WKNavigationDelegate {
     var libraryURL: URL?
+
+    // ── Link handling ─────────────────────────────────────────────────────
+    // Open external links in the user's browser instead of navigating inside
+    // the reader. In-page anchor jumps (footnotes, etc.) are left to WebKit.
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        if navigationAction.navigationType == .linkActivated,
+           let url = navigationAction.request.url,
+           let scheme = url.scheme?.lowercased(),
+           scheme == "http" || scheme == "https" || scheme == "mailto" {
+            NSWorkspace.shared.open(url)
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(.allow)
+    }
 
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
         guard
@@ -74,6 +93,7 @@ struct MarkdownWebView: NSViewRepresentable {
         config.setURLSchemeHandler(context.coordinator, forURLScheme: assetScheme)
 
         let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
     }
