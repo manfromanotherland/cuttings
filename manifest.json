@@ -3,7 +3,7 @@
   "name": "read-later",
   "version": "0.1.0",
   "description": "Save pages to read later, locally.",
-  "permissions": ["activeTab", "nativeMessaging"],
+  "permissions": ["activeTab", "nativeMessaging", "contextMenus", "notifications"],
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"
@@ -16,6 +16,15 @@
     }
   ],
   "action": {
-    "default_title": "Save to read-later"
+    "default_title": "Save to Read Later"
+  },
+  "commands": {
+    "save-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      },
+      "description": "Save current page to Read Later"
+    }
   }
 }
