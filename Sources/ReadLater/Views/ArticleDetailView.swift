@@ -73,7 +73,6 @@ struct ArticleDetailView: View {
             if let articleHTML {
                 MarkdownWebView(
                     html: articleHTML,
-                    baseURL: libraryBaseURL,
                     font: readerFont,
                     fontSize: readerFontSize
                 )
@@ -94,10 +93,6 @@ struct ArticleDetailView: View {
         .navigationTitle(row.title.isEmpty ? "Article" : row.title)
     }
 
-    // Library root as baseURL so WKWebView can read assets/ alongside articles/
-    private var libraryBaseURL: URL? {
-        appState.libraryURL
-    }
 
     private func tagBar(row: FfiReadingRow) -> some View {
         FlowLayout(spacing: 6) {
@@ -212,10 +207,18 @@ struct ArticleDetailView: View {
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
         if let markdown = await appState.getBody(id: id) {
-            // Paths in the Markdown are "../assets/…" relative to articles/.
-            // Since baseURL is the library root, rewrite them to "assets/…".
             var html = markdownToHtml(markdown: markdown)
-            html = html.replacingOccurrences(of: "src=\"../assets/", with: "src=\"assets/")
+            // Rewrite relative asset paths to absolute file:// URLs so
+            // loadHTMLString can resolve them without any baseURL tricks.
+            if let libraryURL = appState.libraryURL {
+                let assetsPrefix = libraryURL
+                    .appendingPathComponent("assets", isDirectory: true)
+                    .absoluteString  // e.g. "file:///Users/…/ReadLater/assets/"
+                html = html.replacingOccurrences(
+                    of: "src=\"../assets/",
+                    with: "src=\"\(assetsPrefix)"
+                )
+            }
             articleHTML = html
         } else {
             articleHTML = nil
