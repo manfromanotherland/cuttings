@@ -13,14 +13,17 @@ final class AssetSchemeHandler: NSObject, WKURLSchemeHandler, WKNavigationDelega
 
     // ── Link handling ─────────────────────────────────────────────────────
     // Open external links in the user's browser instead of navigating inside
-    // the reader. In-page anchor jumps (footnotes, etc.) are left to WebKit.
+    // the reader. We intercept any navigation to a web/mail URL regardless of
+    // navigationType: with JavaScript disabled, WebKit doesn't reliably report
+    // link clicks as `.linkActivated`. The initial loadHTMLString is
+    // `about:blank`, and image loads go through the readlater:// scheme handler
+    // (not navigation), so neither is affected. In-page anchor jumps remain.
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        if navigationAction.navigationType == .linkActivated,
-           let url = navigationAction.request.url,
+        if let url = navigationAction.request.url,
            let scheme = url.scheme?.lowercased(),
            scheme == "http" || scheme == "https" || scheme == "mailto" {
             NSWorkspace.shared.open(url)
