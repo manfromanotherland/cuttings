@@ -17,10 +17,10 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use read_later_core::{
-    add_tag, apply_diffs, diff, get_reading, list_readings, list_tags, open_index, rebuild,
-    remove_tag, scan_library, search, set_archived, set_favorite, set_read,
+    add_tag, apply_diffs, diff, get_reading,
     list::{ListOptions, SortOrder, View},
-    LibraryRoot,
+    list_readings, list_tags, open_index, rebuild, remove_tag, scan_library, search, set_archived,
+    set_favorite, set_read, LibraryRoot,
 };
 use std::path::Path;
 
@@ -63,14 +63,9 @@ enum Cmd {
         offset: usize,
     },
     /// Fetch a single reading (metadata + body excerpt).
-    Get {
-        db_path: String,
-        id: String,
-    },
+    Get { db_path: String, id: String },
     /// List all tags with counts.
-    Tags {
-        db_path: String,
-    },
+    Tags { db_path: String },
     /// Add a tag to a reading.
     AddTag {
         library_path: String,
@@ -99,7 +94,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.cmd {
-        Cmd::Rebuild { library_path, db_path } => {
+        Cmd::Rebuild {
+            library_path,
+            db_path,
+        } => {
             let lib = LibraryRoot::new(Path::new(&library_path))?;
             let conn = open_index(Path::new(&db_path))?;
             rebuild(&conn, &lib)?;
@@ -107,7 +105,10 @@ fn main() -> Result<()> {
             println!("Rebuilt index: {count} articles indexed.");
         }
 
-        Cmd::Sync { library_path, db_path } => {
+        Cmd::Sync {
+            library_path,
+            db_path,
+        } => {
             let lib = LibraryRoot::new(Path::new(&library_path))?;
             let conn = open_index(Path::new(&db_path))?;
             // Load all current index rows as the "old" state by scanning first.
@@ -123,7 +124,11 @@ fn main() -> Result<()> {
             println!("Sync complete: {n} change(s) applied.");
         }
 
-        Cmd::Search { db_path, query, limit } => {
+        Cmd::Search {
+            db_path,
+            query,
+            limit,
+        } => {
             let conn = open_index(Path::new(&db_path))?;
             let results = search(&conn, &query, limit)?;
             if results.is_empty() {
@@ -135,7 +140,13 @@ fn main() -> Result<()> {
             }
         }
 
-        Cmd::List { db_path, view, tag, limit, offset } => {
+        Cmd::List {
+            db_path,
+            view,
+            tag,
+            limit,
+            offset,
+        } => {
             let view = match view.to_lowercase().as_str() {
                 "unread" => View::Unread,
                 "archive" => View::Archive,
@@ -143,14 +154,17 @@ fn main() -> Result<()> {
                 _ => View::All,
             };
             let conn = open_index(Path::new(&db_path))?;
-            let rows = list_readings(&conn, &ListOptions {
-                view,
-                sort: SortOrder::NewestFirst,
-                tag,
-                limit,
-                offset,
-                ..Default::default()
-            })?;
+            let rows = list_readings(
+                &conn,
+                &ListOptions {
+                    view,
+                    sort: SortOrder::NewestFirst,
+                    tag,
+                    limit,
+                    offset,
+                    ..Default::default()
+                },
+            )?;
             if rows.is_empty() {
                 println!("No readings.");
             }
@@ -180,12 +194,16 @@ fn main() -> Result<()> {
                     println!("URL    : {}", row.url);
                     println!("Saved  : {}", row.saved_at);
                     println!("Tags   : {}", row.tags.join(", "));
-                    println!("Read   : {} | Archived: {} | Favorite: {}",
-                        row.read, row.archived, row.favorite);
+                    println!(
+                        "Read   : {} | Archived: {} | Favorite: {}",
+                        row.read, row.archived, row.favorite
+                    );
                     println!("---");
                     let preview: String = body.chars().take(400).collect();
                     println!("{preview}");
-                    if body.len() > 400 { println!("… ({} chars total)", body.len()); }
+                    if body.len() > 400 {
+                        println!("… ({} chars total)", body.len());
+                    }
                 }
             }
         }
@@ -201,21 +219,37 @@ fn main() -> Result<()> {
             }
         }
 
-        Cmd::AddTag { library_path, db_path, id, tag } => {
+        Cmd::AddTag {
+            library_path,
+            db_path,
+            id,
+            tag,
+        } => {
             let lib = LibraryRoot::new(Path::new(&library_path))?;
             let conn = open_index(Path::new(&db_path))?;
             add_tag(&lib, &conn, &id, &tag)?;
             println!("Added tag '{tag}' to {id}.");
         }
 
-        Cmd::RmTag { library_path, db_path, id, tag } => {
+        Cmd::RmTag {
+            library_path,
+            db_path,
+            id,
+            tag,
+        } => {
             let lib = LibraryRoot::new(Path::new(&library_path))?;
             let conn = open_index(Path::new(&db_path))?;
             remove_tag(&lib, &conn, &id, &tag)?;
             println!("Removed tag '{tag}' from {id}.");
         }
 
-        Cmd::Set { library_path, db_path, id, flag, value } => {
+        Cmd::Set {
+            library_path,
+            db_path,
+            id,
+            flag,
+            value,
+        } => {
             let lib = LibraryRoot::new(Path::new(&library_path))?;
             let conn = open_index(Path::new(&db_path))?;
             let v = matches!(value.to_lowercase().as_str(), "true" | "1" | "yes");
