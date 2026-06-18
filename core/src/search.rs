@@ -15,16 +15,73 @@ pub struct SearchResult {
     pub saved_at: String,
 }
 
+/// Split user text into word tokens, dropping all punctuation/operators.
+///
+/// User input (especially pasted prose) routinely contains characters FTS5
+/// treats as operators — `"` (phrase), `-` (NOT), `:` (column), `*` (prefix),
+/// `(` `)` (grouping), and the `AND`/`OR`/`NOT` keywords. Reducing the input
+/// to bare word tokens and re-quoting them ourselves means none of those can
+/// reach the FTS5 parser, so a query can never raise a syntax error.
+fn tokenize(raw: &str) -> Vec<String> {
+    raw.split(|c: char| !c.is_alphanumeric())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Exact contiguous phrase, e.g. `"core rust concepts"*`. The whole input is
+/// one quoted phrase (so FTS5 keywords/operators stay literal); the trailing
+/// `*` makes only the final token a prefix, so a half-typed last word matches
+/// as you type while the earlier, completed words stay exact.
+fn phrase_query(tokens: &[String]) -> String {
+    format!("\"{}\"*", tokens.join(" "))
+}
+
+/// All-words AND, e.g. `"core" "rust" "concepts"*`. Space-separated quoted
+/// terms are implicitly AND-ed by FTS5: every word must appear in the article,
+/// in any order or position. Only the final term gets a prefix `*` (the word
+/// being typed); the rest must match in full.
+fn and_query(tokens: &[String]) -> String {
+    let last = tokens.len() - 1;
+    tokens
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            if i == last {
+                format!("\"{t}\"*")
+            } else {
+                format!("\"{t}\"")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Run a full-text search against the index.
 ///
-/// `query` is passed directly to FTS5 MATCH, so callers can use FTS5 syntax
-/// (e.g. `"exact phrase"`, `term*` for prefix). Results are ranked by BM25
-/// relevance (best first) and capped at `limit`.
+/// `query` is plain user text. It is first matched as an exact contiguous
+/// phrase; if that finds nothing, it falls back to requiring all the words to
+/// appear anywhere in the article. The fallback matters because `body_text`
+/// holds the raw Markdown, so link URLs and other markup are tokenized
+/// *between* the visible words — pasted rendered prose rarely lines up as a
+/// literal phrase, but every word is still present. Results are ranked by
+/// BM25 relevance (best first) and capped at `limit`.
 pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
-    if query.trim().is_empty() {
+    let tokens = tokenize(query);
+    // Nothing searchable (blank, or pure punctuation/operators).
+    if tokens.is_empty() {
         return Ok(vec![]);
     }
 
+    let phrase = run_match(conn, &phrase_query(&tokens), limit)?;
+    if !phrase.is_empty() {
+        return Ok(phrase);
+    }
+    run_match(conn, &and_query(&tokens), limit)
+}
+
+/// Execute one FTS5 `MATCH` query and collect the ranked results.
+fn run_match(conn: &Connection, match_query: &str, limit: usize) -> Result<Vec<SearchResult>> {
     let mut stmt = conn.prepare(
         "SELECT r.id, r.title, r.excerpt, r.tags_json, r.saved_at,
                 snippet(readings_fts, 1, '<mark>', '</mark>', '…', 20)
@@ -35,7 +92,7 @@ pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<Search
          LIMIT ?2",
     )?;
 
-    let rows = stmt.query_map(params![query, limit as i64], |row| {
+    let rows = stmt.query_map(params![match_query, limit as i64], |row| {
         let tags_json: String = row.get(3)?;
         Ok((
             row.get::<_, String>(0)?,
@@ -208,7 +265,135 @@ mod tests {
     }
 
     #[test]
-    fn prefix_search_works() {
+    fn multi_word_phrase_matches_contiguous_body() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "An Article"),
+            "Ownership and borrowing are core Rust concepts.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let results = search(&conn, "core Rust concepts", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn pasted_text_with_punctuation_matches_source() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "An Article"),
+            "Ownership and borrowing are core Rust concepts.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // A pasted snippet carrying punctuation, a stray quote, a hyphen and a
+        // colon must not raise an FTS5 syntax error and must still find the
+        // source (both sides tokenize identically).
+        let results = search(&conn, "borrowing are \"core\" Rust-concepts:", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn non_contiguous_words_match_via_and_fallback() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "An Article"),
+            "Ownership and borrowing are core Rust concepts.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Not adjacent → no exact phrase match, but both words are present, so
+        // the all-words AND fallback still finds the article.
+        let results = search(&conn, "Ownership concepts", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn pasted_prose_across_a_link_still_matches() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        // body_text is raw Markdown, so the link URL is tokenized *between*
+        // the visible words: read the official docs <https doc rust ...> now.
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "Docs"),
+            "Read the [official docs](https://doc.rust-lang.org/book) now.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Pasting the rendered sentence can't match as a contiguous phrase
+        // (the URL tokens interleave), but every word is present → AND fallback.
+        let results = search(&conn, "Read the official docs now", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn truncated_last_word_matches_via_phrase_prefix() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "Loops"),
+            "Loop engineering is replacing yourself as the person who prompts the agent."
+                .to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Typing stops mid-word: "…prompts the ag". The trailing prefix lets
+        // "ag" match "agent" so the result appears before the word is finished.
+        let results = search(&conn, "prompts the ag", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn truncated_last_word_matches_across_link_via_and_prefix() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta(&id, "https://example.com", "Docs"),
+            "Read the [official docs](https://doc.rust-lang.org/book) now.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Phrase fails (URL interleaves) AND the last word is truncated; the
+        // AND fallback with a prefix on the final term still finds it.
+        let results = search(&conn, "official docs no", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn operator_characters_are_treated_literally() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
 
@@ -220,8 +405,14 @@ mod tests {
         .unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        // FTS5 prefix search via trailing *
+        // A trailing `*` is no longer FTS5 prefix syntax; it's a literal,
+        // ignorable separator, so this matches the `async` token without error.
         let results = search(&conn, "async*", 10).unwrap();
         assert_eq!(results.len(), 1);
+
+        // Input that is nothing but operator characters tokenizes to an empty
+        // phrase: zero matches, never an error.
+        let results = search(&conn, "-\"()*:", 10).unwrap();
+        assert!(results.is_empty());
     }
 }
