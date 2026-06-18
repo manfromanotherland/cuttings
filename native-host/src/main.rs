@@ -171,7 +171,9 @@ mod integration_tests {
     where
         F: FnOnce(&TempDir) -> R,
     {
-        let _guard = ENV_LOCK.lock().unwrap();
+        // Recover from a poisoned lock so a panic in one test doesn't cascade
+        // into PoisonError failures in the others.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = TempDir::new().unwrap();
         std::env::set_var("READ_LATER_LIBRARY", dir.path());
         let result = f(&dir);
@@ -245,10 +247,26 @@ mod integration_tests {
 
     #[test]
     fn no_library_returns_library_not_configured() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Isolate BOTH library sources: the env var and the
+        // `$HOME/.config/read-later/library` fallback. Pointing HOME at an
+        // empty temp dir ensures the host can't resolve a real library that a
+        // developer machine happens to have configured.
+        let home = TempDir::new().unwrap();
+        let prev_home = std::env::var_os("HOME");
+        std::env::set_var("HOME", home.path());
         std::env::remove_var("READ_LATER_LIBRARY");
 
         let resp = dispatch(&save_message("https://example.com/no-lib"));
+
+        // Restore HOME before asserting so an assertion failure can't leak the
+        // overridden value into other tests.
+        match prev_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+
         assert!(!resp.ok);
         assert_eq!(resp.error.as_deref(), Some("library_not_configured"));
     }
