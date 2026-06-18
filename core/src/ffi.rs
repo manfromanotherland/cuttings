@@ -71,6 +71,7 @@ pub struct FfiTagCount {
 pub enum FfiView {
     All,
     Unread,
+    Read,
     Archive,
     Favorites,
 }
@@ -128,6 +129,7 @@ impl From<FfiListOptions> for ListOptions {
             view: match o.view {
                 FfiView::All => View::All,
                 FfiView::Unread => View::Unread,
+                FfiView::Read => View::Read,
                 FfiView::Archive => View::Archive,
                 FfiView::Favorites => View::Favorites,
             },

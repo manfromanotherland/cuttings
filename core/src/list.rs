@@ -10,6 +10,8 @@ pub enum View {
     All,
     /// Non-archived readings that have not been read.
     Unread,
+    /// Non-archived readings that have been read.
+    Read,
     /// Archived readings.
     Archive,
     /// Readings marked as favorite (regardless of archived state).
@@ -78,6 +80,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let view_clause = match opts.view {
         View::All => "archived = 0",
         View::Unread => "archived = 0 AND read = 0",
+        View::Read => "archived = 0 AND read = 1",
         View::Archive => "archived = 1",
         View::Favorites => "favorite = 1",
     };
@@ -258,6 +261,42 @@ mod tests {
         .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Unread");
+    }
+
+    #[test]
+    fn list_read_returns_read_non_archived() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://a.com", "Unread"),
+            "body".into(),
+        )
+        .unwrap();
+
+        let mut read_meta = meta(&new_id(), "https://b.com", "Read");
+        read_meta.read = true;
+        write_reading(&lib, read_meta, "body".into()).unwrap();
+
+        // A read but archived item must not appear under the Read view.
+        let mut read_archived = meta(&new_id(), "https://c.com", "ReadArchived");
+        read_archived.read = true;
+        read_archived.archived = true;
+        write_reading(&lib, read_archived, "body".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Read,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "Read");
     }
 
     #[test]
