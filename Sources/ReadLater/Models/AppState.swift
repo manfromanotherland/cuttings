@@ -254,13 +254,14 @@ final class AppState: ObservableObject {
 // ── Sidebar items ──────────────────────────────────────────────────────────────
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case all, unread, archive, favorites
+    case all, unread, read, archive, favorites
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .all: "All"
         case .unread: "Unread"
+        case .read: "Read"
         case .archive: "Archive"
         case .favorites: "Favorites"
         }
@@ -270,6 +271,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .all: "tray.full"
         case .unread: "circle"
+        case .read: "checkmark.circle"
         case .archive: "archivebox"
         case .favorites: "star"
         }
@@ -279,6 +281,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .all: .all
         case .unread: .unread
+        case .read: .read
         case .archive: .archive
         case .favorites: .favorites
         }
