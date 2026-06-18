@@ -12,7 +12,9 @@ struct ReadLaterApp: App {
             ContentView()
                 .environmentObject(appState)
                 .frame(minWidth: 900, minHeight: 600)
-                .preferredColorScheme(appearanceMode.colorScheme)
+                .onChange(of: appearanceMode, initial: true) { _, mode in
+                    NSApplication.shared.appearance = mode.nsAppearance
+                }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
