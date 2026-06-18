@@ -14,11 +14,12 @@ enum ReaderFont: String, CaseIterable, Identifiable {
         }
     }
 
-    var cssFamily: String {
+    /// SwiftUI font design used by the native reader.
+    var design: Font.Design {
         switch self {
-        case .system: "system-ui, -apple-system, sans-serif"
-        case .serif: "Georgia, 'New York', ui-serif, serif"
-        case .mono: "'SF Mono', ui-monospace, 'Menlo', monospace"
+        case .system: .default
+        case .serif: .serif
+        case .mono: .monospaced
         }
     }
 }
@@ -35,4 +36,7 @@ enum ReaderFontSize: Int, CaseIterable, Identifiable {
         case .xlarge: "Extra Large"
         }
     }
+
+    /// Base body point size for the native reader.
+    var points: CGFloat { CGFloat(rawValue) }
 }

@@ -8,7 +8,7 @@ struct ArticleDetailView: View {
     @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
 
     @State private var row: FfiReadingRow?
-    @State private var articleHTML: String?
+    @State private var articleMarkdown: String?
     @State private var isLoading = false
     @State private var newTag = ""
     @State private var showTagInput = false
@@ -69,10 +69,10 @@ struct ArticleDetailView: View {
 
             Divider()
 
-            // WKWebView handles its own scrolling and fills all remaining height
-            if let articleHTML {
-                MarkdownWebView(
-                    html: articleHTML,
+            // Native reader handles its own scrolling and fills remaining height
+            if let articleMarkdown {
+                MarkdownDocumentView(
+                    markdown: articleMarkdown,
                     libraryURL: appState.libraryURL,
                     font: readerFont,
                     fontSize: readerFontSize
@@ -202,43 +202,16 @@ struct ArticleDetailView: View {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private func load(id: String?) async {
-        guard let id else { row = nil; articleHTML = nil; return }
+        guard let id else { row = nil; articleMarkdown = nil; return }
         isLoading = true
         showTagInput = false
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
-        if let markdown = await appState.getBody(id: id) {
-            // Unwrap Markdown linked images BEFORE conversion. pulldown-cmark
-            // sometimes fails to parse `[![alt](img)](url)` when the outer URL
-            // contains CDN characters like $ or !, leaving raw `[ ]( )` syntax
-            // in the rendered output. Stripping the wrapper at the Markdown
-            // level is deterministic and independent of how pulldown-cmark
-            // renders the broken link.
-            let cleaned = unwrapLinkedImages(in: markdown)
-            var html = markdownToHtml(markdown: cleaned)
-            // Rewrite local asset paths to the custom scheme for AssetSchemeHandler.
-            html = html.replacingOccurrences(
-                of: "src=\"../assets/",
-                with: "src=\"readlater://assets/"
-            )
-            articleHTML = html
-        } else {
-            articleHTML = nil
-        }
+        // The native reader parses Markdown directly (linked images like
+        // `[![alt](img)](url)` are handled by the renderer), so no HTML
+        // conversion or asset-path rewriting is needed.
+        articleMarkdown = await appState.getBody(id: id)
         isLoading = false
-    }
-
-    /// Convert Markdown linked images `[![alt](img)](url)` into plain images
-    /// `![alt](img)`, dropping the surrounding link. Common on Substack/Medium.
-    private func unwrapLinkedImages(in markdown: String) -> String {
-        guard let regex = try? NSRegularExpression(
-            pattern: #"\[\s*(!\[[^\]]*\]\([^)]*\))\s*\]\([^)]*\)"#
-        ) else { return markdown }
-        return regex.stringByReplacingMatches(
-            in: markdown,
-            range: NSRange(markdown.startIndex..., in: markdown),
-            withTemplate: "$1"
-        )
     }
 
     private func commitTag(id: String) {
