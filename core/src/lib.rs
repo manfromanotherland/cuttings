@@ -4,7 +4,6 @@ uniffi::setup_scaffolding!();
 
 pub mod ffi;
 mod frontmatter;
-mod html;
 mod id;
 mod images;
 pub mod index;

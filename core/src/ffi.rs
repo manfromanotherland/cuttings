@@ -293,12 +293,3 @@ impl Database {
         crate::set_favorite(&lib, &conn, &id, favorite).map_err(e)
     }
 }
-
-// ── Free functions ────────────────────────────────────────────────────────────
-
-/// Convert a Markdown string to an HTML fragment.
-/// Exposed as a top-level Swift function `markdownToHtml(markdown:)`.
-#[uniffi::export]
-pub fn markdown_to_html(markdown: String) -> String {
-    crate::html::markdown_to_html(&markdown)
-}
