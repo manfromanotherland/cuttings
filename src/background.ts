@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import type { ToastMessage } from "./content.js";
 import type { ExtractionResult } from "./extraction.js";
 import type { SaveRequest, SaveResponse } from "./protocol.js";
 import { HOST_ID, isHostMissing } from "./host.js";
@@ -75,6 +76,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     const result = await chrome.tabs.sendMessage(tabId, { action: "extract" });
     if (result?.error) {
       await showBadge(tabId, "error");
+      await showToast(tabId, "error", "Couldn't save page", result.error);
       console.error("read-later: extraction failed:", result.error);
       return;
     }
@@ -103,6 +105,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
       await notifyHostMissing(tabId);
     } else {
       await showBadge(tabId, "error");
+      await showToast(tabId, "error", "Couldn't save page", "The native helper returned an error.");
       console.error("read-later: native host error:", err);
     }
     return;
@@ -110,8 +113,10 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
 
   if (response.ok) {
     await showBadge(tabId, "ok");
+    await showToast(tabId, "ok", "Saved to Read Later", extraction.metadata.title);
   } else {
     await showBadge(tabId, "error");
+    await showToast(tabId, "error", "Couldn't save page", response.message || response.error);
     console.error("read-later: save failed:", response.error, response.message);
   }
 }
@@ -174,6 +179,20 @@ function sendNativeMessage(message: SaveRequest): Promise<SaveResponse> {
       }
     });
   });
+}
+
+async function showToast(
+  tabId: number,
+  status: ToastMessage["status"],
+  title: string,
+  detail?: string,
+): Promise<void> {
+  const message: ToastMessage = { action: "toast", status, title, detail };
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+  } catch {
+    // Tab closed/navigated or no content script reachable; the badge still conveys status.
+  }
 }
 
 async function showBadge(tabId: number, status: "ok" | "error"): Promise<void> {
