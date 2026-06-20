@@ -2,7 +2,7 @@
 
 import type { ToastMessage } from "./content.js";
 import type { ExtractionResult } from "./extraction.js";
-import type { SaveRequest, SaveResponse } from "./protocol.js";
+import type { CheckRequest, CheckResponse, SaveRequest, SaveResponse } from "./protocol.js";
 import { HOST_ID, isHostMissing } from "./host.js";
 
 const CONTEXT_MENU_ID = "save-page";
@@ -10,44 +10,96 @@ const NOTIF_HOST_MISSING = "host-missing";
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 
-function drawIcon(size: number, active: boolean): ImageData {
+type IconState = "default" | "saved";
+
+function drawIcon(size: number, state: IconState): ImageData {
   const canvas = new OffscreenCanvas(size, size);
   const ctx = canvas.getContext("2d")!;
 
   const r = size * 0.15;
-  ctx.fillStyle = active ? "#2563EB" : "#3B82F6";
+  ctx.fillStyle = state === "saved" ? "#22C55E" : "#3B82F6";
   ctx.beginPath();
   ctx.roundRect(0, 0, size, size, r);
   ctx.fill();
 
-  // Bookmark shape
-  const pad = size * 0.22;
-  const bw = size - pad * 2;
-  const bh = size - pad * 1.5;
-  const notchY = size - pad * 0.6;
-  const midX = pad + bw / 2;
+  if (state === "saved") {
+    const pad = size * 0.26;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = size * 0.13;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(pad, size * 0.5);
+    ctx.lineTo(size * 0.44, size - pad);
+    ctx.lineTo(size - pad, pad);
+    ctx.stroke();
+  } else {
+    const pad = size * 0.22;
+    const bw = size - pad * 2;
+    const bh = size - pad * 1.5;
+    const notchY = size - pad * 0.6;
+    const midX = pad + bw / 2;
 
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.beginPath();
-  ctx.moveTo(pad, pad);
-  ctx.lineTo(pad + bw, pad);
-  ctx.lineTo(pad + bw, notchY);
-  ctx.lineTo(midX, notchY - bh * 0.2);
-  ctx.lineTo(pad, notchY);
-  ctx.closePath();
-  ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad + bw, pad);
+    ctx.lineTo(pad + bw, notchY);
+    ctx.lineTo(midX, notchY - bh * 0.2);
+    ctx.lineTo(pad, notchY);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   return ctx.getImageData(0, 0, size, size);
 }
 
-async function setIcon(active = false): Promise<void> {
-  await chrome.action.setIcon({
-    imageData: {
-      16: drawIcon(16, active),
-      32: drawIcon(32, active),
-      48: drawIcon(48, active),
-    },
-  });
+async function setIcon(state: IconState = "default", tabId?: number): Promise<void> {
+  const imageData = {
+    16: drawIcon(16, state),
+    32: drawIcon(32, state),
+    48: drawIcon(48, state),
+  };
+  if (tabId !== undefined) {
+    await chrome.action.setIcon({ imageData, tabId });
+  } else {
+    await chrome.action.setIcon({ imageData });
+  }
+}
+
+// ── Saved-URL cache ───────────────────────────────────────────────────────────
+
+/** In-memory cache: normalized URL → is it saved? Populated by check and save. */
+const savedCache = new Map<string, boolean>();
+
+function normalizeUrl(raw: string): string {
+  return raw.split("#")[0];
+}
+
+// ── Tab icon check ────────────────────────────────────────────────────────────
+
+async function checkAndSetIcon(tabId: number, rawUrl: string): Promise<void> {
+  if (!rawUrl || rawUrl.startsWith("chrome://") || rawUrl.startsWith("about:")) return;
+
+  const url = normalizeUrl(rawUrl);
+
+  if (savedCache.has(url)) {
+    await setIcon(savedCache.get(url)! ? "saved" : "default", tabId);
+    return;
+  }
+
+  try {
+    const response = await sendNativeMessage<CheckRequest, CheckResponse>({
+      protocol_version: 1,
+      action: "check",
+      url,
+    });
+    const isSaved = response.saved ?? false;
+    savedCache.set(url, isSaved);
+    await setIcon(isSaved ? "saved" : "default", tabId);
+  } catch {
+    // Native host not installed or unreachable — silently skip.
+  }
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────
@@ -65,11 +117,27 @@ chrome.runtime.onStartup.addListener(() => {
   void setIcon();
 });
 
+// ── Tab navigation listeners ──────────────────────────────────────────────────
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  void chrome.tabs.get(tabId, (tab) => {
+    if (tab.url) void checkAndSetIcon(tabId, tab.url);
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && tab.url) {
+    void checkAndSetIcon(tabId, tab.url);
+  }
+});
+
 // ── Save pipeline ─────────────────────────────────────────────────────────────
 
 async function savePage(tab: chrome.tabs.Tab): Promise<void> {
   const tabId = tab.id;
   if (!tabId || !tab.url) return;
+
+  await showToast(tabId, "loading", "Saving…");
 
   let extraction: ExtractionResult;
   try {
@@ -99,7 +167,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
 
   let response: SaveResponse;
   try {
-    response = await sendNativeMessage(request);
+    response = await sendNativeMessage<SaveRequest, SaveResponse>(request);
   } catch (err) {
     if (err instanceof Error && isHostMissing(err)) {
       await notifyHostMissing(tabId);
@@ -114,11 +182,23 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
   if (response.ok) {
     await showBadge(tabId, "ok");
     await showToast(tabId, "ok", "Saved to Read Later", extraction.metadata.title);
+    markSaved(tabId, tab.url, extraction.metadata.canonical_url);
+  } else if (response.error === "duplicate") {
+    await showBadge(tabId, "ok");
+    await showToast(tabId, "ok", "Already in Reading List", extraction.metadata.title);
+    markSaved(tabId, tab.url, extraction.metadata.canonical_url);
   } else {
     await showBadge(tabId, "error");
     await showToast(tabId, "error", "Couldn't save page", response.message || response.error);
     console.error("read-later: save failed:", response.error, response.message);
   }
+}
+
+/** Update the cache and flip the icon to "saved" immediately after a save. */
+function markSaved(tabId: number, tabUrl: string, canonicalUrl: string): void {
+  savedCache.set(normalizeUrl(tabUrl), true);
+  savedCache.set(normalizeUrl(canonicalUrl), true);
+  void setIcon("saved", tabId);
 }
 
 // ── Triggers ──────────────────────────────────────────────────────────────────
@@ -169,9 +249,9 @@ chrome.notifications.onClicked.addListener((id) => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function sendNativeMessage(message: SaveRequest): Promise<SaveResponse> {
+function sendNativeMessage<TReq, TRes>(message: TReq): Promise<TRes> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendNativeMessage(HOST_ID, message, (response: SaveResponse) => {
+    chrome.runtime.sendNativeMessage(HOST_ID, message as object, (response: TRes) => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {

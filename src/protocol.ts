@@ -39,3 +39,17 @@ export interface SaveResponseError {
 }
 
 export type SaveResponse = SaveResponseSuccess | SaveResponseError;
+
+/** Message sent from the extension to check whether a URL is already saved. */
+export interface CheckRequest {
+  protocol_version: 1;
+  action: "check";
+  url: string;
+}
+
+export interface CheckResponse {
+  protocol_version: 1;
+  ok: true;
+  saved: boolean;
+  id?: string;
+}
