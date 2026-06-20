@@ -16,7 +16,9 @@ export interface ExtractionResult {
  * Returns null if the page doesn't look like an article.
  */
 export function extractPage(doc: Document, pageUrl: string): ExtractionResult | null {
-  const article = new Readability(doc.cloneNode(true) as Document).parse();
+  const clone = doc.cloneNode(true) as Document;
+  preserveHeadings(clone);
+  const article = new Readability(clone).parse();
   if (!article?.content) return null;
 
   const { markdown, imageUrls } = htmlToMarkdown(article.content);
@@ -39,6 +41,23 @@ export function extractPage(doc: Document, pageUrl: string): ExtractionResult | 
   };
 
   return { metadata, markdown, image_urls: imageUrls };
+}
+
+/**
+ * Strip class/id attributes from heading elements before Readability runs.
+ *
+ * Readability's `unlikelyCandidates` heuristic removes any node whose class/id
+ * contains the token "header" (among others) before the article is scored.
+ * Genuine in-article headings with class names like Substack's
+ * `header-anchor-post` therefore get dropped, so the Markdown loses every `##`.
+ * Headings are inherently content, so neutralizing their class/id keeps them
+ * without affecting how the surrounding body is selected.
+ */
+function preserveHeadings(doc: Document): void {
+  doc.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((heading) => {
+    heading.removeAttribute("class");
+    heading.removeAttribute("id");
+  });
 }
 
 /** Convert an HTML string to CommonMark Markdown, collecting image URLs. */

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { countWords, htmlToMarkdown } from "./extraction.js";
+import { countWords, extractPage, htmlToMarkdown } from "./extraction.js";
 
 describe("htmlToMarkdown", () => {
   it("converts h1 headings", () => {
@@ -63,6 +63,39 @@ describe("htmlToMarkdown", () => {
     expect(imageUrls).toHaveLength(2);
     expect(imageUrls).toContain("https://example.com/a.jpg");
     expect(imageUrls).toContain("https://example.com/b.png");
+  });
+});
+
+describe("extractPage", () => {
+  function buildDoc(body: string): Document {
+    const doc = document.implementation.createHTMLDocument("Test Article");
+    doc.body.innerHTML = body;
+    return doc;
+  }
+
+  // A long article body so Readability accepts it; section headings carry a
+  // class whose name trips Readability's "header" unlikely-candidate filter.
+  const para =
+    "<p>" +
+    "This is a sufficiently long paragraph of article prose so that Readability " +
+    "treats the surrounding container as the main content and does not bail out. ".repeat(6) +
+    "</p>";
+  const article =
+    "<article>" +
+    para +
+    '<h2 class="header-anchor-post">First section</h2>' +
+    para +
+    '<h2 class="header-anchor-post">Second section</h2>' +
+    para +
+    "</article>";
+
+  it("keeps in-article headings whose class trips the 'header' filter", () => {
+    const result = extractPage(buildDoc(article), "https://example.com/post");
+    expect(result).not.toBeNull();
+    expect(result!.markdown).toContain("First section");
+    expect(result!.markdown).toContain("Second section");
+    expect(result!.markdown).toMatch(/^##\s+.*First section/m);
+    expect(result!.markdown).toMatch(/^##\s+.*Second section/m);
   });
 });
 
