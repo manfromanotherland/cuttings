@@ -19,48 +19,43 @@ struct MarkdownBlockView: View {
     var body: some View {
         switch block {
         case let heading as Heading:
-            Text(InlineRenderer.attributed(heading, theme: theme))
-                .font(theme.headingFont(heading.level))
-                .padding(.top, theme.bodySize * 0.5)
-                .textSelection(.enabled)
+            HeadingView(heading: heading, theme: theme)
 
         case let paragraph as Paragraph:
             ParagraphView(paragraph: paragraph, theme: theme, libraryURL: libraryURL)
 
         case let quote as BlockQuote:
-            HStack(spacing: 12) {
-                Rectangle()
+            HStack(spacing: theme.quoteBarGap) {
+                RoundedRectangle(cornerRadius: theme.quoteBarWidth / 2)
                     .fill(.secondary.opacity(0.4))
-                    .frame(width: 3)
-                VStack(alignment: .leading, spacing: theme.blockSpacing * 0.6) {
+                    .frame(width: theme.quoteBarWidth)
+                VStack(alignment: .leading, spacing: theme.quoteInnerSpacing) {
                     ForEach(childArray(quote)) { item in
                         MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL)
                     }
                 }
                 .foregroundStyle(.secondary)
             }
+            .fixedSize(horizontal: false, vertical: true)
 
         case let list as UnorderedList:
             ListView(items: childArray(list), ordered: false, startIndex: 1,
-                     theme: theme, libraryURL: libraryURL)
+                     depth: 0, theme: theme, libraryURL: libraryURL)
 
         case let list as OrderedList:
             ListView(items: childArray(list), ordered: true, startIndex: Int(list.startIndex),
-                     theme: theme, libraryURL: libraryURL)
+                     depth: 0, theme: theme, libraryURL: libraryURL)
 
         case let item as ListItem:
-            // Reached when recursing inside a ListView item.
-            VStack(alignment: .leading, spacing: theme.blockSpacing * 0.5) {
-                ForEach(childArray(item)) { child in
-                    MarkdownBlockView(block: child.markup, theme: theme, libraryURL: libraryURL)
-                }
-            }
+            // Reached only if a ListItem is rendered outside a ListView; lists
+            // normally route item content through `ListItemContent`.
+            ListItemContent(item: item, depth: 0, theme: theme, libraryURL: libraryURL)
 
         case let code as CodeBlock:
             CodeBlockView(code: code.code, language: code.language, theme: theme)
 
         case is ThematicBreak:
-            Divider().padding(.vertical, theme.blockSpacing * 0.5)
+            Divider().padding(.vertical, theme.ruleSpacing)
 
         case let table as Markdown.Table:
             MarkdownTableView(table: table, theme: theme)
@@ -79,6 +74,39 @@ struct MarkdownBlockView: View {
                     MarkdownBlockView(block: child.markup, theme: theme, libraryURL: libraryURL)
                 }
             }
+        }
+    }
+}
+
+// ── Heading ─────────────────────────────────────────────────────────────────
+
+/// A heading rendered with its own size/weight (injected via `FontContext`, so
+/// the heading font is not overridden by the per-run body font), extra space
+/// above to mark a section break, and level-6 styled as a muted uppercase
+/// eyebrow.
+private struct HeadingView: View {
+    let heading: Heading
+    let theme: MarkdownTheme
+
+    var body: some View {
+        content
+            .padding(.top, theme.headingSpaceAbove(heading.level))
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        let level = heading.level
+        if theme.headingIsEyebrow(level) {
+            Text(InlineRenderer.plainText(heading).uppercased())
+                .font(theme.headingFont(level))
+                .tracking(theme.headingTracking(level))
+                .foregroundStyle(.secondary)
+        } else {
+            Text(InlineRenderer.attributed(heading, theme: theme,
+                                           context: .heading(level, theme)))
+                .tracking(theme.headingTracking(level))
         }
     }
 }
@@ -104,7 +132,7 @@ private struct ParagraphView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 case .image(let source, let alt):
-                    AssetImageView(source: source, alt: alt, libraryURL: libraryURL)
+                    AssetImageView(source: source, alt: alt, libraryURL: libraryURL, theme: theme)
                 }
             }
         }
@@ -158,21 +186,27 @@ private struct ParagraphView: View {
 
 // ── Lists ───────────────────────────────────────────────────────────────────
 
+/// An ordered or unordered list. `depth` drives the bullet glyph and lets
+/// nested lists indent consistently. Item content is rendered by
+/// `ListItemContent`, which recurses into nested lists with `depth + 1`.
 private struct ListView: View {
     let items: [IdentifiedMarkup]
     let ordered: Bool
     let startIndex: Int
+    var depth: Int = 0
     let theme: MarkdownTheme
     let libraryURL: URL?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: theme.blockSpacing * 0.4) {
+        VStack(alignment: .leading, spacing: theme.listItemSpacing) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: theme.listMarkerGap) {
                     marker(for: index, item: item.markup)
                         .font(theme.bodyFont)
                         .foregroundStyle(.secondary)
-                    MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL)
+                        .frame(width: theme.listMarkerWidth(ordered: ordered), alignment: .trailing)
+                    ListItemContent(item: item.markup, depth: depth,
+                                    theme: theme, libraryURL: libraryURL)
                 }
             }
         }
@@ -181,31 +215,70 @@ private struct ListView: View {
     @ViewBuilder
     private func marker(for index: Int, item: Markup) -> some View {
         if let listItem = item as? ListItem, let checkbox = listItem.checkbox {
-            Image(systemName: checkbox == .checked ? "checkmark.square" : "square")
+            Image(systemName: checkbox == .checked ? "checkmark.square.fill" : "square")
+                .foregroundStyle(checkbox == .checked ? Color.accentColor : Color.secondary)
         } else if ordered {
             Text("\(startIndex + index).")
                 .monospacedDigit()
         } else {
-            Text("•")
+            Text(theme.bullet(depth: depth))
+        }
+    }
+}
+
+/// The content of one list item: its paragraphs/blocks, plus any nested lists
+/// rendered one level deeper so the bullet style and indentation step down.
+private struct ListItemContent: View {
+    let item: Markup
+    let depth: Int
+    let theme: MarkdownTheme
+    let libraryURL: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.blockSpacing * 0.5) {
+            ForEach(childArray(item)) { child in
+                switch child.markup {
+                case let list as UnorderedList:
+                    ListView(items: childArray(list), ordered: false, startIndex: 1,
+                             depth: depth + 1, theme: theme, libraryURL: libraryURL)
+                case let list as OrderedList:
+                    ListView(items: childArray(list), ordered: true,
+                             startIndex: Int(list.startIndex), depth: depth + 1,
+                             theme: theme, libraryURL: libraryURL)
+                default:
+                    MarkdownBlockView(block: child.markup, theme: theme, libraryURL: libraryURL)
+                }
+            }
         }
     }
 }
 
 // ── Code block ──────────────────────────────────────────────────────────────
 
+/// A fenced/indented code block. When a language is declared it's shown as a
+/// small label above the scrollable, monospaced code surface.
 private struct CodeBlockView: View {
     let code: String
     let language: String?
     let theme: MarkdownTheme
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            Text(code.hasSuffix("\n") ? String(code.dropLast()) : code)
-                .font(theme.codeFont)
-                .textSelection(.enabled)
-                .padding(14)
+        VStack(alignment: .leading, spacing: 0) {
+            if let language, !language.isEmpty {
+                Text(language.lowercased())
+                    .font(theme.captionFont)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, theme.codePadding)
+                    .padding(.top, theme.codePadding * 0.6)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code.hasSuffix("\n") ? String(code.dropLast()) : code)
+                    .font(theme.codeFont)
+                    .textSelection(.enabled)
+                    .padding(theme.codePadding)
+            }
         }
-        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: theme.codeCornerRadius))
     }
 }
 
@@ -216,12 +289,13 @@ private struct MarkdownTableView: View {
     let theme: MarkdownTheme
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+        Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 8) {
             GridRow {
-                ForEach(Array(table.head.cells.enumerated()), id: \.offset) { _, cell in
-                    Text(InlineRenderer.attributed(cell, theme: theme))
-                        .font(theme.bodyFont.weight(.semibold))
+                ForEach(Array(table.head.cells.enumerated()), id: \.offset) { index, cell in
+                    Text(InlineRenderer.attributed(cell, theme: theme,
+                                                   context: .emphasized(theme, weight: .semibold)))
                         .textSelection(.enabled)
+                        .gridColumnAlignment(alignment(index))
                 }
             }
             Divider()
@@ -229,13 +303,22 @@ private struct MarkdownTableView: View {
                 GridRow {
                     ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
                         Text(InlineRenderer.attributed(cell, theme: theme))
-                            .font(theme.bodyFont)
                             .textSelection(.enabled)
                     }
                 }
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Map a column's Markdown alignment onto a SwiftUI grid alignment.
+    private func alignment(_ index: Int) -> HorizontalAlignment {
+        guard index < table.columnAlignments.count else { return .leading }
+        switch table.columnAlignments[index] {
+        case .some(.center): return .center
+        case .some(.right): return .trailing
+        default: return .leading
+        }
     }
 }
 

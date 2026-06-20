@@ -2,7 +2,8 @@
 
 import SwiftUI
 
-/// Renders a single Markdown image natively. Local library assets
+/// Renders a single Markdown image natively, with an optional caption drawn from
+/// the image's alt text (a "figure"). Local library assets
 /// (`../assets/<id>/<file>`) load from disk under `libraryURL/assets/`;
 /// remote `http(s)` images use `AsyncImage`. Replaces the `readlater://`
 /// custom-scheme handler the WebView relied on.
@@ -10,38 +11,51 @@ struct AssetImageView: View {
     let source: String
     let alt: String
     let libraryURL: URL?
+    let theme: MarkdownTheme
 
     @State private var localImage: NSImage?
     @State private var failed = false
 
     var body: some View {
-        Group {
-            if let url = remoteURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit()
-                    case .failure:
-                        placeholder
-                    default:
-                        ProgressView().frame(maxWidth: .infinity, minHeight: 80)
-                    }
-                }
-            } else if let localImage {
-                Image(nsImage: localImage)
-                    .resizable()
-                    .scaledToFit()
-            } else if failed {
-                placeholder
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 80)
-                    .task(id: source) { await loadLocal() }
+        VStack(spacing: theme.captionGap) {
+            picture
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: theme.imageCornerRadius))
+                .accessibilityLabel(alt)
+            if !alt.isEmpty {
+                Text(alt)
+                    .font(theme.captionFont)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
             }
         }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .accessibilityLabel(alt)
+    }
+
+    @ViewBuilder
+    private var picture: some View {
+        if let url = remoteURL {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                case .failure:
+                    placeholder
+                default:
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                }
+            }
+        } else if let localImage {
+            Image(nsImage: localImage)
+                .resizable()
+                .scaledToFit()
+        } else if failed {
+            placeholder
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 80)
+                .task(id: source) { await loadLocal() }
+        }
     }
 
     private var placeholder: some View {
@@ -52,7 +66,7 @@ struct AssetImageView: View {
         .foregroundStyle(.secondary)
         .font(.callout)
         .frame(maxWidth: .infinity, minHeight: 80)
-        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: theme.imageCornerRadius))
     }
 
     // ── Resolution ──────────────────────────────────────────────────────────
