@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+mod check;
 mod install;
 mod protocol;
 mod save;
@@ -7,7 +8,8 @@ mod save;
 use std::io::{Read, Write};
 
 use anyhow::Result;
-use protocol::{SaveRequest, SaveResponse};
+use protocol::{CheckRequest, SaveRequest, SaveResponse};
+use serde::Deserialize;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -56,15 +58,34 @@ fn run_loop() -> Result<()> {
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct ActionPeek {
+    action: String,
+}
+
 fn dispatch(raw: &[u8]) -> SaveResponse {
-    match serde_json::from_slice::<SaveRequest>(raw) {
-        Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
-        Ok(req) => match save::handle(req) {
-            Ok(resp) => resp,
-            Err(e) => {
-                let (code, msg) = save::classify_error(&e);
-                SaveResponse::error(code, &msg)
-            }
+    let action = match serde_json::from_slice::<ActionPeek>(raw) {
+        Err(e) => return SaveResponse::error("invalid_request", &e.to_string()),
+        Ok(p) => p.action,
+    };
+
+    match action.as_str() {
+        "check" => match serde_json::from_slice::<CheckRequest>(raw) {
+            Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
+            Ok(req) => match check::handle(req) {
+                Ok(resp) => resp,
+                Err(e) => SaveResponse::error("io_error", &e.to_string()),
+            },
+        },
+        _ => match serde_json::from_slice::<SaveRequest>(raw) {
+            Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
+            Ok(req) => match save::handle(req) {
+                Ok(resp) => resp,
+                Err(e) => {
+                    let (code, msg) = save::classify_error(&e);
+                    SaveResponse::error(code, &msg)
+                }
+            },
         },
     }
 }
@@ -302,6 +323,68 @@ mod integration_tests {
                 content.contains("asset-fetch-failed"),
                 "expected <!-- asset-fetch-failed --> comment for unreachable image"
             );
+        });
+    }
+
+    #[test]
+    fn check_returns_not_saved_when_no_index_exists() {
+        // Without an index.db the check action returns saved: false immediately.
+        with_library(|_dir| {
+            let msg = serde_json::to_vec(&serde_json::json!({
+                "protocol_version": 1,
+                "action": "check",
+                "url": "https://example.com/not-there"
+            }))
+            .unwrap();
+            let resp = dispatch(&msg);
+            assert!(resp.ok);
+            assert_eq!(resp.saved, Some(false));
+        });
+    }
+
+    #[test]
+    fn check_returns_not_saved_for_unknown_url_in_index() {
+        with_library(|dir| {
+            // Build an empty index — URL not in it.
+            let db_path = dir.path().join("index.db");
+            let conn = read_later_core::open_index(&db_path).unwrap();
+            let library = read_later_core::LibraryRoot::new(dir.path()).unwrap();
+            read_later_core::rebuild(&conn, &library).unwrap();
+
+            let msg = serde_json::to_vec(&serde_json::json!({
+                "protocol_version": 1,
+                "action": "check",
+                "url": "https://example.com/not-there"
+            }))
+            .unwrap();
+            let resp = dispatch(&msg);
+            assert!(resp.ok);
+            assert_eq!(resp.saved, Some(false));
+        });
+    }
+
+    #[test]
+    fn check_returns_saved_after_save_and_index_sync() {
+        with_library(|dir| {
+            // Save the article to disk.
+            dispatch(&save_message("https://example.com/for-check"));
+
+            // Simulate the Mac app syncing the index.
+            let db_path = dir.path().join("index.db");
+            let conn = read_later_core::open_index(&db_path).unwrap();
+            let library = read_later_core::LibraryRoot::new(dir.path()).unwrap();
+            read_later_core::rebuild(&conn, &library).unwrap();
+
+            let msg = serde_json::to_vec(&serde_json::json!({
+                "protocol_version": 1,
+                "action": "check",
+                "url": "https://example.com/for-check"
+            }))
+            .unwrap();
+            let resp = dispatch(&msg);
+            assert!(resp.ok);
+            assert_eq!(resp.saved, Some(true));
+            assert!(resp.id.is_some());
         });
     }
 

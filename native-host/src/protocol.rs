@@ -25,7 +25,14 @@ pub struct RequestMetadata {
     pub saved_at: String,
 }
 
-/// Outgoing response to the browser extension.
+/// Incoming check request — asks whether a URL is already in the library.
+#[derive(Debug, Deserialize)]
+pub struct CheckRequest {
+    pub protocol_version: u32,
+    pub url: String,
+}
+
+/// Outgoing response to the browser extension (shared by save and check actions).
 #[derive(Debug, Serialize)]
 pub struct SaveResponse {
     pub protocol_version: u32,
@@ -38,6 +45,9 @@ pub struct SaveResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// Present only in responses to a `check` action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved: Option<bool>,
 }
 
 impl SaveResponse {
@@ -49,6 +59,7 @@ impl SaveResponse {
             path: Some(path),
             error: None,
             message: None,
+            saved: None,
         }
     }
 
@@ -60,6 +71,19 @@ impl SaveResponse {
             path: None,
             error: Some(code.to_string()),
             message: Some(msg.to_string()),
+            saved: None,
+        }
+    }
+
+    pub fn check(is_saved: bool, id: Option<String>) -> Self {
+        Self {
+            protocol_version: 1,
+            ok: true,
+            saved: Some(is_saved),
+            id,
+            path: None,
+            error: None,
+            message: None,
         }
     }
 }

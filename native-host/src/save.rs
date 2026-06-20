@@ -77,7 +77,7 @@ pub fn classify_error(e: &anyhow::Error) -> (&'static str, String) {
     ("io_error", e.to_string())
 }
 
-fn find_library_path() -> Result<PathBuf> {
+pub(crate) fn find_library_path() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("READ_LATER_LIBRARY") {
         return Ok(PathBuf::from(path));
     }
