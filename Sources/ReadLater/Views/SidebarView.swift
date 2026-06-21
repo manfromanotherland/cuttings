@@ -37,16 +37,6 @@ struct SidebarView: View {
             appState.selectedId = nil
             Task { await appState.loadReadings() }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await appState.sync() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .help("Sync library")
-            }
-        }
     }
 
     // ── Settings button ───────────────────────────────────────────────────────
