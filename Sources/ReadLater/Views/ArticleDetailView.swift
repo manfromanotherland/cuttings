@@ -62,6 +62,7 @@ struct ArticleDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                ratingControl(row: row)
                 tagBar(row: row)
             }
             .padding(.horizontal, 24)
@@ -95,6 +96,31 @@ struct ArticleDetailView: View {
         .navigationTitle(row.title.isEmpty ? "Article" : row.title)
     }
 
+
+    // ── Rating control ────────────────────────────────────────────────────
+
+    private func ratingControl(row: FfiReadingRow) -> some View {
+        HStack(spacing: 4) {
+            ForEach(1...5, id: \.self) { star in
+                Button {
+                    // Clicking the current rating clears it back to unrated.
+                    let target = UInt8(star)
+                    let newValue: UInt8 = row.rating == target ? 0 : target
+                    Task {
+                        if let updated = await appState.setRating(id: row.id, rating: newValue) {
+                            self.row = updated
+                        }
+                    }
+                } label: {
+                    Image(systemName: UInt8(star) <= row.rating ? "star.fill" : "star")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Rate \(star) star\(star == 1 ? "" : "s")")
+            }
+        }
+        .font(.title3)
+    }
 
     private func tagBar(row: FfiReadingRow) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -207,7 +233,7 @@ struct ArticleDetailView: View {
                 } label: {
                     Label(
                         row.favorite ? "Unfavorite" : "Favorite",
-                        systemImage: row.favorite ? "star.fill" : "star"
+                        systemImage: row.favorite ? "heart.fill" : "heart"
                     )
                 }
                 .help(row.favorite ? "Remove from favorites" : "Add to favorites")

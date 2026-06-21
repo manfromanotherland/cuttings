@@ -71,6 +71,17 @@ actor CoreBridge {
         try db.setFavorite(libraryPath: libraryPath, id: id, favorite: favorite)
     }
 
+    // ── Ratings ───────────────────────────────────────────────────────────
+
+    /// Set a reading's star rating (0–5, where 0 clears it).
+    func setRating(id: String, rating: UInt8) throws {
+        try db.setRating(libraryPath: libraryPath, id: id, rating: rating)
+    }
+
+    func listRatings() throws -> [FfiRatingCount] {
+        try db.listRatings()
+    }
+
     // ── Deletion ──────────────────────────────────────────────────────────
 
     /// Permanently delete a reading (file, assets, and index row).

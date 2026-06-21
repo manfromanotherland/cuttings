@@ -29,9 +29,16 @@ final class AppState: ObservableObject {
         return nil
     }
 
+    /// Currently selected rating filter (1–5), if any.
+    var selectedRating: UInt8? {
+        if case .rating(let r) = sidebarSelection { return r }
+        return nil
+    }
+
     // ── Sidebar metadata ──────────────────────────────────────────────────
     @Published var viewCounts: [SidebarItem: Int] = [:]
     @Published var allTags: [FfiTagCount] = []
+    @Published var allRatings: [FfiRatingCount] = []
 
     // ── Status ────────────────────────────────────────────────────────────
     @Published var isLoading: Bool = false
@@ -129,6 +136,7 @@ final class AppState: ObservableObject {
                     view: activeView.ffiView,
                     sortNewestFirst: sortNewestFirst,
                     tag: selectedTag,
+                    rating: selectedRating,
                     since: nil, until: nil,
                     limit: pageSize, offset: 0
                 )
@@ -142,7 +150,7 @@ final class AppState: ObservableObject {
                 let ids = Set(results.map(\.id))
                 let opts = FfiListOptions(
                     view: .all, sortNewestFirst: true,
-                    tag: nil, since: nil, until: nil,
+                    tag: nil, rating: nil, since: nil, until: nil,
                     limit: 1000, offset: 0
                 )
                 let all = try await core.listReadings(opts: opts)
@@ -167,6 +175,7 @@ final class AppState: ObservableObject {
                 view: activeView.ffiView,
                 sortNewestFirst: sortNewestFirst,
                 tag: selectedTag,
+                rating: selectedRating,
                 since: nil, until: nil,
                 limit: pageSize, offset: UInt32(readings.count)
             )
@@ -188,13 +197,14 @@ final class AppState: ObservableObject {
             for item in SidebarItem.allCases {
                 let opts = FfiListOptions(
                     view: item.ffiView, sortNewestFirst: true,
-                    tag: nil, since: nil, until: nil,
+                    tag: nil, rating: nil, since: nil, until: nil,
                     limit: 9999, offset: 0
                 )
                 counts[item] = try await core.listReadings(opts: opts).count
             }
             viewCounts = counts
             allTags = try await core.listTags()
+            allRatings = try await core.listRatings()
         } catch {
             // Sidebar counts are non-critical; don't surface as an error.
         }
@@ -242,6 +252,19 @@ final class AppState: ObservableObject {
         guard let core else { return }
         try? await core.setFavorite(id: row.id, favorite: !row.favorite)
         await refresh()
+    }
+
+    /// Set a reading's star rating (0–5, 0 clears it). Returns the refreshed
+    /// row so detail views can update their local copy.
+    @discardableResult
+    func setRating(id: String, rating: UInt8) async -> FfiReadingRow? {
+        guard let core else { return nil }
+        try? await core.setRating(id: id, rating: rating)
+        await refresh()
+        // The row may have left the current filtered list (e.g. its rating no
+        // longer matches), so fall back to fetching it straight from the index.
+        if let row = readings.first(where: { $0.id == id }) { return row }
+        return try? await core.getReadingRow(id: id)
     }
 
     func archive(_ row: FfiReadingRow) async {
@@ -318,6 +341,7 @@ final class AppState: ObservableObject {
 enum SidebarSelection: Hashable {
     case view(SidebarItem)
     case tag(String)
+    case rating(UInt8)
 }
 
 // ── Sidebar items ──────────────────────────────────────────────────────────────
@@ -342,7 +366,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .unread: "circle"
         case .read: "checkmark.circle"
         case .archive: "archivebox"
-        case .favorites: "star"
+        case .favorites: "heart"
         }
     }
 

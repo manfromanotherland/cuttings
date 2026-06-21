@@ -15,6 +15,15 @@ struct SidebarView: View {
                 }
             }
 
+            if !appState.allRatings.isEmpty {
+                Section("Ratings") {
+                    ForEach(appState.allRatings, id: \.rating) { rc in
+                        ratingRow(rc)
+                            .tag(SidebarSelection.rating(rc.rating))
+                    }
+                }
+            }
+
             if !appState.allTags.isEmpty {
                 Section("Tags") {
                     ForEach(appState.allTags, id: \.tag) { tc in
@@ -84,6 +93,26 @@ struct SidebarView: View {
                 .lineLimit(1)
             Spacer()
             Text("\(tc.count)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.secondary.opacity(0.15), in: Capsule())
+        }
+        .contentShape(Rectangle())
+    }
+
+    // ── Rating row ──────────────────────────────────────────────────────────────
+
+    private func ratingRow(_ rc: FfiRatingCount) -> some View {
+        HStack(spacing: 2) {
+            ForEach(0..<5) { i in
+                Image(systemName: i < Int(rc.rating) ? "star.fill" : "star")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text("\(rc.count)")
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)

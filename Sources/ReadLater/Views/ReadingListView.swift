@@ -145,6 +145,7 @@ struct ReadingListView: View {
             return "\(n) result\(n == 1 ? "" : "s")"
         }
         if let tag = appState.selectedTag { return "#\(tag)" }
+        if let r = appState.selectedRating { return String(repeating: "★", count: Int(r)) }
         return appState.activeView.label
     }
 }
@@ -170,9 +171,9 @@ struct ReadingRowView: View {
                     .lineLimit(2)
                 Spacer(minLength: 0)
                 if row.favorite {
-                    Image(systemName: "star.fill")
+                    Image(systemName: "heart.fill")
                         .font(.caption)
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(.red)
                 }
             }
 
