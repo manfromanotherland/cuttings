@@ -128,6 +128,7 @@ mod tests {
             read: false,
             archived: false,
             favorite: false,
+            rating: 0,
             tags: vec![],
             excerpt: None,
             word_count: None,

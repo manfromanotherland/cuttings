@@ -34,6 +34,8 @@ pub struct ListOptions {
     pub sort: SortOrder,
     /// Restrict to readings that carry this tag (exact match).
     pub tag: Option<String>,
+    /// Restrict to readings with this exact star rating, 1–5. `None` = no filter.
+    pub rating: Option<u8>,
     /// ISO-8601 lower bound on `saved_at` (inclusive).
     pub since: Option<String>,
     /// ISO-8601 upper bound on `saved_at` (inclusive).
@@ -48,6 +50,7 @@ impl Default for ListOptions {
             view: View::All,
             sort: SortOrder::NewestFirst,
             tag: None,
+            rating: None,
             since: None,
             until: None,
             limit: 50,
@@ -69,6 +72,7 @@ pub struct ReadingRow {
     pub read: bool,
     pub archived: bool,
     pub favorite: bool,
+    pub rating: u8,
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
     pub lang: Option<String>,
@@ -90,16 +94,18 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         SortOrder::OldestFirst => "saved_at ASC",
     };
 
-    // Optional filters use empty-string sentinels so the SQL is always static
-    // with exactly 5 bound parameters — no dynamic param count issues.
+    // Optional filters use sentinel values (empty string / 0) so the SQL is
+    // always static with exactly 6 bound parameters — no dynamic param count.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
-                read, archived, favorite, excerpt, word_count, lang, tags_json
+                read, archived, favorite, excerpt, word_count, lang, tags_json,
+                rating
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
            AND (?4 = '' OR saved_at >= ?4)
            AND (?5 = '' OR saved_at <= ?5)
+           AND (?6 = 0 OR rating = ?6)
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -109,6 +115,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let tag_val = opts.tag.as_deref().unwrap_or("");
     let since_val = opts.since.as_deref().unwrap_or("");
     let until_val = opts.until.as_deref().unwrap_or("");
+    let rating_val = opts.rating.unwrap_or(0) as i64;
 
     let rows = stmt.query_map(
         params![
@@ -116,7 +123,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
             opts.offset as i64,
             tag_val,
             since_val,
-            until_val
+            until_val,
+            rating_val
         ],
         parse_row,
     )?;
@@ -131,13 +139,13 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
     let mut stmt = conn.prepare(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 read, archived, favorite, excerpt, word_count, lang, tags_json,
-                body_text
+                rating, body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(14)?;
+        let body: String = row.get(15)?;
         Ok((row_data, body))
     })?;
 
@@ -165,6 +173,7 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         word_count: row.get(11)?,
         lang: row.get(12)?,
         tags,
+        rating: row.get::<_, i32>(14)? as u8,
     })
 }
 
@@ -195,6 +204,7 @@ mod tests {
             read: false,
             archived: false,
             favorite: false,
+            rating: 0,
             tags: vec![],
             excerpt: None,
             word_count: None,
@@ -385,6 +395,42 @@ mod tests {
         .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Tagged");
+    }
+
+    #[test]
+    fn list_filter_by_rating() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut four = meta(&new_id(), "https://a.com", "Four");
+        four.rating = 4;
+        write_reading(&lib, four, "body".into()).unwrap();
+
+        let mut five = meta(&new_id(), "https://b.com", "Five");
+        five.rating = 5;
+        write_reading(&lib, five, "body".into()).unwrap();
+
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://c.com", "Unrated"),
+            "body".into(),
+        )
+        .unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::All,
+                rating: Some(4),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "Four");
+        assert_eq!(rows[0].rating, 4);
     }
 
     #[test]

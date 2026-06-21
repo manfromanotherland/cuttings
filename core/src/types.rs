@@ -21,6 +21,10 @@ pub struct Metadata {
     pub read: bool,
     pub archived: bool,
     pub favorite: bool,
+    /// Star rating 0–5, where 0 means unrated. Defaults to 0 for articles
+    /// saved before ratings existed (field absent from older frontmatter).
+    #[serde(default)]
+    pub rating: u8,
     pub tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub excerpt: Option<String>,

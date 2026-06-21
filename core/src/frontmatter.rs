@@ -61,6 +61,7 @@ mod tests {
             read,
             archived,
             favorite,
+            rating: 0,
             tags: vec!["rust".to_string(), "local-first".to_string()],
             excerpt: Some("A short excerpt.".to_string()),
             word_count: Some(1234),

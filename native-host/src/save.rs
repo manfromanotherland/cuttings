@@ -59,6 +59,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         read: false,
         archived: false,
         favorite: false,
+        rating: 0,
         tags: vec![],
         excerpt: req.metadata.excerpt,
         word_count: req.metadata.word_count,

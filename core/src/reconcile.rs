@@ -51,9 +51,9 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO readings
          (id, url, canonical_url, title, author, site, saved_at,
-          read, archived, favorite, source_hash, excerpt, word_count,
+          read, archived, favorite, rating, source_hash, excerpt, word_count,
           lang, tags_json, body_text)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
         params![
             r.metadata.id,
             r.metadata.url,
@@ -65,6 +65,7 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.read as i32,
             r.metadata.archived as i32,
             r.metadata.favorite as i32,
+            r.metadata.rating,
             r.metadata.source_hash,
             r.metadata.excerpt,
             r.metadata.word_count,
@@ -81,9 +82,9 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     conn.execute(
         "UPDATE readings SET
          url=?2, canonical_url=?3, title=?4, author=?5, site=?6,
-         saved_at=?7, read=?8, archived=?9, favorite=?10,
-         source_hash=?11, excerpt=?12, word_count=?13, lang=?14,
-         tags_json=?15, body_text=?16
+         saved_at=?7, read=?8, archived=?9, favorite=?10, rating=?11,
+         source_hash=?12, excerpt=?13, word_count=?14, lang=?15,
+         tags_json=?16, body_text=?17
          WHERE id=?1",
         params![
             r.metadata.id,
@@ -96,6 +97,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.read as i32,
             r.metadata.archived as i32,
             r.metadata.favorite as i32,
+            r.metadata.rating,
             r.metadata.source_hash,
             r.metadata.excerpt,
             r.metadata.word_count,
@@ -139,6 +141,7 @@ mod tests {
             read: false,
             archived: false,
             favorite: false,
+            rating: 0,
             tags: vec![],
             excerpt: None,
             word_count: None,

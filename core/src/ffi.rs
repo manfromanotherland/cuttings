@@ -45,6 +45,7 @@ pub struct FfiReadingRow {
     pub read: bool,
     pub archived: bool,
     pub favorite: bool,
+    pub rating: u8,
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
     pub lang: Option<String>,
@@ -67,6 +68,12 @@ pub struct FfiTagCount {
     pub count: u64,
 }
 
+#[derive(uniffi::Record)]
+pub struct FfiRatingCount {
+    pub rating: u8,
+    pub count: u64,
+}
+
 #[derive(uniffi::Enum)]
 pub enum FfiView {
     All,
@@ -81,6 +88,7 @@ pub struct FfiListOptions {
     pub view: FfiView,
     pub sort_newest_first: bool,
     pub tag: Option<String>,
+    pub rating: Option<u8>,
     pub since: Option<String>,
     pub until: Option<String>,
     pub limit: u32,
@@ -102,6 +110,7 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             read: r.read,
             archived: r.archived,
             favorite: r.favorite,
+            rating: r.rating,
             excerpt: r.excerpt,
             word_count: r.word_count,
             lang: r.lang,
@@ -139,6 +148,7 @@ impl From<FfiListOptions> for ListOptions {
                 SortOrder::OldestFirst
             },
             tag: o.tag,
+            rating: o.rating,
             since: o.since,
             until: o.until,
             limit: o.limit as usize,
@@ -261,6 +271,30 @@ impl Database {
         crate::list_tags(&conn).map_err(e).map(|v| {
             v.into_iter()
                 .map(|(tag, count)| FfiTagCount { tag, count })
+                .collect()
+        })
+    }
+
+    // ── Ratings ───────────────────────────────────────────────────────────
+
+    /// Set a reading's star rating (0–5, where 0 clears it).
+    pub fn set_rating(
+        &self,
+        library_path: String,
+        id: String,
+        rating: u8,
+    ) -> Result<(), CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let conn = self.conn.lock().unwrap();
+        crate::set_rating(&lib, &conn, &id, rating).map_err(e)
+    }
+
+    /// Per-value counts of rated readings (1–5) for the sidebar filter.
+    pub fn list_ratings(&self) -> Result<Vec<FfiRatingCount>, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        crate::list_ratings(&conn).map_err(e).map(|v| {
+            v.into_iter()
+                .map(|(rating, count)| FfiRatingCount { rating, count })
                 .collect()
         })
     }

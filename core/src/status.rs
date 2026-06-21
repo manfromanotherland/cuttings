@@ -40,7 +40,15 @@ pub fn set_favorite(
     update_flag(library, conn, id, |m| m.favorite = favorite)
 }
 
-fn update_flag<F>(library: &LibraryRoot, conn: &Connection, id: &str, apply: F) -> Result<()>
+/// Apply an arbitrary metadata mutation to a reading: update the `.md`
+/// frontmatter (source of truth), then sync the index row. Shared by the
+/// status setters and `set_rating`.
+pub(crate) fn update_flag<F>(
+    library: &LibraryRoot,
+    conn: &Connection,
+    id: &str,
+    apply: F,
+) -> Result<()>
 where
     F: FnOnce(&mut crate::Metadata),
 {
@@ -101,6 +109,7 @@ mod tests {
             read: false,
             archived: false,
             favorite: false,
+            rating: 0,
             tags: vec![],
             excerpt: None,
             word_count: None,

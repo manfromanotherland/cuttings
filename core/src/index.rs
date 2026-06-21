@@ -18,6 +18,9 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 1 {
         migrate_v1(conn)?;
     }
+    if version < 2 {
+        migrate_v2(conn)?;
+    }
     Ok(())
 }
 
@@ -82,6 +85,19 @@ fn migrate_v1(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v2: add the `rating` column (0–5, 0 = unrated) for star ratings.
+fn migrate_v2(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+        ALTER TABLE readings ADD COLUMN rating INTEGER NOT NULL DEFAULT 0;
+        PRAGMA user_version = 2;
+        COMMIT;
+        ",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,7 +116,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
 
         // readings table exists
         let count: i64 = conn
@@ -187,6 +203,7 @@ mod tests {
             "read",
             "archived",
             "favorite",
+            "rating",
             "source_hash",
             "tags_json",
             "body_text",
