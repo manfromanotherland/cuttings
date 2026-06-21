@@ -70,4 +70,11 @@ actor CoreBridge {
     func setFavorite(id: String, favorite: Bool) throws {
         try db.setFavorite(libraryPath: libraryPath, id: id, favorite: favorite)
     }
+
+    // ── Deletion ──────────────────────────────────────────────────────────
+
+    /// Permanently delete a reading (file, assets, and index row).
+    func deleteReading(id: String) throws {
+        try db.deleteReading(libraryPath: libraryPath, id: id)
+    }
 }

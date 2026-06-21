@@ -236,6 +236,13 @@ struct ArticleDetailView: View {
                     Label("Open in Browser", systemImage: "safari")
                 }
                 .help("Open original URL")
+
+                Button(role: .destructive) {
+                    appState.pendingDelete = row
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .help("Permanently delete this reading")
             }
         }
     }

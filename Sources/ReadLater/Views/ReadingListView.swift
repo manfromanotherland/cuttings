@@ -19,6 +19,21 @@ struct ReadingListView: View {
         .navigationTitle(navigationTitle)
         .task { await appState.loadReadings() }
         .toolbar { toolbarItems }
+        .confirmationDialog(
+            "Delete this reading?",
+            isPresented: Binding(
+                get: { appState.pendingDelete != nil },
+                set: { if !$0 { appState.pendingDelete = nil } }
+            ),
+            presenting: appState.pendingDelete
+        ) { row in
+            Button("Delete", role: .destructive) {
+                Task { await appState.delete(row) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { row in
+            Text("“\(row.title.isEmpty ? row.url : row.title)” will be permanently removed from your library, including its files. This cannot be undone.")
+        }
     }
 
     // ── List ──────────────────────────────────────────────────────────────
@@ -113,6 +128,13 @@ struct ReadingListView: View {
             }
             .keyboardShortcut(.delete, modifiers: .command)
         }
+
+        Divider()
+
+        Button("Delete…", role: .destructive) {
+            appState.pendingDelete = row
+        }
+        .keyboardShortcut(.delete, modifiers: [.command, .option])
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

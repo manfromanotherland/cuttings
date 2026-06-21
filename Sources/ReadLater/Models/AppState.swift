@@ -14,6 +14,9 @@ final class AppState: ObservableObject {
     @Published var sidebarSelection: SidebarSelection? = .view(.all)
     @Published var sortNewestFirst: Bool = true
 
+    /// Reading awaiting delete confirmation, if any. Drives the confirm dialog.
+    @Published var pendingDelete: FfiReadingRow?
+
     /// Currently active smart view (derived from `sidebarSelection`).
     var activeView: SidebarItem {
         if case .view(let item) = sidebarSelection { return item }
@@ -251,6 +254,19 @@ final class AppState: ObservableObject {
         guard let core else { return }
         try? await core.setArchived(id: row.id, archived: false)
         await refresh()
+    }
+
+    /// Permanently delete a reading: removes its file and assets from disk and
+    /// its row from the index. Irreversible — callers should confirm first.
+    func delete(_ row: FfiReadingRow) async {
+        guard let core else { return }
+        do {
+            try await core.deleteReading(id: row.id)
+            if selectedId == row.id { selectedId = nil }
+            await refresh()
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     func addTag(id: String, tag: String) async {

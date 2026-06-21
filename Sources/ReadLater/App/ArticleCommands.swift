@@ -32,6 +32,11 @@ struct ArticleCommands: Commands {
                     .keyboardShortcut(.delete, modifiers: .command)
                 }
 
+                Button("Delete…", role: .destructive) {
+                    appState.pendingDelete = row
+                }
+                .keyboardShortcut(.delete, modifiers: [.command, .option])
+
                 Divider()
 
                 Button("Open in Browser") {
