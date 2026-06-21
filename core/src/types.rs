@@ -69,4 +69,12 @@ impl LibraryRoot {
     pub fn article_path(&self, id: &str) -> PathBuf {
         self.articles_dir().join(format!("{id}.md"))
     }
+
+    pub fn highlights_dir(&self) -> PathBuf {
+        self.0.join("highlights")
+    }
+
+    pub fn highlights_path(&self, id: &str) -> PathBuf {
+        self.highlights_dir().join(format!("{id}.md"))
+    }
 }

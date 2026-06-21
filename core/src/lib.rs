@@ -5,6 +5,7 @@ uniffi::setup_scaffolding!();
 mod delete;
 pub mod ffi;
 mod frontmatter;
+pub mod highlights;
 mod id;
 mod images;
 pub mod index;
@@ -21,6 +22,9 @@ mod writer;
 
 pub use delete::delete_reading;
 pub use frontmatter::{parse_reading, render_reading};
+pub use highlights::{
+    add_highlight, delete_highlight, list_highlights, toggle_highlight, Highlight,
+};
 pub use id::new_id;
 pub use images::download_images;
 pub use index::open as open_index;

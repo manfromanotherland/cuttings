@@ -74,6 +74,12 @@ pub struct FfiRatingCount {
     pub count: u64,
 }
 
+#[derive(uniffi::Record)]
+pub struct FfiHighlight {
+    pub id: String,
+    pub text: String,
+}
+
 #[derive(uniffi::Enum)]
 pub enum FfiView {
     All,
@@ -115,6 +121,15 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             word_count: r.word_count,
             lang: r.lang,
             tags: r.tags,
+        }
+    }
+}
+
+impl From<crate::highlights::Highlight> for FfiHighlight {
+    fn from(h: crate::highlights::Highlight) -> Self {
+        Self {
+            id: h.id,
+            text: h.text,
         }
     }
 }
@@ -337,5 +352,58 @@ impl Database {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::delete_reading(&lib, &conn, &id).map_err(e)
+    }
+
+    // ── Highlights ────────────────────────────────────────────────────────
+
+    /// List a reading's saved highlights, in creation order.
+    pub fn list_highlights(
+        &self,
+        library_path: String,
+        reading_id: String,
+    ) -> Result<Vec<FfiHighlight>, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        crate::list_highlights(&lib, &reading_id)
+            .map_err(e)
+            .map(|v| v.into_iter().map(Into::into).collect())
+    }
+
+    /// Save a new highlight (the verbatim selected text) for a reading and
+    /// return it. Re-adding an existing passage is a no-op that returns the
+    /// existing highlight.
+    pub fn add_highlight(
+        &self,
+        library_path: String,
+        reading_id: String,
+        text: String,
+    ) -> Result<FfiHighlight, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        crate::add_highlight(&lib, &reading_id, &text)
+            .map_err(e)
+            .map(Into::into)
+    }
+
+    /// Toggle a highlight by its text: removes it if the exact passage is
+    /// already highlighted, otherwise adds it. Returns `true` if the passage is
+    /// highlighted after the call, `false` if it was cleared.
+    pub fn toggle_highlight(
+        &self,
+        library_path: String,
+        reading_id: String,
+        text: String,
+    ) -> Result<bool, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        crate::toggle_highlight(&lib, &reading_id, &text).map_err(e)
+    }
+
+    /// Remove a single highlight from a reading.
+    pub fn delete_highlight(
+        &self,
+        library_path: String,
+        reading_id: String,
+        highlight_id: String,
+    ) -> Result<(), CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        crate::delete_highlight(&lib, &reading_id, &highlight_id).map_err(e)
     }
 }

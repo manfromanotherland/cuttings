@@ -27,6 +27,10 @@ pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Res
         std::fs::remove_dir_all(&assets)?;
     }
 
+    // Remove any highlights saved against this reading; they live outside the
+    // index (in `highlights/`) so nothing else would clean them up.
+    crate::highlights::delete_all_highlights(library, id)?;
+
     apply_diffs(conn, &[ScanDiff::Removed(id.to_string())])
 }
 
@@ -87,6 +91,8 @@ mod tests {
         let assets = lib.assets_dir(&id);
         fs::create_dir_all(&assets).unwrap();
         fs::write(assets.join("image.png"), b"x").unwrap();
+        // ...and a saved highlight, which lives outside the index.
+        crate::highlights::add_highlight(&lib, &id, "a passage").unwrap();
         rebuild(&conn, &lib).unwrap();
         assert_eq!(row_count(&conn, &id), 1);
 
@@ -94,6 +100,7 @@ mod tests {
 
         assert!(!lib.article_path(&id).exists());
         assert!(!assets.exists());
+        assert!(!lib.highlights_path(&id).exists());
         assert_eq!(row_count(&conn, &id), 0);
     }
 
