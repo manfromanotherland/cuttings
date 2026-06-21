@@ -7,11 +7,11 @@ struct SidebarView: View {
     @State private var showAppearancePopover = false
 
     var body: some View {
-        List(selection: $appState.activeView) {
+        List(selection: $appState.sidebarSelection) {
             Section("Library") {
                 ForEach(SidebarItem.allCases) { item in
                     viewRow(item)
-                        .tag(item)
+                        .tag(SidebarSelection.view(item))
                 }
             }
 
@@ -19,6 +19,7 @@ struct SidebarView: View {
                 Section("Tags") {
                     ForEach(appState.allTags, id: \.tag) { tc in
                         tagRow(tc)
+                            .tag(SidebarSelection.tag(tc.tag))
                     }
                 }
             }
@@ -32,12 +33,9 @@ struct SidebarView: View {
             .background(.background)
         }
         .navigationTitle("Read Later")
-        .onChange(of: appState.activeView) { _, _ in
+        .onChange(of: appState.sidebarSelection) { _, _ in
             appState.selectedId = nil
-            Task {
-                appState.selectedTag = nil
-                await appState.loadReadings()
-            }
+            Task { await appState.loadReadings() }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -103,12 +101,6 @@ struct SidebarView: View {
                 .background(.secondary.opacity(0.15), in: Capsule())
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            Task { await appState.selectTag(tc.tag) }
-        }
-        .foregroundStyle(
-            appState.selectedTag == tc.tag ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
-        )
     }
 }
 

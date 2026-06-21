@@ -11,9 +11,20 @@ final class AppState: ObservableObject {
     @Published var searchResults: [FfiSearchResult] = []
     @Published var selectedId: String?
     @Published var searchQuery: String = ""
-    @Published var activeView: SidebarItem = .all
-    @Published var selectedTag: String?
+    @Published var sidebarSelection: SidebarSelection? = .view(.all)
     @Published var sortNewestFirst: Bool = true
+
+    /// Currently active smart view (derived from `sidebarSelection`).
+    var activeView: SidebarItem {
+        if case .view(let item) = sidebarSelection { return item }
+        return .all
+    }
+
+    /// Currently selected tag filter, if any (derived from `sidebarSelection`).
+    var selectedTag: String? {
+        if case .tag(let tag) = sidebarSelection { return tag }
+        return nil
+    }
 
     // ── Sidebar metadata ──────────────────────────────────────────────────
     @Published var viewCounts: [SidebarItem: Int] = [:]
@@ -189,13 +200,12 @@ final class AppState: ObservableObject {
     // ── Tag navigation ────────────────────────────────────────────────────
 
     func selectTag(_ tag: String) async {
-        selectedTag = tag
-        activeView = .all
+        sidebarSelection = .tag(tag)
         await loadReadings()
     }
 
     func clearTag() async {
-        selectedTag = nil
+        sidebarSelection = .view(.all)
         await loadReadings()
     }
 
@@ -260,6 +270,13 @@ final class AppState: ObservableObject {
         return try? await core.getBody(id: id)
     }
 
+    /// Re-fetch a single reading row from the index (e.g. after a tag edit) so
+    /// detail views can refresh their local copy without a full list reload.
+    func reloadRow(id: String) async -> FfiReadingRow? {
+        guard let core else { return nil }
+        return try? await core.getReadingRow(id: id)
+    }
+
     // ── Security-scoped resource ──────────────────────────────────────────
 
     private func stopAccessing() {
@@ -276,6 +293,15 @@ final class AppState: ObservableObject {
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         return support.appendingPathComponent("index.db").path
     }
+}
+
+// ── Sidebar selection ────────────────────────────────────────────────────────
+// A single selectable identity for the sidebar `List`, covering both the smart
+// views and tag filters so SwiftUI can drive native row highlighting for both.
+
+enum SidebarSelection: Hashable {
+    case view(SidebarItem)
+    case tag(String)
 }
 
 // ── Sidebar items ──────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ struct ArticleDetailView: View {
     @State private var isLoading = false
     @State private var newTag = ""
     @State private var showTagInput = false
+    @FocusState private var tagFieldFocused: Bool
 
     var body: some View {
         Group {
@@ -96,25 +97,62 @@ struct ArticleDetailView: View {
 
 
     private func tagBar(row: FfiReadingRow) -> some View {
-        FlowLayout(spacing: 6) {
-            ForEach(row.tags, id: \.self) { tag in
-                tagChip(tag: tag, id: row.id)
-            }
-            if showTagInput {
-                TextField("tag", text: $newTag)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 100)
-                    .onSubmit { commitTag(id: row.id) }
-            } else {
-                Button {
-                    showTagInput = true
-                } label: {
-                    Label("Tag", systemImage: "plus")
-                        .font(.caption)
+        VStack(alignment: .leading, spacing: 6) {
+            FlowLayout(spacing: 6) {
+                ForEach(row.tags, id: \.self) { tag in
+                    tagChip(tag: tag, id: row.id)
                 }
-                .buttonStyle(.bordered)
+                if showTagInput {
+                    TextField("tag", text: $newTag)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
+                        .focused($tagFieldFocused)
+                        .onSubmit { commitTag(id: row.id) }
+                        .onExitCommand { dismissTagInput() }
+                } else {
+                    Button {
+                        showTagInput = true
+                        tagFieldFocused = true
+                    } label: {
+                        Label("Tag", systemImage: "plus")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            // Autocomplete suggestions drawn from existing tags in the library.
+            if showTagInput {
+                let suggestions = tagSuggestions(for: row)
+                if !suggestions.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(suggestions, id: \.self) { suggestion in
+                            Button {
+                                newTag = suggestion
+                                commitTag(id: row.id)
+                            } label: {
+                                Text("#\(suggestion)")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    /// Existing library tags matching the current input, excluding tags already
+    /// applied to this article. With an empty field, surfaces all available tags.
+    private func tagSuggestions(for row: FfiReadingRow) -> [String] {
+        let query = newTag.trimmingCharacters(in: .whitespaces).lowercased()
+        let applied = Set(row.tags.map { $0.lowercased() })
+        return appState.allTags
+            .map(\.tag)
+            .filter { !applied.contains($0.lowercased()) }
+            .filter { query.isEmpty || $0.lowercased().contains(query) }
+            .prefix(8)
+            .map { $0 }
     }
 
     private func tagChip(tag: String, id: String) -> some View {
@@ -122,7 +160,10 @@ struct ArticleDetailView: View {
             Text("#\(tag)")
                 .font(.caption)
             Button {
-                Task { await appState.removeTag(id: id, tag: tag) }
+                Task {
+                    await appState.removeTag(id: id, tag: tag)
+                    row = await appState.reloadRow(id: id)
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption2)
@@ -216,10 +257,20 @@ struct ArticleDetailView: View {
 
     private func commitTag(id: String) {
         let tag = newTag.trimmingCharacters(in: .whitespaces)
-        showTagInput = false
         newTag = ""
-        guard !tag.isEmpty else { return }
-        Task { await appState.addTag(id: id, tag: tag) }
+        guard !tag.isEmpty else { dismissTagInput(); return }
+        Task {
+            await appState.addTag(id: id, tag: tag)
+            row = await appState.reloadRow(id: id)
+        }
+        // Keep the input open and focused so several tags can be added in a row.
+        tagFieldFocused = true
+    }
+
+    private func dismissTagInput() {
+        showTagInput = false
+        tagFieldFocused = false
+        newTag = ""
     }
 }
 
