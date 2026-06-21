@@ -21,7 +21,11 @@ final class AppState: ObservableObject {
 
     // ── Status ────────────────────────────────────────────────────────────
     @Published var isLoading: Bool = false
+    @Published var isLoadingMore: Bool = false
+    @Published var hasMoreReadings: Bool = false
     @Published var error: String?
+
+    private let pageSize: UInt32 = 100
 
     private var core: CoreBridge?
     private var accessedURL: URL?
@@ -112,10 +116,13 @@ final class AppState: ObservableObject {
                     sortNewestFirst: sortNewestFirst,
                     tag: selectedTag,
                     since: nil, until: nil,
-                    limit: 200, offset: 0
+                    limit: pageSize, offset: 0
                 )
-                readings = try await core.listReadings(opts: opts)
+                let result = try await core.listReadings(opts: opts)
+                readings = result
+                hasMoreReadings = result.count == Int(pageSize)
             } else {
+                hasMoreReadings = false
                 let results = try await core.search(query: searchQuery, limit: 50)
                 searchResults = results
                 let ids = Set(results.map(\.id))
@@ -136,6 +143,26 @@ final class AppState: ObservableObject {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    func loadMoreReadings() async {
+        guard hasMoreReadings, !isLoadingMore, searchQuery.isEmpty, let core else { return }
+        isLoadingMore = true
+        do {
+            let opts = FfiListOptions(
+                view: activeView.ffiView,
+                sortNewestFirst: sortNewestFirst,
+                tag: selectedTag,
+                since: nil, until: nil,
+                limit: pageSize, offset: UInt32(readings.count)
+            )
+            let result = try await core.listReadings(opts: opts)
+            readings.append(contentsOf: result)
+            hasMoreReadings = result.count == Int(pageSize)
+        } catch {
+            self.error = error.localizedDescription
+        }
+        isLoadingMore = false
     }
 
     // ── Sidebar counts & tags ─────────────────────────────────────────────

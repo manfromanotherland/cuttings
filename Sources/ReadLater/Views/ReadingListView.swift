@@ -28,8 +28,21 @@ struct ReadingListView: View {
             ReadingRowView(row: row, snippet: snippet(for: row.id))
                 .tag(row.id)
                 .contextMenu { contextMenu(for: row) }
+                .onAppear {
+                    if row.id == appState.readings.last?.id {
+                        Task { await appState.loadMoreReadings() }
+                    }
+                }
         }
         .listStyle(.inset)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if appState.isLoadingMore {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(.background)
+            }
+        }
     }
 
     private func snippet(for id: String) -> String? {
