@@ -12,15 +12,22 @@ struct MarkdownDocumentView: View {
     let libraryURL: URL?
     var font: ReaderFont = .system
     var fontSize: ReaderFontSize = .medium
+    /// Verbatim text of the reading's highlights; each occurrence is tinted.
+    var highlights: [String] = []
+    /// Called with the selected text when the user highlights a passage.
+    var onHighlight: (String) -> Void = { _ in }
 
     private let groups: [RenderGroup]
 
     init(markdown: String, libraryURL: URL?,
-         font: ReaderFont = .system, fontSize: ReaderFontSize = .medium) {
+         font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
+         highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in }) {
         self.markdown = markdown
         self.libraryURL = libraryURL
         self.font = font
         self.fontSize = fontSize
+        self.highlights = highlights
+        self.onHighlight = onHighlight
         let document = Document(parsing: Self.unwrapLinkedImages(markdown))
         self.groups = Self.makeGroups(Array(document.children))
     }
@@ -126,8 +133,12 @@ struct MarkdownDocumentView: View {
                 ForEach(groups) { group in
                     switch group {
                     case .textRun(_, let blocks):
-                        SelectableTextView(attributed: MarkdownTextRun.attributed(blocks, theme: theme))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        SelectableTextView(
+                            attributed: MarkdownTextRun.attributed(blocks, theme: theme),
+                            highlights: highlights,
+                            onHighlight: onHighlight
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     case .other(let item):
                         MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL)
                     }

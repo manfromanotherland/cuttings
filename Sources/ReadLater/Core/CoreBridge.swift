@@ -88,4 +88,26 @@ actor CoreBridge {
     func deleteReading(id: String) throws {
         try db.deleteReading(libraryPath: libraryPath, id: id)
     }
+
+    // ── Highlights ────────────────────────────────────────────────────────
+
+    func listHighlights(readingId: String) throws -> [FfiHighlight] {
+        try db.listHighlights(libraryPath: libraryPath, readingId: readingId)
+    }
+
+    @discardableResult
+    func addHighlight(readingId: String, text: String) throws -> FfiHighlight {
+        try db.addHighlight(libraryPath: libraryPath, readingId: readingId, text: text)
+    }
+
+    /// Toggle a highlight by its text. Returns `true` if highlighted after the
+    /// call, `false` if it was cleared.
+    @discardableResult
+    func toggleHighlight(readingId: String, text: String) throws -> Bool {
+        try db.toggleHighlight(libraryPath: libraryPath, readingId: readingId, text: text)
+    }
+
+    func deleteHighlight(readingId: String, highlightId: String) throws {
+        try db.deleteHighlight(libraryPath: libraryPath, readingId: readingId, highlightId: highlightId)
+    }
 }

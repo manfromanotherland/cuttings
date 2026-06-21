@@ -7,6 +7,11 @@ extension NSAttributedString.Key {
     /// Value: `[CGFloat]` — the x-offsets (in text-container coordinates) of the
     /// quote bars enclosing this paragraph. Read by `ReaderLayoutManager`.
     static let quoteBar = NSAttributedString.Key("ReaderQuoteBar")
+
+    /// Marks a range as a saved highlight. `ReaderLayoutManager` fills a tinted
+    /// rounded rect behind it. A dedicated key (rather than `.backgroundColor`)
+    /// keeps highlights from clobbering inline-code backgrounds.
+    static let readerHighlight = NSAttributedString.Key("ReaderHighlight")
 }
 
 /// A read-only `NSTextView` bridged into SwiftUI. SwiftUI's `Text` +
@@ -22,9 +27,17 @@ extension NSAttributedString.Key {
 /// plain attributed text cannot express.
 struct SelectableTextView: NSViewRepresentable {
     let attributed: NSAttributedString
+    /// Verbatim text of every highlight for this reading. Each exact occurrence
+    /// found in this run is tinted.
+    var highlights: [String] = []
+    /// Called with the selected text when the user picks "Highlight" from the
+    /// context menu.
+    var onHighlight: (String) -> Void = { _ in }
 
     func makeNSView(context: Context) -> ReaderTextView {
         let textView = ReaderTextView.make()
+        textView.onHighlight = onHighlight
+        textView.highlights = highlights
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -50,18 +63,45 @@ struct SelectableTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ textView: ReaderTextView, context: Context) {
-        // Only re-set the storage when the content actually changed (e.g. the
-        // user changed the reader font/size). Re-setting on every SwiftUI pass
-        // would clear the user's in-progress selection. Invalidating the
-        // intrinsic size makes SwiftUI re-read the height *after* the text is in
-        // place — without this, a run measured before its text was set (which
-        // happens on the first layout pass) collapses to zero height and renders
-        // blank.
+        // Only re-set the storage when the *base* content actually changed (e.g.
+        // the user changed the reader font/size). Re-setting on every SwiftUI
+        // pass would clear the user's in-progress selection. We compare against
+        // the stored base (not the live storage, which carries highlight
+        // attributes added below) so applying a tint never looks like a content
+        // change. Invalidating the intrinsic size makes SwiftUI re-read the
+        // height *after* the text is in place — without this, a run measured
+        // before its text was set (which happens on the first layout pass)
+        // collapses to zero height and renders blank.
         guard let storage = textView.textStorage else { return }
-        if !storage.isEqual(attributed) {
+        textView.onHighlight = onHighlight
+        textView.highlights = highlights
+        if textView.baseAttributed?.isEqual(attributed) != true {
             storage.setAttributedString(attributed)
+            textView.baseAttributed = attributed.copy() as? NSAttributedString
             textView.invalidateIntrinsicContentSize()
         }
+        applyHighlightTints(to: storage, in: textView)
+    }
+
+    /// Tag every exact occurrence of each highlight string with
+    /// `.readerHighlight` so the layout manager draws a tint behind it. Cheap
+    /// for article-sized text; runs each pass so added/removed highlights show
+    /// immediately without rebuilding the attributed string.
+    private func applyHighlightTints(to storage: NSTextStorage, in textView: ReaderTextView) {
+        let whole = NSRange(location: 0, length: storage.length)
+        storage.removeAttribute(.readerHighlight, range: whole)
+        let haystack = storage.string as NSString
+        for needle in highlights where !needle.isEmpty {
+            var searchStart = 0
+            while searchStart < haystack.length {
+                let scope = NSRange(location: searchStart, length: haystack.length - searchStart)
+                let found = haystack.range(of: needle, options: [], range: scope)
+                if found.location == NSNotFound { break }
+                storage.addAttribute(.readerHighlight, value: true, range: found)
+                searchStart = found.location + max(found.length, 1)
+            }
+        }
+        textView.needsDisplay = true
     }
 }
 
@@ -71,6 +111,17 @@ struct SelectableTextView: NSViewRepresentable {
 /// holds it strongly here to keep the whole stack alive.
 final class ReaderTextView: NSTextView {
     private var retainedStorage: NSTextStorage?
+
+    /// The last attributed string set as content, *without* the highlight
+    /// attributes layered on top — the baseline `updateNSView` diffs against.
+    var baseAttributed: NSAttributedString?
+
+    /// Invoked with the selected text when the user chooses "Highlight".
+    var onHighlight: ((String) -> Void)?
+
+    /// Verbatim text of the reading's current highlights, so the context menu
+    /// can offer "Remove Highlight" when the selection matches one.
+    var highlights: [String] = []
 
     static func make() -> ReaderTextView {
         let storage = NSTextStorage()
@@ -102,6 +153,33 @@ final class ReaderTextView: NSTextView {
         super.setFrameSize(newSize)
         if widthChanged { invalidateIntrinsicContentSize() }
     }
+
+    /// Replace the default rich text-editing context menu with a single
+    /// highlight command. With no selection there is nothing to act on, so no
+    /// menu is shown. When the selection exactly matches an existing highlight
+    /// the command removes it; otherwise it adds one.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let range = selectedRange()
+        guard range.length > 0, let storage = textStorage else { return nil }
+        let selected = (storage.string as NSString)
+            .substring(with: range)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = highlights.contains(selected) ? "Remove Highlight" : "Highlight"
+        let menu = NSMenu()
+        let item = NSMenuItem(title: title,
+                              action: #selector(highlightSelection(_:)),
+                              keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+        return menu
+    }
+
+    @objc private func highlightSelection(_ sender: Any?) {
+        let range = selectedRange()
+        guard range.length > 0, let storage = textStorage else { return }
+        let text = (storage.string as NSString).substring(with: range)
+        onHighlight?(text)
+    }
 }
 
 /// Draws block-quote bars in the text margin. TextKit gives no way to express a
@@ -112,9 +190,16 @@ final class ReaderLayoutManager: NSLayoutManager {
     /// Matches `MarkdownTheme.quoteBarWidth`.
     private let barWidth: CGFloat = 3
 
+    /// Translucent fill behind highlighted passages. Yellow reads as a marker
+    /// in both light and dark mode at this alpha.
+    private let highlightColor = NSColor.systemYellow.withAlphaComponent(0.32)
+
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
         guard let textStorage else { return }
+
+        drawHighlights(forGlyphRange: glyphsToShow, at: origin, textStorage: textStorage)
+
         let color = NSColor.secondaryLabelColor.withAlphaComponent(0.4)
 
         enumerateLineFragments(forGlyphRange: glyphsToShow) { rect, _, _, glyphRange, _ in
@@ -129,6 +214,28 @@ final class ReaderLayoutManager: NSLayoutManager {
                                      width: self.barWidth, height: rect.height)
                 NSBezierPath(roundedRect: barRect,
                              xRadius: self.barWidth / 2, yRadius: self.barWidth / 2).fill()
+            }
+        }
+    }
+
+    /// Fill a rounded tint behind every range carrying `.readerHighlight`. Drawn
+    /// in `drawBackground` (before the glyphs) so text stays on top.
+    private func drawHighlights(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint,
+                                textStorage: NSTextStorage) {
+        guard let container = textContainers.first else { return }
+        let charRange = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        highlightColor.setFill()
+        textStorage.enumerateAttribute(.readerHighlight, in: charRange) { value, range, _ in
+            guard value != nil else { return }
+            let glyphRange = self.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            self.enumerateEnclosingRects(
+                forGlyphRange: glyphRange,
+                withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+                in: container
+            ) { rect, _ in
+                let r = NSRect(x: origin.x + rect.minX, y: origin.y + rect.minY,
+                               width: rect.width, height: rect.height)
+                NSBezierPath(roundedRect: r, xRadius: 2, yRadius: 2).fill()
             }
         }
     }

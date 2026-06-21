@@ -12,6 +12,7 @@ struct ArticleDetailView: View {
     @State private var isLoading = false
     @State private var newTag = ""
     @State private var showTagInput = false
+    @State private var showHighlights = false
     @FocusState private var tagFieldFocused: Bool
 
     var body: some View {
@@ -35,6 +36,10 @@ struct ArticleDetailView: View {
             Task { await load(id: id) }
         }
         .toolbar { toolbarItems }
+        .inspector(isPresented: $showHighlights) {
+            HighlightsInspector(readingId: appState.selectedId)
+                .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
+        }
     }
 
     // ── Article content ───────────────────────────────────────────────────
@@ -77,7 +82,11 @@ struct ArticleDetailView: View {
                     markdown: articleMarkdown,
                     libraryURL: appState.libraryURL,
                     font: readerFont,
-                    fontSize: readerFontSize
+                    fontSize: readerFontSize,
+                    highlights: appState.highlights.map(\.text),
+                    onHighlight: { text in
+                        Task { await appState.toggleHighlight(id: row.id, text: text) }
+                    }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let excerpt = row.excerpt, !excerpt.isEmpty {
@@ -275,6 +284,13 @@ struct ArticleDetailView: View {
                 }
                 .help("Open original URL")
 
+                Button {
+                    showHighlights.toggle()
+                } label: {
+                    Label("Highlights", systemImage: "highlighter")
+                }
+                .help("Show highlights")
+
                 Button(role: .destructive) {
                     appState.pendingDelete = row
                 } label: {
@@ -288,11 +304,17 @@ struct ArticleDetailView: View {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private func load(id: String?) async {
-        guard let id else { row = nil; articleMarkdown = nil; return }
+        guard let id else {
+            row = nil
+            articleMarkdown = nil
+            await appState.loadHighlights(id: nil)
+            return
+        }
         isLoading = true
         showTagInput = false
         newTag = ""
         row = appState.readings.first(where: { $0.id == id })
+        await appState.loadHighlights(id: id)
         // The native reader parses Markdown directly (linked images like
         // `[![alt](img)](url)` are handled by the renderer), so no HTML
         // conversion or asset-path rewriting is needed.
