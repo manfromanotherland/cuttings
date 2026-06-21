@@ -2,6 +2,7 @@
 
 uniffi::setup_scaffolding!();
 
+mod delete;
 pub mod ffi;
 mod frontmatter;
 mod id;
@@ -17,6 +18,7 @@ mod types;
 mod url_norm;
 mod writer;
 
+pub use delete::delete_reading;
 pub use frontmatter::{parse_reading, render_reading};
 pub use id::new_id;
 pub use images::download_images;

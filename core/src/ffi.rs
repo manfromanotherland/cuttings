@@ -294,4 +294,14 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         crate::set_favorite(&lib, &conn, &id, favorite).map_err(e)
     }
+
+    // ── Deletion ──────────────────────────────────────────────────────────
+
+    /// Permanently delete a reading: its file, assets, and index row. Unlike
+    /// `set_archived`, this cannot be undone.
+    pub fn delete_reading(&self, library_path: String, id: String) -> Result<(), CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let conn = self.conn.lock().unwrap();
+        crate::delete_reading(&lib, &conn, &id).map_err(e)
+    }
 }
