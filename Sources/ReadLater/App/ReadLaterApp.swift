@@ -21,6 +21,9 @@ struct ReadLaterApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             ArticleCommands(appState: appState)
+            TypographyCommands()
+            AppearanceCommands(appearanceMode: $appearanceMode)
+            NavigationCommands()
         }
 
         Settings {
