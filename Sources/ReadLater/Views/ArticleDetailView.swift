@@ -219,7 +219,10 @@ struct ArticleDetailView: View {
         if let row {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    Task { await appState.toggleRead(row) }
+                    Task {
+                        await appState.toggleRead(row)
+                        self.row = await appState.reloadRow(id: row.id)
+                    }
                 } label: {
                     Label(
                         row.read ? "Mark Unread" : "Mark Read",
@@ -229,7 +232,10 @@ struct ArticleDetailView: View {
                 .help(row.read ? "Mark as unread" : "Mark as read")
 
                 Button {
-                    Task { await appState.toggleFavorite(row) }
+                    Task {
+                        await appState.toggleFavorite(row)
+                        self.row = await appState.reloadRow(id: row.id)
+                    }
                 } label: {
                     Label(
                         row.favorite ? "Unfavorite" : "Favorite",
@@ -240,14 +246,20 @@ struct ArticleDetailView: View {
 
                 if row.archived {
                     Button {
-                        Task { await appState.unarchive(row) }
+                        Task {
+                            await appState.unarchive(row)
+                            self.row = await appState.reloadRow(id: row.id)
+                        }
                     } label: {
                         Label("Move to Library", systemImage: "tray.and.arrow.up")
                     }
                     .help("Move back to library")
                 } else {
                     Button {
-                        Task { await appState.archive(row) }
+                        Task {
+                            await appState.archive(row)
+                            self.row = await appState.reloadRow(id: row.id)
+                        }
                     } label: {
                         Label("Archive", systemImage: "archivebox")
                     }
