@@ -220,6 +220,14 @@ final class AppState: ObservableObject {
                 // order for free and avoids any list-size cap.
                 readings = try await core.getReadingRows(ids: results.map(\.id))
             }
+
+            // Open the first reading by default so selection-dependent UI (the
+            // reader and its toolbar, including Sort) is visible without an
+            // extra click. If the previous selection is gone after a reload,
+            // fall back to the first item; clear it only when the list is empty.
+            if selectedId == nil || !readings.contains(where: { $0.id == selectedId }) {
+                selectedId = readings.first?.id
+            }
         } catch {
             self.error = error.localizedDescription
         }

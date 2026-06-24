@@ -223,9 +223,20 @@ struct ArticleDetailView: View {
 
     // ── Toolbar ───────────────────────────────────────────────────────────
 
+    /// The selected row resolved straight from the shared, synchronously
+    /// published `appState.readings` (kept fresh by every mutation's refresh).
+    /// Driving the toolbar from this — rather than the async-loaded `@State row`
+    /// — makes the actions appear/disappear in the SAME render frame as the
+    /// sort button (which also keys off `appState.readings`). Using the async
+    /// `row` instead lets the two reflow a frame apart, which reads as a blink.
+    private var currentRow: FfiReadingRow? {
+        guard let id = appState.selectedId else { return nil }
+        return appState.readings.first(where: { $0.id == id })
+    }
+
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        if let row {
+        if let row = currentRow {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     Task {

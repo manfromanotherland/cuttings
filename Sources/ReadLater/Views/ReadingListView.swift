@@ -94,22 +94,24 @@ struct ReadingListView: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Picker("Sort By", selection: $appState.sortField) {
-                    ForEach(ReadingSort.allCases) { field in
-                        Text(field.label).tag(field)
+        if !appState.readings.isEmpty {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("Sort By", selection: $appState.sortField) {
+                        ForEach(ReadingSort.allCases) { field in
+                            Text(field.label).tag(field)
+                        }
                     }
+                    Divider()
+                    Picker("Order", selection: $appState.sortAscending) {
+                        Text(appState.sortField.directionLabel(ascending: false)).tag(false)
+                        Text(appState.sortField.directionLabel(ascending: true)).tag(true)
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
-                Divider()
-                Picker("Order", selection: $appState.sortAscending) {
-                    Text(appState.sortField.directionLabel(ascending: false)).tag(false)
-                    Text(appState.sortField.directionLabel(ascending: true)).tag(true)
-                }
-            } label: {
-                Label("Sort", systemImage: "arrow.up.arrow.down")
+                .help("Sort readings")
             }
-            .help("Sort readings")
         }
     }
 

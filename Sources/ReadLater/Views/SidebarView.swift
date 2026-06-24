@@ -43,7 +43,10 @@ struct SidebarView: View {
         }
         .navigationTitle("Read Later")
         .onChange(of: appState.sidebarSelection) { _, _ in
-            appState.selectedId = nil
+            // Don't clear the selection here: loadReadings() re-selects the
+            // first item (or keeps a still-valid one), so clearing first only
+            // makes the selection-dependent toolbar (sort + actions) blink off
+            // and back on while the new list loads.
             Task { await appState.loadReadings() }
         }
     }
