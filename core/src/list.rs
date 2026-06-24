@@ -18,20 +18,29 @@ pub enum View {
     Favorites,
 }
 
-/// Sort order for listing.
+/// Field to sort a listing by. Direction is controlled separately by
+/// [`ListOptions::ascending`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SortOrder {
-    /// Newest `saved_at` first (default).
+pub enum SortField {
+    /// When the reading was saved (default).
     #[default]
-    NewestFirst,
-    OldestFirst,
+    SavedAt,
+    /// When the reading was last marked read. Unread rows (`read_at IS NULL`)
+    /// always sort last, regardless of direction.
+    ReadAt,
+    /// Star rating (0–5).
+    Rating,
 }
 
 /// Options for `list_readings`.
 #[derive(Debug, Clone)]
 pub struct ListOptions {
     pub view: View,
-    pub sort: SortOrder,
+    pub sort: SortField,
+    /// Sort ascending when `true`, descending when `false`. Descending is the
+    /// natural default for every field (newest / highest / most-recently-read
+    /// first).
+    pub ascending: bool,
     /// Restrict to readings that carry this tag (exact match).
     pub tag: Option<String>,
     /// Restrict to readings with this exact star rating, 1–5. `None` = no filter.
@@ -48,7 +57,8 @@ impl Default for ListOptions {
     fn default() -> Self {
         Self {
             view: View::All,
-            sort: SortOrder::NewestFirst,
+            sort: SortField::SavedAt,
+            ascending: false,
             tag: None,
             rating: None,
             since: None,
@@ -92,9 +102,15 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         View::Favorites => "favorite = 1",
     };
 
+    // Direction applies to the chosen field; a final `id DESC` makes the order
+    // total so pagination is stable when the primary key ties. For `read_at`,
+    // the leading `(read_at IS NULL)` term forces unread rows last in both
+    // directions (it always sorts ascending: 0 = has-date before 1 = null).
+    let dir = if opts.ascending { "ASC" } else { "DESC" };
     let order = match opts.sort {
-        SortOrder::NewestFirst => "saved_at DESC",
-        SortOrder::OldestFirst => "saved_at ASC",
+        SortField::SavedAt => format!("saved_at {dir}, id DESC"),
+        SortField::ReadAt => format!("(read_at IS NULL), read_at {dir}, id DESC"),
+        SortField::Rating => format!("rating {dir}, id DESC"),
     };
 
     // Optional filters use sentinel values (empty string / 0) so the SQL is
@@ -483,6 +499,81 @@ mod tests {
         let ids1: Vec<_> = page1.iter().map(|r| &r.id).collect();
         let ids2: Vec<_> = page2.iter().map(|r| &r.id).collect();
         assert!(ids1.iter().all(|id| !ids2.contains(id)));
+    }
+
+    #[test]
+    fn sort_by_read_at_puts_unread_last_in_both_directions() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut a = meta(&new_id(), "https://a.com", "A");
+        a.read_at = Some("2026-01-02T00:00:00.000Z".into());
+        write_reading(&lib, a, "body".into()).unwrap();
+
+        let mut b = meta(&new_id(), "https://b.com", "B");
+        b.read_at = Some("2026-01-03T00:00:00.000Z".into());
+        write_reading(&lib, b, "body".into()).unwrap();
+
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://c.com", "C-unread"),
+            "body".into(),
+        )
+        .unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let titles = |ascending: bool| {
+            list_readings(
+                &conn,
+                &ListOptions {
+                    view: View::All,
+                    sort: SortField::ReadAt,
+                    ascending,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .into_iter()
+            .map(|r| r.title)
+            .collect::<Vec<_>>()
+        };
+
+        // Descending: most recently read first; unread last.
+        assert_eq!(titles(false), ["B", "A", "C-unread"]);
+        // Ascending: earliest read first; unread STILL last.
+        assert_eq!(titles(true), ["A", "B", "C-unread"]);
+    }
+
+    #[test]
+    fn sort_by_rating_orders_by_stars() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut five = meta(&new_id(), "https://a.com", "Five");
+        five.rating = 5;
+        write_reading(&lib, five, "body".into()).unwrap();
+
+        let mut three = meta(&new_id(), "https://b.com", "Three");
+        three.rating = 3;
+        write_reading(&lib, three, "body".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::All,
+                sort: SortField::Rating,
+                ascending: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.title.as_str()).collect::<Vec<_>>(),
+            ["Five", "Three"]
+        );
     }
 
     #[test]

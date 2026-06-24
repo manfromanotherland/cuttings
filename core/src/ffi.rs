@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    list::{ListOptions, SortOrder, View},
+    list::{ListOptions, SortField, View},
     scanner::ScannedReading,
     LibraryRoot,
 };
@@ -89,10 +89,19 @@ pub enum FfiView {
     Favorites,
 }
 
+#[derive(uniffi::Enum)]
+pub enum FfiSortField {
+    SavedAt,
+    ReadAt,
+    Rating,
+}
+
 #[derive(uniffi::Record)]
 pub struct FfiListOptions {
     pub view: FfiView,
-    pub sort_newest_first: bool,
+    pub sort: FfiSortField,
+    /// Ascending when `true`, descending when `false` (the default direction).
+    pub ascending: bool,
     pub tag: Option<String>,
     pub rating: Option<u8>,
     pub since: Option<String>,
@@ -157,11 +166,12 @@ impl From<FfiListOptions> for ListOptions {
                 FfiView::Archive => View::Archive,
                 FfiView::Favorites => View::Favorites,
             },
-            sort: if o.sort_newest_first {
-                SortOrder::NewestFirst
-            } else {
-                SortOrder::OldestFirst
+            sort: match o.sort {
+                FfiSortField::SavedAt => SortField::SavedAt,
+                FfiSortField::ReadAt => SortField::ReadAt,
+                FfiSortField::Rating => SortField::Rating,
             },
+            ascending: o.ascending,
             tag: o.tag,
             rating: o.rating,
             since: o.since,

@@ -18,7 +18,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use read_later_core::{
     add_tag, apply_diffs, diff, get_reading,
-    list::{ListOptions, SortOrder, View},
+    list::{ListOptions, SortField, View},
     list_readings, list_tags, open_index, rebuild, remove_tag, scan_library, search, set_archived,
     set_favorite, set_read, LibraryRoot,
 };
@@ -57,6 +57,12 @@ enum Cmd {
         view: String,
         #[arg(long)]
         tag: Option<String>,
+        /// Sort field: saved_at | read_at | rating.
+        #[arg(long, default_value = "saved_at")]
+        sort: String,
+        /// Sort ascending instead of the default descending order.
+        #[arg(long)]
+        asc: bool,
         #[arg(long, default_value = "20")]
         limit: usize,
         #[arg(long, default_value = "0")]
@@ -144,21 +150,30 @@ fn main() -> Result<()> {
             db_path,
             view,
             tag,
+            sort,
+            asc,
             limit,
             offset,
         } => {
             let view = match view.to_lowercase().as_str() {
                 "unread" => View::Unread,
+                "read" => View::Read,
                 "archive" => View::Archive,
                 "favorites" => View::Favorites,
                 _ => View::All,
+            };
+            let sort = match sort.to_lowercase().as_str() {
+                "read_at" => SortField::ReadAt,
+                "rating" => SortField::Rating,
+                _ => SortField::SavedAt,
             };
             let conn = open_index(Path::new(&db_path))?;
             let rows = list_readings(
                 &conn,
                 &ListOptions {
                     view,
-                    sort: SortOrder::NewestFirst,
+                    sort,
+                    ascending: asc,
                     tag,
                     limit,
                     offset,
