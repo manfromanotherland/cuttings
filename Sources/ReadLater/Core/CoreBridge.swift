@@ -39,6 +39,13 @@ actor CoreBridge {
         try db.getReadingRow(id: id)
     }
 
+    /// Hydrate full rows for `ids`, preserving their order and skipping any id
+    /// no longer in the index. Used to turn ranked search hits (which span both
+    /// active and archived readings) into displayable rows in a single hop.
+    func getReadingRows(ids: [String]) throws -> [FfiReadingRow] {
+        try ids.compactMap { try db.getReadingRow(id: $0) }
+    }
+
     func getBody(id: String) throws -> String? {
         try db.getBody(id: id)
     }

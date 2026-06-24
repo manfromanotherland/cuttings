@@ -151,20 +151,12 @@ final class AppState: ObservableObject {
                 hasMoreReadings = false
                 let results = try await core.search(query: searchQuery, limit: 50)
                 searchResults = results
-                let ids = Set(results.map(\.id))
-                let opts = FfiListOptions(
-                    view: .all, sortNewestFirst: true,
-                    tag: nil, rating: nil, since: nil, until: nil,
-                    limit: 1000, offset: 0
-                )
-                let all = try await core.listReadings(opts: opts)
-                readings = all.filter { ids.contains($0.id) }
-                    .sorted { a, b in
-                        // Preserve search rank order.
-                        let ai = results.firstIndex(where: { $0.id == a.id }) ?? Int.max
-                        let bi = results.firstIndex(where: { $0.id == b.id }) ?? Int.max
-                        return ai < bi
-                    }
+                // Hydrate full rows straight from the ranked hit ids. Search
+                // spans both active and archived readings, so we must not route
+                // through a `.all` listing (archived = 0) — that would silently
+                // drop archived matches. Fetching by id also preserves BM25 rank
+                // order for free and avoids any list-size cap.
+                readings = try await core.getReadingRows(ids: results.map(\.id))
             }
         } catch {
             self.error = error.localizedDescription
