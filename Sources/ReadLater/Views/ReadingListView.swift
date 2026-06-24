@@ -44,8 +44,21 @@ struct ReadingListView: View {
 
     // ── List ──────────────────────────────────────────────────────────────
 
+    /// List selection that refuses to clear when the user clicks empty space.
+    /// Keeping a row selected keeps the selection-dependent toolbar (sort +
+    /// actions) stable. The selection is still cleared for an empty list — that
+    /// path goes through `loadReadings()`, not this binding.
+    private var listSelection: Binding<String?> {
+        Binding(
+            get: { appState.selectedId },
+            set: { newValue in
+                if newValue != nil { appState.selectedId = newValue }
+            }
+        )
+    }
+
     private var list: some View {
-        List(appState.readings, id: \.id, selection: $appState.selectedId) { row in
+        List(appState.readings, id: \.id, selection: listSelection) { row in
             ReadingRowView(row: row, snippet: snippet(for: row.id))
                 .tag(row.id)
                 .contextMenu { contextMenu(for: row) }
