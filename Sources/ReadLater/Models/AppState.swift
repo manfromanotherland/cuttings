@@ -3,8 +3,49 @@
 import Foundation
 import SwiftUI
 
+/// User-selectable sort field for the reading list. Mirrors the core's
+/// `FfiSortField`; persisted as its `rawValue` in `UserDefaults`.
+enum ReadingSort: String, CaseIterable, Identifiable {
+    case savedAt
+    case readAt
+    case rating
+
+    var id: String { rawValue }
+
+    /// Label shown in the sort-field picker.
+    var label: String {
+        switch self {
+        case .savedAt: "Date saved"
+        case .readAt: "Date read"
+        case .rating: "Rating"
+        }
+    }
+
+    var ffi: FfiSortField {
+        switch self {
+        case .savedAt: .savedAt
+        case .readAt: .readAt
+        case .rating: .rating
+        }
+    }
+
+    /// Direction label tailored to the field (e.g. "Newest first" vs
+    /// "Highest rated"), for the ascending/descending picker.
+    func directionLabel(ascending: Bool) -> String {
+        switch self {
+        case .savedAt: ascending ? "Oldest first" : "Newest first"
+        case .readAt: ascending ? "Read least recently" : "Read most recently"
+        case .rating: ascending ? "Lowest rated" : "Highest rated"
+        }
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
+    private enum SortDefaultsKey {
+        static let field = "sortField"
+        static let ascending = "sortAscending"
+    }
     // ── Navigation state ──────────────────────────────────────────────────
     @Published var libraryURL: URL?
     @Published var readings: [FfiReadingRow] = []
@@ -12,7 +53,21 @@ final class AppState: ObservableObject {
     @Published var selectedId: String?
     @Published var searchQuery: String = ""
     @Published var sidebarSelection: SidebarSelection? = .view(.all)
-    @Published var sortNewestFirst: Bool = true
+
+    /// Sort field for the reading list, persisted across launches.
+    @Published var sortField: ReadingSort {
+        didSet {
+            UserDefaults.standard.set(sortField.rawValue, forKey: SortDefaultsKey.field)
+        }
+    }
+
+    /// Sort direction (ascending when `true`), persisted across launches.
+    /// Descending is the default for every field.
+    @Published var sortAscending: Bool {
+        didSet {
+            UserDefaults.standard.set(sortAscending, forKey: SortDefaultsKey.ascending)
+        }
+    }
 
     /// Reading awaiting delete confirmation, if any. Drives the confirm dialog.
     @Published var pendingDelete: FfiReadingRow?
@@ -57,6 +112,12 @@ final class AppState: ObservableObject {
     private var watcher: LibraryWatcher?
 
     init() {
+        // Restore the persisted sort preference (defaults: saved-at, descending).
+        let defaults = UserDefaults.standard
+        sortField = defaults.string(forKey: SortDefaultsKey.field)
+            .flatMap(ReadingSort.init(rawValue:)) ?? .savedAt
+        sortAscending = defaults.bool(forKey: SortDefaultsKey.ascending)
+
         if let url = LibraryBookmark.resolve() {
             accessedURL = url
             Task { await boot(url: url) }
@@ -138,7 +199,8 @@ final class AppState: ObservableObject {
                 searchResults = []
                 let opts = FfiListOptions(
                     view: activeView.ffiView,
-                    sortNewestFirst: sortNewestFirst,
+                    sort: sortField.ffi,
+                    ascending: sortAscending,
                     tag: selectedTag,
                     rating: selectedRating,
                     since: nil, until: nil,
@@ -169,7 +231,8 @@ final class AppState: ObservableObject {
         do {
             let opts = FfiListOptions(
                 view: activeView.ffiView,
-                sortNewestFirst: sortNewestFirst,
+                sort: sortField.ffi,
+                ascending: sortAscending,
                 tag: selectedTag,
                 rating: selectedRating,
                 since: nil, until: nil,
@@ -192,7 +255,7 @@ final class AppState: ObservableObject {
             var counts: [SidebarItem: Int] = [:]
             for item in SidebarItem.allCases {
                 let opts = FfiListOptions(
-                    view: item.ffiView, sortNewestFirst: true,
+                    view: item.ffiView, sort: .savedAt, ascending: false,
                     tag: nil, rating: nil, since: nil, until: nil,
                     limit: 9999, offset: 0
                 )

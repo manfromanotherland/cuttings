@@ -18,6 +18,12 @@ struct ReadingListView: View {
         }
         .navigationTitle(navigationTitle)
         .task { await appState.loadReadings() }
+        .onChange(of: appState.sortField) { _, _ in
+            Task { await appState.loadReadings() }
+        }
+        .onChange(of: appState.sortAscending) { _, _ in
+            Task { await appState.loadReadings() }
+        }
         .toolbar { toolbarItems }
         .confirmationDialog(
             "Delete this reading?",
@@ -89,16 +95,21 @@ struct ReadingListView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                appState.sortNewestFirst.toggle()
-                Task { await appState.loadReadings() }
+            Menu {
+                Picker("Sort By", selection: $appState.sortField) {
+                    ForEach(ReadingSort.allCases) { field in
+                        Text(field.label).tag(field)
+                    }
+                }
+                Divider()
+                Picker("Order", selection: $appState.sortAscending) {
+                    Text(appState.sortField.directionLabel(ascending: false)).tag(false)
+                    Text(appState.sortField.directionLabel(ascending: true)).tag(true)
+                }
             } label: {
-                Label(
-                    appState.sortNewestFirst ? "Newest first" : "Oldest first",
-                    systemImage: appState.sortNewestFirst ? "arrow.down" : "arrow.up"
-                )
+                Label("Sort", systemImage: "arrow.up.arrow.down")
             }
-            .help(appState.sortNewestFirst ? "Sort: newest first" : "Sort: oldest first")
+            .help("Sort readings")
         }
     }
 
