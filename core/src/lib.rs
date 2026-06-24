@@ -16,6 +16,7 @@ pub mod scanner;
 pub mod search;
 pub mod status;
 pub mod tags;
+mod time;
 mod types;
 mod url_norm;
 mod writer;

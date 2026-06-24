@@ -51,7 +51,7 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO readings
          (id, url, canonical_url, title, author, site, saved_at,
-          read, archived, favorite, rating, source_hash, excerpt, word_count,
+          read_at, archived, favorite, rating, source_hash, excerpt, word_count,
           lang, tags_json, body_text)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
         params![
@@ -62,7 +62,7 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.author,
             r.metadata.site,
             r.metadata.saved_at,
-            r.metadata.read as i32,
+            r.metadata.read_at,
             r.metadata.archived as i32,
             r.metadata.favorite as i32,
             r.metadata.rating,
@@ -82,7 +82,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     conn.execute(
         "UPDATE readings SET
          url=?2, canonical_url=?3, title=?4, author=?5, site=?6,
-         saved_at=?7, read=?8, archived=?9, favorite=?10, rating=?11,
+         saved_at=?7, read_at=?8, archived=?9, favorite=?10, rating=?11,
          source_hash=?12, excerpt=?13, word_count=?14, lang=?15,
          tags_json=?16, body_text=?17
          WHERE id=?1",
@@ -94,7 +94,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.author,
             r.metadata.site,
             r.metadata.saved_at,
-            r.metadata.read as i32,
+            r.metadata.read_at,
             r.metadata.archived as i32,
             r.metadata.favorite as i32,
             r.metadata.rating,
@@ -138,7 +138,7 @@ mod tests {
             author: None,
             site: None,
             saved_at: "2026-06-13T15:00:00Z".to_string(),
-            read: false,
+            read_at: None,
             archived: false,
             favorite: false,
             rating: 0,

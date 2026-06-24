@@ -16,8 +16,18 @@ use crate::{
 };
 
 /// Mark a reading as read (`true`) or unread (`false`).
+///
+/// Read state is carried entirely by `read_at`: marking read stamps it with the
+/// current UTC time (overwriting any earlier value, so it always reflects the
+/// most recent time marked read); marking unread clears it back to `None`.
 pub fn set_read(library: &LibraryRoot, conn: &Connection, id: &str, read: bool) -> Result<()> {
-    update_flag(library, conn, id, |m| m.read = read)
+    update_flag(library, conn, id, |m| {
+        m.read_at = if read {
+            Some(crate::time::now_utc_iso())
+        } else {
+            None
+        };
+    })
 }
 
 /// Archive (`true`) or un-archive (`false`) a reading.
@@ -106,7 +116,7 @@ mod tests {
             author: None,
             site: None,
             saved_at: "2026-06-13T15:00:00Z".to_string(),
-            read: false,
+            read_at: None,
             archived: false,
             favorite: false,
             rating: 0,
@@ -131,6 +141,16 @@ mod tests {
             != 0
     }
 
+    fn read_at_is_set(conn: &Connection, id: &str) -> bool {
+        conn.query_row(
+            "SELECT read_at IS NOT NULL FROM readings WHERE id = ?1",
+            rusqlite::params![id],
+            |r| r.get::<_, i32>(0),
+        )
+        .unwrap()
+            != 0
+    }
+
     // ── read / unread ────────────────────────────────────────────────────────
 
     #[test]
@@ -144,7 +164,9 @@ mod tests {
         set_read(&lib, &conn, &id, true).unwrap();
 
         let content = fs::read_to_string(lib.article_path(&id)).unwrap();
-        assert!(content.contains("read: true"));
+        // Read state is the presence of `read_at`, not a `read:` boolean.
+        assert!(content.contains("read_at:"));
+        assert!(!content.contains("\nread:"));
     }
 
     #[test]
@@ -156,10 +178,10 @@ mod tests {
         rebuild(&conn, &lib).unwrap();
 
         set_read(&lib, &conn, &id, true).unwrap();
-        assert!(read_flag(&conn, &id, "read"));
+        assert!(read_at_is_set(&conn, &id));
 
         set_read(&lib, &conn, &id, false).unwrap();
-        assert!(!read_flag(&conn, &id, "read"));
+        assert!(!read_at_is_set(&conn, &id));
     }
 
     // ── archived ─────────────────────────────────────────────────────────────

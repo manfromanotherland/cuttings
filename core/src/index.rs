@@ -27,6 +27,9 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 4 {
         migrate_v4(conn)?;
     }
+    if version < 5 {
+        migrate_v5(conn)?;
+    }
     Ok(())
 }
 
@@ -184,6 +187,34 @@ fn migrate_v4(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v5: replace the `read` boolean with a `read_at` timestamp.
+///
+/// Read state is now carried by `read_at` (UTC ISO-8601, or NULL for unread)
+/// rather than a separate boolean — this lets the UI sort by when something was
+/// read. Already-read rows are backfilled with their `saved_at` so they stay
+/// read (we don't know the real read time for historical data; save time is the
+/// best available stamp and keeps them sorting sensibly). The `read` column is
+/// then dropped. The FTS index is rebuilt defensively: it never indexed `read`,
+/// but rebuilding guarantees its rowids stay aligned with the rewritten table.
+fn migrate_v5(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings ADD COLUMN read_at TEXT;
+        UPDATE readings SET read_at = saved_at WHERE read = 1;
+        ALTER TABLE readings DROP COLUMN read;
+
+        INSERT INTO readings_fts(readings_fts) VALUES('rebuild');
+
+        PRAGMA user_version = 5;
+
+        COMMIT;
+        ",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,7 +233,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
 
         // readings table exists
         let count: i64 = conn
@@ -323,7 +354,10 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4, "v4 migration ran on top of the v3 database");
+        assert_eq!(
+            version, 5,
+            "migrations ran forward on top of the v3 database"
+        );
 
         let after: i64 = conn
             .query_row(
@@ -343,6 +377,87 @@ mod tests {
             )
             .unwrap();
         assert_eq!(idx, 0, "v3 index dropped by v4");
+    }
+
+    #[test]
+    fn upgrade_from_v4_backfills_read_at_and_drops_read() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+
+        // Build a DB stamped at v4 (pre-read_at) with one read and one unread
+        // row, using the old `read` boolean column.
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+                .unwrap();
+            migrate_v1(&conn).unwrap();
+            migrate_v2(&conn).unwrap();
+            migrate_v3(&conn).unwrap();
+            migrate_v4(&conn).unwrap();
+
+            for (id, read, saved) in [
+                ("01READ", 1, "2026-06-13T15:00:00Z"),
+                ("01UNREAD", 0, "2026-06-14T15:00:00Z"),
+            ] {
+                conn.execute(
+                    "INSERT INTO readings
+                     (id, url, canonical_url, title, saved_at, read, source_hash, body_text)
+                     VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    rusqlite::params![
+                        id,
+                        "https://example.com",
+                        "Title",
+                        saved,
+                        read,
+                        "sha256:abc",
+                        "body"
+                    ],
+                )
+                .unwrap();
+            }
+
+            let version: u32 = conn
+                .pragma_query_value(None, "user_version", |r| r.get(0))
+                .unwrap();
+            assert_eq!(version, 4, "precondition: stamped at v4");
+        }
+
+        // Reopen through the public path: migrations carry it to v5.
+        let conn = open(&db_path).unwrap();
+
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 5);
+
+        // The read row keeps a read_at equal to its save time; unread stays NULL.
+        let read_at: Option<String> = conn
+            .query_row(
+                "SELECT read_at FROM readings WHERE id = '01READ'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(read_at.as_deref(), Some("2026-06-13T15:00:00Z"));
+
+        let unread_at: Option<String> = conn
+            .query_row(
+                "SELECT read_at FROM readings WHERE id = '01UNREAD'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(unread_at, None);
+
+        // The legacy `read` column is gone.
+        let has_read: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('readings') WHERE name = 'read'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_read, 0, "v5 drops the read column");
     }
 
     #[test]
@@ -395,7 +510,7 @@ mod tests {
             "url",
             "canonical_url",
             "title",
-            "read",
+            "read_at",
             "archived",
             "favorite",
             "rating",
@@ -405,5 +520,11 @@ mod tests {
         ] {
             assert!(columns.contains(&col.to_string()), "missing column: {col}");
         }
+
+        // The old `read` boolean is gone — read state lives in `read_at`.
+        assert!(
+            !columns.contains(&"read".to_string()),
+            "legacy `read` column should be dropped"
+        );
     }
 }

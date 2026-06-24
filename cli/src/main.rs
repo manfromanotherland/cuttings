@@ -198,6 +198,9 @@ fn main() -> Result<()> {
                         "Read   : {} | Archived: {} | Favorite: {}",
                         row.read, row.archived, row.favorite
                     );
+                    if let Some(read_at) = &row.read_at {
+                        println!("Read at: {read_at}");
+                    }
                     println!("---");
                     let preview: String = body.chars().take(400).collect();
                     println!("{preview}");

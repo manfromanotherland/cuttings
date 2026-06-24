@@ -56,7 +56,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         author: req.metadata.author,
         site: req.metadata.site,
         saved_at: req.metadata.saved_at,
-        read: false,
+        read_at: None,
         archived: false,
         favorite: false,
         rating: 0,

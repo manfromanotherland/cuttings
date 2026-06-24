@@ -69,7 +69,10 @@ pub struct ReadingRow {
     pub author: Option<String>,
     pub site: Option<String>,
     pub saved_at: String,
+    /// `true` when the reading has been read — derived from `read_at` being set.
     pub read: bool,
+    /// UTC ISO-8601 timestamp of the most recent time marked read, or `None`.
+    pub read_at: Option<String>,
     pub archived: bool,
     pub favorite: bool,
     pub rating: u8,
@@ -83,8 +86,8 @@ pub struct ReadingRow {
 pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
     let view_clause = match opts.view {
         View::All => "archived = 0",
-        View::Unread => "archived = 0 AND read = 0",
-        View::Read => "archived = 0 AND read = 1",
+        View::Unread => "archived = 0 AND read_at IS NULL",
+        View::Read => "archived = 0 AND read_at IS NOT NULL",
         View::Archive => "archived = 1",
         View::Favorites => "favorite = 1",
     };
@@ -98,8 +101,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     // always static with exactly 6 bound parameters — no dynamic param count.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
-                read, archived, favorite, excerpt, word_count, lang, tags_json,
-                rating
+                (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
+                rating, read_at
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
@@ -138,14 +141,14 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
 pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, String)>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
-                read, archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, body_text
+                (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
+                rating, read_at, body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(15)?;
+        let body: String = row.get(16)?;
         Ok((row_data, body))
     })?;
 
@@ -174,6 +177,7 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         lang: row.get(12)?,
         tags,
         rating: row.get::<_, i32>(14)? as u8,
+        read_at: row.get(15)?,
     })
 }
 
@@ -201,7 +205,7 @@ mod tests {
             author: None,
             site: None,
             saved_at: "2026-06-13T15:00:00Z".to_string(),
-            read: false,
+            read_at: None,
             archived: false,
             favorite: false,
             rating: 0,
@@ -256,7 +260,7 @@ mod tests {
         .unwrap();
 
         let mut read_meta = meta(&new_id(), "https://b.com", "Read");
-        read_meta.read = true;
+        read_meta.read_at = Some("2026-06-13T16:00:00.000Z".to_string());
         write_reading(&lib, read_meta, "body".into()).unwrap();
 
         rebuild(&conn, &lib).unwrap();
@@ -286,12 +290,12 @@ mod tests {
         .unwrap();
 
         let mut read_meta = meta(&new_id(), "https://b.com", "Read");
-        read_meta.read = true;
+        read_meta.read_at = Some("2026-06-13T16:00:00.000Z".to_string());
         write_reading(&lib, read_meta, "body".into()).unwrap();
 
         // A read but archived item must not appear under the Read view.
         let mut read_archived = meta(&new_id(), "https://c.com", "ReadArchived");
-        read_archived.read = true;
+        read_archived.read_at = Some("2026-06-13T16:00:00.000Z".to_string());
         read_archived.archived = true;
         write_reading(&lib, read_archived, "body".into()).unwrap();
 

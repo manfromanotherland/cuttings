@@ -18,7 +18,12 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub site: Option<String>,
     pub saved_at: String,
-    pub read: bool,
+    /// UTC ISO-8601 timestamp (millisecond precision, `Z` suffix — same format
+    /// as `saved_at`) of the most recent time the reading was marked read.
+    /// `None` means unread: presence of this field *is* the read state, so there
+    /// is no separate `read` boolean.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_at: Option<String>,
     pub archived: bool,
     pub favorite: bool,
     /// Star rating 0–5, where 0 means unrated. Defaults to 0 for articles

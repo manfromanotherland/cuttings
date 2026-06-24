@@ -27,8 +27,21 @@ pub fn parse_reading(content: &str) -> Result<Reading> {
     let after_fence = &rest[close + 5..]; // skip "\n---\n"
     let body = after_fence.trim_start_matches('\n').to_string();
 
-    let metadata: Metadata =
+    // Parse once into a generic value so we can read any legacy `read: true`
+    // flag from files written before `read_at` existed, then into Metadata.
+    let value: serde_yaml::Value =
         serde_yaml::from_str(yaml_str).map_err(|e| anyhow!("invalid frontmatter: {e}"))?;
+    let legacy_read = value.get("read").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    let mut metadata: Metadata =
+        serde_yaml::from_value(value).map_err(|e| anyhow!("invalid frontmatter: {e}"))?;
+
+    // Forward-migrate the dropped `read` boolean: a legacy read article with no
+    // `read_at` is treated as read at its save time. The next write drops the
+    // `read` key entirely (it is no longer part of Metadata).
+    if metadata.read_at.is_none() && legacy_read {
+        metadata.read_at = Some(metadata.saved_at.clone());
+    }
 
     Ok(Reading { metadata, body })
 }
@@ -58,7 +71,7 @@ mod tests {
             author: Some("Jane Doe".to_string()),
             site: Some("example.com".to_string()),
             saved_at: "2026-06-13T15:00:00Z".to_string(),
-            read,
+            read_at: read.then(|| "2026-06-13T16:00:00.000Z".to_string()),
             archived,
             favorite,
             rating: 0,
@@ -101,6 +114,57 @@ mod tests {
         assert_eq!(parsed.metadata, meta);
     }
 
+    #[test]
+    fn legacy_read_true_migrates_to_read_at() {
+        // A file written before `read_at` existed: it carries `read: true` and
+        // no `read_at`. Parsing must treat it as read, stamped at save time.
+        let content = "\
+---
+format_version: 1
+id: 01J9Z8X7Q2VBKN3P4HXYZ01AB
+url: https://example.com/article
+canonical_url: https://example.com/article
+title: Old Article
+saved_at: 2026-06-13T15:00:00Z
+read: true
+archived: false
+favorite: false
+tags: []
+source_hash: sha256:abc
+---
+
+Body.
+";
+        let parsed = parse_reading(content).unwrap();
+        assert_eq!(
+            parsed.metadata.read_at.as_deref(),
+            Some("2026-06-13T15:00:00Z")
+        );
+    }
+
+    #[test]
+    fn legacy_read_false_stays_unread() {
+        let content = "\
+---
+format_version: 1
+id: 01J9Z8X7Q2VBKN3P4HXYZ01AB
+url: https://example.com/article
+canonical_url: https://example.com/article
+title: Old Article
+saved_at: 2026-06-13T15:00:00Z
+read: false
+archived: false
+favorite: false
+tags: []
+source_hash: sha256:abc
+---
+
+Body.
+";
+        let parsed = parse_reading(content).unwrap();
+        assert_eq!(parsed.metadata.read_at, None);
+    }
+
     proptest! {
         #[test]
         fn bool_fields_round_trip(
@@ -119,7 +183,7 @@ mod tests {
             let rendered = render_reading(&reading).unwrap();
             let parsed = parse_reading(&rendered).unwrap();
 
-            prop_assert_eq!(parsed.metadata.read, meta.read);
+            prop_assert_eq!(parsed.metadata.read_at, meta.read_at);
             prop_assert_eq!(parsed.metadata.archived, meta.archived);
             prop_assert_eq!(parsed.metadata.favorite, meta.favorite);
             prop_assert_eq!(parsed.metadata.word_count, meta.word_count);

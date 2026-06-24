@@ -87,7 +87,7 @@ mod tests {
             author: None,
             site: Some("example.com".to_string()),
             saved_at: "2026-06-13T15:00:00Z".to_string(),
-            read: false,
+            read_at: None,
             archived: false,
             favorite: false,
             rating: 0,
