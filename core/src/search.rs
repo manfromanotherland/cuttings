@@ -64,8 +64,13 @@ fn and_query(tokens: &[String]) -> String {
 /// appear anywhere in the article. The fallback matters because `body_text`
 /// holds the raw Markdown, so link URLs and other markup are tokenized
 /// *between* the visible words — pasted rendered prose rarely lines up as a
-/// literal phrase, but every word is still present. Results are ranked by
-/// BM25 relevance (best first) and capped at `limit`.
+/// literal phrase, but every word is still present.
+///
+/// The FTS index spans the title, body, *and* source site, so a query like
+/// "nytimes" surfaces articles from nytimes.com even when the term appears
+/// nowhere in their text — site tokens match (and prefix-match) just like any
+/// other word. Results are ranked by BM25 relevance (best first), capped at
+/// `limit`.
 pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
     let tokens = tokenize(query);
     // Nothing searchable (blank, or pure punctuation/operators).
@@ -391,6 +396,123 @@ mod tests {
         let results = search(&conn, "official docs no", 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, id);
+    }
+
+    fn meta_site(id: &str, url: &str, title: &str, site: &str) -> Metadata {
+        let mut m = meta(id, url, title);
+        m.site = Some(site.to_string());
+        m
+    }
+
+    #[test]
+    fn finds_match_by_site() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta_site(&id, "https://nytimes.com/a", "Some Headline", "nytimes.com"),
+            "Body with no mention of the source.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // The term appears nowhere in title/body — only in the site column.
+        let results = search(&conn, "nytimes", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn site_match_is_case_insensitive() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta_site(&id, "https://www.GitHub.com/x", "Repo", "www.GitHub.com"),
+            "body".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // FTS lowercases tokens, so a lowercase query matches a mixed-case site.
+        let results = search(&conn, "github", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn site_prefix_match_works() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        write_reading(
+            &lib,
+            meta_site(&id, "https://nytimes.com/a", "Headline", "nytimes.com"),
+            "Body with no mention of the source.".to_string(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // A half-typed site token prefix-matches, just like title/body terms:
+        // the trailing-`*` on the last token lets "nyt" reach "nytimes".
+        let results = search(&conn, "nyt", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[test]
+    fn site_and_content_matches_have_no_duplicates() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        // Article A: "rust" only in the body.
+        let a = new_id();
+        write_reading(
+            &lib,
+            meta_site(
+                &a,
+                "https://blog.example.com/a",
+                "Post A",
+                "blog.example.com",
+            ),
+            "All about rust and ownership.".to_string(),
+        )
+        .unwrap();
+
+        // Article B: site is rust-lang.org; "rust" appears in the site only.
+        let b = new_id();
+        write_reading(
+            &lib,
+            meta_site(&b, "https://rust-lang.org/b", "Post B", "rust-lang.org"),
+            "Body with no keyword.".to_string(),
+        )
+        .unwrap();
+
+        // Article C: "rust" in BOTH body and site — a single MATCH must still
+        // return it exactly once.
+        let c = new_id();
+        write_reading(
+            &lib,
+            meta_site(&c, "https://rust-lang.org/c", "Post C", "rust-lang.org"),
+            "Learning rust today.".to_string(),
+        )
+        .unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let results = search(&conn, "rust", 10).unwrap();
+        let ids: Vec<&str> = results.iter().map(|r| r.id.as_str()).collect();
+
+        assert!(ids.contains(&a.as_str()), "body hit A should be present");
+        assert!(ids.contains(&b.as_str()), "site hit B should be present");
+        assert!(ids.contains(&c.as_str()), "hit C should be present");
+        // C matches in two columns but FTS lists each row once.
+        assert_eq!(results.len(), 3, "C must not be duplicated");
     }
 
     #[test]
