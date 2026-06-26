@@ -48,6 +48,13 @@ final class AppState: ObservableObject {
     }
     // ── Navigation state ──────────────────────────────────────────────────
     @Published var libraryURL: URL?
+
+    /// True from launch until the first boot from a persisted bookmark settles.
+    /// `libraryURL` is only set at the end of the async `boot`, so without this
+    /// flag the brief gap between launch and boot would flash the onboarding
+    /// screen even when a saved library exists. Onboarding keys off both:
+    /// show it only when there's no library *and* we aren't restoring one.
+    @Published var isRestoringLibrary: Bool = false
     @Published var readings: [FfiReadingRow] = []
     @Published var searchResults: [FfiSearchResult] = []
     @Published var selectedId: String?
@@ -120,6 +127,7 @@ final class AppState: ObservableObject {
 
         if let url = LibraryBookmark.resolve() {
             accessedURL = url
+            isRestoringLibrary = true
             Task { await boot(url: url) }
         }
     }
@@ -167,6 +175,7 @@ final class AppState: ObservableObject {
             self.error = error.localizedDescription
         }
         isLoading = false
+        isRestoringLibrary = false
     }
 
     /// Write the library path to ~/.config/read-later/library so the native

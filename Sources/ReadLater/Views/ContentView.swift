@@ -7,10 +7,14 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if appState.libraryURL == nil {
-                OnboardingView()
-            } else {
+            if appState.libraryURL != nil {
                 mainContent
+            } else if appState.isRestoringLibrary {
+                // A saved library is still being opened; stay neutral rather than
+                // flashing onboarding for the few frames before boot settles.
+                RestoringView()
+            } else {
+                OnboardingView()
             }
         }
     }
@@ -42,6 +46,18 @@ struct ContentView: View {
                 .transition(.move(edge: .bottom))
             }
         }
+    }
+}
+
+// ── Restoring placeholder ─────────────────────────────────────────────────────
+// Shown while a previously chosen library is being reopened on launch, so the
+// onboarding button never flashes for users who've already picked a folder.
+
+private struct RestoringView: View {
+    var body: some View {
+        ProgressView()
+            .controlSize(.large)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
