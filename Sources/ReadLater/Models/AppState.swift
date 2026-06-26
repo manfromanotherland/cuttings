@@ -309,14 +309,63 @@ final class AppState: ObservableObject {
 
     // ── Mutations ─────────────────────────────────────────────────────────
 
+    /// Optimistically patch the in-memory row for `id` so a status change shows
+    /// on the next frame, before the core write + `refresh()` land. Touches only
+    /// the row's own fields; removing a row that no longer matches the filter is
+    /// the separate, explicit job of `advancePastFilteredRow`, while re-ordering
+    /// is left to the follow-up `refresh()`. A failed write self-heals: the
+    /// refresh re-reads the index and overwrites this.
+    private func patchRow(id: String, _ apply: (inout FfiReadingRow) -> Void) {
+        guard let i = readings.firstIndex(where: { $0.id == id }) else { return }
+        apply(&readings[i])
+    }
+
+    /// Mirror of the core's view/tag/rating filter (see `list.rs`): does `row`
+    /// still belong in the list the user is currently looking at?
+    private func rowMatchesCurrentFilter(_ row: FfiReadingRow) -> Bool {
+        switch activeView {
+        case .all:       if row.archived { return false }
+        case .unread:    if row.archived || row.read { return false }
+        case .read:      if row.archived || !row.read { return false }
+        case .archive:   if !row.archived { return false }
+        case .favorites: if !row.favorite { return false }
+        }
+        if let tag = selectedTag, !row.tags.contains(tag) { return false }
+        if let rating = selectedRating, row.rating != rating { return false }
+        return true
+    }
+
+    /// Pair with `patchRow` for status changes: if the optimistic edit pushed the
+    /// row out of the current filter, slide it out and advance the selection to an
+    /// adjacent row in the *same* render tick — so the user sees one motion, not
+    /// an in-place icon flip followed a beat later by the row jumping away. A
+    /// no-op when the row still matches (e.g. marking read in the All view).
+    /// Skipped during search, whose results span every view.
+    private func advancePastFilteredRow(id: String) {
+        guard searchQuery.isEmpty,
+              let i = readings.firstIndex(where: { $0.id == id }),
+              !rowMatchesCurrentFilter(readings[i]) else { return }
+        withAnimation {
+            if selectedId == id {
+                selectedId = i + 1 < readings.count ? readings[i + 1].id
+                    : (i > 0 ? readings[i - 1].id : nil)
+            }
+            readings.remove(at: i)
+        }
+    }
+
     func toggleRead(_ row: FfiReadingRow) async {
         guard let core else { return }
+        patchRow(id: row.id) { $0.read = !row.read }
+        advancePastFilteredRow(id: row.id)
         try? await core.setRead(id: row.id, read: !row.read)
         await refresh()
     }
 
     func toggleFavorite(_ row: FfiReadingRow) async {
         guard let core else { return }
+        patchRow(id: row.id) { $0.favorite = !row.favorite }
+        advancePastFilteredRow(id: row.id)
         try? await core.setFavorite(id: row.id, favorite: !row.favorite)
         await refresh()
     }
@@ -326,6 +375,7 @@ final class AppState: ObservableObject {
     @discardableResult
     func setRating(id: String, rating: UInt8) async -> FfiReadingRow? {
         guard let core else { return nil }
+        patchRow(id: id) { $0.rating = rating }
         try? await core.setRating(id: id, rating: rating)
         await refresh()
         // The row may have left the current filtered list (e.g. its rating no
@@ -336,12 +386,16 @@ final class AppState: ObservableObject {
 
     func archive(_ row: FfiReadingRow) async {
         guard let core else { return }
+        patchRow(id: row.id) { $0.archived = true }
+        advancePastFilteredRow(id: row.id)
         try? await core.setArchived(id: row.id, archived: true)
         await refresh()
     }
 
     func unarchive(_ row: FfiReadingRow) async {
         guard let core else { return }
+        patchRow(id: row.id) { $0.archived = false }
+        advancePastFilteredRow(id: row.id)
         try? await core.setArchived(id: row.id, archived: false)
         await refresh()
     }
@@ -361,12 +415,17 @@ final class AppState: ObservableObject {
 
     func addTag(id: String, tag: String) async {
         guard let core else { return }
+        // Mirror the core: trim, dedup on exact match, append (no sort/lowercase),
+        // so the optimistic chip lands in the same place the reload confirms.
+        let tag = tag.trimmingCharacters(in: .whitespaces)
+        patchRow(id: id) { if !$0.tags.contains(tag) { $0.tags.append(tag) } }
         try? await core.addTag(id: id, tag: tag)
         await refresh()
     }
 
     func removeTag(id: String, tag: String) async {
         guard let core else { return }
+        patchRow(id: id) { $0.tags.removeAll { $0 == tag } }
         try? await core.removeTag(id: id, tag: tag)
         await refresh()
     }

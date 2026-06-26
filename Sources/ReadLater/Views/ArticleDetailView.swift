@@ -132,10 +132,15 @@ struct ArticleDetailView: View {
                     // Clicking the current rating clears it back to unrated.
                     let target = UInt8(star)
                     let newValue: UInt8 = row.rating == target ? 0 : target
+                    // Optimistic: flip the stars now, then reconcile with the
+                    // authoritative row once the core write + refresh land
+                    // (falling back to the prior row if the write didn't take).
+                    let previous = self.row
+                    var optimistic = row
+                    optimistic.rating = newValue
+                    self.row = optimistic
                     Task {
-                        if let updated = await appState.setRating(id: row.id, rating: newValue) {
-                            self.row = updated
-                        }
+                        self.row = await appState.setRating(id: row.id, rating: newValue) ?? previous
                     }
                 } label: {
                     Image(systemName: UInt8(star) <= row.rating ? "star.fill" : "star")
@@ -212,9 +217,14 @@ struct ArticleDetailView: View {
             Text("#\(tag)")
                 .font(.caption)
             Button {
+                // Optimistic: drop the chip now, reconcile after the write.
+                if var optimistic = row {
+                    optimistic.tags.removeAll { $0 == tag }
+                    row = optimistic
+                }
                 Task {
                     await appState.removeTag(id: id, tag: tag)
-                    row = await appState.reloadRow(id: id)
+                    row = await appState.reloadRow(id: id) ?? row
                 }
             } label: {
                 Image(systemName: "xmark")
@@ -256,10 +266,10 @@ struct ArticleDetailView: View {
         if let row = currentRow {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    Task {
-                        await appState.toggleRead(row)
-                        self.row = await appState.reloadRow(id: row.id)
-                    }
+                    // Drives off `currentRow` (optimistic), and on a selection
+                    // advance `onChange(selectedId)` reloads the detail — so no
+                    // `self.row` reload here, which would fight that advance.
+                    Task { await appState.toggleRead(row) }
                 } label: {
                     Label(
                         row.read ? "Mark Unread" : "Mark Read",
@@ -269,10 +279,7 @@ struct ArticleDetailView: View {
                 .help(row.read ? "Mark as unread" : "Mark as read")
 
                 Button {
-                    Task {
-                        await appState.toggleFavorite(row)
-                        self.row = await appState.reloadRow(id: row.id)
-                    }
+                    Task { await appState.toggleFavorite(row) }
                 } label: {
                     Label(
                         row.favorite ? "Unfavorite" : "Favorite",
@@ -283,20 +290,14 @@ struct ArticleDetailView: View {
 
                 if row.archived {
                     Button {
-                        Task {
-                            await appState.unarchive(row)
-                            self.row = await appState.reloadRow(id: row.id)
-                        }
+                        Task { await appState.unarchive(row) }
                     } label: {
                         Label("Move to Library", systemImage: "tray.and.arrow.up")
                     }
                     .help("Move back to library")
                 } else {
                     Button {
-                        Task {
-                            await appState.archive(row)
-                            self.row = await appState.reloadRow(id: row.id)
-                        }
+                        Task { await appState.archive(row) }
                     } label: {
                         Label("Archive", systemImage: "archivebox")
                     }
@@ -354,9 +355,14 @@ struct ArticleDetailView: View {
         let tag = newTag.trimmingCharacters(in: .whitespaces)
         newTag = ""
         guard !tag.isEmpty else { dismissTagInput(); return }
+        // Optimistic: show the chip now (exact-match dedup + append mirror core).
+        if var optimistic = row, !optimistic.tags.contains(tag) {
+            optimistic.tags.append(tag)
+            row = optimistic
+        }
         Task {
             await appState.addTag(id: id, tag: tag)
-            row = await appState.reloadRow(id: id)
+            row = await appState.reloadRow(id: id) ?? row
         }
         // Keep the input open and focused so several tags can be added in a row.
         tagFieldFocused = true
