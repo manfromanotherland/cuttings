@@ -6,17 +6,26 @@ struct SidebarView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showAppearancePopover = false
 
+    // Per-section collapse state, persisted across launches so the sidebar
+    // reopens the way the user left it. Default to expanded.
+    @AppStorage("sidebarLibraryExpanded") private var libraryExpanded = true
+    @AppStorage("sidebarRatingsExpanded") private var ratingsExpanded = true
+    @AppStorage("sidebarTagsExpanded") private var tagsExpanded = true
+
     var body: some View {
         List(selection: $appState.sidebarSelection) {
-            Section("Library") {
+            Section(isExpanded: $libraryExpanded) {
                 ForEach(SidebarItem.allCases) { item in
                     viewRow(item)
                         .tag(SidebarSelection.view(item))
                 }
+            } header: {
+                Text("Library")
+                    .padding(.top, 12)
             }
 
             if !appState.allRatings.isEmpty {
-                Section("Ratings") {
+                Section("Ratings", isExpanded: $ratingsExpanded) {
                     ForEach(appState.allRatings, id: \.rating) { rc in
                         ratingRow(rc)
                             .tag(SidebarSelection.rating(rc.rating))
@@ -25,7 +34,7 @@ struct SidebarView: View {
             }
 
             if !appState.allTags.isEmpty {
-                Section("Tags") {
+                Section("Tags", isExpanded: $tagsExpanded) {
                     ForEach(appState.allTags, id: \.tag) { tc in
                         tagRow(tc)
                             .tag(SidebarSelection.tag(tc.tag))
