@@ -58,6 +58,7 @@ struct SidebarView: View {
             showAppearancePopover.toggle()
         } label: {
             Label("Settings", systemImage: "gear")
+                .labelStyle(.tightIcon)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -76,6 +77,7 @@ struct SidebarView: View {
     private func viewRow(_ item: SidebarItem) -> some View {
         HStack {
             Label(item.label, systemImage: item.icon)
+                .labelStyle(.tightIcon)
             Spacer()
             if let count = appState.viewCounts[item], count > 0 {
                 Text("\(count)")
@@ -93,6 +95,7 @@ struct SidebarView: View {
     private func tagRow(_ tc: FfiTagCount) -> some View {
         HStack {
             Label(tc.tag, systemImage: "tag")
+                .labelStyle(.tightIcon)
                 .lineLimit(1)
             Spacer()
             Text("\(tc.count)")

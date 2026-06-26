@@ -53,16 +53,19 @@ struct ArticleDetailView: View {
                 HStack(spacing: 12) {
                     if let site = row.site, !site.isEmpty {
                         Label(site, systemImage: "globe")
+                            .labelStyle(.tightIcon)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     if let author = row.author, !author.isEmpty {
                         Label(author, systemImage: "person")
+                            .labelStyle(.tightIcon)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     if let readingTime = row.readingTimeLabel {
                         Label(readingTime, systemImage: "clock")
+                            .labelStyle(.tightIcon)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .help(row.wordCount.map { "\($0) words" } ?? "")
