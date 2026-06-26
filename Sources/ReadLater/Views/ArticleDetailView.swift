@@ -61,10 +61,11 @@ struct ArticleDetailView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    if let wc = row.wordCount, wc > 0 {
-                        Label("\(wc) words", systemImage: "text.alignleft")
+                    if let readingTime = row.readingTimeLabel {
+                        Label(readingTime, systemImage: "clock")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .help(row.wordCount.map { "\($0) words" } ?? "")
                     }
                 }
                 tagBar(row: row)

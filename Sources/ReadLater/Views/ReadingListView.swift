@@ -203,14 +203,16 @@ struct ReadingRowView: View {
                 }
             }
 
-            // Site + date
+            // Site + reading time
             HStack(spacing: 6) {
                 if let site = row.site, !site.isEmpty {
                     Text(site)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Text(relativeDate(row.savedAt))
+                if let readingTime = row.readingTimeLabel {
+                    Text(readingTime)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
