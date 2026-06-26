@@ -258,7 +258,12 @@ struct ArticleDetailView: View {
     /// `row` instead lets the two reflow a frame apart, which reads as a blink.
     private var currentRow: FfiReadingRow? {
         guard let id = appState.selectedId else { return nil }
-        return appState.readings.first(where: { $0.id == id })
+        // Fall back to the loaded detail row when the selection sits outside the
+        // current list — e.g. after re-rating the open article inside a rating
+        // filter, where it stays selected and shown but drops off the list. Keeps
+        // the toolbar populated instead of blanking the actions for what's on
+        // screen.
+        return appState.readings.first(where: { $0.id == id }) ?? (row?.id == id ? row : nil)
     }
 
     @ToolbarContentBuilder

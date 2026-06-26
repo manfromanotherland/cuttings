@@ -185,14 +185,26 @@ final class AppState: ObservableObject {
 
     func refresh() async {
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadReadings() }
+            // A refresh follows a local mutation (or a watcher sync): never
+            // re-home the selection here. The mutation already set the selection
+            // it wants — advancing to a neighbour, or deliberately staying on a
+            // row it just filtered out (e.g. re-rating the open article while in
+            // a rating filter). Stealing it would desync the list highlight from
+            // the open reading and strand the phantom-selected next row.
+            group.addTask { await self.loadReadings(resetSelectionIfMissing: false) }
             group.addTask { await self.loadSidebar() }
         }
     }
 
     // ── List / search ─────────────────────────────────────────────────────
 
-    func loadReadings() async {
+    /// `resetSelectionIfMissing` controls what happens when the current
+    /// selection isn't in the freshly loaded list. Direct (re)loads — filter
+    /// switch, sort, search, first load — pass `true` to re-home onto the first
+    /// row. A `refresh()` after a local mutation passes `false` to leave the
+    /// selection alone (see `refresh()`). An empty selection always defaults to
+    /// the first row either way.
+    func loadReadings(resetSelectionIfMissing: Bool = true) async {
         guard let core else { return }
         do {
             if searchQuery.isEmpty {
@@ -222,10 +234,12 @@ final class AppState: ObservableObject {
             }
 
             // Open the first reading by default so selection-dependent UI (the
-            // reader and its toolbar, including Sort) is visible without an
-            // extra click. If the previous selection is gone after a reload,
-            // fall back to the first item; clear it only when the list is empty.
-            if selectedId == nil || !readings.contains(where: { $0.id == selectedId }) {
+            // reader and its toolbar, including Sort) is visible without an extra
+            // click. A missing selection is re-homed to the first item only when
+            // the caller asked (direct reloads); a post-mutation refresh leaves a
+            // deliberately off-list selection — the open reading — in place.
+            if selectedId == nil
+                || (resetSelectionIfMissing && !readings.contains(where: { $0.id == selectedId })) {
                 selectedId = readings.first?.id
             }
         } catch {
