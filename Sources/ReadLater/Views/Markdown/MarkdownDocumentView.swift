@@ -7,7 +7,7 @@ import Markdown
 /// as a SwiftUI view tree. Replaces the `WKWebView`-based `MarkdownWebView`.
 /// Light/Dark adapt automatically via semantic colors (appearance is applied
 /// app-wide in `ReadLaterApp`), and links open in the system browser.
-struct MarkdownDocumentView: View {
+struct MarkdownDocumentView<Footer: View>: View {
     let markdown: String
     let libraryURL: URL?
     var font: ReaderFont = .system
@@ -16,18 +16,23 @@ struct MarkdownDocumentView: View {
     var highlights: [String] = []
     /// Called with the selected text when the user highlights a passage.
     var onHighlight: (String) -> Void = { _ in }
+    /// Trailing content rendered inside the scroll, after the article body — so
+    /// it comes into view only when the reader reaches the end of the article.
+    @ViewBuilder var footer: () -> Footer
 
     private let groups: [RenderGroup]
 
     init(markdown: String, libraryURL: URL?,
          font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
-         highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in }) {
+         highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
+         @ViewBuilder footer: @escaping () -> Footer = { EmptyView() }) {
         self.markdown = markdown
         self.libraryURL = libraryURL
         self.font = font
         self.fontSize = fontSize
         self.highlights = highlights
         self.onHighlight = onHighlight
+        self.footer = footer
         let document = Document(parsing: Self.unwrapLinkedImages(markdown))
         self.groups = Self.makeGroups(Array(document.children))
     }
@@ -143,6 +148,8 @@ struct MarkdownDocumentView: View {
                         MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL)
                     }
                 }
+                footer()
+                    .frame(maxWidth: .infinity)
             }
             .font(theme.bodyFont)
             .frame(maxWidth: theme.contentMaxWidth, alignment: .leading)

@@ -67,7 +67,6 @@ struct ArticleDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                ratingControl(row: row)
                 tagBar(row: row)
             }
             .padding(.horizontal, 24)
@@ -86,16 +85,20 @@ struct ArticleDetailView: View {
                     highlights: appState.highlights.map(\.text),
                     onHighlight: { text in
                         Task { await appState.toggleHighlight(id: row.id, text: text) }
-                    }
+                    },
+                    footer: { ratingFooter(row: row) }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let excerpt = row.excerpt, !excerpt.isEmpty {
                 ScrollView {
-                    Text(excerpt)
-                        .foregroundStyle(.secondary)
-                        .italic()
-                        .padding(24)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(excerpt)
+                            .foregroundStyle(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ratingFooter(row: row)
+                    }
+                    .padding(24)
                 }
             } else {
                 Spacer()
@@ -107,6 +110,20 @@ struct ArticleDetailView: View {
 
 
     // ── Rating control ────────────────────────────────────────────────────
+
+    /// End-of-article rating: shown after the body so it surfaces when the
+    /// reader reaches the end — rating is a judgment formed once you've read.
+    private func ratingFooter(row: FfiReadingRow) -> some View {
+        VStack(spacing: 12) {
+            Divider()
+            Text("Rate this article")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            ratingControl(row: row)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 32)
+    }
 
     private func ratingControl(row: FfiReadingRow) -> some View {
         HStack(spacing: 4) {
