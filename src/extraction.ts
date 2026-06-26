@@ -70,6 +70,20 @@ export function htmlToMarkdown(html: string): { markdown: string; imageUrls: str
     bulletListMarker: "-",
   });
 
+  // In-page anchors (`href="#..."`) point at element ids within the original
+  // page. The extracted Markdown keeps no such ids (CommonMark headings carry
+  // none, and `preserveHeadings` strips them), so these links are dangling in
+  // every viewer. Unwrap them to their text content — keeping footnote markers,
+  // TOC labels, and "back to top" wording as plain prose without a dead link.
+  td.addRule("inPageAnchors", {
+    filter(node) {
+      return node.nodeName === "A" && (node.getAttribute("href") ?? "").startsWith("#");
+    },
+    replacement(content) {
+      return content;
+    },
+  });
+
   td.addRule("images", {
     filter: "img",
     replacement(_content, node) {

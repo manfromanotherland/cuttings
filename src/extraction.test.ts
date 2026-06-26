@@ -31,6 +31,23 @@ describe("htmlToMarkdown", () => {
     expect(markdown.trim()).toBe("[Example](https://example.com)");
   });
 
+  it("unwraps in-page anchor links to plain text", () => {
+    const { markdown } = htmlToMarkdown('<a href="#section">Jump to section</a>');
+    expect(markdown.trim()).toBe("Jump to section");
+  });
+
+  it("keeps text around an unwrapped in-page anchor", () => {
+    const { markdown } = htmlToMarkdown('<p>See <a href="#notes">the notes</a> below.</p>');
+    expect(markdown.trim()).toBe("See the notes below.");
+  });
+
+  it("still converts external links normally", () => {
+    const { markdown } = htmlToMarkdown(
+      '<p><a href="#local">here</a> and <a href="https://example.com">there</a></p>',
+    );
+    expect(markdown.trim()).toBe("here and [there](https://example.com)");
+  });
+
   it("converts fenced code blocks", () => {
     const { markdown } = htmlToMarkdown("<pre><code>const x = 1;</code></pre>");
     expect(markdown).toContain("```");

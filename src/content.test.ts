@@ -70,7 +70,12 @@ describe("showToast", () => {
     showToast({ action: "toast", status: "loading", title: "Saving…" });
     const host = document.getElementById(HOST_ID)!;
 
-    showToast({ action: "toast", status: "ok", title: "Saved to Read Later", detail: "My Article" });
+    showToast({
+      action: "toast",
+      status: "ok",
+      title: "Saved to Read Later",
+      detail: "My Article",
+    });
 
     expect(document.getElementById(HOST_ID)).toBe(host);
     expect(document.querySelectorAll(`#${HOST_ID}`)).toHaveLength(1);
@@ -100,7 +105,12 @@ describe("showToast", () => {
     showToast({ action: "toast", status: "loading", title: "Saving…" });
     document.getElementById(HOST_ID)!.remove();
 
-    showToast({ action: "toast", status: "ok", title: "Saved to Read Later", detail: "My Article" });
+    showToast({
+      action: "toast",
+      status: "ok",
+      title: "Saved to Read Later",
+      detail: "My Article",
+    });
 
     const host = document.getElementById(HOST_ID);
     expect(host).not.toBeNull();

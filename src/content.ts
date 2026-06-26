@@ -94,9 +94,11 @@ export function showToast({ status, title, detail }: ToastMessage): void {
       .close:hover { color: #0F172A; background: #F1F5F9; }
     </style>
     <div class="toast">
-      ${isLoading
-        ? '<div class="spinner"></div>'
-        : `<div class="badge" style="background:${accent}">${icon}</div>`}
+      ${
+        isLoading
+          ? '<div class="spinner"></div>'
+          : `<div class="badge" style="background:${accent}">${icon}</div>`
+      }
       <div class="text">
         <div class="title"></div>
         ${detail ? '<div class="detail"></div>' : ""}
