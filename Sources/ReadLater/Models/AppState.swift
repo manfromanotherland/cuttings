@@ -323,15 +323,80 @@ final class AppState: ObservableObject {
 
     // ── Mutations ─────────────────────────────────────────────────────────
 
-    /// Optimistically patch the in-memory row for `id` so a status change shows
-    /// on the next frame, before the core write + `refresh()` land. Touches only
-    /// the row's own fields; removing a row that no longer matches the filter is
-    /// the separate, explicit job of `advancePastFilteredRow`, while re-ordering
-    /// is left to the follow-up `refresh()`. A failed write self-heals: the
-    /// refresh re-reads the index and overwrites this.
-    private func patchRow(id: String, _ apply: (inout FfiReadingRow) -> Void) {
-        guard let i = readings.firstIndex(where: { $0.id == id }) else { return }
-        apply(&readings[i])
+    /// Optimistically apply an edit so it shows on the next frame, before the
+    /// core write + `refresh()` land: swap the row in the visible list (if
+    /// present) and fold the before/after into the sidebar aggregates. Removing a
+    /// row that no longer matches the filter is the separate, explicit job of
+    /// `advancePastFilteredRow`; re-ordering is left to the follow-up `refresh()`.
+    /// A failed write self-heals: the refresh re-reads the index and overwrites
+    /// both the row and the counts.
+    private func applyOptimistic(_ old: FfiReadingRow, _ new: FfiReadingRow) {
+        if let i = readings.firstIndex(where: { $0.id == old.id }) {
+            readings[i] = new
+        }
+        applySidebarDelta(from: old, to: new)
+    }
+
+    /// Fold a row's before/after state into the sidebar counts (view counts, tag
+    /// counts, rating counts), mirroring the core's count rules so the optimistic
+    /// numbers match what `loadSidebar()` reconciles to: view counts follow the
+    /// `list.rs` clauses (Favorites counts regardless of archived); tag and rating
+    /// counts include only non-archived readings (`tags.rs` / `rating.rs`).
+    private func applySidebarDelta(from old: FfiReadingRow, to new: FfiReadingRow) {
+        func inView(_ item: SidebarItem, _ r: FfiReadingRow) -> Bool {
+            switch item {
+            case .all:       !r.archived
+            case .unread:    !r.archived && !r.read
+            case .read:      !r.archived && r.read
+            case .archive:   r.archived
+            case .favorites: r.favorite
+            }
+        }
+        for item in SidebarItem.allCases {
+            let delta = (inView(item, new) ? 1 : 0) - (inView(item, old) ? 1 : 0)
+            if delta != 0 { viewCounts[item] = max(0, (viewCounts[item] ?? 0) + delta) }
+        }
+
+        func tagContributes(_ r: FfiReadingRow, _ tag: String) -> Bool {
+            !r.archived && r.tags.contains(tag)
+        }
+        for tag in Set(old.tags).union(new.tags) {
+            let delta = (tagContributes(new, tag) ? 1 : 0) - (tagContributes(old, tag) ? 1 : 0)
+            if delta != 0 { bumpTag(tag, by: delta) }
+        }
+
+        func ratingBucket(_ r: FfiReadingRow) -> UInt8? {
+            (!r.archived && (1...5).contains(r.rating)) ? r.rating : nil
+        }
+        let oldBucket = ratingBucket(old), newBucket = ratingBucket(new)
+        if oldBucket != newBucket {
+            if let oldBucket { bumpRating(oldBucket, by: -1) }
+            if let newBucket { bumpRating(newBucket, by: 1) }
+        }
+    }
+
+    /// Adjust a tag's count, dropping it at zero and inserting it when it first
+    /// appears, then re-sort to match `list_tags` (count desc, then name asc).
+    private func bumpTag(_ tag: String, by delta: Int) {
+        if let i = allTags.firstIndex(where: { $0.tag == tag }) {
+            let n = Int(allTags[i].count) + delta
+            if n <= 0 { allTags.remove(at: i) } else { allTags[i].count = UInt64(n) }
+        } else if delta > 0 {
+            allTags.append(FfiTagCount(tag: tag, count: UInt64(delta)))
+        }
+        allTags.sort { $0.count != $1.count ? $0.count > $1.count : $0.tag < $1.tag }
+    }
+
+    /// Adjust a star bucket's count, dropping it at zero and inserting it when it
+    /// first appears, keeping `list_ratings`' highest-first order.
+    private func bumpRating(_ rating: UInt8, by delta: Int) {
+        if let i = allRatings.firstIndex(where: { $0.rating == rating }) {
+            let n = Int(allRatings[i].count) + delta
+            if n <= 0 { allRatings.remove(at: i) } else { allRatings[i].count = UInt64(n) }
+        } else if delta > 0 {
+            allRatings.append(FfiRatingCount(rating: rating, count: UInt64(delta)))
+        }
+        allRatings.sort { $0.rating > $1.rating }
     }
 
     /// Mirror of the core's view/tag/rating filter (see `list.rs`): does `row`
@@ -349,9 +414,9 @@ final class AppState: ObservableObject {
         return true
     }
 
-    /// Pair with `patchRow` for status changes: if the optimistic edit pushed the
-    /// row out of the current filter, slide it out and advance the selection to an
-    /// adjacent row in the *same* render tick — so the user sees one motion, not
+    /// Pair with `applyOptimistic` for status changes: if the optimistic edit
+    /// pushed the row out of the current filter, slide it out and advance the
+    /// selection to an adjacent row in the *same* render tick — one motion, not
     /// an in-place icon flip followed a beat later by the row jumping away. A
     /// no-op when the row still matches (e.g. marking read in the All view).
     /// Skipped during search, whose results span every view.
@@ -370,17 +435,21 @@ final class AppState: ObservableObject {
 
     func toggleRead(_ row: FfiReadingRow) async {
         guard let core else { return }
-        patchRow(id: row.id) { $0.read = !row.read }
+        var updated = row
+        updated.read = !row.read
+        applyOptimistic(row, updated)
         advancePastFilteredRow(id: row.id)
-        try? await core.setRead(id: row.id, read: !row.read)
+        try? await core.setRead(id: row.id, read: updated.read)
         await refresh()
     }
 
     func toggleFavorite(_ row: FfiReadingRow) async {
         guard let core else { return }
-        patchRow(id: row.id) { $0.favorite = !row.favorite }
+        var updated = row
+        updated.favorite = !row.favorite
+        applyOptimistic(row, updated)
         advancePastFilteredRow(id: row.id)
-        try? await core.setFavorite(id: row.id, favorite: !row.favorite)
+        try? await core.setFavorite(id: row.id, favorite: updated.favorite)
         await refresh()
     }
 
@@ -389,7 +458,11 @@ final class AppState: ObservableObject {
     @discardableResult
     func setRating(id: String, rating: UInt8) async -> FfiReadingRow? {
         guard let core else { return nil }
-        patchRow(id: id) { $0.rating = rating }
+        if let old = readings.first(where: { $0.id == id }) {
+            var updated = old
+            updated.rating = rating
+            applyOptimistic(old, updated)
+        }
         try? await core.setRating(id: id, rating: rating)
         await refresh()
         // The row may have left the current filtered list (e.g. its rating no
@@ -400,7 +473,9 @@ final class AppState: ObservableObject {
 
     func archive(_ row: FfiReadingRow) async {
         guard let core else { return }
-        patchRow(id: row.id) { $0.archived = true }
+        var updated = row
+        updated.archived = true
+        applyOptimistic(row, updated)
         advancePastFilteredRow(id: row.id)
         try? await core.setArchived(id: row.id, archived: true)
         await refresh()
@@ -408,7 +483,9 @@ final class AppState: ObservableObject {
 
     func unarchive(_ row: FfiReadingRow) async {
         guard let core else { return }
-        patchRow(id: row.id) { $0.archived = false }
+        var updated = row
+        updated.archived = false
+        applyOptimistic(row, updated)
         advancePastFilteredRow(id: row.id)
         try? await core.setArchived(id: row.id, archived: false)
         await refresh()
@@ -432,14 +509,22 @@ final class AppState: ObservableObject {
         // Mirror the core: trim, dedup on exact match, append (no sort/lowercase),
         // so the optimistic chip lands in the same place the reload confirms.
         let tag = tag.trimmingCharacters(in: .whitespaces)
-        patchRow(id: id) { if !$0.tags.contains(tag) { $0.tags.append(tag) } }
+        if let old = readings.first(where: { $0.id == id }), !old.tags.contains(tag) {
+            var updated = old
+            updated.tags.append(tag)
+            applyOptimistic(old, updated)
+        }
         try? await core.addTag(id: id, tag: tag)
         await refresh()
     }
 
     func removeTag(id: String, tag: String) async {
         guard let core else { return }
-        patchRow(id: id) { $0.tags.removeAll { $0 == tag } }
+        if let old = readings.first(where: { $0.id == id }), old.tags.contains(tag) {
+            var updated = old
+            updated.tags.removeAll { $0 == tag }
+            applyOptimistic(old, updated)
+        }
         try? await core.removeTag(id: id, tag: tag)
         await refresh()
     }
