@@ -3,9 +3,10 @@
 import SwiftUI
 
 /// Modal tag picker for an article. A search field filters the library's tags;
-/// with no query it lists the 10 most-used. Clicking a tag toggles it on or off
-/// for the article (a checkmark marks applied tags). Typing a name that doesn't
-/// exist yet offers an "Add" row — or press Return — to create and apply it.
+/// with no query it lists the article's tags first, then others. Clicking a tag
+/// toggles it on or off for the article (a checkmark marks applied tags). Typing
+/// a name that doesn't exist yet offers an "Add" row — or press Return — to
+/// create and apply it.
 ///
 /// Changes apply live through `onToggle`, so the sheet stays open to manage
 /// several tags in a row and closing needs no explicit save.
@@ -21,16 +22,30 @@ struct TagPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @FocusState private var searchFocused: Bool
+    /// Display order, snapshotted when the sheet opens (applied tags first, then
+    /// the rest) and held stable while open, so toggling a tag never reorders the
+    /// list. Seeded in `init`, so it's correct on the first frame; re-derived each
+    /// time the sheet reopens (fresh @State). Checkmarks track the live `applied`.
+    @State private var order: [String]
+
+    init(applied: [String], allTags: [String], onToggle: @escaping (String, Bool) -> Void) {
+        self.applied = applied
+        self.allTags = allTags
+        self.onToggle = onToggle
+        // Freeze the order at presentation: applied tags first, then the rest.
+        let appliedSet = Set(applied)
+        _order = State(initialValue: applied + allTags.filter { !appliedSet.contains($0) })
+    }
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
     private var appliedSet: Set<String> { Set(applied) }
 
-    /// The list contents: the 10 most-used tags when idle, otherwise every tag
-    /// whose name contains the query (case-insensitive).
+    /// The list contents, drawn from the frozen `order`: idle shows the first ten,
+    /// searching shows every match. Applied tags already sit first in `order`.
     private var listed: [String] {
         let q = trimmedQuery.lowercased()
-        if q.isEmpty { return Array(allTags.prefix(10)) }
-        return allTags.filter { $0.lowercased().contains(q) }
+        if q.isEmpty { return Array(order.prefix(10)) }
+        return order.filter { $0.lowercased().contains(q) }
     }
 
     /// The tag to offer creating — the typed name, when it doesn't already exist
@@ -57,6 +72,9 @@ struct TagPickerSheet: View {
             .padding(12)
         }
         .frame(width: 380, height: 460)
+        // Esc closes the sheet even while the search field holds focus — a
+        // focused TextField can swallow the Done button's cancel shortcut.
+        .onExitCommand { dismiss() }
     }
 
     private var searchField: some View {
@@ -117,6 +135,9 @@ struct TagPickerSheet: View {
     }
 
     private func apply(_ tag: String) {
+        // A freshly created tag isn't in the frozen order yet — surface it at the
+        // top so it's visible (and within the idle first-ten).
+        if !order.contains(tag) { order.insert(tag, at: 0) }
         onToggle(tag, true)
         query = ""
     }
@@ -129,6 +150,7 @@ struct TagPickerSheet: View {
         if let existing = allTags.first(where: { $0.caseInsensitiveCompare(q) == .orderedSame }) {
             if !appliedSet.contains(existing) { onToggle(existing, true) }
         } else {
+            if !order.contains(q) { order.insert(q, at: 0) }
             onToggle(q, true)
         }
         query = ""
