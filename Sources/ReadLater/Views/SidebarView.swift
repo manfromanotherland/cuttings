@@ -35,10 +35,19 @@ struct SidebarView: View {
 
             if !appState.allTags.isEmpty {
                 Section("Tags", isExpanded: $tagsExpanded) {
-                    ForEach(appState.allTags, id: \.tag) { tc in
-                        tagRow(tc)
-                            .tag(SidebarSelection.tag(tc.tag))
+                    // Apple Notes-style: tags as small pills that wrap, rather than
+                    // a vertical list of identical rows. The flow is a single,
+                    // non-selectable List row; each tile manages its own selection.
+                    FlowLayout(spacing: 6) {
+                        ForEach(appState.allTags, id: \.tag) { tc in
+                            tagTile(tc)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // No padding around the section — only FlowLayout's spacing
+                    // between tiles.
+                    .listRowInsets(EdgeInsets())
+                    .selectionDisabled()
                 }
             }
         }
@@ -99,22 +108,44 @@ struct SidebarView: View {
         }
     }
 
-    // ── Tag row ───────────────────────────────────────────────────────────────
+    // ── Tag tile ──────────────────────────────────────────────────────────────
 
-    private func tagRow(_ tc: FfiTagCount) -> some View {
-        HStack {
-            Label(tc.tag, systemImage: "tag")
-                .labelStyle(.tightIcon)
-                .lineLimit(1)
-            Spacer()
-            Text("\(tc.count)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.15), in: Capsule())
+    /// A small pill showing `#tag` with its reading count in a trailing badge —
+    /// the badge matching the smart-view rows. No icon; the name uses the same
+    /// (default) font as those rows, and the selected tag fills with the accent.
+    private func tagTile(_ tc: FfiTagCount) -> some View {
+        let isSelected = appState.selectedTag == tc.tag
+        return Button {
+            appState.sidebarSelection = .tag(tc.tag)
+        } label: {
+            HStack(spacing: 5) {
+                Text("#\(tc.tag)")
+                    // 2pt smaller than the sidebar's default (~13pt) row font.
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                Text("\(tc.count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(isSelected ? Color.white : .secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        isSelected
+                            ? AnyShapeStyle(.white.opacity(0.25))
+                            : AnyShapeStyle(.secondary.opacity(0.18)),
+                        in: Capsule()
+                    )
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                isSelected
+                    ? AnyShapeStyle(Color.accentColor)
+                    : AnyShapeStyle(.secondary.opacity(0.12)),
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
     }
 
     // ── Rating row ──────────────────────────────────────────────────────────────
