@@ -10,10 +10,8 @@ struct ArticleDetailView: View {
     @State private var row: FfiReadingRow?
     @State private var articleMarkdown: String?
     @State private var isLoading = false
-    @State private var newTag = ""
-    @State private var showTagInput = false
     @State private var showHighlights = false
-    @FocusState private var tagFieldFocused: Bool
+    @State private var showTagSheet = false
 
     var body: some View {
         Group {
@@ -39,6 +37,20 @@ struct ArticleDetailView: View {
         .inspector(isPresented: $showHighlights) {
             HighlightsInspector(readingId: appState.selectedId)
                 .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
+        }
+        .sheet(isPresented: $showTagSheet) {
+            if let row {
+                // Driven by the detail `row`, which add/removeTag update
+                // synchronously — so checkmarks flip the instant you toggle.
+                TagPickerSheet(
+                    applied: row.tags,
+                    allTags: appState.allTags.map(\.tag),
+                    onToggle: { tag, shouldApply in
+                        if shouldApply { addTag(tag, to: row.id) }
+                        else { removeTag(tag, from: row.id) }
+                    }
+                )
+            }
         }
     }
 
@@ -158,62 +170,13 @@ struct ArticleDetailView: View {
     }
 
     private func tagBar(row: FfiReadingRow) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            FlowLayout(spacing: 6) {
-                ForEach(row.tags, id: \.self) { tag in
-                    tagChip(tag: tag, id: row.id)
-                }
-                if showTagInput {
-                    TextField("tag", text: $newTag)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 120)
-                        .focused($tagFieldFocused)
-                        .onSubmit { commitTag(id: row.id) }
-                        .onExitCommand { dismissTagInput() }
-                } else {
-                    Button {
-                        showTagInput = true
-                        tagFieldFocused = true
-                    } label: {
-                        Label("Tag", systemImage: "plus")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-
-            // Autocomplete suggestions drawn from existing tags in the library.
-            if showTagInput {
-                let suggestions = tagSuggestions(for: row)
-                if !suggestions.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(suggestions, id: \.self) { suggestion in
-                            Button {
-                                newTag = suggestion
-                                commitTag(id: row.id)
-                            } label: {
-                                Text("#\(suggestion)")
-                                    .font(.caption)
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                }
+        // Applied tags as removable chips. Adding tags happens in the tag sheet,
+        // opened from the `#` toolbar button.
+        FlowLayout(spacing: 6) {
+            ForEach(row.tags, id: \.self) { tag in
+                tagChip(tag: tag, id: row.id)
             }
         }
-    }
-
-    /// Existing library tags matching the current input, excluding tags already
-    /// applied to this article. With an empty field, surfaces all available tags.
-    private func tagSuggestions(for row: FfiReadingRow) -> [String] {
-        let query = newTag.trimmingCharacters(in: .whitespaces).lowercased()
-        let applied = Set(row.tags.map { $0.lowercased() })
-        return appState.allTags
-            .map(\.tag)
-            .filter { !applied.contains($0.lowercased()) }
-            .filter { query.isEmpty || $0.lowercased().contains(query) }
-            .prefix(8)
-            .map { $0 }
     }
 
     private func tagChip(tag: String, id: String) -> some View {
@@ -221,15 +184,7 @@ struct ArticleDetailView: View {
             Text("#\(tag)")
                 .font(.caption)
             Button {
-                // Optimistic: drop the chip now, reconcile after the write.
-                if var optimistic = row {
-                    optimistic.tags.removeAll { $0 == tag }
-                    row = optimistic
-                }
-                Task {
-                    await appState.removeTag(id: id, tag: tag)
-                    row = await appState.reloadRow(id: id) ?? row
-                }
+                removeTag(tag, from: id)
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption2)
@@ -323,6 +278,13 @@ struct ArticleDetailView: View {
                 .help("Open original URL")
 
                 Button {
+                    showTagSheet = true
+                } label: {
+                    Label("Tags", systemImage: "number")
+                }
+                .help("Edit tags")
+
+                Button {
                     showHighlights.toggle()
                 } label: {
                     Label("Highlights", systemImage: "highlighter")
@@ -349,8 +311,6 @@ struct ArticleDetailView: View {
             return
         }
         isLoading = true
-        showTagInput = false
-        newTag = ""
         row = appState.readings.first(where: { $0.id == id })
         await appState.loadHighlights(id: id)
         // The native reader parses Markdown directly (linked images like
@@ -360,11 +320,11 @@ struct ArticleDetailView: View {
         isLoading = false
     }
 
-    private func commitTag(id: String) {
-        let tag = newTag.trimmingCharacters(in: .whitespaces)
-        newTag = ""
-        guard !tag.isEmpty else { dismissTagInput(); return }
-        // Optimistic: show the chip now (exact-match dedup + append mirror core).
+    /// Apply a tag to the article: optimistically show the chip now (exact-match
+    /// dedup + append mirror the core), then write through and reconcile.
+    private func addTag(_ tag: String, to id: String) {
+        let tag = tag.trimmingCharacters(in: .whitespaces)
+        guard !tag.isEmpty else { return }
         if var optimistic = row, !optimistic.tags.contains(tag) {
             optimistic.tags.append(tag)
             row = optimistic
@@ -373,14 +333,19 @@ struct ArticleDetailView: View {
             await appState.addTag(id: id, tag: tag)
             row = await appState.reloadRow(id: id) ?? row
         }
-        // Keep the input open and focused so several tags can be added in a row.
-        tagFieldFocused = true
     }
 
-    private func dismissTagInput() {
-        showTagInput = false
-        tagFieldFocused = false
-        newTag = ""
+    /// Remove a tag from the article: optimistically drop the chip, reconcile
+    /// after the write.
+    private func removeTag(_ tag: String, from id: String) {
+        if var optimistic = row {
+            optimistic.tags.removeAll { $0 == tag }
+            row = optimistic
+        }
+        Task {
+            await appState.removeTag(id: id, tag: tag)
+            row = await appState.reloadRow(id: id) ?? row
+        }
     }
 }
 
