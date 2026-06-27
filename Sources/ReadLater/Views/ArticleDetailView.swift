@@ -82,8 +82,17 @@ struct ArticleDetailView: View {
                             .foregroundStyle(.secondary)
                             .help(row.wordCount.map { "\($0) words" } ?? "")
                     }
+                    if !row.tags.isEmpty {
+                        Spacer()
+                        // Plain read-only label pushed to the trailing edge; adding
+                        // / removing tags happens in the tag sheet (the # toolbar
+                        // button).
+                        Text(row.tags.map { "#\($0)" }.joined(separator: " "))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
-                tagBar(row: row)
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
@@ -167,33 +176,6 @@ struct ArticleDetailView: View {
             }
         }
         .font(.title3)
-    }
-
-    private func tagBar(row: FfiReadingRow) -> some View {
-        // Applied tags as removable chips. Adding tags happens in the tag sheet,
-        // opened from the `#` toolbar button.
-        FlowLayout(spacing: 6) {
-            ForEach(row.tags, id: \.self) { tag in
-                tagChip(tag: tag, id: row.id)
-            }
-        }
-    }
-
-    private func tagChip(tag: String, id: String) -> some View {
-        HStack(spacing: 2) {
-            Text("#\(tag)")
-                .font(.caption)
-            Button {
-                removeTag(tag, from: id)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption2)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(.secondary.opacity(0.15), in: Capsule())
     }
 
     private var emptyDetail: some View {

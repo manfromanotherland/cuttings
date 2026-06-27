@@ -229,14 +229,6 @@ struct ReadingRowView: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(2)
             }
-
-            // Tags
-            if !row.tags.isEmpty {
-                Text(row.tags.map { "#\($0)" }.joined(separator: "  "))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
         }
         .padding(.vertical, 4)
     }
