@@ -9,6 +9,7 @@ enum ReadingSort: String, CaseIterable, Identifiable {
     case savedAt
     case readAt
     case rating
+    case timeToRead
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum ReadingSort: String, CaseIterable, Identifiable {
         case .savedAt: "Date saved"
         case .readAt: "Date read"
         case .rating: "Rating"
+        case .timeToRead: "Time to read"
         }
     }
 
@@ -26,6 +28,7 @@ enum ReadingSort: String, CaseIterable, Identifiable {
         case .savedAt: .savedAt
         case .readAt: .readAt
         case .rating: .rating
+        case .timeToRead: .wordCount
         }
     }
 
@@ -36,6 +39,7 @@ enum ReadingSort: String, CaseIterable, Identifiable {
         case .savedAt: ascending ? "Oldest first" : "Newest first"
         case .readAt: ascending ? "Read least recently" : "Read most recently"
         case .rating: ascending ? "Lowest rated" : "Highest rated"
+        case .timeToRead: ascending ? "Shortest first" : "Longest first"
         }
     }
 }
