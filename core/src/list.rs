@@ -30,6 +30,10 @@ pub enum SortField {
     ReadAt,
     /// Star rating (0–5).
     Rating,
+    /// Estimated time to read, ranked by word count. Rows without a known
+    /// word count (`word_count IS NULL`) always sort last, regardless of
+    /// direction.
+    WordCount,
 }
 
 /// Options for `list_readings`.
@@ -111,6 +115,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         SortField::SavedAt => format!("saved_at {dir}, id DESC"),
         SortField::ReadAt => format!("(read_at IS NULL), read_at {dir}, id DESC"),
         SortField::Rating => format!("rating {dir}, id DESC"),
+        SortField::WordCount => format!("(word_count IS NULL), word_count {dir}, id DESC"),
     };
 
     // Optional filters use sentinel values (empty string / 0) so the SQL is
@@ -574,6 +579,51 @@ mod tests {
             rows.iter().map(|r| r.title.as_str()).collect::<Vec<_>>(),
             ["Five", "Three"]
         );
+    }
+
+    #[test]
+    fn sort_by_word_count_puts_unknown_last_in_both_directions() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut long = meta(&new_id(), "https://a.com", "Long");
+        long.word_count = Some(5000);
+        write_reading(&lib, long, "body".into()).unwrap();
+
+        let mut short = meta(&new_id(), "https://b.com", "Short");
+        short.word_count = Some(200);
+        write_reading(&lib, short, "body".into()).unwrap();
+
+        // No word_count set -> ranks last regardless of direction.
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://c.com", "Unknown"),
+            "body".into(),
+        )
+        .unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let titles = |ascending: bool| {
+            list_readings(
+                &conn,
+                &ListOptions {
+                    view: View::All,
+                    sort: SortField::WordCount,
+                    ascending,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .into_iter()
+            .map(|r| r.title)
+            .collect::<Vec<_>>()
+        };
+
+        // Descending: longest read first; unknown last.
+        assert_eq!(titles(false), ["Long", "Short", "Unknown"]);
+        // Ascending: shortest read first; unknown STILL last.
+        assert_eq!(titles(true), ["Short", "Long", "Unknown"]);
     }
 
     #[test]

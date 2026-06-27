@@ -165,6 +165,7 @@ fn main() -> Result<()> {
             let sort = match sort.to_lowercase().as_str() {
                 "read_at" => SortField::ReadAt,
                 "rating" => SortField::Rating,
+                "word_count" => SortField::WordCount,
                 _ => SortField::SavedAt,
             };
             let conn = open_index(Path::new(&db_path))?;

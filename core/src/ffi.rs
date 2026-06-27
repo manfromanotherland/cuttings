@@ -94,6 +94,7 @@ pub enum FfiSortField {
     SavedAt,
     ReadAt,
     Rating,
+    WordCount,
 }
 
 #[derive(uniffi::Record)]
@@ -170,6 +171,7 @@ impl From<FfiListOptions> for ListOptions {
                 FfiSortField::SavedAt => SortField::SavedAt,
                 FfiSortField::ReadAt => SortField::ReadAt,
                 FfiSortField::Rating => SortField::Rating,
+                FfiSortField::WordCount => SortField::WordCount,
             },
             ascending: o.ascending,
             tag: o.tag,
