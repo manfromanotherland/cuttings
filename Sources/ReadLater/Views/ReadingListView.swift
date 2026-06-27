@@ -153,6 +153,9 @@ struct ReadingListView: View {
                 Task { await appState.archive(row) }
             }
             .keyboardShortcut(.delete, modifiers: .command)
+            // ⌘⌫ is "delete to start of line" in a text field; yield to it while
+            // editing so typing isn't hijacked into archiving.
+            .disabled(appState.isEditingText)
         }
 
         Divider()
@@ -161,6 +164,7 @@ struct ReadingListView: View {
             appState.pendingDelete = row
         }
         .keyboardShortcut(.delete, modifiers: [.command, .option])
+        .disabled(appState.isEditingText)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

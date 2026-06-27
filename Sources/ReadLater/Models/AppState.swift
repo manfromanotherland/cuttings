@@ -2,6 +2,7 @@
 
 import Foundation
 import SwiftUI
+import AppKit
 
 /// User-selectable sort field for the reading list. Mirrors the core's
 /// `FfiSortField`; persisted as its `rawValue` in `UserDefaults`.
@@ -83,6 +84,15 @@ final class AppState: ObservableObject {
     /// Reading awaiting delete confirmation, if any. Drives the confirm dialog.
     @Published var pendingDelete: FfiReadingRow?
 
+    /// Drives the tag-picker sheet for the open reading. Held here (rather than in
+    /// the detail view) so both the toolbar button and the ⌘⇧T menu command can
+    /// open it.
+    @Published var showTagSheet: Bool = false
+
+    /// Drives the highlights inspector for the open reading. Held here so both the
+    /// toolbar button and the ⌘⇧H menu command can toggle it.
+    @Published var showHighlights: Bool = false
+
     /// Highlights for the currently open reading. Drives both the reader's
     /// in-text tinting and the highlights inspector.
     @Published var highlights: [FfiHighlight] = []
@@ -116,11 +126,26 @@ final class AppState: ObservableObject {
     @Published var hasMoreReadings: Bool = false
     @Published var error: String?
 
+    /// True while the user is editing a text field (the toolbar search field, the
+    /// tag picker, …). macOS dispatches menu/context-menu key-equivalents *before*
+    /// the focused field editor, so a global ⌘⌫ ("Archive") would fire mid-edit
+    /// instead of deleting the line. Commands whose shortcuts collide with the
+    /// field editor's own keys disable themselves while this holds, letting the
+    /// keystroke fall through to standard text editing. Kept in sync by
+    /// `startTextEditingMonitor`.
+    @Published var isEditingText: Bool = false
+
     private let pageSize: UInt32 = 100
 
     private var core: CoreBridge?
     private var accessedURL: URL?
     private var watcher: LibraryWatcher?
+
+    /// Tokens for the text-editing focus observers; removed in `deinit`.
+    /// `nonisolated(unsafe)` so the `nonisolated deinit` can read them to tear
+    /// down: they're only written on the main actor (in `init`) and read once at
+    /// deinit, which has exclusive access — so there's no actual race to guard.
+    nonisolated(unsafe) private var editingObservers: [NSObjectProtocol] = []
 
     init() {
         // Restore the persisted sort preference (defaults: saved-at, descending).
@@ -134,6 +159,82 @@ final class AppState: ObservableObject {
             isRestoringLibrary = true
             Task { await boot(url: url) }
         }
+
+        startTextEditingMonitor()
+    }
+
+    deinit {
+        let center = NotificationCenter.default
+        editingObservers.forEach { center.removeObserver($0) }
+    }
+
+    // ── Text-editing focus ──────────────────────────────────────────────────
+    // macOS routes menu key-equivalents ahead of the focused field editor, so a
+    // global ⌘⌫ ("Archive") fires even while the user is deleting a line in a
+    // text field. We publish `isEditingText` so colliding commands can disable
+    // themselves while a field is focused. Rather than wire focus into every
+    // field, we watch the field editor's begin/end-editing notifications (and key
+    // window changes) and re-read the key window's first responder — one place,
+    // covering the search field, the tag picker, and any field added later.
+
+    private func startTextEditingMonitor() {
+        let names: [Notification.Name] = [
+            NSText.didBeginEditingNotification,
+            NSText.didEndEditingNotification,
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didResignKeyNotification,
+        ]
+        let center = NotificationCenter.default
+        editingObservers = names.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                // Delivery on `.main` runs on the main thread, so it's safe to
+                // assume MainActor isolation and read AppKit/UI state directly.
+                MainActor.assumeIsolated { self?.refreshEditingState() }
+            }
+        }
+    }
+
+    private func refreshEditingState() {
+        let editing = Self.firstResponderIsTextInput()
+        if editing != isEditingText { isEditingText = editing }
+    }
+
+    /// Whether the key window's first responder is an editable text input — the
+    /// field editor behind a `TextField`/search field, or an editable `NSTextView`.
+    /// The reader's selectable-but-read-only text view is intentionally excluded:
+    /// there's no line to delete there, so its shortcuts should keep working.
+    private static func firstResponderIsTextInput() -> Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        if let textView = responder as? NSTextView {
+            return textView.isFieldEditor || textView.isEditable
+        }
+        return responder is NSText
+    }
+
+    // ── Search focus ──────────────────────────────────────────────────────────
+
+    /// Move keyboard focus to the toolbar search field (the ⌘K command). SwiftUI's
+    /// `.searchable` exposes no focus binding we can drive from a menu command, so
+    /// we reach the field through AppKit: prefer the toolbar's search item, and
+    /// fall back to finding the `NSSearchField` in the window's view tree.
+    func focusSearchField() {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        if let item = window.toolbar?.items
+            .compactMap({ $0 as? NSSearchToolbarItem }).first {
+            item.beginSearchInteraction()
+            return
+        }
+        if let field = window.contentView.flatMap(Self.firstSearchField(in:)) {
+            window.makeFirstResponder(field)
+        }
+    }
+
+    private static func firstSearchField(in view: NSView) -> NSSearchField? {
+        if let field = view as? NSSearchField { return field }
+        for subview in view.subviews {
+            if let field = firstSearchField(in: subview) { return field }
+        }
+        return nil
     }
 
     // ── Onboarding ────────────────────────────────────────────────────────

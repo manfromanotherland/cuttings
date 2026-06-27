@@ -10,8 +10,6 @@ struct ArticleDetailView: View {
     @State private var row: FfiReadingRow?
     @State private var articleMarkdown: String?
     @State private var isLoading = false
-    @State private var showHighlights = false
-    @State private var showTagSheet = false
 
     var body: some View {
         Group {
@@ -34,11 +32,11 @@ struct ArticleDetailView: View {
             Task { await load(id: id) }
         }
         .toolbar { toolbarItems }
-        .inspector(isPresented: $showHighlights) {
+        .inspector(isPresented: $appState.showHighlights) {
             HighlightsInspector(readingId: appState.selectedId)
                 .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
         }
-        .sheet(isPresented: $showTagSheet) {
+        .sheet(isPresented: $appState.showTagSheet) {
             if let row {
                 // Driven by the detail `row`, which add/removeTag update
                 // synchronously — so checkmarks flip the instant you toggle.
@@ -260,14 +258,14 @@ struct ArticleDetailView: View {
                 .help("Open original URL")
 
                 Button {
-                    showTagSheet = true
+                    appState.showTagSheet = true
                 } label: {
                     Label("Tags", systemImage: "number")
                 }
                 .help("Edit tags")
 
                 Button {
-                    showHighlights.toggle()
+                    appState.showHighlights.toggle()
                 } label: {
                     Label("Highlights", systemImage: "highlighter")
                 }

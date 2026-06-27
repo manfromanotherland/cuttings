@@ -21,6 +21,18 @@ struct ArticleCommands: Commands {
 
                 Divider()
 
+                Button("Edit Tags…") {
+                    appState.showTagSheet = true
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+
+                Button(appState.showHighlights ? "Hide Highlights" : "Show Highlights") {
+                    appState.showHighlights.toggle()
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+
+                Divider()
+
                 if row.archived {
                     Button("Move to Library") {
                         Task { await appState.unarchive(row) }
@@ -30,12 +42,16 @@ struct ArticleCommands: Commands {
                         Task { await appState.archive(row) }
                     }
                     .keyboardShortcut(.delete, modifiers: .command)
+                    // ⌘⌫ is "delete to start of line" in a text field; yield to it
+                    // while editing so typing isn't hijacked into archiving.
+                    .disabled(appState.isEditingText)
                 }
 
                 Button("Delete…", role: .destructive) {
                     appState.pendingDelete = row
                 }
                 .keyboardShortcut(.delete, modifiers: [.command, .option])
+                .disabled(appState.isEditingText)
 
                 Divider()
 

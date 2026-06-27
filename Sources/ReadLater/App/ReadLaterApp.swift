@@ -30,7 +30,7 @@ struct ReadLaterApp: App {
             ArticleCommands(appState: appState)
             TypographyCommands()
             AppearanceCommands(appearanceMode: $appearanceMode)
-            NavigationCommands()
+            NavigationCommands(appState: appState)
         }
 
         Settings {

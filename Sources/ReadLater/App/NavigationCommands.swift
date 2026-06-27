@@ -5,6 +5,8 @@ import AppKit
 
 /// Menu bar commands for navigating the main window.
 struct NavigationCommands: Commands {
+    @ObservedObject var appState: AppState
+
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") {
@@ -12,6 +14,11 @@ struct NavigationCommands: Commands {
                     #selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
             }
             .keyboardShortcut("s", modifiers: [.control, .command])
+
+            Button("Focus Search") {
+                appState.focusSearchField()
+            }
+            .keyboardShortcut("k", modifiers: .command)
         }
     }
 }
