@@ -45,11 +45,21 @@ cargo build -p native-host --release
 
 **Install** (writes browser manifest files so Chrome/Edge/Firefox can find the host):
 ```bash
-./target/release/native-host --install
+./target/release/native-host --install-manifest --extension-id <your-32-char-id>
 ```
 
 This creates `com.readlater.host.json` in the appropriate native messaging manifest directories
 for Chrome, Edge, Chromium, and Firefox on macOS.
+
+**Wiring the extension ID:** the `--extension-id` value gates which extension may connect — it
+becomes `chrome-extension://<id>/` in the manifest's `allowed_origins` (Chrome/Edge) and the
+`allowed_extensions` entry (Firefox). Get the ID from `chrome://extensions` after loading the
+unpacked extension (see [read-later-extension](https://github.com/boniattirodrigo/read-later-extension)).
+
+If you omit `--extension-id`, the manifest is written with a placeholder origin
+(`chrome-extension://PLACEHOLDER_EXTENSION_ID/`) and the browser will refuse to connect — useful
+only as a dry run. Re-run the command whenever the extension ID changes or you rebuild the binary
+at a new path (the manifest records the absolute path to the host binary).
 
 ## XCFramework (for the macOS app)
 
