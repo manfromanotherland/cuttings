@@ -135,12 +135,12 @@ struct ReadingListView: View {
         Button(row.read ? "Mark as Unread" : "Mark as Read") {
             Task { await appState.toggleRead(row) }
         }
-        .keyboardShortcut("u", modifiers: .command)
+        .keyboardShortcut(ShortcutCatalog.toggleRead)
 
         Button(row.favorite ? "Remove from Favorites" : "Add to Favorites") {
             Task { await appState.toggleFavorite(row) }
         }
-        .keyboardShortcut("f", modifiers: [.command, .shift])
+        .keyboardShortcut(ShortcutCatalog.toggleFavorite)
 
         Divider()
 
@@ -152,7 +152,7 @@ struct ReadingListView: View {
             Button("Archive") {
                 Task { await appState.archive(row) }
             }
-            .keyboardShortcut(.delete, modifiers: .command)
+            .keyboardShortcut(ShortcutCatalog.archive)
             // ⌘⌫ is "delete to start of line" in a text field; yield to it while
             // editing so typing isn't hijacked into archiving.
             .disabled(appState.isEditingText)
@@ -160,10 +160,10 @@ struct ReadingListView: View {
 
         Divider()
 
-        Button("Delete…", role: .destructive) {
+        Button("Delete", role: .destructive) {
             appState.pendingDelete = row
         }
-        .keyboardShortcut(.delete, modifiers: [.command, .option])
+        .keyboardShortcut(ShortcutCatalog.delete)
         .disabled(appState.isEditingText)
     }
 

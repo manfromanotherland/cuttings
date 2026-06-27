@@ -13,12 +13,12 @@ struct NavigationCommands: Commands {
                 NSApp.keyWindow?.firstResponder?.tryToPerform(
                     #selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
             }
-            .keyboardShortcut("s", modifiers: [.control, .command])
+            .keyboardShortcut(ShortcutCatalog.toggleSidebar)
 
             Button("Focus Search") {
                 appState.focusSearchField()
             }
-            .keyboardShortcut("k", modifiers: .command)
+            .keyboardShortcut(ShortcutCatalog.focusSearch)
         }
     }
 }

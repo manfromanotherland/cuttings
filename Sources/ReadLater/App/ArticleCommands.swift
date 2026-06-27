@@ -12,24 +12,24 @@ struct ArticleCommands: Commands {
                 Button(row.read ? "Mark as Unread" : "Mark as Read") {
                     Task { await appState.toggleRead(row) }
                 }
-                .keyboardShortcut("u", modifiers: .command)
+                .keyboardShortcut(ShortcutCatalog.toggleRead)
 
                 Button(row.favorite ? "Remove from Favorites" : "Add to Favorites") {
                     Task { await appState.toggleFavorite(row) }
                 }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .keyboardShortcut(ShortcutCatalog.toggleFavorite)
 
                 Divider()
 
                 Button("Edit Tags…") {
                     appState.showTagSheet = true
                 }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
+                .keyboardShortcut(ShortcutCatalog.editTags)
 
                 Button(appState.showHighlights ? "Hide Highlights" : "Show Highlights") {
                     appState.showHighlights.toggle()
                 }
-                .keyboardShortcut("h", modifiers: [.command, .shift])
+                .keyboardShortcut(ShortcutCatalog.toggleHighlights)
 
                 Divider()
 
@@ -41,16 +41,16 @@ struct ArticleCommands: Commands {
                     Button("Archive") {
                         Task { await appState.archive(row) }
                     }
-                    .keyboardShortcut(.delete, modifiers: .command)
+                    .keyboardShortcut(ShortcutCatalog.archive)
                     // ⌘⌫ is "delete to start of line" in a text field; yield to it
                     // while editing so typing isn't hijacked into archiving.
                     .disabled(appState.isEditingText)
                 }
 
-                Button("Delete…", role: .destructive) {
+                Button("Delete", role: .destructive) {
                     appState.pendingDelete = row
                 }
-                .keyboardShortcut(.delete, modifiers: [.command, .option])
+                .keyboardShortcut(ShortcutCatalog.delete)
                 .disabled(appState.isEditingText)
 
                 Divider()
@@ -60,7 +60,7 @@ struct ArticleCommands: Commands {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .keyboardShortcut(ShortcutCatalog.openInBrowser)
             } else {
                 Text("No article selected")
                     .foregroundStyle(.secondary)

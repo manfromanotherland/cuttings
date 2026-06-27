@@ -93,6 +93,9 @@ final class AppState: ObservableObject {
     /// toolbar button and the ⌘⇧H menu command can toggle it.
     @Published var showHighlights: Bool = false
 
+    /// Drives the keyboard-shortcuts cheat sheet (the ⌘/ command).
+    @Published var showShortcuts: Bool = false
+
     /// Highlights for the currently open reading. Drives both the reader's
     /// in-text tinting and the highlights inspector.
     @Published var highlights: [FfiHighlight] = []

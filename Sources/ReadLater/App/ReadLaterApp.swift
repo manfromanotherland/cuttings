@@ -31,6 +31,7 @@ struct ReadLaterApp: App {
             TypographyCommands()
             AppearanceCommands(appearanceMode: $appearanceMode)
             NavigationCommands(appState: appState)
+            HelpCommands(appState: appState)
         }
 
         Settings {

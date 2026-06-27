@@ -17,6 +17,10 @@ struct ContentView: View {
                 OnboardingView()
             }
         }
+        // Attached at the root so ⌘/ works from any screen.
+        .sheet(isPresented: $appState.showShortcuts) {
+            ShortcutsView()
+        }
     }
 
     private var mainContent: some View {

@@ -20,7 +20,7 @@ struct TypographyCommands: Commands {
                         readerFontSize = next
                     }
                 }
-                .keyboardShortcut("+", modifiers: .command)
+                .keyboardShortcut(ShortcutCatalog.increaseFont)
                 .disabled(readerFontSize == .xlarge)
 
                 Button("Decrease Size") {
@@ -28,7 +28,7 @@ struct TypographyCommands: Commands {
                         readerFontSize = prev
                     }
                 }
-                .keyboardShortcut("-", modifiers: .command)
+                .keyboardShortcut(ShortcutCatalog.decreaseFont)
                 .disabled(readerFontSize == .small)
 
                 Divider()
