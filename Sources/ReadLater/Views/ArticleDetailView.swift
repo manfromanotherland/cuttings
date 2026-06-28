@@ -142,6 +142,12 @@ struct ArticleDetailView: View {
                     footer: { ratingFooter(row: row) }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Identity tied to the reading so switching articles builds a
+                // fresh ScrollView (scrolled to top) instead of inheriting the
+                // previous article's offset. Keyed on `row.id` — not the parsed
+                // document — so background revalidation of the *same* reading
+                // (which can swap in a re-parsed document) doesn't reset scroll.
+                .id(row.id)
             } else if let excerpt = row.excerpt, !excerpt.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -153,6 +159,7 @@ struct ArticleDetailView: View {
                     }
                     .padding(24)
                 }
+                .id(row.id)
             } else {
                 Spacer()
             }
