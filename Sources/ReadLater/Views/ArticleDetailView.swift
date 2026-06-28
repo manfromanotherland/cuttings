@@ -10,6 +10,9 @@ struct ArticleDetailView: View {
     @State private var row: FfiReadingRow?
     @State private var articleDocument: ArticleDocument?
     @State private var isLoading = false
+    /// True when the selected reading's body is too large to render (see
+    /// `maxParseBytes`); drives the oversize notice instead of the reader.
+    @State private var bodyTooLarge = false
 
     /// Parsed bodies of readings opened this session, so revisiting one shows
     /// instantly — no re-parse, no spinner. Each entry keeps the body it was
@@ -28,6 +31,12 @@ struct ArticleDetailView: View {
     /// must respect — ~32 MB holds hundreds of normal articles or a dozen-plus
     /// very large ones, far more than a session revisits.
     private let cacheByteBudget = 32 * 1024 * 1024
+
+    /// Bodies larger than this are not parsed at all — swift-markdown would
+    /// freeze the main thread and spike memory on a pathological file. The
+    /// reader shows an "open in browser" notice instead. ~10 MB is already
+    /// ~1.5M words, far beyond any real article.
+    private let maxParseBytes = 10 * 1024 * 1024
 
     var body: some View {
         @Bindable var appState = appState
@@ -118,7 +127,9 @@ struct ArticleDetailView: View {
             Divider()
 
             // Native reader handles its own scrolling and fills remaining height
-            if let articleDocument {
+            if bodyTooLarge {
+                oversizeNotice(row: row)
+            } else if let articleDocument {
                 MarkdownDocumentView(
                     document: articleDocument,
                     libraryURL: appState.libraryURL,
@@ -204,6 +215,33 @@ struct ArticleDetailView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Shown instead of the reader when a reading's body is too large to parse
+    /// (see `maxParseBytes`). The full text is still available in the browser.
+    private func oversizeNotice(row: FfiReadingRow) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40))
+                .foregroundStyle(.tertiary)
+            Text("This article is too large to display in the reader")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Text("Open it in your browser to read the full text.")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+            if let url = URL(string: row.url) {
+                Button("Open in Browser") {
+                    NSWorkspace.shared.open(url)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
     }
 
     // ── Toolbar ───────────────────────────────────────────────────────────
@@ -306,6 +344,7 @@ struct ArticleDetailView: View {
         guard let id else {
             row = nil
             articleDocument = nil
+            bodyTooLarge = false
             await appState.loadHighlights(id: nil)
             return
         }
@@ -316,6 +355,7 @@ struct ArticleDetailView: View {
         // reading below. Highlights are reloaded so toggles made elsewhere show.
         if let cached = documentCache[id] {
             articleDocument = cached.document
+            bodyTooLarge = false
             isLoading = false
             touch(id)
             await appState.loadHighlights(id: id)
@@ -330,14 +370,32 @@ struct ArticleDetailView: View {
         // conversion or asset-path rewriting is needed. Parse here, off the
         // per-render path, so re-rendering the reader never re-parses.
         let body = await appState.getBody(id: id)
-        if let body {
-            let document = ArticleDocument(markdown: body)
-            store(body: body, document: document, id: id)
-            articleDocument = document
-        } else {
-            articleDocument = nil
-        }
+        present(body: body, id: id)
         isLoading = false
+    }
+
+    /// Show a freshly fetched body: parse, cache, and display it — unless it
+    /// exceeds `maxParseBytes`, in which case skip parsing entirely (it would
+    /// freeze the main thread) and flag it so the reader shows the oversize
+    /// notice. A nil body (nothing fetched) clears the reader.
+    private func present(body: String?, id: String) {
+        guard let body else {
+            articleDocument = nil
+            bodyTooLarge = false
+            return
+        }
+        guard body.utf8.count <= maxParseBytes else {
+            // Too large to render: don't parse, and don't keep any stale cache.
+            documentCache.removeValue(forKey: id)
+            cacheOrder.removeAll { $0 == id }
+            articleDocument = nil
+            bodyTooLarge = true
+            return
+        }
+        bodyTooLarge = false
+        let document = ArticleDocument(markdown: body)
+        store(body: body, document: document, id: id)
+        articleDocument = document
     }
 
     /// After showing a reading from cache, re-read its body and re-parse only if
@@ -347,11 +405,9 @@ struct ArticleDetailView: View {
     /// path since the cached parse is already on screen.
     private func revalidate(id: String, cachedBody: String) async {
         let body = await appState.getBody(id: id)
-        // Bail if the user moved on, or the reading's body is gone (deleted).
+        // Bail if the user moved on, or nothing changed.
         guard appState.selectedId == id, let body, body != cachedBody else { return }
-        let document = ArticleDocument(markdown: body)
-        store(body: body, document: document, id: id)
-        articleDocument = document
+        present(body: body, id: id)
     }
 
     /// Insert a parsed document (with the body it was parsed from), then evict
