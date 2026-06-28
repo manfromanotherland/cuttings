@@ -11,6 +11,24 @@ struct ArticleDetailView: View {
     @State private var articleDocument: ArticleDocument?
     @State private var isLoading = false
 
+    /// Parsed bodies of readings opened this session, so revisiting one shows
+    /// instantly — no re-parse, no spinner. Each entry keeps the body it was
+    /// parsed from; on revisit the cached parse is shown at once and that single
+    /// reading is revalidated in the background (re-read its body, re-parse only
+    /// if it changed on disk). So an external edit to one file refreshes just
+    /// that reading and never throws away the others' caches. LRU-evicted to fit
+    /// `cacheByteBudget`. Highlights are deliberately not cached — they're an
+    /// overlay reloaded on each open, so toggles made elsewhere still show on
+    /// return.
+    @State private var documentCache: [String: (body: String, document: ArticleDocument)] = [:]
+    @State private var cacheOrder: [String] = []
+
+    /// Approximate memory ceiling for cached parses (LRU-evicted to fit). macOS
+    /// has no hard per-app memory cap, so this is tidiness rather than a limit we
+    /// must respect — ~32 MB holds hundreds of normal articles or a dozen-plus
+    /// very large ones, far more than a session revisits.
+    private let cacheByteBudget = 32 * 1024 * 1024
+
     var body: some View {
         @Bindable var appState = appState
         Group {
@@ -291,16 +309,88 @@ struct ArticleDetailView: View {
             await appState.loadHighlights(id: nil)
             return
         }
-        isLoading = true
         row = appState.readings.first(where: { $0.id == id })
+
+        // Revisiting an already-opened reading: show its parsed body straight
+        // from the cache — no re-parse, no spinner — then revalidate just this
+        // reading below. Highlights are reloaded so toggles made elsewhere show.
+        if let cached = documentCache[id] {
+            articleDocument = cached.document
+            isLoading = false
+            touch(id)
+            await appState.loadHighlights(id: id)
+            await revalidate(id: id, cachedBody: cached.body)
+            return
+        }
+
+        isLoading = true
         await appState.loadHighlights(id: id)
         // The native reader parses Markdown directly (linked images like
         // `[![alt](img)](url)` are handled by the renderer), so no HTML
         // conversion or asset-path rewriting is needed. Parse here, off the
         // per-render path, so re-rendering the reader never re-parses.
         let body = await appState.getBody(id: id)
-        articleDocument = body.map { ArticleDocument(markdown: $0) }
+        if let body {
+            let document = ArticleDocument(markdown: body)
+            store(body: body, document: document, id: id)
+            articleDocument = document
+        } else {
+            articleDocument = nil
+        }
         isLoading = false
+    }
+
+    /// After showing a reading from cache, re-read its body and re-parse only if
+    /// it changed on disk — so an external edit to a single file refreshes just
+    /// that reading, leaving every other cached reading intact. Cheap when
+    /// nothing changed (a body fetch + string compare), and off the critical
+    /// path since the cached parse is already on screen.
+    private func revalidate(id: String, cachedBody: String) async {
+        let body = await appState.getBody(id: id)
+        // Bail if the user moved on, or the reading's body is gone (deleted).
+        guard appState.selectedId == id, let body, body != cachedBody else { return }
+        let document = ArticleDocument(markdown: body)
+        store(body: body, document: document, id: id)
+        articleDocument = document
+    }
+
+    /// Insert a parsed document (with the body it was parsed from), then evict
+    /// the least-recently-used entries until the cache fits `cacheByteBudget`.
+    /// An article whose own estimated cost exceeds the whole budget is not cached
+    /// at all — caching it would evict every other entry and still blow the
+    /// ceiling. It still displays (it's the current `articleDocument`); it just
+    /// isn't retained once you navigate away.
+    private func store(body: String, document: ArticleDocument, id: String) {
+        let entry = (body: body, document: document)
+        guard estimatedCost(entry) <= cacheByteBudget else {
+            // Too big to cache: drop any stale entry lingering under this id.
+            documentCache.removeValue(forKey: id)
+            cacheOrder.removeAll { $0 == id }
+            return
+        }
+        documentCache[id] = entry
+        touch(id)
+        var total = documentCache.values.reduce(0) { $0 + estimatedCost($1) }
+        while total > cacheByteBudget, cacheOrder.count > 1 {
+            let evicted = cacheOrder.removeFirst()
+            if let evictedEntry = documentCache.removeValue(forKey: evicted) {
+                total -= estimatedCost(evictedEntry)
+            }
+        }
+    }
+
+    /// Rough retained-memory estimate for one entry: the source bytes plus the
+    /// swift-markdown tree, which runs ~3× the source — so ~4× overall. A coarse
+    /// proxy (the real tree size isn't cheaply measurable), but enough to hold a
+    /// predictable ceiling.
+    private func estimatedCost(_ entry: (body: String, document: ArticleDocument)) -> Int {
+        entry.body.utf8.count * 4
+    }
+
+    /// Mark `id` as most-recently-used in the eviction order.
+    private func touch(_ id: String) {
+        cacheOrder.removeAll { $0 == id }
+        cacheOrder.append(id)
     }
 
     /// Apply a tag to the article: optimistically show the chip now (exact-match
