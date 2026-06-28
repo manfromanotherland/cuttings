@@ -85,7 +85,7 @@ private struct TypographySettingsTab: View {
 // ── Library ───────────────────────────────────────────────────────────────────
 
 private struct LibrarySettingsTab: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         Form {

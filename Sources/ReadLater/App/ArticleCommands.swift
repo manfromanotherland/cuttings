@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Menu bar commands that operate on the currently selected article.
 struct ArticleCommands: Commands {
-    @ObservedObject var appState: AppState
+    var appState: AppState
 
     var body: some Commands {
         CommandMenu("Article") {

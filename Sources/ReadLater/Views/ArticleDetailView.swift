@@ -3,7 +3,7 @@
 import SwiftUI
 
 struct ArticleDetailView: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
     @AppStorage("readerFont") private var readerFont: ReaderFont = .system
     @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
 
@@ -12,6 +12,7 @@ struct ArticleDetailView: View {
     @State private var isLoading = false
 
     var body: some View {
+        @Bindable var appState = appState
         Group {
             if let selectedId = appState.selectedId {
                 if isLoading {

@@ -5,7 +5,7 @@ import AppKit
 
 /// Menu bar commands for navigating the main window.
 struct NavigationCommands: Commands {
-    @ObservedObject var appState: AppState
+    var appState: AppState
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {

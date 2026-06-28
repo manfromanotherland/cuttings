@@ -5,7 +5,7 @@ import AppKit
 
 @main
 struct ReadLaterApp: App {
-    @StateObject private var appState = AppState()
+    @State private var appState = AppState()
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
 
     init() {
@@ -17,7 +17,7 @@ struct ReadLaterApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(appState)
+                .environment(appState)
                 .frame(minWidth: 900, minHeight: 600)
                 .onChange(of: appearanceMode, initial: true) { _, mode in
                     NSApplication.shared.appearance = mode.nsAppearance
@@ -36,7 +36,7 @@ struct ReadLaterApp: App {
 
         Settings {
             SettingsView()
-                .environmentObject(appState)
+                .environment(appState)
         }
     }
 }

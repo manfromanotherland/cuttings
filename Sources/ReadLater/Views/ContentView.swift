@@ -3,13 +3,14 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
 
     /// Which of the two navigable columns currently holds keyboard focus. Shared
     /// with both column views so the ←/→ arrows can hand focus back and forth.
     @FocusState private var focusedColumn: FocusColumn?
 
     var body: some View {
+        @Bindable var appState = appState
         Group {
             if appState.libraryURL != nil {
                 mainContent
@@ -27,7 +28,9 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
     private var mainContent: some View {
+        @Bindable var appState = appState
         NavigationSplitView {
             SidebarView(focusedColumn: $focusedColumn)
                 .navigationSplitViewColumnWidth(min: 160, ideal: 200)
@@ -82,7 +85,7 @@ private struct RestoringView: View {
 // ── Onboarding placeholder (fleshed out in MAC-2) ─────────────────────────────
 
 private struct OnboardingView: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         VStack(spacing: 16) {

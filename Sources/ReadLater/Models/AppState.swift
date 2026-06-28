@@ -3,6 +3,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import Observation
 
 /// User-selectable sort field for the reading list. Mirrors the core's
 /// `FfiSortField`; persisted as its `rawValue` in `UserDefaults`.
@@ -46,28 +47,31 @@ enum ReadingSort: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class AppState: ObservableObject {
+@Observable
+final class AppState {
     private enum SortDefaultsKey {
         static let field = "sortField"
         static let ascending = "sortAscending"
     }
     // ── Navigation state ──────────────────────────────────────────────────
-    @Published var libraryURL: URL?
+    var libraryURL: URL?
 
     /// True from launch until the first boot from a persisted bookmark settles.
     /// `libraryURL` is only set at the end of the async `boot`, so without this
     /// flag the brief gap between launch and boot would flash the onboarding
     /// screen even when a saved library exists. Onboarding keys off both:
     /// show it only when there's no library *and* we aren't restoring one.
-    @Published var isRestoringLibrary: Bool = false
-    @Published var readings: [FfiReadingRow] = []
-    @Published var searchResults: [FfiSearchResult] = []
-    @Published var selectedId: String?
-    @Published var searchQuery: String = ""
-    @Published var sidebarSelection: SidebarSelection? = .view(.all)
+    var isRestoringLibrary: Bool = false
+    var readings: [FfiReadingRow] = []
+    var searchResults: [FfiSearchResult] = []
+    var selectedId: String?
+    var searchQuery: String = ""
+    var sidebarSelection: SidebarSelection? = .view(.all)
 
-    /// Sort field for the reading list, persisted across launches.
-    @Published var sortField: ReadingSort {
+    /// Sort field for the reading list, persisted across launches. The default
+    /// here only initializes the backing store; `init` immediately overwrites it
+    /// with the persisted preference (re-persisting the same value harmlessly).
+    var sortField: ReadingSort = .savedAt {
         didSet {
             UserDefaults.standard.set(sortField.rawValue, forKey: SortDefaultsKey.field)
         }
@@ -75,30 +79,30 @@ final class AppState: ObservableObject {
 
     /// Sort direction (ascending when `true`), persisted across launches.
     /// Descending is the default for every field.
-    @Published var sortAscending: Bool {
+    var sortAscending: Bool = false {
         didSet {
             UserDefaults.standard.set(sortAscending, forKey: SortDefaultsKey.ascending)
         }
     }
 
     /// Reading awaiting delete confirmation, if any. Drives the confirm dialog.
-    @Published var pendingDelete: FfiReadingRow?
+    var pendingDelete: FfiReadingRow?
 
     /// Drives the tag-picker sheet for the open reading. Held here (rather than in
     /// the detail view) so both the toolbar button and the ⌘⇧T menu command can
     /// open it.
-    @Published var showTagSheet: Bool = false
+    var showTagSheet: Bool = false
 
     /// Drives the highlights inspector for the open reading. Held here so both the
     /// toolbar button and the ⌘⇧H menu command can toggle it.
-    @Published var showHighlights: Bool = false
+    var showHighlights: Bool = false
 
     /// Drives the keyboard-shortcuts cheat sheet (the ⌘/ command).
-    @Published var showShortcuts: Bool = false
+    var showShortcuts: Bool = false
 
     /// Highlights for the currently open reading. Drives both the reader's
     /// in-text tinting and the highlights inspector.
-    @Published var highlights: [FfiHighlight] = []
+    var highlights: [FfiHighlight] = []
 
     /// Currently active smart view (derived from `sidebarSelection`).
     var activeView: SidebarItem {
@@ -119,15 +123,15 @@ final class AppState: ObservableObject {
     }
 
     // ── Sidebar metadata ──────────────────────────────────────────────────
-    @Published var viewCounts: [SidebarItem: Int] = [:]
-    @Published var allTags: [FfiTagCount] = []
-    @Published var allRatings: [FfiRatingCount] = []
+    var viewCounts: [SidebarItem: Int] = [:]
+    var allTags: [FfiTagCount] = []
+    var allRatings: [FfiRatingCount] = []
 
     // ── Status ────────────────────────────────────────────────────────────
-    @Published var isLoading: Bool = false
-    @Published var isLoadingMore: Bool = false
-    @Published var hasMoreReadings: Bool = false
-    @Published var error: String?
+    var isLoading: Bool = false
+    var isLoadingMore: Bool = false
+    var hasMoreReadings: Bool = false
+    var error: String?
 
     /// True while the user is editing a text field (the toolbar search field, the
     /// tag picker, …). macOS dispatches menu/context-menu key-equivalents *before*
@@ -136,7 +140,7 @@ final class AppState: ObservableObject {
     /// field editor's own keys disable themselves while this holds, letting the
     /// keystroke fall through to standard text editing. Kept in sync by
     /// `startTextEditingMonitor`.
-    @Published var isEditingText: Bool = false
+    var isEditingText: Bool = false
 
     private let pageSize: UInt32 = 100
 

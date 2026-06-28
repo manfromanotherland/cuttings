@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Help-menu commands. Hosts the keyboard-shortcuts cheat sheet (⌘/).
 struct HelpCommands: Commands {
-    @ObservedObject var appState: AppState
+    var appState: AppState
 
     var body: some Commands {
         CommandGroup(after: .help) {

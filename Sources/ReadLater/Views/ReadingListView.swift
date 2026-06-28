@@ -3,7 +3,7 @@
 import SwiftUI
 
 struct ReadingListView: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
 
     /// Shared with the sidebar so ← can hand focus back across to it.
     @FocusState.Binding var focusedColumn: FocusColumn?
@@ -117,6 +117,7 @@ struct ReadingListView: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
+        @Bindable var appState = appState
         if !appState.readings.isEmpty {
             ToolbarItem(placement: .primaryAction) {
                 Menu {

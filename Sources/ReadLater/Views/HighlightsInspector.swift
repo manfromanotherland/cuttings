@@ -7,7 +7,7 @@ import SwiftUI
 /// "Highlight" from the context menu; this panel lists them and lets the user
 /// remove individual ones.
 struct HighlightsInspector: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
 
     /// The reading whose highlights are shown. Highlights are scoped per
     /// reading, so deletions target this id.

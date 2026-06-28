@@ -3,7 +3,7 @@
 import SwiftUI
 
 struct SidebarView: View {
-    @EnvironmentObject private var appState: AppState
+    @Environment(AppState.self) private var appState
     @State private var showAppearancePopover = false
 
     /// Shared with the reading list so → can hand focus across to it.
@@ -16,6 +16,7 @@ struct SidebarView: View {
     @AppStorage("sidebarTagsExpanded") private var tagsExpanded = true
 
     var body: some View {
+        @Bindable var appState = appState
         List(selection: $appState.sidebarSelection) {
             Section(isExpanded: $libraryExpanded) {
                 ForEach(SidebarItem.allCases) { item in
