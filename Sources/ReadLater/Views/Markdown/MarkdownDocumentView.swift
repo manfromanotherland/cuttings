@@ -3,45 +3,20 @@
 import SwiftUI
 import Markdown
 
-/// Native reader: parses the article Markdown with swift-markdown and renders it
-/// as a SwiftUI view tree. Replaces the `WKWebView`-based `MarkdownWebView`.
-/// Light/Dark adapt automatically via semantic colors (appearance is applied
-/// app-wide in `ReadLaterApp`), and links open in the system browser.
-struct MarkdownDocumentView<Footer: View>: View {
-    let markdown: String
-    let libraryURL: URL?
-    var font: ReaderFont = .system
-    var fontSize: ReaderFontSize = .medium
-    /// Verbatim text of the reading's highlights; each occurrence is tinted.
-    var highlights: [String] = []
-    /// Called with the selected text when the user highlights a passage.
-    var onHighlight: (String) -> Void = { _ in }
-    /// Trailing content rendered inside the scroll, after the article body — so
-    /// it comes into view only when the reader reaches the end of the article.
-    @ViewBuilder var footer: () -> Footer
-
-    private let groups: [RenderGroup]
-
-    init(markdown: String, libraryURL: URL?,
-         font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
-         highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
-         @ViewBuilder footer: @escaping () -> Footer = { EmptyView() }) {
-        self.markdown = markdown
-        self.libraryURL = libraryURL
-        self.font = font
-        self.fontSize = fontSize
-        self.highlights = highlights
-        self.onHighlight = onHighlight
-        self.footer = footer
-        let document = Document(parsing: Self.unwrapLinkedImages(markdown))
-        self.groups = Self.makeGroups(Array(document.children))
-    }
-
+/// The parsed block structure of an article, computed once from its Markdown.
+/// Parsing (`Document(parsing:)` + grouping) is the expensive step of rendering,
+/// so callers build this **off the per-render path** — when the article loads —
+/// and hand it to `MarkdownDocumentView`. The view then only applies the theme
+/// and highlight tinting on each render, never re-parsing. (Previously the parse
+/// lived in the view's initializer, so every unrelated re-render of the reader —
+/// a highlight toggle, a font change, a selection advance — re-parsed the whole
+/// article on the main thread.)
+struct ArticleDocument {
     /// A render unit: either a run of contiguous text blocks rendered as one
     /// selectable `NSTextView`, or a single non-text block (image, list, quote,
     /// table, code) rendered by the SwiftUI block renderer. Selection is
     /// continuous *within* a text run; non-text blocks form a seam.
-    private enum RenderGroup: Identifiable {
+    enum RenderGroup: Identifiable {
         case textRun(id: Int, blocks: [Markup])
         case other(IdentifiedMarkup)
 
@@ -51,6 +26,13 @@ struct MarkdownDocumentView<Footer: View>: View {
             case .other(let item): item.id
             }
         }
+    }
+
+    let groups: [RenderGroup]
+
+    init(markdown: String) {
+        let document = Document(parsing: Self.unwrapLinkedImages(markdown))
+        self.groups = Self.makeGroups(Array(document.children))
     }
 
     /// Group the document's top-level blocks, merging maximal runs of foldable
@@ -127,6 +109,37 @@ struct MarkdownDocumentView<Footer: View>: View {
         return markdown.replacingOccurrences(
             of: pattern, with: "$1", options: .regularExpression)
     }
+}
+
+/// Native reader: renders a pre-parsed `ArticleDocument` as a SwiftUI view tree.
+/// Replaces the `WKWebView`-based `MarkdownWebView`. Light/Dark adapt
+/// automatically via semantic colors (appearance is applied app-wide in
+/// `ReadLaterApp`), and links open in the system browser.
+struct MarkdownDocumentView<Footer: View>: View {
+    let document: ArticleDocument
+    let libraryURL: URL?
+    var font: ReaderFont = .system
+    var fontSize: ReaderFontSize = .medium
+    /// Verbatim text of the reading's highlights; each occurrence is tinted.
+    var highlights: [String] = []
+    /// Called with the selected text when the user highlights a passage.
+    var onHighlight: (String) -> Void = { _ in }
+    /// Trailing content rendered inside the scroll, after the article body — so
+    /// it comes into view only when the reader reaches the end of the article.
+    @ViewBuilder var footer: () -> Footer
+
+    init(document: ArticleDocument, libraryURL: URL?,
+         font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
+         highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
+         @ViewBuilder footer: @escaping () -> Footer = { EmptyView() }) {
+        self.document = document
+        self.libraryURL = libraryURL
+        self.font = font
+        self.fontSize = fontSize
+        self.highlights = highlights
+        self.onHighlight = onHighlight
+        self.footer = footer
+    }
 
     private var theme: MarkdownTheme {
         MarkdownTheme(font: font, fontSize: fontSize)
@@ -135,7 +148,7 @@ struct MarkdownDocumentView<Footer: View>: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
-                ForEach(groups) { group in
+                ForEach(document.groups) { group in
                     switch group {
                     case .textRun(_, let blocks):
                         SelectableTextView(

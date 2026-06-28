@@ -8,7 +8,7 @@ struct ArticleDetailView: View {
     @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
 
     @State private var row: FfiReadingRow?
-    @State private var articleMarkdown: String?
+    @State private var articleDocument: ArticleDocument?
     @State private var isLoading = false
 
     var body: some View {
@@ -100,9 +100,9 @@ struct ArticleDetailView: View {
             Divider()
 
             // Native reader handles its own scrolling and fills remaining height
-            if let articleMarkdown {
+            if let articleDocument {
                 MarkdownDocumentView(
-                    markdown: articleMarkdown,
+                    document: articleDocument,
                     libraryURL: appState.libraryURL,
                     font: readerFont,
                     fontSize: readerFontSize,
@@ -287,7 +287,7 @@ struct ArticleDetailView: View {
     private func load(id: String?) async {
         guard let id else {
             row = nil
-            articleMarkdown = nil
+            articleDocument = nil
             await appState.loadHighlights(id: nil)
             return
         }
@@ -296,8 +296,10 @@ struct ArticleDetailView: View {
         await appState.loadHighlights(id: id)
         // The native reader parses Markdown directly (linked images like
         // `[![alt](img)](url)` are handled by the renderer), so no HTML
-        // conversion or asset-path rewriting is needed.
-        articleMarkdown = await appState.getBody(id: id)
+        // conversion or asset-path rewriting is needed. Parse here, off the
+        // per-render path, so re-rendering the reader never re-parses.
+        let body = await appState.getBody(id: id)
+        articleDocument = body.map { ArticleDocument(markdown: $0) }
         isLoading = false
     }
 
