@@ -43,6 +43,9 @@ targets:
       - name: Build and copy native-host
         script: |
           set -e
+          # Xcode runs build phases with a sanitized PATH that omits ~/.cargo/bin,
+          # so make cargo discoverable before invoking it.
+          source "$HOME/.cargo/env" 2>/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
           CORE="${SRCROOT}/../read-later-core"
           cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin native-host
           SRC="${CORE}/target/release/native-host"
