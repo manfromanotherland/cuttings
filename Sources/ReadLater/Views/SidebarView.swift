@@ -6,6 +6,9 @@ struct SidebarView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showAppearancePopover = false
 
+    /// Shared with the reading list so → can hand focus across to it.
+    @FocusState.Binding var focusedColumn: FocusColumn?
+
     // Per-section collapse state, persisted across launches so the sidebar
     // reopens the way the user left it. Default to expanded.
     @AppStorage("sidebarLibraryExpanded") private var libraryExpanded = true
@@ -52,6 +55,13 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .focused($focusedColumn, equals: .sidebar)
+        // → crosses into the reading list; ↑/↓ keep navigating the sidebar's own
+        // rows. The list's ← arrow brings focus back here.
+        .onKeyPress(.rightArrow) {
+            focusedColumn = .list
+            return .handled
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 Divider()

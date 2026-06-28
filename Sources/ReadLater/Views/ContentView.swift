@@ -5,6 +5,10 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
 
+    /// Which of the two navigable columns currently holds keyboard focus. Shared
+    /// with both column views so the ←/→ arrows can hand focus back and forth.
+    @FocusState private var focusedColumn: FocusColumn?
+
     var body: some View {
         Group {
             if appState.libraryURL != nil {
@@ -25,10 +29,10 @@ struct ContentView: View {
 
     private var mainContent: some View {
         NavigationSplitView {
-            SidebarView()
+            SidebarView(focusedColumn: $focusedColumn)
                 .navigationSplitViewColumnWidth(min: 160, ideal: 200)
         } content: {
-            ReadingListView()
+            ReadingListView(focusedColumn: $focusedColumn)
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320)
         } detail: {
             ArticleDetailView()
@@ -51,6 +55,16 @@ struct ContentView: View {
             }
         }
     }
+}
+
+// ── Column focus ──────────────────────────────────────────────────────────────
+// Identifies the two columns that participate in ←/→ arrow navigation. The
+// detail (reader) column isn't part of this cycle — it's reached by selecting a
+// reading, not by arrowing across.
+
+enum FocusColumn: Hashable {
+    case sidebar
+    case list
 }
 
 // ── Restoring placeholder ─────────────────────────────────────────────────────

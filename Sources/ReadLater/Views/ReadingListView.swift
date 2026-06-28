@@ -5,6 +5,9 @@ import SwiftUI
 struct ReadingListView: View {
     @EnvironmentObject private var appState: AppState
 
+    /// Shared with the sidebar so ← can hand focus back across to it.
+    @FocusState.Binding var focusedColumn: FocusColumn?
+
     var body: some View {
         Group {
             if appState.isLoading {
@@ -69,6 +72,13 @@ struct ReadingListView: View {
                 }
         }
         .listStyle(.inset)
+        .focused($focusedColumn, equals: .list)
+        // ← hands focus back to the sidebar; ↑/↓ keep moving through the
+        // readings. (→ into the reader isn't part of the arrow cycle.)
+        .onKeyPress(.leftArrow) {
+            focusedColumn = .sidebar
+            return .handled
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if appState.isLoadingMore {
                 ProgressView()
