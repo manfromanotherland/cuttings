@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import ImageIO
 import SwiftUI
 
 /// Renders a single Markdown image natively, with an optional caption drawn from
@@ -98,14 +99,50 @@ struct AssetImageView: View {
 
     private func loadLocal() async {
         guard let url = localURL else { failed = true; return }
-        // Read bytes off the main actor (Data is Sendable; NSImage is not).
-        let data = await Task.detached(priority: .userInitiated) {
-            try? Data(contentsOf: url)
+        // The reader never lays an image out wider than `contentMaxWidth`, so a
+        // thumbnail that many device pixels across is all the display needs.
+        // Loading at native resolution instead would hold far more memory than
+        // the on-screen size warrants, and a long article stacks several images.
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let maxPixel = theme.contentMaxWidth * scale
+        // Decode the downsampled image off the main actor. ImageIO reads only
+        // what it needs from disk and never materializes the full-resolution
+        // bitmap (`NSImage` is not Sendable, hence the wrapper).
+        let decoded = await Task.detached(priority: .userInitiated) {
+            AssetImageView.downsampledImage(at: url, maxPixel: maxPixel)
         }.value
-        if let data, let image = NSImage(data: data) {
-            localImage = image
+        if let decoded {
+            localImage = decoded.image
         } else {
             failed = true
         }
+    }
+
+    /// Wraps an `NSImage` so it can cross the actor boundary out of the detached
+    /// decode task. Safe because the image is fully built inside that task and
+    /// never mutated afterward — ownership transfers to the main actor.
+    private struct DecodedImage: @unchecked Sendable {
+        let image: NSImage
+    }
+
+    /// Decode `url` into an image whose largest dimension is at most `maxPixel`
+    /// device pixels, using ImageIO so the full-resolution bitmap is never
+    /// materialized. Smaller source images are left as-is (no upscaling).
+    /// Returns `nil` if the file can't be read or decoded.
+    private static nonisolated func downsampledImage(at url: URL, maxPixel: CGFloat) -> DecodedImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel.rounded()),
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        let size = NSSize(width: cgImage.width, height: cgImage.height)
+        return DecodedImage(image: NSImage(cgImage: cgImage, size: size))
     }
 }
