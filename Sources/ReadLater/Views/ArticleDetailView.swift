@@ -215,14 +215,7 @@ struct ArticleDetailView: View {
     }
 
     private var emptyDetail: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
-            Text("Select an article to read")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView("Select an article to read", systemImage: "doc.text")
     }
 
     /// Shown instead of the reader when a reading's body is too large to parse

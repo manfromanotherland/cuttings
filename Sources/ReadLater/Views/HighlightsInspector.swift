@@ -52,19 +52,11 @@ struct HighlightsInspector: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "highlighter")
-                .font(.system(size: 32))
-                .foregroundStyle(.tertiary)
-            Text("No highlights yet")
-                .foregroundStyle(.secondary)
-            Text("Select text in the article and right-click to add one.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView(
+            "No highlights yet",
+            systemImage: "highlighter",
+            description: Text("Select text in the article and right-click to add one.")
+        )
     }
 
     private func delete(_ highlightId: String) {

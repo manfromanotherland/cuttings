@@ -96,21 +96,22 @@ struct ReadingListView: View {
 
     // ── Empty state ───────────────────────────────────────────────────────
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "tray")
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
-            Text("Nothing here yet")
-                .foregroundStyle(.secondary)
-            if appState.selectedTag != nil {
+        if !appState.searchQuery.isEmpty {
+            // System-provided, auto-localized "No Results for …" state.
+            ContentUnavailableView.search(text: appState.searchQuery)
+        } else if appState.selectedTag != nil {
+            ContentUnavailableView {
+                Label("Nothing here yet", systemImage: "tray")
+            } actions: {
                 Button("Clear tag filter") {
                     Task { await appState.clearTag() }
                 }
-                .buttonStyle(.bordered)
             }
+        } else {
+            ContentUnavailableView("Nothing here yet", systemImage: "tray")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // ── Toolbar ───────────────────────────────────────────────────────────
