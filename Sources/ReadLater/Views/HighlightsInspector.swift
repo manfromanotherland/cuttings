@@ -81,10 +81,9 @@ private struct HighlightRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Rectangle()
+            RoundedRectangle(cornerRadius: 1.5)
                 .fill(Color.yellow.opacity(0.6))
                 .frame(width: 3)
-                .cornerRadius(1.5)
             Text(text)
                 .font(.callout)
                 .foregroundStyle(.primary)
