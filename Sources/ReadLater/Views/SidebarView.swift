@@ -18,14 +18,11 @@ struct SidebarView: View {
     var body: some View {
         @Bindable var appState = appState
         List(selection: $appState.sidebarSelection) {
-            Section(isExpanded: $libraryExpanded) {
+            Section("Library", isExpanded: $libraryExpanded) {
                 ForEach(SidebarItem.allCases) { item in
                     viewRow(item)
                         .tag(SidebarSelection.view(item))
                 }
-            } header: {
-                Text("Library")
-                    .padding(.top, 12)
             }
 
             if !appState.allRatings.isEmpty {
@@ -178,7 +175,9 @@ struct SidebarView: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(rc.rating) star\(rc.rating == 1 ? "" : "s"), \(rc.count) reading\(rc.count == 1 ? "" : "s")")
+        .accessibilityLabel(
+            "\(rc.rating) star\(rc.rating == 1 ? "" : "s"), \(rc.count) reading\(rc.count == 1 ? "" : "s")"
+        )
     }
 }
 
@@ -209,9 +208,8 @@ private struct AppearancePopoverView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .background(
-                            appearanceMode == mode ?
-                                AnyShapeStyle(.secondary.opacity(0.25)) :
-                                AnyShapeStyle(.clear),
+                            appearanceMode == mode
+                                ? AnyShapeStyle(.secondary.opacity(0.25)) : AnyShapeStyle(.clear),
                             in: RoundedRectangle(cornerRadius: 6)
                         )
                         .contentShape(Rectangle())
@@ -243,7 +241,9 @@ private struct AppearancePopoverView: View {
                 Text("Aa")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                Slider(value: fontSizeBinding, in: 0...Double(ReaderFontSize.allCases.count - 1), step: 1)
+                Slider(
+                    value: fontSizeBinding, in: 0...Double(ReaderFontSize.allCases.count - 1),
+                    step: 1)
                 Text("Aa")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
