@@ -177,6 +177,8 @@ struct SidebarView: View {
                 .background(.secondary.opacity(0.15), in: Capsule())
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(rc.rating) star\(rc.rating == 1 ? "" : "s"), \(rc.count) reading\(rc.count == 1 ? "" : "s")")
     }
 }
 

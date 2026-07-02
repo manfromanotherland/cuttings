@@ -206,6 +206,7 @@ struct ReadingRowView: View {
                         .fill(.blue)
                         .frame(width: 7, height: 7)
                         .padding(.top, 5)
+                        .accessibilityLabel("Unread")
                 }
                 Text(row.title.isEmpty ? row.url : row.title)
                     .font(.headline)
@@ -215,6 +216,7 @@ struct ReadingRowView: View {
                     Image(systemName: "heart.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
+                        .accessibilityLabel("Favorite")
                 }
             }
 

@@ -208,6 +208,7 @@ struct ArticleDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Rate \(star) star\(star == 1 ? "" : "s")")
+                .accessibilityLabel("Rate \(star) star\(star == 1 ? "" : "s")")
             }
         }
         .font(.title3)
