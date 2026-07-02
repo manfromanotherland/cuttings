@@ -17,10 +17,10 @@ struct ArticleDocument {
     /// table, code) rendered by the SwiftUI block renderer. Selection is
     /// continuous *within* a text run; non-text blocks form a seam.
     enum RenderGroup: Identifiable {
-        case textRun(id: Int, blocks: [Markup])
+        case textRun(id: String, blocks: [Markup])
         case other(IdentifiedMarkup)
 
-        var id: Int {
+        var id: String {
             switch self {
             case .textRun(let id, _): id
             case .other(let item): item.id
@@ -36,18 +36,19 @@ struct ArticleDocument {
     }
 
     /// Group the document's top-level blocks, merging maximal runs of foldable
-    /// (text-only) blocks. A run's id is the offset of its first block, which is
-    /// distinct from every standalone block's offset, so ids stay unique.
+    /// (text-only) blocks. A run takes the source-derived id of its first block,
+    /// and each standalone block its own — both distinct source positions, so
+    /// ids stay unique across the group list.
     private static func makeGroups(_ blocks: [Markup]) -> [RenderGroup] {
         var groups: [RenderGroup] = []
         var run: [Markup] = []
         var runStart = 0
 
         func flush() {
-            if !run.isEmpty {
-                groups.append(.textRun(id: runStart, blocks: run))
-                run = []
-            }
+            guard let first = run.first else { return }
+            groups.append(.textRun(id: IdentifiedMarkup.stableID(for: first, fallbackIndex: runStart),
+                                   blocks: run))
+            run = []
         }
 
         for (offset, block) in blocks.enumerated() {
@@ -56,7 +57,8 @@ struct ArticleDocument {
                 run.append(block)
             } else {
                 flush()
-                groups.append(.other(IdentifiedMarkup(id: offset, markup: block)))
+                groups.append(.other(IdentifiedMarkup(
+                    id: IdentifiedMarkup.stableID(for: block, fallbackIndex: offset), markup: block)))
             }
         }
         flush()

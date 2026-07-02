@@ -124,8 +124,8 @@ private struct ParagraphView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.blockSpacing * 0.6) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                switch segment {
+            ForEach(segments) { identified in
+                switch identified.segment {
                 case .text(let attributed):
                     Text(attributed)
                         .lineSpacing(theme.lineSpacing)
@@ -143,27 +143,42 @@ private struct ParagraphView: View {
         case image(source: String, alt: String)
     }
 
-    private var segments: [Segment] {
-        var result: [Segment] = []
+    /// A segment tagged with a source-derived id (the child it began at), so a
+    /// paragraph's runs and images keep stable identity instead of keying on
+    /// their position in the segment array.
+    private struct IdentifiedSegment: Identifiable {
+        let id: String
+        let segment: Segment
+    }
+
+    private var segments: [IdentifiedSegment] {
+        var result: [IdentifiedSegment] = []
         var run = AttributedString()
+        var runID: String?
 
         func flush() {
-            if !run.characters.isEmpty {
-                result.append(.text(run))
-                run = AttributedString()
-            }
+            guard !run.characters.isEmpty else { return }
+            result.append(IdentifiedSegment(id: runID ?? "#\(result.count)", segment: .text(run)))
+            run = AttributedString()
+            runID = nil
         }
 
-        for child in paragraph.children {
+        for (offset, child) in paragraph.children.enumerated() {
             if let image = standaloneImage(child) {
                 flush()
-                result.append(.image(source: image.source ?? "", alt: InlineRenderer.plainText(image)))
+                result.append(IdentifiedSegment(
+                    id: IdentifiedMarkup.stableID(for: child, fallbackIndex: offset),
+                    segment: .image(source: image.source ?? "", alt: InlineRenderer.plainText(image))))
             } else {
+                // The run inherits the id of the first child that feeds it.
+                if run.characters.isEmpty { runID = IdentifiedMarkup.stableID(for: child, fallbackIndex: offset) }
                 run.append(InlineRenderer.inline(child, theme: theme))
             }
         }
         flush()
-        return result.isEmpty ? [.text(AttributedString())] : result
+        return result.isEmpty
+            ? [IdentifiedSegment(id: "#0", segment: .text(AttributedString()))]
+            : result
     }
 
     /// An image either bare, or as the sole meaningful child of a link.
@@ -199,7 +214,7 @@ private struct ListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.listItemSpacing) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 HStack(alignment: .firstTextBaseline, spacing: theme.listMarkerGap) {
                     marker(for: index, item: item.markup)
                         .font(theme.bodyFont)
@@ -291,7 +306,9 @@ private struct MarkdownTableView: View {
     var body: some View {
         Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 8) {
             GridRow {
-                ForEach(Array(table.head.cells.enumerated()), id: \.offset) { index, cell in
+                // Cells/rows carry a unique source `range`; key on it so identity
+                // is content-derived rather than the column/row position.
+                ForEach(Array(table.head.cells.enumerated()), id: \.element.range) { index, cell in
                     Text(InlineRenderer.attributed(cell, theme: theme,
                                                    context: .emphasized(theme, weight: .semibold)))
                         .textSelection(.enabled)
@@ -299,9 +316,9 @@ private struct MarkdownTableView: View {
                 }
             }
             Divider()
-            ForEach(Array(table.body.rows.enumerated()), id: \.offset) { _, row in
+            ForEach(Array(table.body.rows.enumerated()), id: \.element.range) { _, row in
                 GridRow {
-                    ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
+                    ForEach(Array(row.cells.enumerated()), id: \.element.range) { _, cell in
                         Text(InlineRenderer.attributed(cell, theme: theme))
                             .textSelection(.enabled)
                     }
@@ -326,12 +343,30 @@ private struct MarkdownTableView: View {
 
 /// Wraps a `Markup` child with a stable identity for `ForEach`.
 struct IdentifiedMarkup: Identifiable {
-    let id: Int
+    let id: String
     let markup: Markup
+
+    /// A stable identity for a parsed node, taken from its span in the *source*
+    /// text rather than its index in a rendered array. `Document(parsing:)`
+    /// assigns every node a unique source range, so sibling nodes never share a
+    /// start location; the index fallback (only reached for nodes without range
+    /// info, e.g. programmatically built ones) stays unique within its
+    /// collection. Position-based ids (`\.offset`) instead reset per-row state
+    /// on any insert/reorder — harmless for immutable parsed content, but this
+    /// keeps identity content-derived per the list-identity rule.
+    static func stableID(for markup: Markup, fallbackIndex index: Int) -> String {
+        if let start = markup.range?.lowerBound {
+            return "\(start.line):\(start.column)"
+        }
+        return "#\(index)"
+    }
 }
 
 private func childArray(_ markup: Markup) -> [IdentifiedMarkup] {
-    Array(markup.children).enumerated().map { IdentifiedMarkup(id: $0.offset, markup: $0.element) }
+    Array(markup.children).enumerated().map {
+        IdentifiedMarkup(id: IdentifiedMarkup.stableID(for: $0.element, fallbackIndex: $0.offset),
+                         markup: $0.element)
+    }
 }
 
 private extension String {
