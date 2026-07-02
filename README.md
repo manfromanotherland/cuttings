@@ -16,7 +16,7 @@ Part of the **read-later** project →
 
 ## Prerequisites
 
-- macOS 13 or later
+- macOS 14 or later
 - Xcode 15 or later
 - [Homebrew](https://brew.sh)
 - [xcodegen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
