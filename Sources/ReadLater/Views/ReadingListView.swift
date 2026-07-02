@@ -250,17 +250,6 @@ struct ReadingRowView: View {
         }
         .padding(.vertical, 4)
     }
-
-    private func relativeDate(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = formatter.date(from: iso)
-            ?? ISO8601DateFormatter().date(from: iso)
-        else { return iso }
-        let rel = RelativeDateTimeFormatter()
-        rel.unitsStyle = .abbreviated
-        return rel.localizedString(for: date, relativeTo: .now)
-    }
 }
 
 // ── String helper ─────────────────────────────────────────────────────────────
