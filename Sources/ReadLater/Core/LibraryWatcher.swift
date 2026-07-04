@@ -21,14 +21,29 @@ final class LibraryWatcher: @unchecked Sendable {
 
     deinit { stop() }
 
+    /// Tear down the stream and release the retain that keeps `self` alive.
+    ///
+    /// Callers **must** invoke this before dropping their reference (e.g. when
+    /// switching libraries). `start` stores a `passRetained(self)` in the
+    /// FSEvents context; that +1 is only balanced by the stream's `release`
+    /// callback, which only runs when the stream is torn down here. Relying on
+    /// `deinit` alone is a deadlock: the retain keeps the refcount above zero,
+    /// so `deinit` never runs, so the stream never tears down, so the retain is
+    /// never released. Calling `invalidate()` explicitly breaks that cycle.
+    /// `deinit { stop() }` remains as a backstop; `stop()` is idempotent.
+    func invalidate() { stop() }
+
     // ── Private ───────────────────────────────────────────────────────────
 
     private func start(path: String) {
-        // `passRetained` keeps self alive for the duration of the stream.
-        // The `release` callback balances the retain when the stream is torn down.
+        // `passRetained` keeps self alive for the duration of the stream; the
+        // `release` callback balances it when the stream is torn down in stop().
+        // Hold the token so the create-failure path below can balance it by hand
+        // (that path never creates a stream, so `release` would never fire).
+        let retained = Unmanaged.passRetained(self)
         var ctx = FSEventStreamContext(
             version: 0,
-            info: Unmanaged.passRetained(self).toOpaque(),
+            info: retained.toOpaque(),
             retain: nil,
             release: { Unmanaged<LibraryWatcher>.fromOpaque($0!).release() },
             copyDescription: nil
@@ -49,7 +64,12 @@ final class LibraryWatcher: @unchecked Sendable {
             0.5,   // seconds of latency / coalescing
             flags
         )
-        guard let stream else { return }
+        guard let stream else {
+            // No stream means the `release` callback will never run, so balance
+            // the retain above by hand instead of leaking `self`.
+            retained.release()
+            return
+        }
         FSEventStreamSetDispatchQueue(stream, queue)
         FSEventStreamStart(stream)
     }

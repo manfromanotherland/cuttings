@@ -437,6 +437,12 @@ final class AppState {
     }
 
     private func startWatcher(libraryPath: String) {
+        // Tear down the previous watcher before replacing it. Reassigning alone
+        // would leak it — the FSEvents stream keeps it alive, still watching the
+        // old folder and firing sync() against the new library. invalidate()
+        // runs while we still hold the strong reference, so the release it
+        // triggers can't deallocate the watcher mid-teardown.
+        watcher?.invalidate()
         watcher = LibraryWatcher(libraryPath: libraryPath) { [weak self] in
             Task { @MainActor [weak self] in await self?.sync() }
         }
