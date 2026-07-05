@@ -42,7 +42,7 @@ struct ContentView: View {
         }
         .searchable(text: $appState.searchQuery, placement: .toolbar, prompt: "Search")
         .onChange(of: appState.searchQuery) { _, _ in
-            Task { await appState.loadReadings() }
+            appState.searchDidChange()
         }
         .overlay {
             if let err = appState.error {

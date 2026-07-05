@@ -66,6 +66,12 @@ final class AppState {
     var searchResults: [FfiSearchResult] = []
     var selectedId: String?
     var searchQuery: String = ""
+
+    /// Pending debounced search reload. Each keystroke cancels the previous one
+    /// so the core is queried once typing settles, not per character. Plumbing
+    /// only — not part of the observable UI state.
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+
     var sidebarSelection: SidebarSelection? = .view(.all)
 
     /// Sort field for the reading list, persisted across launches. The default
@@ -318,6 +324,26 @@ final class AppState {
     }
 
     // ── List / search ─────────────────────────────────────────────────────
+
+    /// Entry point for search-field edits. Debounces rapid typing so the core
+    /// runs a single search once input settles (~150ms) instead of one pass per
+    /// keystroke; each edit cancels the previous pending reload. Non-search
+    /// reloads (filter, sort, refresh) call `loadReadings` directly and stay
+    /// immediate.
+    func searchDidChange() {
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard let self, !Task.isCancelled else { return }
+            // This reload fires ~150ms after the last keystroke, while the search
+            // field is still focused. Re-homing the list selection here moves
+            // first responder to the list, flips `isEditingText` false, and lets
+            // ⌘⌫ (Archive) fire instead of deleting to the start of the search
+            // term. So while a text field is being edited, leave the selection
+            // put to keep focus in the field; re-home only when not editing.
+            await self.loadReadings(resetSelectionIfMissing: !self.isEditingText)
+        }
+    }
 
     /// `resetSelectionIfMissing` controls what happens when the current
     /// selection isn't in the freshly loaded list. Direct (re)loads — filter
