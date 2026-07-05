@@ -7,10 +7,32 @@ use rusqlite::Connection;
 
 /// Open (or create) the index database at `db_path` and run any pending migrations.
 pub fn open(db_path: &Path) -> Result<Connection> {
-    let conn = Connection::open(db_path)?;
+    let mut conn = Connection::open(db_path)?;
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     migrate(&conn)?;
+    if std::env::var_os("SQL_TRACE").is_some() {
+        install_sql_trace(&mut conn);
+    }
     Ok(conn)
+}
+
+/// Log every executed SQL statement (with its wall-clock duration) to stderr.
+///
+/// Gated on the `SQL_TRACE` env var so release builds pay nothing. Useful for
+/// spotting chatty callers and N+1 patterns — a statement that repeats dozens
+/// of times per UI action shows up as an obvious run of identical lines.
+fn install_sql_trace(conn: &mut Connection) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNT: AtomicU64 = AtomicU64::new(0);
+    conn.profile(Some(|sql: &str, dur: std::time::Duration| {
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        let ms = dur.as_secs_f64() * 1e3;
+        if ms < 1.0 {
+            eprintln!("[sql #{n} {:>6.2}µs] {sql}", ms * 1e3);
+        } else {
+            eprintln!("[sql #{n} {:>6.2}ms] {sql}", ms);
+        }
+    }));
 }
 
 fn migrate(conn: &Connection) -> Result<()> {
