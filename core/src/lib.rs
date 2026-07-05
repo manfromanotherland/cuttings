@@ -29,7 +29,9 @@ pub use highlights::{
 pub use id::new_id;
 pub use images::download_images;
 pub use index::open as open_index;
-pub use list::{get_reading, list_readings, ListOptions, ReadingRow, SortField, View};
+pub use list::{
+    get_reading, list_readings, view_counts, ListOptions, ReadingRow, SortField, View, ViewCounts,
+};
 pub use rating::{list_ratings, set_rating};
 pub use reconcile::{apply_diffs, rebuild};
 pub use scanner::{diff, scan_library, ScanDiff, ScannedReading};

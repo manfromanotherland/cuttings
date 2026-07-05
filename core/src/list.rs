@@ -96,15 +96,62 @@ pub struct ReadingRow {
     pub tags: Vec<String>,
 }
 
-/// List readings from the index according to `opts`.
-pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
-    let view_clause = match opts.view {
+/// The SQL predicate that selects a smart view. Single source of truth shared
+/// by [`list_readings`] and [`view_counts`] so a view's count can never
+/// disagree with the list it produces.
+fn view_clause(view: View) -> &'static str {
+    match view {
         View::All => "archived = 0",
         View::Unread => "archived = 0 AND read_at IS NULL",
         View::Read => "archived = 0 AND read_at IS NOT NULL",
         View::Archive => "archived = 1",
         View::Favorites => "favorite = 1",
-    };
+    }
+}
+
+/// The number of readings in each smart view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ViewCounts {
+    pub all: u64,
+    pub unread: u64,
+    pub read: u64,
+    pub archive: u64,
+    pub favorites: u64,
+}
+
+/// Count the readings in every smart view in a single pass over the table.
+///
+/// One grouped aggregate — not five `SELECT COUNT(*)`s, and emphatically not
+/// `list_readings(..).len()` — so the cost is a single table scan regardless of
+/// library size, with no rows materialized and no `LIMIT` to silently cap the
+/// result. The `FILTER` clause needs SQLite >= 3.30 (satisfied by the bundled
+/// build) and yields 0 rather than NULL for an empty view.
+pub fn view_counts(conn: &Connection) -> Result<ViewCounts> {
+    conn.query_row(
+        "SELECT
+             COUNT(*) FILTER (WHERE archived = 0),
+             COUNT(*) FILTER (WHERE archived = 0 AND read_at IS NULL),
+             COUNT(*) FILTER (WHERE archived = 0 AND read_at IS NOT NULL),
+             COUNT(*) FILTER (WHERE archived = 1),
+             COUNT(*) FILTER (WHERE favorite = 1)
+         FROM readings",
+        [],
+        |row| {
+            Ok(ViewCounts {
+                all: row.get::<_, i64>(0)? as u64,
+                unread: row.get::<_, i64>(1)? as u64,
+                read: row.get::<_, i64>(2)? as u64,
+                archive: row.get::<_, i64>(3)? as u64,
+                favorites: row.get::<_, i64>(4)? as u64,
+            })
+        },
+    )
+    .map_err(Into::into)
+}
+
+/// List readings from the index according to `opts`.
+pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
+    let view_clause = view_clause(opts.view);
 
     // Direction applies to the chosen field; a final `id DESC` makes the order
     // total so pagination is stable when the primary key ties. For `read_at`,
@@ -390,6 +437,63 @@ mod tests {
         .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Fav");
+    }
+
+    #[test]
+    fn view_counts_match_list_lengths() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        // A: active, unread
+        write_reading(&lib, meta(&new_id(), "https://a.com", "A"), "b".into()).unwrap();
+        // B: active, read
+        let mut b = meta(&new_id(), "https://b.com", "B");
+        b.read_at = Some("2026-06-13T16:00:00.000Z".into());
+        write_reading(&lib, b, "b".into()).unwrap();
+        // C: archived
+        let mut c = meta(&new_id(), "https://c.com", "C");
+        c.archived = true;
+        write_reading(&lib, c, "b".into()).unwrap();
+        // D: active, unread, favorite
+        let mut d = meta(&new_id(), "https://d.com", "D");
+        d.favorite = true;
+        write_reading(&lib, d, "b".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let counts = view_counts(&conn).unwrap();
+        assert_eq!(counts.all, 3); // A, B, D (C is archived)
+        assert_eq!(counts.unread, 2); // A, D
+        assert_eq!(counts.read, 1); // B
+        assert_eq!(counts.archive, 1); // C
+        assert_eq!(counts.favorites, 1); // D
+
+        // Each grouped count must equal the length of the corresponding list —
+        // the one-pass query agrees with the old materialize-and-count.
+        let len = |view| {
+            list_readings(
+                &conn,
+                &ListOptions {
+                    view,
+                    limit: 9999,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .len() as u64
+        };
+        assert_eq!(counts.all, len(View::All));
+        assert_eq!(counts.unread, len(View::Unread));
+        assert_eq!(counts.read, len(View::Read));
+        assert_eq!(counts.archive, len(View::Archive));
+        assert_eq!(counts.favorites, len(View::Favorites));
+    }
+
+    #[test]
+    fn view_counts_zero_on_empty_library() {
+        let (_dir, conn) = setup();
+        // FILTER yields 0, not NULL, so every field is a clean zero.
+        assert_eq!(view_counts(&conn).unwrap(), ViewCounts::default());
     }
 
     #[test]

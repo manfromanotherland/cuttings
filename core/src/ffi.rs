@@ -75,6 +75,15 @@ pub struct FfiRatingCount {
 }
 
 #[derive(uniffi::Record)]
+pub struct FfiViewCounts {
+    pub all: u64,
+    pub unread: u64,
+    pub read: u64,
+    pub archive: u64,
+    pub favorites: u64,
+}
+
+#[derive(uniffi::Record)]
 pub struct FfiHighlight {
     pub id: String,
     pub text: String,
@@ -140,6 +149,18 @@ impl From<crate::highlights::Highlight> for FfiHighlight {
         Self {
             id: h.id,
             text: h.text,
+        }
+    }
+}
+
+impl From<crate::list::ViewCounts> for FfiViewCounts {
+    fn from(c: crate::list::ViewCounts) -> Self {
+        Self {
+            all: c.all,
+            unread: c.unread,
+            read: c.read,
+            archive: c.archive,
+            favorites: c.favorites,
         }
     }
 }
@@ -256,6 +277,14 @@ impl Database {
         crate::list_readings(&conn, &opts.into())
             .map_err(e)
             .map(|v| v.into_iter().map(Into::into).collect())
+    }
+
+    /// Per-view reading counts in a single pass over the table — the aggregates
+    /// behind the sidebar's view badges. Replaces five
+    /// `list_readings(limit: 9999).len()` calls; see `view_counts`.
+    pub fn view_counts(&self) -> Result<FfiViewCounts, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        crate::view_counts(&conn).map_err(e).map(Into::into)
     }
 
     /// Fetch a reading's metadata row. Returns `None` if not found.
