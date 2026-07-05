@@ -56,6 +56,34 @@ Or build from the command line:
 xcodebuild build -project ReadLater.xcodeproj -scheme ReadLater
 ```
 
+## Debugging: SQL tracing
+
+The app embeds `read-later-core`, which logs every SQL statement to stderr when the `SQL_TRACE`
+environment variable is set — handy for checking whether the UI is issuing too many queries. See
+the [core README](../read-later-core/README.md#debugging-sql-tracing) for the output format and a
+one-liner that ranks statements by frequency.
+
+First rebuild the framework so the app links the traced core:
+
+```bash
+make xcframework
+```
+
+Then launch the app with the variable set:
+
+- **From Xcode** — Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables, add
+  `SQL_TRACE = 1`, then Run. The `[sql …]` lines print to the debug console.
+- **From the terminal** — run the built binary directly so stderr streams to your terminal
+  (launching from Finder or `open` hides it):
+
+```bash
+APP=$(ls -dt ~/Library/Developer/Xcode/DerivedData/ReadLater-*/Build/Products/Debug/ReadLater.app | head -1)
+SQL_TRACE=1 "$APP/Contents/MacOS/ReadLater"
+```
+
+The logs go to stderr only — not a file or Console.app. To keep them, redirect:
+`SQL_TRACE=1 "$APP/Contents/MacOS/ReadLater" 2>&1 | tee ~/read-later-sql.log`.
+
 ## Other make targets
 
 ```bash
