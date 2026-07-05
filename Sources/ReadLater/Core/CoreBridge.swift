@@ -35,6 +35,12 @@ actor CoreBridge {
         try db.listReadings(opts: opts)
     }
 
+    /// Per-view counts in one pass — replaces five
+    /// `listReadings(limit: 9999).count` calls.
+    func viewCounts() throws -> FfiViewCounts {
+        try db.viewCounts()
+    }
+
     func getReadingRow(id: String) throws -> FfiReadingRow? {
         try db.getReadingRow(id: id)
     }

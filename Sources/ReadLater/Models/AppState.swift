@@ -395,16 +395,18 @@ final class AppState {
     func loadSidebar() async {
         guard let core else { return }
         do {
-            var counts: [SidebarItem: Int] = [:]
-            for item in SidebarItem.allCases {
-                let opts = FfiListOptions(
-                    view: item.ffiView, sort: .savedAt, ascending: false,
-                    tag: nil, rating: nil, since: nil, until: nil,
-                    limit: 9999, offset: 0
-                )
-                counts[item] = try await core.listReadings(opts: opts).count
-            }
-            viewCounts = counts
+            // One grouped COUNT query for all five badges, instead of
+            // materializing up to 9,999 full rows per view. This is only the
+            // authoritative recount — the optimistic `applySidebarDelta` path
+            // still updates the badges within a frame and reconciles here.
+            let c = try await core.viewCounts()
+            viewCounts = [
+                .all: Int(c.all),
+                .unread: Int(c.unread),
+                .read: Int(c.read),
+                .archive: Int(c.archive),
+                .favorites: Int(c.favorites),
+            ]
             allTags = try await core.listTags()
             allRatings = try await core.listRatings()
         } catch {
