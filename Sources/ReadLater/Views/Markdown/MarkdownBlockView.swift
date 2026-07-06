@@ -32,49 +32,34 @@ struct MarkdownBlockView: View {
                           highlights: highlights, onHighlight: onHighlight)
 
         case let quote as BlockQuote:
-            // An image-free quote folds into one selectable text view — its bars,
-            // indentation, and secondary color come from `MarkdownTextRun` +
-            // `ReaderLayoutManager` — so quoted text supports the highlight tint
-            // and the Highlight/Look Up menu. A quote containing an image keeps
-            // the SwiftUI rendering, which lays the image out as a figure (the
-            // text-run emitter would flatten it to alt text).
-            if Self.containsImage(block) {
-                HStack(spacing: theme.quoteBarGap) {
-                    RoundedRectangle(cornerRadius: theme.quoteBarWidth / 2)
-                        .fill(.secondary.opacity(0.4))
-                        .frame(width: theme.quoteBarWidth)
-                    VStack(alignment: .leading, spacing: theme.quoteInnerSpacing) {
-                        ForEach(childArray(quote)) { item in
-                            MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
-                                              highlights: highlights, onHighlight: onHighlight)
-                        }
+            // Reached only for image-bearing quotes — image-free quotes fold into
+            // a shared text run (see `ArticleDocument.isFoldable`). Rendered as
+            // SwiftUI so the embedded image lays out as a figure; the highlight
+            // plumbing reaches any figure captions inside.
+            HStack(spacing: theme.quoteBarGap) {
+                RoundedRectangle(cornerRadius: theme.quoteBarWidth / 2)
+                    .fill(.secondary.opacity(0.4))
+                    .frame(width: theme.quoteBarWidth)
+                VStack(alignment: .leading, spacing: theme.quoteInnerSpacing) {
+                    ForEach(childArray(quote)) { item in
+                        MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
+                                          highlights: highlights, onHighlight: onHighlight)
                     }
-                    .foregroundStyle(.secondary)
                 }
-                .fixedSize(horizontal: false, vertical: true)
-            } else {
-                selectableRun(block)
+                .foregroundStyle(.secondary)
             }
+            .fixedSize(horizontal: false, vertical: true)
 
         case let list as UnorderedList:
-            // Same treatment as quotes: image-free lists fold into a selectable
-            // text view (marker column, hanging indent, and nesting expressed as
-            // paragraph styles by `MarkdownTextRun`); image-bearing lists keep the
-            // SwiftUI renderer so embedded figures survive.
-            if Self.containsImage(block) {
-                ListView(items: childArray(list), ordered: false, startIndex: 1,
-                         depth: 0, theme: theme, libraryURL: libraryURL)
-            } else {
-                selectableRun(block)
-            }
+            // Reached only for image-bearing lists — image-free lists fold into a
+            // shared text run (see `ArticleDocument.isFoldable`). SwiftUI keeps the
+            // embedded figures.
+            ListView(items: childArray(list), ordered: false, startIndex: 1,
+                     depth: 0, theme: theme, libraryURL: libraryURL)
 
         case let list as OrderedList:
-            if Self.containsImage(block) {
-                ListView(items: childArray(list), ordered: true, startIndex: Int(list.startIndex),
-                         depth: 0, theme: theme, libraryURL: libraryURL)
-            } else {
-                selectableRun(block)
-            }
+            ListView(items: childArray(list), ordered: true, startIndex: Int(list.startIndex),
+                     depth: 0, theme: theme, libraryURL: libraryURL)
 
         case let item as ListItem:
             // Reached only if a ListItem is rendered outside a ListView; lists
@@ -106,25 +91,6 @@ struct MarkdownBlockView: View {
                 }
             }
         }
-    }
-
-    /// Render a whole block as one selectable text view via `MarkdownTextRun`, so
-    /// its text carries the highlight tint and the Highlight/Look Up context menu.
-    private func selectableRun(_ block: Markup) -> some View {
-        SelectableTextView(
-            attributed: MarkdownTextRun.attributed([block], theme: theme),
-            highlights: highlights,
-            onHighlight: onHighlight
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// True if the block's subtree contains any image. `MarkdownTextRun` would
-    /// flatten an embedded image to its alt text, so lists and quotes divert to
-    /// the selectable text view only when there is no figure to lose.
-    static func containsImage(_ markup: Markup) -> Bool {
-        if markup is Markdown.Image { return true }
-        return markup.children.contains { containsImage($0) }
     }
 }
 

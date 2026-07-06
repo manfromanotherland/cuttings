@@ -12,10 +12,12 @@ import Markdown
 /// a highlight toggle, a font change, a selection advance — re-parsed the whole
 /// article on the main thread.)
 struct ArticleDocument {
-    /// A render unit: either a run of contiguous text blocks rendered as one
-    /// selectable `NSTextView`, or a single non-text block (image, list, quote,
-    /// table, code) rendered by the SwiftUI block renderer. Selection is
-    /// continuous *within* a text run; non-text blocks form a seam.
+    /// A render unit: either a run of contiguous text blocks — headings,
+    /// paragraphs, and image-free lists and quotes — rendered as one selectable
+    /// `NSTextView`, or a single non-foldable block (a figure, a table, a code
+    /// block, or an image-bearing list/quote) rendered by the SwiftUI block
+    /// renderer. Selection is continuous *within* a text run; the non-foldable
+    /// blocks form a seam.
     enum RenderGroup: Identifiable {
         case textRun(id: String, blocks: [Markup])
         case other(IdentifiedMarkup)
@@ -36,7 +38,7 @@ struct ArticleDocument {
     }
 
     /// Group the document's top-level blocks, merging maximal runs of foldable
-    /// (text-only) blocks. A run takes the source-derived id of its first block,
+    /// blocks (see `isFoldable`). A run takes the source-derived id of its first block,
     /// and each standalone block its own — both distinct source positions, so
     /// ids stay unique across the group list.
     private static func makeGroups(_ blocks: [Markup]) -> [RenderGroup] {
@@ -65,23 +67,34 @@ struct ArticleDocument {
         return groups
     }
 
-    /// Headings and text-only paragraphs fold into a selectable text run.
+    /// Which blocks fold into a shared selectable text run, so a drag-selection
+    /// flows continuously across them. `MarkdownTextRun` emits headings,
+    /// paragraphs, lists, and quotes into one `NSAttributedString`, so all four
+    /// can share a run.
     ///
-    /// Lists and block quotes are intentionally *not* folded into that shared
-    /// run: their attributed layout (right-aligned marker tab stops, hanging
-    /// indents, quote bars) is fragile inside a single large `NSTextView` and was
-    /// observed to collapse the run on list-heavy articles. They stay separate
-    /// groups, but each is still rendered as its own (small) `SelectableTextView`
-    /// via `MarkdownTextRun` in `MarkdownBlockView` — so they support highlighting
-    /// and Look Up — forming a selection seam between blocks. Image-bearing
-    /// lists/quotes fall back to the SwiftUI block views, which lay images out as
-    /// figures the text-run emitter would flatten to alt text.
+    /// A block is *not* foldable — and so becomes a standalone group and a
+    /// selection seam — when it carries an image: a standalone-image paragraph
+    /// (a figure), or a list/quote whose subtree contains any image. The text-run
+    /// emitter would flatten an embedded image to its alt text, so those render
+    /// via the SwiftUI block views instead, which lay the image out as a figure.
+    /// Code blocks, tables, and thematic breaks are likewise never foldable.
     private static func isFoldable(_ block: Markup) -> Bool {
         if block is Heading { return true }
         if let paragraph = block as? Paragraph {
             return !paragraph.children.contains { standaloneImage($0) != nil }
         }
+        if block is UnorderedList || block is OrderedList || block is BlockQuote {
+            return !containsImage(block)
+        }
         return false
+    }
+
+    /// True if the block's subtree contains any image. Lists and quotes fold into
+    /// a text run only when image-free, since `MarkdownTextRun` would otherwise
+    /// flatten the image to alt text.
+    private static func containsImage(_ markup: Markup) -> Bool {
+        if markup is Markdown.Image { return true }
+        return markup.children.contains { containsImage($0) }
     }
 
     /// Mirrors `ParagraphView.standaloneImage`: a bare image, or a link wrapping
