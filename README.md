@@ -42,7 +42,7 @@ set, so normal builds pay nothing. Useful for spotting chatty callers and N+1 pa
 that repeats dozens of times per action shows up as an obvious run of identical lines.
 
 ```bash
-SQL_TRACE=1 cargo run -p read-later-cli -- list ~/read-later/index.db
+SQL_TRACE=1 cargo test -p read-later-core -- --nocapture
 ```
 
 Each line is one statement SQLite ran (including the FTS-sync triggers). Durations under 1ms are
@@ -57,7 +57,7 @@ To find the worst offenders, capture stderr to a file and collapse duplicates so
 frequent statements float to the top:
 
 ```bash
-SQL_TRACE=1 cargo run -p read-later-cli -- list ~/read-later/index.db 2> /tmp/sql.log
+SQL_TRACE=1 cargo test -p read-later-core -- --nocapture 2> /tmp/sql.log
 grep '^\[sql' /tmp/sql.log \
   | sed -E 's/^\[sql #[0-9]+ +[^]]*\] //' \
   | sort | uniq -c | sort -rn | head -20
