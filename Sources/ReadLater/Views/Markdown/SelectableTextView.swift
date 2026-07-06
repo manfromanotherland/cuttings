@@ -189,6 +189,16 @@ final class ReaderTextView: NSTextView {
         }
     }
 
+    /// Keep the "Services" submenu out of the reader's context menu. AppKit adds
+    /// it to a text view's menu because the view advertises that it can hand its
+    /// selection to a service; reporting no valid send/return types removes the
+    /// entry. Copy and the reader's own Highlight / Look Up commands don't go
+    /// through the Services architecture, so they are unaffected.
+    override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?,
+                                 returnType: NSPasteboard.PasteboardType?) -> Any? {
+        nil
+    }
+
     /// Replace the default rich text-editing context menu with just the commands
     /// the reader offers: a highlight toggle, and a "Look Up" that opens the
     /// system dictionary panel for the selection. With no selection there is
