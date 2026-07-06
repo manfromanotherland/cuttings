@@ -24,6 +24,9 @@ struct ReadingListView: View {
         .onChange(of: appState.sortField) { _, _ in
             Task { await appState.loadReadings() }
         }
+        .onChange(of: appState.searchSort) { _, _ in
+            Task { await appState.loadReadings() }
+        }
         .onChange(of: appState.sortAscending) { _, _ in
             Task { await appState.loadReadings() }
         }
@@ -62,7 +65,7 @@ struct ReadingListView: View {
 
     private var list: some View {
         List(appState.readings, id: \.id, selection: listSelection) { row in
-            ReadingRowView(row: row, snippet: snippet(for: row.id))
+            ReadingRowView(row: row)
                 .tag(row.id)
                 .contextMenu { contextMenu(for: row) }
                 .onAppear {
@@ -87,11 +90,6 @@ struct ReadingListView: View {
                     .background(.background)
             }
         }
-    }
-
-    private func snippet(for id: String) -> String? {
-        guard !appState.searchQuery.isEmpty else { return nil }
-        return appState.searchResults.first(where: { $0.id == id })?.snippet
     }
 
     // ── Empty state ───────────────────────────────────────────────────────
@@ -120,17 +118,25 @@ struct ReadingListView: View {
     private var toolbarItems: some ToolbarContent {
         @Bindable var appState = appState
         if !appState.readings.isEmpty {
+            let searching = !appState.searchQuery.isEmpty
+            let effectiveSort = searching ? appState.searchSort : appState.sortField
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Picker("Sort By", selection: $appState.sortField) {
-                        ForEach(ReadingSort.allCases) { field in
+                    // While searching, bind to `searchSort` (which offers
+                    // Relevance) so the search order stays independent of the
+                    // list's persisted sort field.
+                    Picker("Sort By", selection: searching ? $appState.searchSort : $appState.sortField) {
+                        ForEach(ReadingSort.options(searching: searching)) { field in
                             Text(field.label).tag(field)
                         }
                     }
-                    Divider()
-                    Picker("Order", selection: $appState.sortAscending) {
-                        Text(appState.sortField.directionLabel(ascending: false)).tag(false)
-                        Text(appState.sortField.directionLabel(ascending: true)).tag(true)
+                    // Relevance has no ascending/descending — hide the order picker.
+                    if effectiveSort != .relevance {
+                        Divider()
+                        Picker("Order", selection: $appState.sortAscending) {
+                            Text(effectiveSort.directionLabel(ascending: false)).tag(false)
+                            Text(effectiveSort.directionLabel(ascending: true)).tag(true)
+                        }
                     }
                 } label: {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
@@ -196,7 +202,6 @@ struct ReadingListView: View {
 
 struct ReadingRowView: View {
     let row: FfiReadingRow
-    var snippet: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -235,13 +240,8 @@ struct ReadingRowView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            // Snippet (search) or excerpt (browse)
-            if let snippet {
-                Text(snippet.strippingMarkTags())
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-            } else if let excerpt = row.excerpt, !excerpt.isEmpty {
+            // Excerpt
+            if let excerpt = row.excerpt, !excerpt.isEmpty {
                 Text(excerpt)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -249,15 +249,5 @@ struct ReadingRowView: View {
             }
         }
         .padding(.vertical, 4)
-    }
-}
-
-// ── String helper ─────────────────────────────────────────────────────────────
-
-private extension String {
-    /// Remove `<mark>` and `</mark>` tags produced by FTS5 snippet().
-    func strippingMarkTags() -> String {
-        replacingOccurrences(of: "<mark>", with: "")
-            .replacingOccurrences(of: "</mark>", with: "")
     }
 }

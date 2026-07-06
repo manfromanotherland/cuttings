@@ -8,6 +8,7 @@ import Observation
 /// User-selectable sort field for the reading list. Mirrors the core's
 /// `FfiSortField`; persisted as its `rawValue` in `UserDefaults`.
 enum ReadingSort: String, CaseIterable, Identifiable {
+    case relevance
     case savedAt
     case readAt
     case rating
@@ -18,6 +19,7 @@ enum ReadingSort: String, CaseIterable, Identifiable {
     /// Label shown in the sort-field picker.
     var label: String {
         switch self {
+        case .relevance: "Relevance"
         case .savedAt: "Date saved"
         case .readAt: "Date read"
         case .rating: "Rating"
@@ -27,6 +29,7 @@ enum ReadingSort: String, CaseIterable, Identifiable {
 
     var ffi: FfiSortField {
         switch self {
+        case .relevance: .relevance
         case .savedAt: .savedAt
         case .readAt: .readAt
         case .rating: .rating
@@ -38,11 +41,18 @@ enum ReadingSort: String, CaseIterable, Identifiable {
     /// "Highest rated"), for the ascending/descending picker.
     func directionLabel(ascending: Bool) -> String {
         switch self {
+        case .relevance: "Most relevant first"
         case .savedAt: ascending ? "Oldest first" : "Newest first"
         case .readAt: ascending ? "Read least recently" : "Read most recently"
         case .rating: ascending ? "Lowest rated" : "Highest rated"
         case .timeToRead: ascending ? "Shortest first" : "Longest first"
         }
+    }
+
+    /// Sort options offered in the UI. Relevance only makes sense while a search
+    /// is active, so it's excluded otherwise.
+    static func options(searching: Bool) -> [ReadingSort] {
+        searching ? allCases : allCases.filter { $0 != .relevance }
     }
 }
 
@@ -63,9 +73,13 @@ final class AppState {
     /// show it only when there's no library *and* we aren't restoring one.
     var isRestoringLibrary: Bool = false
     var readings: [FfiReadingRow] = []
-    var searchResults: [FfiSearchResult] = []
     var selectedId: String?
     var searchQuery: String = ""
+
+    /// Sort applied while a search is active. Kept separate from `sortField` so
+    /// searching (which defaults to relevance) never clobbers the list's own
+    /// persisted sort. Not persisted — a fresh search starts on relevance.
+    var searchSort: ReadingSort = .relevance
 
     /// Pending debounced search reload. Each keystroke cancels the previous one
     /// so the core is queried once typing settles, not per character. Plumbing
@@ -354,31 +368,24 @@ final class AppState {
     func loadReadings(resetSelectionIfMissing: Bool = true) async {
         guard let core else { return }
         do {
-            if searchQuery.isEmpty {
-                searchResults = []
-                let opts = FfiListOptions(
-                    view: activeView.ffiView,
-                    sort: sortField.ffi,
-                    ascending: sortAscending,
-                    tag: selectedTag,
-                    rating: selectedRating,
-                    since: nil, until: nil,
-                    limit: pageSize, offset: 0
-                )
-                let result = try await core.listReadings(opts: opts)
-                readings = result
-                hasMoreReadings = result.count == Int(pageSize)
-            } else {
-                hasMoreReadings = false
-                let results = try await core.search(query: searchQuery, limit: 50)
-                searchResults = results
-                // Hydrate full rows straight from the ranked hit ids. Search
-                // spans both active and archived readings, so we must not route
-                // through a `.all` listing (archived = 0) — that would silently
-                // drop archived matches. Fetching by id also preserves BM25 rank
-                // order for free and avoids any list-size cap.
-                readings = try await core.getReadingRows(ids: results.map(\.id))
-            }
+            // Search is just another filter: a full-text query flows through the
+            // same list path (composing with the active view), ranked by the
+            // chosen sort — Relevance while searching, the persisted field
+            // otherwise.
+            let query = searchQuery.isEmpty ? nil : searchQuery
+            let opts = FfiListOptions(
+                view: activeView.ffiView,
+                sort: (query == nil ? sortField : searchSort).ffi,
+                ascending: sortAscending,
+                tag: selectedTag,
+                rating: selectedRating,
+                since: nil, until: nil,
+                query: query,
+                limit: pageSize, offset: 0
+            )
+            let result = try await core.listReadings(opts: opts)
+            readings = result
+            hasMoreReadings = result.count == Int(pageSize)
 
             // Open the first reading by default so selection-dependent UI (the
             // reader and its toolbar, including Sort) is visible without an extra
@@ -395,16 +402,18 @@ final class AppState {
     }
 
     func loadMoreReadings() async {
-        guard hasMoreReadings, !isLoadingMore, searchQuery.isEmpty, let core else { return }
+        guard hasMoreReadings, !isLoadingMore, let core else { return }
         isLoadingMore = true
         do {
+            let query = searchQuery.isEmpty ? nil : searchQuery
             let opts = FfiListOptions(
                 view: activeView.ffiView,
-                sort: sortField.ffi,
+                sort: (query == nil ? sortField : searchSort).ffi,
                 ascending: sortAscending,
                 tag: selectedTag,
                 rating: selectedRating,
                 since: nil, until: nil,
+                query: query,
                 limit: pageSize, offset: UInt32(readings.count)
             )
             let result = try await core.listReadings(opts: opts)

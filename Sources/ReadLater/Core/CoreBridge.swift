@@ -27,10 +27,6 @@ actor CoreBridge {
 
     // ── Query ─────────────────────────────────────────────────────────────
 
-    func search(query: String, limit: UInt32 = 20) throws -> [FfiSearchResult] {
-        try db.search(query: query, limit: limit)
-    }
-
     func listReadings(opts: FfiListOptions) throws -> [FfiReadingRow] {
         try db.listReadings(opts: opts)
     }
@@ -43,13 +39,6 @@ actor CoreBridge {
 
     func getReadingRow(id: String) throws -> FfiReadingRow? {
         try db.getReadingRow(id: id)
-    }
-
-    /// Hydrate full rows for `ids`, preserving their order and skipping any id
-    /// no longer in the index. Used to turn ranked search hits (which span both
-    /// active and archived readings) into displayable rows in a single hop.
-    func getReadingRows(ids: [String]) throws -> [FfiReadingRow] {
-        try ids.compactMap { try db.getReadingRow(id: $0) }
     }
 
     func getBody(id: String) throws -> String? {
