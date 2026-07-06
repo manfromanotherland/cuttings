@@ -34,6 +34,9 @@ pub enum SortField {
     /// word count (`word_count IS NULL`) always sort last, regardless of
     /// direction.
     WordCount,
+    /// Full-text relevance (BM25), best first. Only meaningful with a query set;
+    /// listings without one fall back to `SavedAt`.
+    Relevance,
 }
 
 /// Options for `list_readings`.
@@ -53,6 +56,9 @@ pub struct ListOptions {
     pub since: Option<String>,
     /// ISO-8601 upper bound on `saved_at` (inclusive).
     pub until: Option<String>,
+    /// Full-text query. When set, rows are filtered through the FTS index;
+    /// `None` is a plain listing.
+    pub query: Option<String>,
     pub limit: usize,
     pub offset: usize,
 }
@@ -67,6 +73,7 @@ impl Default for ListOptions {
             rating: None,
             since: None,
             until: None,
+            query: None,
             limit: 50,
             offset: 0,
         }
@@ -150,7 +157,21 @@ pub fn view_counts(conn: &Connection) -> Result<ViewCounts> {
 }
 
 /// List readings from the index according to `opts`.
+///
+/// When `opts.query` is set, rows are filtered through the full-text index
+/// (composing with the view/tag/rating/date filters) and rank by BM25 under
+/// `SortField::Relevance`. Otherwise this is a plain listing over the `readings`
+/// table.
 pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
+    // A present query means "search" — even whitespace/punctuation-only input,
+    // which matches nothing rather than falling back to the full listing.
+    if let Some(query) = opts.query.as_deref() {
+        return match crate::search::match_query(conn, query)? {
+            Some(match_query) => list_readings_fts(conn, opts, &match_query),
+            None => Ok(Vec::new()),
+        };
+    }
+
     let view_clause = view_clause(opts.view);
 
     // Direction applies to the chosen field; a final `id DESC` makes the order
@@ -159,7 +180,9 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     // directions (it always sorts ascending: 0 = has-date before 1 = null).
     let dir = if opts.ascending { "ASC" } else { "DESC" };
     let order = match opts.sort {
-        SortField::SavedAt => format!("saved_at {dir}, id DESC"),
+        // Relevance needs the FTS table; off-search it's meaningless, so fall
+        // back to the default field.
+        SortField::SavedAt | SortField::Relevance => format!("saved_at {dir}, id DESC"),
         SortField::ReadAt => format!("(read_at IS NULL), read_at {dir}, id DESC"),
         SortField::Rating => format!("rating {dir}, id DESC"),
         SortField::WordCount => format!("(word_count IS NULL), word_count {dir}, id DESC"),
@@ -226,6 +249,66 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
     }
 }
 
+/// Full-text variant of [`list_readings`]: filter rows through the FTS index
+/// with `match_query` and rank by BM25 (`SortField::Relevance`) or the requested
+/// field — all while honouring the view/tag/rating/date filters and pagination.
+fn list_readings_fts(
+    conn: &Connection,
+    opts: &ListOptions,
+    match_query: &str,
+) -> Result<Vec<ReadingRow>> {
+    let view_clause = view_clause(opts.view);
+    let dir = if opts.ascending { "ASC" } else { "DESC" };
+    // bm25() scores better matches lower, so plain ascending order is best-first.
+    let order = match opts.sort {
+        SortField::Relevance => "bm25(readings_fts), r.id DESC".to_string(),
+        SortField::SavedAt => format!("r.saved_at {dir}, r.id DESC"),
+        SortField::ReadAt => format!("(r.read_at IS NULL), r.read_at {dir}, r.id DESC"),
+        SortField::Rating => format!("r.rating {dir}, r.id DESC"),
+        SortField::WordCount => format!("(r.word_count IS NULL), r.word_count {dir}, r.id DESC"),
+    };
+
+    // The view/tag/rating columns live only on `readings`, so they're
+    // unambiguous unqualified; `title`/`body_text` exist on both tables, hence
+    // the `r.` on the selected columns.
+    let sql = format!(
+        "SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
+                (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
+                r.lang, r.tags_json, r.rating, r.read_at
+         FROM readings_fts
+         JOIN readings r ON r.rowid = readings_fts.rowid
+         WHERE readings_fts MATCH ?7
+           AND {view_clause}
+           AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
+           AND (?4 = '' OR r.saved_at >= ?4)
+           AND (?5 = '' OR r.saved_at <= ?5)
+           AND (?6 = 0 OR r.rating = ?6)
+         ORDER BY {order}
+         LIMIT ?1 OFFSET ?2"
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let tag_val = opts.tag.as_deref().unwrap_or("");
+    let since_val = opts.since.as_deref().unwrap_or("");
+    let until_val = opts.until.as_deref().unwrap_or("");
+    let rating_val = opts.rating.unwrap_or(0) as i64;
+
+    let rows = stmt.query_map(
+        params![
+            opts.limit as i64,
+            opts.offset as i64,
+            tag_val,
+            since_val,
+            until_val,
+            rating_val,
+            match_query
+        ],
+        parse_row,
+    )?;
+
+    rows.map(|r| r.map_err(Into::into)).collect()
+}
+
 fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
     let tags_json: String = row.get(13)?;
     let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
@@ -289,6 +372,58 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let conn = open(&dir.path().join("index.db")).unwrap();
         (dir, conn)
+    }
+
+    #[test]
+    fn list_query_filters_by_fulltext() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://a.com", "Rust async"),
+            "learning rust async".into(),
+        )
+        .unwrap();
+        write_reading(
+            &lib,
+            meta(&new_id(), "https://b.com", "Cooking"),
+            "pasta recipe".into(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("rust".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "Rust async");
+    }
+
+    #[test]
+    fn list_blank_query_matches_nothing() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        write_reading(&lib, meta(&new_id(), "https://a.com", "A"), "body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // A present-but-untokenizable query is still a search, so it returns no
+        // rows rather than falling back to the full listing.
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("   ".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(rows.is_empty());
     }
 
     #[test]

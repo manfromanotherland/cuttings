@@ -53,16 +53,6 @@ pub struct FfiReadingRow {
 }
 
 #[derive(uniffi::Record)]
-pub struct FfiSearchResult {
-    pub id: String,
-    pub title: String,
-    pub excerpt: Option<String>,
-    pub snippet: String,
-    pub tags: Vec<String>,
-    pub saved_at: String,
-}
-
-#[derive(uniffi::Record)]
 pub struct FfiTagCount {
     pub tag: String,
     pub count: u64,
@@ -104,6 +94,7 @@ pub enum FfiSortField {
     ReadAt,
     Rating,
     WordCount,
+    Relevance,
 }
 
 #[derive(uniffi::Record)]
@@ -116,6 +107,7 @@ pub struct FfiListOptions {
     pub rating: Option<u8>,
     pub since: Option<String>,
     pub until: Option<String>,
+    pub query: Option<String>,
     pub limit: u32,
     pub offset: u32,
 }
@@ -165,19 +157,6 @@ impl From<crate::list::ViewCounts> for FfiViewCounts {
     }
 }
 
-impl From<crate::search::SearchResult> for FfiSearchResult {
-    fn from(r: crate::search::SearchResult) -> Self {
-        Self {
-            id: r.id,
-            title: r.title,
-            excerpt: r.excerpt,
-            snippet: r.snippet,
-            tags: r.tags,
-            saved_at: r.saved_at,
-        }
-    }
-}
-
 impl From<FfiListOptions> for ListOptions {
     fn from(o: FfiListOptions) -> Self {
         Self {
@@ -193,12 +172,14 @@ impl From<FfiListOptions> for ListOptions {
                 FfiSortField::ReadAt => SortField::ReadAt,
                 FfiSortField::Rating => SortField::Rating,
                 FfiSortField::WordCount => SortField::WordCount,
+                FfiSortField::Relevance => SortField::Relevance,
             },
             ascending: o.ascending,
             tag: o.tag,
             rating: o.rating,
             since: o.since,
             until: o.until,
+            query: o.query,
             limit: o.limit as usize,
             offset: o.offset as usize,
         }
@@ -264,13 +245,6 @@ impl Database {
     }
 
     // ── Query ─────────────────────────────────────────────────────────────
-
-    pub fn search(&self, query: String, limit: u32) -> Result<Vec<FfiSearchResult>, CoreError> {
-        let conn = self.conn.lock().unwrap();
-        crate::search(&conn, &query, limit as usize)
-            .map_err(e)
-            .map(|v| v.into_iter().map(Into::into).collect())
-    }
 
     pub fn list_readings(&self, opts: FfiListOptions) -> Result<Vec<FfiReadingRow>, CoreError> {
         let conn = self.conn.lock().unwrap();

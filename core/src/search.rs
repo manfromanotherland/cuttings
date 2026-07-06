@@ -57,6 +57,30 @@ fn and_query(tokens: &[String]) -> String {
         .join(" ")
 }
 
+/// Build the FTS5 `MATCH` string for `query`, preferring an exact phrase and
+/// falling back to all-words-AND when the phrase matches nothing. Returns
+/// `None` when there's nothing searchable (blank / pure punctuation).
+///
+/// Shared by [`search`] and `list_readings`' full-text branch so both agree on
+/// how user text becomes an FTS query.
+pub(crate) fn match_query(conn: &Connection, query: &str) -> Result<Option<String>> {
+    let tokens = tokenize(query);
+    if tokens.is_empty() {
+        return Ok(None);
+    }
+    let phrase = phrase_query(&tokens);
+    let phrase_matches: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM readings_fts WHERE readings_fts MATCH ?1)",
+        params![phrase],
+        |row| row.get(0),
+    )?;
+    Ok(Some(if phrase_matches {
+        phrase
+    } else {
+        and_query(&tokens)
+    }))
+}
+
 /// Run a full-text search against the index.
 ///
 /// `query` is plain user text. It is first matched as an exact contiguous
