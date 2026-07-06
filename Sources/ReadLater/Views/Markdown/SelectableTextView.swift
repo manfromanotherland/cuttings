@@ -154,23 +154,39 @@ final class ReaderTextView: NSTextView {
         if widthChanged { invalidateIntrinsicContentSize() }
     }
 
-    /// Replace the default rich text-editing context menu with a single
-    /// highlight command. With no selection there is nothing to act on, so no
-    /// menu is shown. When the selection exactly matches an existing highlight
-    /// the command removes it; otherwise it adds one.
+    /// Replace the default rich text-editing context menu with just the commands
+    /// the reader offers: a highlight toggle, and a "Look Up" that opens the
+    /// system dictionary panel for the selection. With no selection there is
+    /// nothing to act on, so no menu is shown. When the selection exactly matches
+    /// an existing highlight the highlight command removes it; otherwise it adds
+    /// one.
     override func menu(for event: NSEvent) -> NSMenu? {
         let range = selectedRange()
         guard range.length > 0, let storage = textStorage else { return nil }
         let selected = (storage.string as NSString)
             .substring(with: range)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let title = highlights.contains(selected) ? "Remove Highlight" : "Highlight"
         let menu = NSMenu()
-        let item = NSMenuItem(title: title,
-                              action: #selector(highlightSelection(_:)),
-                              keyEquivalent: "")
-        item.target = self
-        menu.addItem(item)
+
+        let highlightTitle = highlights.contains(selected) ? "Remove Highlight" : "Highlight"
+        let highlightItem = NSMenuItem(title: highlightTitle,
+                                       action: #selector(highlightSelection(_:)),
+                                       keyEquivalent: "")
+        highlightItem.target = self
+        menu.addItem(highlightItem)
+
+        // "Look Up" opens the native define/thesaurus/Wikipedia popover. Only
+        // offered when the trimmed selection has content to define; grouped in
+        // its own section, matching how macOS separates Look Up from edit
+        // actions.
+        if !selected.isEmpty {
+            menu.addItem(.separator())
+            let lookUpItem = NSMenuItem(title: "Look Up \(Self.lookUpLabel(for: selected))",
+                                        action: #selector(lookUpSelection(_:)),
+                                        keyEquivalent: "")
+            lookUpItem.target = self
+            menu.addItem(lookUpItem)
+        }
         return menu
     }
 
@@ -179,6 +195,33 @@ final class ReaderTextView: NSTextView {
         guard range.length > 0, let storage = textStorage else { return }
         let text = (storage.string as NSString).substring(with: range)
         onHighlight?(text)
+    }
+
+    /// Show the system Look Up panel (Dictionary, Thesaurus, and Apple's
+    /// knowledge sources) for the current selection, anchored at its baseline.
+    @objc private func lookUpSelection(_ sender: Any?) {
+        let range = selectedRange()
+        guard range.length > 0,
+              let storage = textStorage,
+              let layoutManager,
+              let container = textContainer else { return }
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: range,
+                                                  actualCharacterRange: nil)
+        let bounds = layoutManager.boundingRect(forGlyphRange: glyphRange, in: container)
+        // The panel wants the baseline origin of the first character; the bottom
+        // of the flipped line rect approximates it well enough to anchor there.
+        let origin = NSPoint(x: bounds.minX + textContainerOrigin.x,
+                             y: bounds.maxY + textContainerOrigin.y)
+        showDefinition(for: storage.attributedSubstring(from: range), at: origin)
+    }
+
+    /// A quoted, length-capped rendering of the selection for the "Look Up" menu
+    /// title, mirroring the system item's `Look Up “word”` styling.
+    private static func lookUpLabel(for text: String) -> String {
+        let maxLength = 24
+        let condensed = text.replacingOccurrences(of: "\n", with: " ")
+        guard condensed.count > maxLength else { return "“\(condensed)”" }
+        return "“\(condensed.prefix(maxLength))…”"
     }
 }
 
