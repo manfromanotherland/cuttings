@@ -154,6 +154,41 @@ final class ReaderTextView: NSTextView {
         if widthChanged { invalidateIntrinsicContentSize() }
     }
 
+    /// Starting an interaction here makes this run the active selection, so clear
+    /// any selection held by the other runs first. Each `NSTextView` keeps its own
+    /// selection independently, so without this a previous block's selection stays
+    /// drawn (grayed, inactive) alongside the new one.
+    override func mouseDown(with event: NSEvent) {
+        if let content = window?.contentView {
+            ReaderTextView.collapseSelections(in: content, except: self)
+        }
+        super.mouseDown(with: event)
+    }
+
+    /// All selection changes funnel through here (including live drag extension
+    /// and programmatic clearing). Force a full repaint after each so incremental
+    /// selection drawing can't leave stale highlight pixels behind — the ghost
+    /// "blue line" that lingered between line fragments during a drag and survived
+    /// clearing the selection, because a partial invalidation never covered it.
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity,
+                                    stillSelecting stillSelectingFlag: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelectingFlag)
+        needsDisplay = true
+    }
+
+    /// Collapse the selection of every reader text view in `root`'s subtree,
+    /// skipping `keep` (the run taking over the selection, if any). Shared with
+    /// the margin click-catcher, which clears them all.
+    static func collapseSelections(in root: NSView, except keep: ReaderTextView? = nil) {
+        for subview in root.subviews {
+            if let textView = subview as? ReaderTextView,
+               textView !== keep, textView.selectedRange().length > 0 {
+                textView.setSelectedRange(NSRange(location: 0, length: 0))
+            }
+            collapseSelections(in: subview, except: keep)
+        }
+    }
+
     /// Replace the default rich text-editing context menu with just the commands
     /// the reader offers: a highlight toggle, and a "Look Up" that opens the
     /// system dictionary panel for the selection. With no selection there is
