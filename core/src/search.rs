@@ -3,18 +3,6 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 
-/// A single result returned by a full-text search.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SearchResult {
-    pub id: String,
-    pub title: String,
-    pub excerpt: Option<String>,
-    /// Context snippet with matched terms wrapped in `<mark>…</mark>`.
-    pub snippet: String,
-    pub tags: Vec<String>,
-    pub saved_at: String,
-}
-
 /// Split user text into word tokens, dropping all punctuation/operators.
 ///
 /// User input (especially pasted prose) routinely contains characters FTS5
@@ -61,8 +49,20 @@ fn and_query(tokens: &[String]) -> String {
 /// falling back to all-words-AND when the phrase matches nothing. Returns
 /// `None` when there's nothing searchable (blank / pure punctuation).
 ///
-/// Shared by [`search`] and `list_readings`' full-text branch so both agree on
-/// how user text becomes an FTS query.
+/// This is the single place user text becomes an FTS query; `list_readings`'
+/// full-text branch runs the result so search stays consistent with the list.
+///
+/// `query` is plain user text. It is first matched as an exact contiguous
+/// phrase; if that finds nothing, it falls back to requiring all the words to
+/// appear anywhere in the article. The fallback matters because `body_text`
+/// holds the raw Markdown, so link URLs and other markup are tokenized
+/// *between* the visible words — pasted rendered prose rarely lines up as a
+/// literal phrase, but every word is still present.
+///
+/// The FTS index spans the title, body, *and* source site, so a query like
+/// "nytimes" surfaces articles from nytimes.com even when the term appears
+/// nowhere in their text — site tokens match (and prefix-match) just like any
+/// other word.
 pub(crate) fn match_query(conn: &Connection, query: &str) -> Result<Option<String>> {
     let tokens = tokenize(query);
     if tokens.is_empty() {
@@ -79,75 +79,6 @@ pub(crate) fn match_query(conn: &Connection, query: &str) -> Result<Option<Strin
     } else {
         and_query(&tokens)
     }))
-}
-
-/// Run a full-text search against the index.
-///
-/// `query` is plain user text. It is first matched as an exact contiguous
-/// phrase; if that finds nothing, it falls back to requiring all the words to
-/// appear anywhere in the article. The fallback matters because `body_text`
-/// holds the raw Markdown, so link URLs and other markup are tokenized
-/// *between* the visible words — pasted rendered prose rarely lines up as a
-/// literal phrase, but every word is still present.
-///
-/// The FTS index spans the title, body, *and* source site, so a query like
-/// "nytimes" surfaces articles from nytimes.com even when the term appears
-/// nowhere in their text — site tokens match (and prefix-match) just like any
-/// other word. Results are ranked by BM25 relevance (best first), capped at
-/// `limit`.
-pub fn search(conn: &Connection, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
-    let tokens = tokenize(query);
-    // Nothing searchable (blank, or pure punctuation/operators).
-    if tokens.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let phrase = run_match(conn, &phrase_query(&tokens), limit)?;
-    if !phrase.is_empty() {
-        return Ok(phrase);
-    }
-    run_match(conn, &and_query(&tokens), limit)
-}
-
-/// Execute one FTS5 `MATCH` query and collect the ranked results.
-fn run_match(conn: &Connection, match_query: &str, limit: usize) -> Result<Vec<SearchResult>> {
-    let mut stmt = conn.prepare(
-        "SELECT r.id, r.title, r.excerpt, r.tags_json, r.saved_at,
-                snippet(readings_fts, 1, '<mark>', '</mark>', '…', 20)
-         FROM readings_fts
-         JOIN readings r ON r.rowid = readings_fts.rowid
-         WHERE readings_fts MATCH ?1
-         ORDER BY bm25(readings_fts)
-         LIMIT ?2",
-    )?;
-
-    let rows = stmt.query_map(params![match_query, limit as i64], |row| {
-        let tags_json: String = row.get(3)?;
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, Option<String>>(2)?,
-            tags_json,
-            row.get::<_, String>(4)?,
-            row.get::<_, String>(5)?,
-        ))
-    })?;
-
-    let mut results = Vec::new();
-    for row in rows {
-        let (id, title, excerpt, tags_json, saved_at, snippet) = row?;
-        let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
-        results.push(SearchResult {
-            id,
-            title,
-            excerpt,
-            snippet,
-            tags,
-            saved_at,
-        });
-    }
-
-    Ok(results)
 }
 
 #[cfg(test)]
@@ -186,17 +117,47 @@ mod tests {
         }
     }
 
+    fn meta_site(id: &str, url: &str, title: &str, site: &str) -> Metadata {
+        let mut m = meta(id, url, title);
+        m.site = Some(site.to_string());
+        m
+    }
+
     fn setup() -> (TempDir, Connection) {
         let dir = TempDir::new().unwrap();
         let conn = open(&dir.path().join("index.db")).unwrap();
         (dir, conn)
     }
 
+    /// Build the MATCH string for `query` via [`match_query`] and return the ids
+    /// it selects, best-first. Exercises the real query builder against the FTS
+    /// index — the same string `list_readings` runs — minus the list's
+    /// view/tag/rating filters and pagination.
+    fn matches(conn: &Connection, query: &str) -> Vec<String> {
+        let Some(m) = match_query(conn, query).unwrap() else {
+            return vec![];
+        };
+        let mut stmt = conn
+            .prepare(
+                "SELECT r.id
+                 FROM readings_fts JOIN readings r ON r.rowid = readings_fts.rowid
+                 WHERE readings_fts MATCH ?1
+                 ORDER BY bm25(readings_fts)",
+            )
+            .unwrap();
+        let ids = stmt
+            .query_map(params![m], |row| row.get::<_, String>(0))
+            .unwrap();
+        ids.map(|r| r.unwrap()).collect()
+    }
+
     #[test]
-    fn empty_query_returns_nothing() {
+    fn blank_query_yields_no_match_string() {
         let (_dir, conn) = setup();
-        let results = search(&conn, "", 10).unwrap();
-        assert!(results.is_empty());
+        // A present-but-untokenizable query produces no MATCH at all — the
+        // caller treats that as "search matching nothing", not a full listing.
+        assert!(match_query(&conn, "").unwrap().is_none());
+        assert!(matches(&conn, "").is_empty());
     }
 
     #[test]
@@ -213,9 +174,7 @@ mod tests {
         .unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        let results = search(&conn, "rust", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "rust"), vec![id]);
     }
 
     #[test]
@@ -232,9 +191,7 @@ mod tests {
         .unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        let results = search(&conn, "borrowing", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "borrowing"), vec![id]);
     }
 
     #[test]
@@ -250,48 +207,7 @@ mod tests {
         .unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        let results = search(&conn, "python", 10).unwrap();
-        assert!(results.is_empty());
-    }
-
-    #[test]
-    fn limit_caps_results() {
-        let (dir, conn) = setup();
-        let lib = make_library(&dir);
-
-        for i in 0..5 {
-            write_reading(
-                &lib,
-                meta(&new_id(), &format!("https://example.com/{i}"), "Rust tips"),
-                "Rust is great.".to_string(),
-            )
-            .unwrap();
-        }
-        rebuild(&conn, &lib).unwrap();
-
-        let results = search(&conn, "rust", 3).unwrap();
-        assert_eq!(results.len(), 3);
-    }
-
-    #[test]
-    fn snippet_contains_mark_tags() {
-        let (dir, conn) = setup();
-        let lib = make_library(&dir);
-
-        write_reading(
-            &lib,
-            meta(&new_id(), "https://example.com", "Article"),
-            "The lifetime system in Rust prevents dangling pointers.".to_string(),
-        )
-        .unwrap();
-        rebuild(&conn, &lib).unwrap();
-
-        let results = search(&conn, "lifetime", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert!(
-            results[0].snippet.contains("<mark>"),
-            "snippet should highlight matched term"
-        );
+        assert!(matches(&conn, "python").is_empty());
     }
 
     #[test]
@@ -308,9 +224,7 @@ mod tests {
         .unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        let results = search(&conn, "core Rust concepts", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "core Rust concepts"), vec![id]);
     }
 
     #[test]
@@ -330,9 +244,10 @@ mod tests {
         // A pasted snippet carrying punctuation, a stray quote, a hyphen and a
         // colon must not raise an FTS5 syntax error and must still find the
         // source (both sides tokenize identically).
-        let results = search(&conn, "borrowing are \"core\" Rust-concepts:", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(
+            matches(&conn, "borrowing are \"core\" Rust-concepts:"),
+            vec![id]
+        );
     }
 
     #[test]
@@ -351,9 +266,7 @@ mod tests {
 
         // Not adjacent → no exact phrase match, but both words are present, so
         // the all-words AND fallback still finds the article.
-        let results = search(&conn, "Ownership concepts", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "Ownership concepts"), vec![id]);
     }
 
     #[test]
@@ -374,9 +287,7 @@ mod tests {
 
         // Pasting the rendered sentence can't match as a contiguous phrase
         // (the URL tokens interleave), but every word is present → AND fallback.
-        let results = search(&conn, "Read the official docs now", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "Read the official docs now"), vec![id]);
     }
 
     #[test]
@@ -396,9 +307,7 @@ mod tests {
 
         // Typing stops mid-word: "…prompts the ag". The trailing prefix lets
         // "ag" match "agent" so the result appears before the word is finished.
-        let results = search(&conn, "prompts the ag", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "prompts the ag"), vec![id]);
     }
 
     #[test]
@@ -417,15 +326,7 @@ mod tests {
 
         // Phrase fails (URL interleaves) AND the last word is truncated; the
         // AND fallback with a prefix on the final term still finds it.
-        let results = search(&conn, "official docs no", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
-    }
-
-    fn meta_site(id: &str, url: &str, title: &str, site: &str) -> Metadata {
-        let mut m = meta(id, url, title);
-        m.site = Some(site.to_string());
-        m
+        assert_eq!(matches(&conn, "official docs no"), vec![id]);
     }
 
     #[test]
@@ -443,9 +344,7 @@ mod tests {
         rebuild(&conn, &lib).unwrap();
 
         // The term appears nowhere in title/body — only in the site column.
-        let results = search(&conn, "nytimes", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "nytimes"), vec![id]);
     }
 
     #[test]
@@ -463,9 +362,7 @@ mod tests {
         rebuild(&conn, &lib).unwrap();
 
         // FTS lowercases tokens, so a lowercase query matches a mixed-case site.
-        let results = search(&conn, "github", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "github"), vec![id]);
     }
 
     #[test]
@@ -484,9 +381,7 @@ mod tests {
 
         // A half-typed site token prefix-matches, just like title/body terms:
         // the trailing-`*` on the last token lets "nyt" reach "nytimes".
-        let results = search(&conn, "nyt", 10).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, id);
+        assert_eq!(matches(&conn, "nyt"), vec![id]);
     }
 
     #[test]
@@ -529,14 +424,12 @@ mod tests {
 
         rebuild(&conn, &lib).unwrap();
 
-        let results = search(&conn, "rust", 10).unwrap();
-        let ids: Vec<&str> = results.iter().map(|r| r.id.as_str()).collect();
-
-        assert!(ids.contains(&a.as_str()), "body hit A should be present");
-        assert!(ids.contains(&b.as_str()), "site hit B should be present");
-        assert!(ids.contains(&c.as_str()), "hit C should be present");
+        let ids = matches(&conn, "rust");
+        assert!(ids.contains(&a), "body hit A should be present");
+        assert!(ids.contains(&b), "site hit B should be present");
+        assert!(ids.contains(&c), "hit C should be present");
         // C matches in two columns but FTS lists each row once.
-        assert_eq!(results.len(), 3, "C must not be duplicated");
+        assert_eq!(ids.len(), 3, "C must not be duplicated");
     }
 
     #[test]
@@ -554,12 +447,10 @@ mod tests {
 
         // A trailing `*` is no longer FTS5 prefix syntax; it's a literal,
         // ignorable separator, so this matches the `async` token without error.
-        let results = search(&conn, "async*", 10).unwrap();
-        assert_eq!(results.len(), 1);
+        assert_eq!(matches(&conn, "async*").len(), 1);
 
         // Input that is nothing but operator characters tokenizes to an empty
         // phrase: zero matches, never an error.
-        let results = search(&conn, "-\"()*:", 10).unwrap();
-        assert!(results.is_empty());
+        assert!(matches(&conn, "-\"()*:").is_empty());
     }
 }
