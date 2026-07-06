@@ -318,3 +318,28 @@ final class ReaderLayoutManager: NSLayoutManager {
         }
     }
 }
+
+/// A transparent click-catcher placed *behind* the article content. A reader
+/// text run keeps its selection until something clears it, but clicking the
+/// margins around the text — or the gaps between blocks — lands on the scroll
+/// view's empty background, which no text view sees, so the selection lingers.
+/// This view fills that background and, on a click that misses the text views on
+/// top, collapses any active selection — so clicking outside the text deselects,
+/// as it would in a single document. It sits behind the runs, so it only ever
+/// receives clicks the text views did not handle and never interferes with
+/// selecting, clicking links, or the context menu.
+struct SelectionClearingBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { ClickCatcher() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class ClickCatcher: NSView {
+        /// Deselect even when the window is not key, so a single click both
+        /// activates the window and clears the selection.
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let content = window?.contentView else { return }
+            ReaderTextView.collapseSelections(in: content)
+        }
+    }
+}

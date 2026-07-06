@@ -188,6 +188,9 @@ struct MarkdownDocumentView<Footer: View>: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
             .padding(.bottom, 80)
+            // Behind the content: a click in the margins or between blocks clears
+            // any active text selection, so clicking outside the text deselects.
+            .background(SelectionClearingBackground())
         }
         .environment(\.openURL, OpenURLAction { url in
             NSWorkspace.shared.open(url)
