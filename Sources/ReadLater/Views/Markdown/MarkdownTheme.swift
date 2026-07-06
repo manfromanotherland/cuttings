@@ -123,5 +123,6 @@ struct MarkdownTheme {
     var ruleSpacing: CGFloat { blockSpacing * 0.5 }
     var imageCornerRadius: CGFloat { 6 }
     var captionGap: CGFloat { bodySize * 0.4 }
-    var captionFont: Font { .system(size: bodySize * 0.85, design: design) }
+    var captionSize: CGFloat { bodySize * 0.85 }
+    var captionFont: Font { .system(size: captionSize, design: design) }
 }

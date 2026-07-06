@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import ImageIO
 import SwiftUI
 
@@ -13,6 +14,8 @@ struct AssetImageView: View {
     let alt: String
     let libraryURL: URL?
     let theme: MarkdownTheme
+    var highlights: [String] = []
+    var onHighlight: (String) -> Void = { _ in }
 
     @State private var localImage: NSImage?
     @State private var failed = false
@@ -24,13 +27,29 @@ struct AssetImageView: View {
                 .clipShape(RoundedRectangle(cornerRadius: theme.imageCornerRadius))
                 .accessibilityLabel(alt)
             if !alt.isEmpty {
-                Text(alt)
-                    .font(theme.captionFont)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .textSelection(.enabled)
+                // A selectable text view (rather than SwiftUI `Text`) so the
+                // caption supports the same highlight tint and Highlight/Look Up
+                // menu as body text.
+                SelectableTextView(attributed: captionAttributed,
+                                   highlights: highlights, onHighlight: onHighlight)
+                    .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    /// The alt-text caption as an `NSAttributedString` (centered, secondary,
+    /// caption-sized) so it can back a `SelectableTextView`.
+    private var captionAttributed: NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byWordWrapping
+        let font = AppKitInline.makeFont(size: theme.captionSize, weight: .regular,
+                                         design: theme.design, bold: false, italic: false)
+        return NSAttributedString(string: alt, attributes: [
+            .font: font,
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraph,
+        ])
     }
 
     @ViewBuilder

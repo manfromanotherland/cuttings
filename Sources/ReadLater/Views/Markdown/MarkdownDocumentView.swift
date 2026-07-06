@@ -67,13 +67,15 @@ struct ArticleDocument {
 
     /// Headings and text-only paragraphs fold into a selectable text run.
     ///
-    /// Lists and block quotes are intentionally *not* folded: their attributed
-    /// layout (right-aligned marker tab stops, hanging indents, quote bars) is
-    /// fragile inside a single large `NSTextView` and was observed to collapse
-    /// the run on list-heavy, image-free articles. They render via their proven
-    /// SwiftUI block views instead, forming a selection seam. (The list/quote
-    /// emitters in `MarkdownTextRun` remain for a future, on-device-tested
-    /// re-enable.)
+    /// Lists and block quotes are intentionally *not* folded into that shared
+    /// run: their attributed layout (right-aligned marker tab stops, hanging
+    /// indents, quote bars) is fragile inside a single large `NSTextView` and was
+    /// observed to collapse the run on list-heavy articles. They stay separate
+    /// groups, but each is still rendered as its own (small) `SelectableTextView`
+    /// via `MarkdownTextRun` in `MarkdownBlockView` — so they support highlighting
+    /// and Look Up — forming a selection seam between blocks. Image-bearing
+    /// lists/quotes fall back to the SwiftUI block views, which lay images out as
+    /// figures the text-run emitter would flatten to alt text.
     private static func isFoldable(_ block: Markup) -> Bool {
         if block is Heading { return true }
         if let paragraph = block as? Paragraph {
@@ -160,7 +162,8 @@ struct MarkdownDocumentView<Footer: View>: View {
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                     case .other(let item):
-                        MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL)
+                        MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
+                                          highlights: highlights, onHighlight: onHighlight)
                     }
                 }
                 footer()
