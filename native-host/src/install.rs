@@ -8,6 +8,11 @@ use serde_json::json;
 
 const HOST_NAME: &str = "com.readlater.host";
 
+/// Extension ID pinned by the `key` field in the extension's manifest.json.
+/// Keep this in sync with read-later-extension/manifest.json — the ID is
+/// derived from that public key, so both must change together.
+const DEFAULT_EXTENSION_ID: &str = "alanikmfkpbfompcnmmjngdeedmgdlpk";
+
 /// Paths where Chrome-style native messaging manifests live on macOS.
 const CHROME_PATHS: &[&str] = &[
     "Library/Application Support/Google/Chrome/NativeMessagingHosts",
@@ -21,7 +26,9 @@ const FIREFOX_PATH: &str = "Library/Application Support/Mozilla/NativeMessagingH
 /// Write `com.readlater.host.json` to all per-browser manifest directories.
 ///
 /// `extension_id` is the Chrome extension ID (e.g. `abcdefghijklmnopqrstuvwxyz123456`).
-/// Pass `None` to use a placeholder — update it once the extension is published.
+/// Pass `None` to use `DEFAULT_EXTENSION_ID`, the ID pinned by the extension's
+/// `key` field — which is what the macOS app relies on when it installs the
+/// manifest without an explicit ID.
 pub fn install_manifest(extension_id: Option<&str>) -> Result<()> {
     let binary_path = std::env::current_exe()
         .context("could not determine binary path")?
@@ -31,9 +38,10 @@ pub fn install_manifest(extension_id: Option<&str>) -> Result<()> {
     let home = std::env::var("HOME").context("HOME env var not set")?;
     let home = PathBuf::from(home);
 
-    let origin = extension_id
-        .map(|id| format!("chrome-extension://{id}/"))
-        .unwrap_or_else(|| "chrome-extension://PLACEHOLDER_EXTENSION_ID/".to_string());
+    let origin = format!(
+        "chrome-extension://{}/",
+        extension_id.unwrap_or(DEFAULT_EXTENSION_ID)
+    );
 
     let chrome_manifest = json!({
         "name": HOST_NAME,
