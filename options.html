@@ -242,6 +242,54 @@
         color: var(--green);
         font-weight: 500;
       }
+
+      /* Diagnostics log */
+
+      .log-view {
+        max-height: 220px;
+        overflow-y: auto;
+        background: var(--bg-muted);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .log-empty {
+        color: var(--text-muted);
+      }
+
+      .log-entry {
+        display: flex;
+        gap: 8px;
+        padding: 1px 0;
+        word-break: break-word;
+      }
+
+      .log-time {
+        color: var(--text-muted);
+        flex: 0 0 auto;
+      }
+
+      .log-msg {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .log-entry.error .log-msg {
+        color: var(--red);
+      }
+
+      .log-entry.warn .log-msg {
+        color: var(--amber);
+      }
+
+      .log-actions {
+        display: flex;
+        gap: 16px;
+      }
     </style>
   </head>
   <body>
@@ -296,6 +344,23 @@
                 Requires a compatible version of the native host.</span
               >
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diagnostics -->
+      <div class="section">
+        <div class="section-header">Diagnostics</div>
+        <div class="section-body">
+          <p class="label-hint">
+            Recent save activity and errors. If a save didn't work, reproduce it, then come back
+            here to see what happened.
+          </p>
+          <div id="log-view" class="log-view">Loading…</div>
+          <div class="log-actions">
+            <button id="log-refresh" class="btn-ghost">Refresh</button>
+            <button id="log-copy" class="btn-ghost">Copy</button>
+            <button id="log-clear" class="btn-ghost">Clear</button>
           </div>
         </div>
       </div>

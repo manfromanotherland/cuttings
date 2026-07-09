@@ -4,6 +4,7 @@ import type { ToastMessage } from "./content.js";
 import type { ExtractionResult } from "./extraction.js";
 import type { CheckRequest, CheckResponse, SaveRequest, SaveResponse } from "./protocol.js";
 import { HOST_ID, isHostMissing } from "./host.js";
+import { log } from "./log.js";
 
 const CONTEXT_MENU_ID = "save-page";
 const NOTIF_HOST_MISSING = "host-missing";
@@ -12,10 +13,7 @@ const NOTIF_HOST_MISSING = "host-missing";
 
 type IconState = "default" | "saved";
 
-function drawIcon(size: number, state: IconState): ImageData {
-  const canvas = new OffscreenCanvas(size, size);
-  const ctx = canvas.getContext("2d")!;
-
+function paintIcon(ctx: OffscreenCanvasRenderingContext2D, size: number, state: IconState): void {
   const r = size * 0.15;
   ctx.fillStyle = state === "saved" ? "#22C55E" : "#3B82F6";
   ctx.beginPath();
@@ -50,8 +48,25 @@ function drawIcon(size: number, state: IconState): ImageData {
     ctx.closePath();
     ctx.fill();
   }
+}
 
+function drawIcon(size: number, state: IconState): ImageData {
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext("2d")!;
+  paintIcon(ctx, size, state);
   return ctx.getImageData(0, 0, size, size);
+}
+
+/** Render the icon to a PNG data URL — required for chrome.notifications, which can't decode SVG. */
+async function iconDataUrl(size: number, state: IconState): Promise<string> {
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext("2d")!;
+  paintIcon(ctx, size, state);
+  const blob = await canvas.convertToBlob({ type: "image/png" });
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return "data:image/png;base64," + btoa(binary);
 }
 
 async function setIcon(state: IconState = "default", tabId?: number): Promise<void> {
@@ -133,25 +148,52 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 // ── Save pipeline ─────────────────────────────────────────────────────────────
 
+/**
+ * Ask the content script to extract the page. The content script is normally
+ * injected by the manifest, but only into tabs that navigate *after* the
+ * extension loads — a tab that was already open when the extension was
+ * installed or reloaded has no content script and won't answer. When the first
+ * message fails, inject the script programmatically (allowed on the active tab
+ * via the `activeTab` grant from the user's click) and retry once.
+ */
+async function requestExtraction(tabId: number): Promise<ExtractionResult | { error: string }> {
+  try {
+    return await chrome.tabs.sendMessage(tabId, { action: "extract" });
+  } catch {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] });
+    return await chrome.tabs.sendMessage(tabId, { action: "extract" });
+  }
+}
+
 async function savePage(tab: chrome.tabs.Tab): Promise<void> {
   const tabId = tab.id;
-  if (!tabId || !tab.url) return;
+  if (!tabId || !tab.url) {
+    await log("warn", "Save ignored: no active tab id or URL", { tabId, url: tab.url });
+    return;
+  }
 
+  await log("info", "Save triggered", { url: tab.url });
   await showToast(tabId, "loading", "Saving…");
 
   let extraction: ExtractionResult;
   try {
-    const result = await chrome.tabs.sendMessage(tabId, { action: "extract" });
-    if (result?.error) {
+    const result = await requestExtraction(tabId);
+    if (result && "error" in result && result.error) {
       await showBadge(tabId, "error");
       await showToast(tabId, "error", "Couldn't save page", result.error);
-      console.error("read-later: extraction failed:", result.error);
+      await log("error", "Extraction failed", { url: tab.url, error: result.error });
       return;
     }
     extraction = result as ExtractionResult;
   } catch (err) {
     await showBadge(tabId, "error");
-    console.error("read-later: could not reach content script:", err);
+    await showToast(
+      tabId,
+      "error",
+      "Couldn't save page",
+      "This page can't be read (it may be a browser or store page).",
+    );
+    await log("error", "Could not reach content script", { url: tab.url, error: err });
     return;
   }
 
@@ -170,11 +212,12 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     response = await sendNativeMessage<SaveRequest, SaveResponse>(request);
   } catch (err) {
     if (err instanceof Error && isHostMissing(err)) {
+      await log("warn", "Native host not found", { error: err });
       await notifyHostMissing(tabId);
     } else {
       await showBadge(tabId, "error");
       await showToast(tabId, "error", "Couldn't save page", "The native helper returned an error.");
-      console.error("read-later: native host error:", err);
+      await log("error", "Native host error", { url: tab.url, error: err });
     }
     return;
   }
@@ -183,14 +226,20 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     await showBadge(tabId, "ok");
     await showToast(tabId, "ok", "Saved to Read Later", extraction.metadata.title);
     markSaved(tabId, tab.url, extraction.metadata.canonical_url);
+    await log("info", "Saved", { url: tab.url, title: extraction.metadata.title });
   } else if (response.error === "duplicate") {
     await showBadge(tabId, "ok");
     await showToast(tabId, "ok", "Already in Reading List", extraction.metadata.title);
     markSaved(tabId, tab.url, extraction.metadata.canonical_url);
+    await log("info", "Already saved (duplicate)", { url: tab.url });
   } else {
     await showBadge(tabId, "error");
     await showToast(tabId, "error", "Couldn't save page", response.message || response.error);
-    console.error("read-later: save failed:", response.error, response.message);
+    await log("error", "Save failed", {
+      url: tab.url,
+      error: response.error,
+      message: response.message,
+    });
   }
 }
 
@@ -219,25 +268,30 @@ chrome.commands.onCommand.addListener((command) => {
 
 // ── Host-missing notification ─────────────────────────────────────────────────
 
-const NOTIF_ICON =
-  "data:image/svg+xml;charset=utf-8," +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">' +
-      '<rect width="48" height="48" rx="8" fill="#3B82F6"/>' +
-      '<path d="M14 12h20v28l-10-7-10 7z" fill="white"/>' +
-      "</svg>",
-  );
-
 async function notifyHostMissing(tabId: number): Promise<void> {
   await showBadge(tabId, "error");
-  await chrome.notifications.create(NOTIF_HOST_MISSING, {
-    type: "basic",
-    iconUrl: NOTIF_ICON,
-    title: "Read Later — Native Host Not Found",
-    message:
-      "The native helper isn't installed yet. Click this notification to see how to install it.",
-    requireInteraction: true,
-  });
+  await showToast(
+    tabId,
+    "error",
+    "Native helper not installed",
+    "Click the notification to see how to install it.",
+  );
+  try {
+    // iconUrl must be a raster image — the notifications API can't decode SVG.
+    const iconUrl = await iconDataUrl(48, "default");
+    await chrome.notifications.create(NOTIF_HOST_MISSING, {
+      type: "basic",
+      iconUrl,
+      title: "Read Later — Native Host Not Found",
+      message:
+        "The native helper isn't installed yet. Click this notification to see how to install it.",
+      requireInteraction: true,
+    });
+  } catch (err) {
+    // A failed notification must never bubble up as an unhandled rejection; the
+    // toast and badge above already convey the problem.
+    await log("error", "Could not show host-missing notification", { error: err });
+  }
 }
 
 chrome.notifications.onClicked.addListener((id) => {
