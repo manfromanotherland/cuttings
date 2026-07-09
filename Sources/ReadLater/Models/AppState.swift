@@ -280,6 +280,7 @@ final class AppState {
     private func pickLibrary(url: URL) async {
         do {
             try LibrarySetup.scaffold(at: url)
+            WelcomeArticle.seedIfEmpty(in: url)
             try LibraryBookmark.save(url: url)
             stopAccessing()
             accessedURL = LibraryBookmark.resolve()
