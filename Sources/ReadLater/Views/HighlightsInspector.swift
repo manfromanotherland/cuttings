@@ -33,9 +33,9 @@ struct HighlightsInspector: View {
                 .listRowSeparator(.visible)
                 .contextMenu {
                     Button("Copy") {
-                        let pb = NSPasteboard.general
-                        pb.clearContents()
-                        pb.setString(highlight.text, forType: .string)
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(highlight.text, forType: .string)
                     }
                     Button("Delete", role: .destructive) {
                         delete(highlight.id)

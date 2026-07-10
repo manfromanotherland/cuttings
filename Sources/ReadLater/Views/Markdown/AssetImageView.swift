@@ -48,7 +48,7 @@ struct AssetImageView: View {
         return NSAttributedString(string: alt, attributes: [
             .font: font,
             .foregroundColor: NSColor.secondaryLabelColor,
-            .paragraphStyle: paragraph,
+            .paragraphStyle: paragraph
         ])
     }
 
@@ -105,11 +105,9 @@ struct AssetImageView: View {
     private var localURL: URL? {
         guard let libraryURL else { return nil }
         var path = source
-        for prefix in ["../assets/", "./assets/", "assets/"] {
-            if path.hasPrefix(prefix) {
-                path = String(path.dropFirst(prefix.count))
-                break
-            }
+        for prefix in ["../assets/", "./assets/", "assets/"] where path.hasPrefix(prefix) {
+            path = String(path.dropFirst(prefix.count))
+            break
         }
         return libraryURL
             .appendingPathComponent("assets")
@@ -156,7 +154,7 @@ struct AssetImageView: View {
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel.rounded()),
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel.rounded())
         ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             return nil

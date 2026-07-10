@@ -27,6 +27,15 @@ enum WelcomeArticle {
         else { return }
 
         let body = rawBody.trimmingCharacters(in: .newlines) + "\n"
+        let articleURL = articlesURL.appendingPathComponent("\(articleId).md")
+        try? articleContent(body: body).write(to: articleURL, atomically: true, encoding: .utf8)
+
+        seedHighlight(in: libraryURL)
+    }
+
+    /// The complete article file for `body`: YAML front matter (with the hash,
+    /// word count, and timestamp derived from it) followed by the body itself.
+    private static func articleContent(body: String) -> String {
         let sourceHash = "sha256:" + SHA256.hash(data: Data(body.utf8))
             .map { String(format: "%02x", $0) }.joined()
         let wordCount = body.components(separatedBy: .whitespacesAndNewlines)
@@ -52,11 +61,7 @@ enum WelcomeArticle {
         content += "source_hash: \(sourceHash)\n"
         content += "---\n\n"
         content += body
-
-        let articleURL = articlesURL.appendingPathComponent("\(articleId).md")
-        try? content.write(to: articleURL, atomically: true, encoding: .utf8)
-
-        seedHighlight(in: libraryURL)
+        return content
     }
 
     private static func seedHighlight(in libraryURL: URL) {

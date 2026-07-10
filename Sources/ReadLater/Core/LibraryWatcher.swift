@@ -75,11 +75,11 @@ final class LibraryWatcher: @unchecked Sendable {
     }
 
     private func stop() {
-        guard let s = stream else { return }
-        FSEventStreamStop(s)
-        FSEventStreamInvalidate(s)
-        FSEventStreamRelease(s)
-        stream = nil
+        guard let stream else { return }
+        FSEventStreamStop(stream)
+        FSEventStreamInvalidate(stream)
+        FSEventStreamRelease(stream)
+        self.stream = nil
     }
 
     private func fire() {

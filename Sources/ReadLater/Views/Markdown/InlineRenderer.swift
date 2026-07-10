@@ -49,12 +49,12 @@ enum InlineRenderer {
 
         func with(bold: Bool? = nil, italic: Bool? = nil,
                   strike: Bool? = nil, link: URL? = nil) -> Style {
-            var s = self
-            if let bold { s.bold = bold }
-            if let italic { s.italic = italic }
-            if let strike { s.strike = strike }
-            if let link { s.link = link }
-            return s
+            var copy = self
+            if let bold { copy.bold = bold }
+            if let italic { copy.italic = italic }
+            if let strike { copy.strike = strike }
+            if let link { copy.link = link }
+            return copy
         }
     }
 
@@ -95,9 +95,9 @@ enum InlineRenderer {
                                theme: MarkdownTheme) -> AttributedString {
         switch markup {
         case let text as Markdown.Text:
-            return AttributedString(text.string, attributes: container(style, context, theme, code: false))
+            return AttributedString(text.string, attributes: attributes(style, context, code: false))
         case let code as InlineCode:
-            return AttributedString(code.code, attributes: container(style, context, theme, code: true))
+            return AttributedString(code.code, attributes: attributes(style, context, code: true))
         case is LineBreak:
             return AttributedString("\n")
         case is SoftBreak:
@@ -110,25 +110,32 @@ enum InlineRenderer {
             let alt = plainText(image)
             return alt.isEmpty
                 ? AttributedString("")
-                : AttributedString(alt, attributes: container(style, context, theme, code: false))
-        case let emphasis as Emphasis:
-            return concat(emphasis.children, style: style.with(italic: true), context: context, theme: theme)
-        case let strong as Strong:
-            return concat(strong.children, style: style.with(bold: true), context: context, theme: theme)
-        case let strike as Strikethrough:
-            return concat(strike.children, style: style.with(strike: true), context: context, theme: theme)
-        case let link as Markdown.Link:
-            var s = style
-            if let dest = link.destination, let url = URL(string: dest) { s.link = url }
-            return concat(link.children, style: s, context: context, theme: theme)
+                : AttributedString(alt, attributes: attributes(style, context, code: false))
         default:
-            return concat(markup.children, style: style, context: context, theme: theme)
+            return container(markup, style: style, context: context, theme: theme)
         }
     }
 
-    private static func container(_ style: Style, _ ctx: FontContext,
-                                  _ theme: MarkdownTheme, code: Bool) -> AttributeContainer {
-        var c = AttributeContainer()
+    /// Container nodes (emphasis, strong, strikethrough, links, and anything
+    /// unrecognized): layer their styling onto `style`, then render children.
+    private static func container(_ markup: Markup, style: Style,
+                                  context: FontContext,
+                                  theme: MarkdownTheme) -> AttributedString {
+        let restyled: Style
+        switch markup {
+        case is Emphasis: restyled = style.with(italic: true)
+        case is Strong: restyled = style.with(bold: true)
+        case is Strikethrough: restyled = style.with(strike: true)
+        case let link as Markdown.Link:
+            restyled = style.with(link: link.destination.flatMap(URL.init(string:)))
+        default: restyled = style
+        }
+        return concat(markup.children, style: restyled, context: context, theme: theme)
+    }
+
+    private static func attributes(_ style: Style, _ ctx: FontContext,
+                                   code: Bool) -> AttributeContainer {
+        var attrs = AttributeContainer()
         // Start from the context's base font (body size, or a heading's size and
         // weight) then layer inline emphasis on top so nested styles compose.
         var font = code
@@ -136,17 +143,17 @@ enum InlineRenderer {
             : Font.system(size: ctx.size, design: ctx.design).weight(ctx.weight)
         if style.bold { font = font.bold() }
         if style.italic { font = font.italic() }
-        c.font = font
+        attrs.font = font
         // Use explicit Text.LineStyle values so the attribute resolves to the
         // SwiftUI scope (a bare `.single` is ambiguous with Foundation's
         // NSUnderlineStyle).
-        if style.strike { c.strikethroughStyle = Text.LineStyle(pattern: .solid, color: nil) }
-        if code { c.backgroundColor = Color.secondary.opacity(0.15) }
+        if style.strike { attrs.strikethroughStyle = Text.LineStyle(pattern: .solid, color: nil) }
+        if code { attrs.backgroundColor = Color.secondary.opacity(0.15) }
         if let link = style.link {
-            c.link = link
-            c.foregroundColor = .accentColor
-            c.underlineStyle = Text.LineStyle(pattern: .solid, color: nil)
+            attrs.link = link
+            attrs.foregroundColor = .accentColor
+            attrs.underlineStyle = Text.LineStyle(pattern: .solid, color: nil)
         }
-        return c
+        return attrs
     }
 }

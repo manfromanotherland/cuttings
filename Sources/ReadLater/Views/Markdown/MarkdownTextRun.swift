@@ -135,7 +135,7 @@ enum MarkdownTextRun {
             style.headIndent = bodyIndent
             style.tabStops = [
                 NSTextTab(textAlignment: .right, location: ctx.indent + markerWidth, options: [:]),
-                NSTextTab(textAlignment: .left, location: bodyIndent, options: [:]),
+                NSTextTab(textAlignment: .left, location: bodyIndent, options: [:])
             ]
             style.defaultTabInterval = bodyIndent
 
@@ -210,7 +210,7 @@ enum MarkdownTextRun {
                                              design: theme.design, bold: false, italic: false)
             return NSAttributedString(string: checked ? "☑" : "☐", attributes: [
                 .font: font,
-                .foregroundColor: checked ? NSColor.controlAccentColor : NSColor.secondaryLabelColor,
+                .foregroundColor: checked ? NSColor.controlAccentColor : NSColor.secondaryLabelColor
             ])
         }
         let glyph = ordered ? "\(number)." : theme.bullet(depth: depth)
@@ -220,7 +220,7 @@ enum MarkdownTextRun {
                                     design: theme.design, bold: false, italic: false)
         return NSAttributedString(string: glyph, attributes: [
             .font: font,
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: NSColor.secondaryLabelColor
         ])
     }
 

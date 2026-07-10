@@ -21,8 +21,8 @@ struct AppShortcut: Identifiable {
     var display: String {
         var glyphs = ""
         if modifiers.contains(.control) { glyphs += "⌃" }
-        if modifiers.contains(.option)  { glyphs += "⌥" }
-        if modifiers.contains(.shift)   { glyphs += "⇧" }
+        if modifiers.contains(.option) { glyphs += "⌥" }
+        if modifiers.contains(.shift) { glyphs += "⇧" }
         if modifiers.contains(.command) { glyphs += "⌘" }
         return glyphs + keyGlyph
     }
@@ -43,6 +43,12 @@ enum ShortcutCatalog {
         let shortcuts: [AppShortcut]
         var id: String { name }
     }
+
+    // The catalog below is a hand-aligned table: one shortcut per row, with
+    // title / key / modifiers / glyph in columns so differences scan at a
+    // glance. Column padding trips the comma-spacing and line-length rules,
+    // so they're off for the table only.
+    // swiftlint:disable comma line_length
 
     // Article actions
     static let toggleRead       = AppShortcut(title: "Mark Read / Unread",      key: "u",     modifiers: .command,            keyGlyph: "U")
@@ -69,6 +75,7 @@ enum ShortcutCatalog {
         Group(name: "Article", shortcuts: [toggleRead, toggleFavorite, editTags, toggleHighlights, archive, delete, openInBrowser]),
         Group(name: "View",    shortcuts: [focusSearch, toggleSidebar]),
         Group(name: "Reading", shortcuts: [increaseFont, decreaseFont]),
-        Group(name: "Help",    shortcuts: [showShortcuts]),
+        Group(name: "Help",    shortcuts: [showShortcuts])
     ]
+    // swiftlint:enable comma line_length
 }

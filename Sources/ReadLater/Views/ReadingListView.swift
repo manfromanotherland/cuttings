@@ -44,7 +44,8 @@ struct ReadingListView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { row in
-            Text("“\(row.title.isEmpty ? row.url : row.title)” will be permanently removed from your library, including its files. This cannot be undone.")
+            Text("“\(row.title.isEmpty ? row.url : row.title)” will be permanently removed "
+                + "from your library, including its files. This cannot be undone.")
         }
     }
 
@@ -189,11 +190,13 @@ struct ReadingListView: View {
 
     private var navigationTitle: String {
         if !appState.searchQuery.isEmpty {
-            let n = appState.readings.count
-            return "\(n) result\(n == 1 ? "" : "s")"
+            let count = appState.readings.count
+            return "\(count) result\(count == 1 ? "" : "s")"
         }
         if let tag = appState.selectedTag { return "#\(tag)" }
-        if let r = appState.selectedRating { return String(repeating: "★", count: Int(r)) }
+        if let rating = appState.selectedRating {
+            return String(repeating: "★", count: Int(rating))
+        }
         return appState.activeView.label
     }
 }

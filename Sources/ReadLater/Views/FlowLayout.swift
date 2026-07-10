@@ -20,17 +20,17 @@ struct FlowLayout: Layout {
     }
 
     private func layout(subviews: Subviews, in size: CGSize) -> (size: CGSize, origins: [CGPoint]) {
-        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        var cursorX: CGFloat = 0, cursorY: CGFloat = 0, rowHeight: CGFloat = 0
         var origins: [CGPoint] = []
         for view in subviews {
-            let s = view.sizeThatFits(.unspecified)
-            if x + s.width > size.width, x > 0 {
-                x = 0; y += rowH + spacing; rowH = 0
+            let viewSize = view.sizeThatFits(.unspecified)
+            if cursorX + viewSize.width > size.width, cursorX > 0 {
+                cursorX = 0; cursorY += rowHeight + spacing; rowHeight = 0
             }
-            origins.append(CGPoint(x: x, y: y))
-            x += s.width + spacing
-            rowH = max(rowH, s.height)
+            origins.append(CGPoint(x: cursorX, y: cursorY))
+            cursorX += viewSize.width + spacing
+            rowHeight = max(rowHeight, viewSize.height)
         }
-        return (CGSize(width: size.width, height: y + rowH), origins)
+        return (CGSize(width: size.width, height: cursorY + rowHeight), origins)
     }
 }

@@ -27,9 +27,9 @@ struct SidebarView: View {
 
             if !appState.sidebar.ratings.isEmpty {
                 Section("Ratings", isExpanded: $ratingsExpanded) {
-                    ForEach(appState.sidebar.ratings, id: \.rating) { rc in
-                        ratingRow(rc)
-                            .tag(SidebarSelection.rating(rc.rating))
+                    ForEach(appState.sidebar.ratings, id: \.rating) { ratingCount in
+                        ratingRow(ratingCount)
+                            .tag(SidebarSelection.rating(ratingCount.rating))
                     }
                 }
             }
@@ -40,8 +40,8 @@ struct SidebarView: View {
                     // a vertical list of identical rows. The flow is a single,
                     // non-selectable List row; each tile manages its own selection.
                     FlowLayout(spacing: 6) {
-                        ForEach(appState.sidebar.tags, id: \.tag) { tc in
-                            tagTile(tc)
+                        ForEach(appState.sidebar.tags, id: \.tag) { tagCount in
+                            tagTile(tagCount)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -121,27 +121,17 @@ struct SidebarView: View {
     /// A small pill showing `#tag` with its reading count in a trailing badge —
     /// the badge matching the smart-view rows. No icon; the name uses the same
     /// (default) font as those rows, and the selected tag fills with the accent.
-    private func tagTile(_ tc: FfiTagCount) -> some View {
-        let isSelected = appState.selectedTag == tc.tag
+    private func tagTile(_ tagCount: FfiTagCount) -> some View {
+        let isSelected = appState.selectedTag == tagCount.tag
         return Button {
-            appState.sidebarSelection = .tag(tc.tag)
+            appState.sidebarSelection = .tag(tagCount.tag)
         } label: {
             HStack(spacing: 5) {
-                Text("#\(tc.tag)")
+                Text("#\(tagCount.tag)")
                     // 2pt smaller than the sidebar's default (~13pt) row font.
                     .font(.system(size: 11))
                     .lineLimit(1)
-                Text("\(tc.count)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(isSelected ? Color.white : .secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        isSelected
-                            ? AnyShapeStyle(.white.opacity(0.25))
-                            : AnyShapeStyle(.secondary.opacity(0.18)),
-                        in: Capsule()
-                    )
+                tileBadge(count: tagCount.count, isSelected: isSelected)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -156,17 +146,33 @@ struct SidebarView: View {
         .buttonStyle(.plain)
     }
 
+    /// The count badge inside a tag tile, tinted to read against the selected
+    /// (accent-filled) tile as well as the resting one.
+    private func tileBadge(count: UInt64, isSelected: Bool) -> some View {
+        Text("\(count)")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(isSelected ? Color.white : .secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                isSelected
+                    ? AnyShapeStyle(.white.opacity(0.25))
+                    : AnyShapeStyle(.secondary.opacity(0.18)),
+                in: Capsule()
+            )
+    }
+
     // ── Rating row ──────────────────────────────────────────────────────────────
 
-    private func ratingRow(_ rc: FfiRatingCount) -> some View {
+    private func ratingRow(_ ratingCount: FfiRatingCount) -> some View {
         HStack(spacing: 2) {
-            ForEach(0..<5) { i in
-                Image(systemName: i < Int(rc.rating) ? "star.fill" : "star")
+            ForEach(0..<5) { star in
+                Image(systemName: star < Int(ratingCount.rating) ? "star.fill" : "star")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text("\(rc.count)")
+            Text("\(ratingCount.count)")
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)
@@ -176,7 +182,8 @@ struct SidebarView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(rc.rating) star\(rc.rating == 1 ? "" : "s"), \(rc.count) reading\(rc.count == 1 ? "" : "s")"
+            "\(ratingCount.rating) star\(ratingCount.rating == 1 ? "" : "s"), "
+            + "\(ratingCount.count) reading\(ratingCount.count == 1 ? "" : "s")"
         )
     }
 }

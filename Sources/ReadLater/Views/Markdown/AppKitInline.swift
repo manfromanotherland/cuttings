@@ -20,37 +20,43 @@ enum AppKitInline {
 
         func with(bold: Bool? = nil, italic: Bool? = nil,
                   strike: Bool? = nil, link: URL? = nil) -> Style {
-            var s = self
-            if let bold { s.bold = bold }
-            if let italic { s.italic = italic }
-            if let strike { s.strike = strike }
-            if let link { s.link = link }
-            return s
+            var copy = self
+            if let bold { copy.bold = bold }
+            if let italic { copy.italic = italic }
+            if let strike { copy.strike = strike }
+            if let link { copy.link = link }
+            return copy
         }
+    }
+
+    /// The base run a block sets for its inlines — font metrics and text color.
+    /// Fixed for the whole traversal, unlike `Style`, which containers layer as
+    /// they nest.
+    private struct Run {
+        let size: CGFloat
+        let weight: Font.Weight
+        let design: Font.Design
+        let color: NSColor
     }
 
     /// Build an attributed string from a block node's inline children. `weight`
     /// and `size` set the base run; emphasis (bold/italic/code) layers on top.
     static func attributed(_ markup: Markup, size: CGFloat, weight: Font.Weight,
                            design: Font.Design, color: NSColor = .labelColor) -> NSAttributedString {
+        let run = Run(size: size, weight: weight, design: design, color: color)
         let out = NSMutableAttributedString()
         for child in markup.children {
-            out.append(render(child, style: Style(), size: size,
-                              weight: weight, design: design, color: color))
+            out.append(render(child, style: Style(), run: run))
         }
         return out
     }
 
-    private static func render(_ markup: Markup, style: Style, size: CGFloat,
-                               weight: Font.Weight, design: Font.Design,
-                               color: NSColor) -> NSAttributedString {
+    private static func render(_ markup: Markup, style: Style, run: Run) -> NSAttributedString {
         switch markup {
         case let text as Markdown.Text:
-            return leaf(text.string, style: style, size: size, weight: weight,
-                        design: design, color: color, code: false)
+            return leaf(text.string, style: style, run: run, code: false)
         case let code as InlineCode:
-            return leaf(code.code, style: style, size: size, weight: weight,
-                        design: design, color: color, code: true)
+            return leaf(code.code, style: style, run: run, code: true)
         case is LineBreak:
             return NSAttributedString(string: "\n")
         case is SoftBreak:
@@ -61,50 +67,42 @@ enum AppKitInline {
             // Inline images fall back to alt text so nothing is dropped; block
             // images are handled by the SwiftUI renderer outside the text run.
             let alt = InlineRenderer.plainText(image)
-            return alt.isEmpty
-                ? NSAttributedString()
-                : leaf(alt, style: style, size: size, weight: weight,
-                       design: design, color: color, code: false)
-        case let emphasis as Emphasis:
-            return concat(emphasis.children, style: style.with(italic: true),
-                          size: size, weight: weight, design: design, color: color)
-        case let strong as Strong:
-            return concat(strong.children, style: style.with(bold: true),
-                          size: size, weight: weight, design: design, color: color)
-        case let strike as Strikethrough:
-            return concat(strike.children, style: style.with(strike: true),
-                          size: size, weight: weight, design: design, color: color)
-        case let link as Markdown.Link:
-            var s = style
-            if let dest = link.destination, let url = URL(string: dest) { s.link = url }
-            return concat(link.children, style: s, size: size,
-                          weight: weight, design: design, color: color)
+            return alt.isEmpty ? NSAttributedString() : leaf(alt, style: style, run: run, code: false)
         default:
-            return concat(markup.children, style: style, size: size,
-                          weight: weight, design: design, color: color)
+            return container(markup, style: style, run: run)
         }
     }
 
-    private static func concat<S: Sequence>(_ children: S, style: Style, size: CGFloat,
-                                            weight: Font.Weight, design: Font.Design,
-                                            color: NSColor) -> NSAttributedString
+    /// Container nodes (emphasis, strong, strikethrough, links, and anything
+    /// unrecognized): layer their styling onto `style`, then render children.
+    private static func container(_ markup: Markup, style: Style, run: Run) -> NSAttributedString {
+        let restyled: Style
+        switch markup {
+        case is Emphasis: restyled = style.with(italic: true)
+        case is Strong: restyled = style.with(bold: true)
+        case is Strikethrough: restyled = style.with(strike: true)
+        case let link as Markdown.Link:
+            restyled = style.with(link: link.destination.flatMap(URL.init(string:)))
+        default: restyled = style
+        }
+        return concat(markup.children, style: restyled, run: run)
+    }
+
+    private static func concat<S: Sequence>(_ children: S, style: Style, run: Run) -> NSAttributedString
     where S.Element == Markup {
         let out = NSMutableAttributedString()
         for child in children {
-            out.append(render(child, style: style, size: size,
-                              weight: weight, design: design, color: color))
+            out.append(render(child, style: style, run: run))
         }
         return out
     }
 
-    private static func leaf(_ string: String, style: Style, size: CGFloat,
-                             weight: Font.Weight, design: Font.Design,
-                             color: NSColor, code: Bool) -> NSAttributedString {
+    private static func leaf(_ string: String, style: Style, run: Run, code: Bool) -> NSAttributedString {
         var attrs: [NSAttributedString.Key: Any] = [:]
-        attrs[.font] = makeFont(size: code ? size * 0.9 : size, weight: weight,
-                                design: code ? .monospaced : design,
+        attrs[.font] = makeFont(size: code ? run.size * 0.9 : run.size, weight: run.weight,
+                                design: code ? .monospaced : run.design,
                                 bold: style.bold, italic: style.italic)
-        attrs[.foregroundColor] = color
+        attrs[.foregroundColor] = run.color
         if style.strike { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         if code { attrs[.backgroundColor] = NSColor.secondaryLabelColor.withAlphaComponent(0.15) }
         if let link = style.link {

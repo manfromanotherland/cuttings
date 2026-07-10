@@ -43,19 +43,19 @@ struct TagPickerSheet: View {
     /// The list contents, drawn from the frozen `order`: idle shows the first ten,
     /// searching shows every match. Applied tags already sit first in `order`.
     private var listed: [String] {
-        let q = trimmedQuery.lowercased()
-        if q.isEmpty { return Array(order.prefix(10)) }
-        return order.filter { $0.lowercased().contains(q) }
+        let needle = trimmedQuery.lowercased()
+        if needle.isEmpty { return Array(order.prefix(10)) }
+        return order.filter { $0.lowercased().contains(needle) }
     }
 
     /// The tag to offer creating — the typed name, when it doesn't already exist
     /// (case-insensitive). `nil` hides the "Add" row.
     private var creatable: String? {
-        let q = trimmedQuery
-        guard !q.isEmpty,
-              !allTags.contains(where: { $0.caseInsensitiveCompare(q) == .orderedSame })
+        let typed = trimmedQuery
+        guard !typed.isEmpty,
+              !allTags.contains(where: { $0.caseInsensitiveCompare(typed) == .orderedSame })
         else { return nil }
-        return q
+        return typed
     }
 
     var body: some View {
@@ -145,13 +145,13 @@ struct TagPickerSheet: View {
     /// Return key: apply an existing exact match (case-insensitive) if there is
     /// one, otherwise create and apply the typed tag.
     private func submit() {
-        let q = trimmedQuery
-        guard !q.isEmpty else { return }
-        if let existing = allTags.first(where: { $0.caseInsensitiveCompare(q) == .orderedSame }) {
+        let typed = trimmedQuery
+        guard !typed.isEmpty else { return }
+        if let existing = allTags.first(where: { $0.caseInsensitiveCompare(typed) == .orderedSame }) {
             if !appliedSet.contains(existing) { onToggle(existing, true) }
         } else {
-            if !order.contains(q) { order.insert(q, at: 0) }
-            onToggle(q, true)
+            if !order.contains(typed) { order.insert(typed, at: 0) }
+            onToggle(typed, true)
         }
         query = ""
     }
