@@ -25,22 +25,22 @@ struct SidebarView: View {
                 }
             }
 
-            if !appState.allRatings.isEmpty {
+            if !appState.sidebar.ratings.isEmpty {
                 Section("Ratings", isExpanded: $ratingsExpanded) {
-                    ForEach(appState.allRatings, id: \.rating) { rc in
+                    ForEach(appState.sidebar.ratings, id: \.rating) { rc in
                         ratingRow(rc)
                             .tag(SidebarSelection.rating(rc.rating))
                     }
                 }
             }
 
-            if !appState.allTags.isEmpty {
+            if !appState.sidebar.tags.isEmpty {
                 Section("Tags", isExpanded: $tagsExpanded) {
                     // Apple Notes-style: tags as small pills that wrap, rather than
                     // a vertical list of identical rows. The flow is a single,
                     // non-selectable List row; each tile manages its own selection.
                     FlowLayout(spacing: 6) {
-                        ForEach(appState.allTags, id: \.tag) { tc in
+                        ForEach(appState.sidebar.tags, id: \.tag) { tc in
                             tagTile(tc)
                         }
                     }
@@ -105,7 +105,7 @@ struct SidebarView: View {
             Label(item.label, systemImage: item.icon)
                 .labelStyle(.tightIcon)
             Spacer()
-            if let count = appState.viewCounts[item], count > 0 {
+            if let count = appState.sidebar.viewCounts[item], count > 0 {
                 Text("\(count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)

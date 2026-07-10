@@ -70,7 +70,7 @@ struct ArticleDetailView: View {
                 // synchronously — so checkmarks flip the instant you toggle.
                 TagPickerSheet(
                     applied: row.tags,
-                    allTags: appState.allTags.map(\.tag),
+                    allTags: appState.sidebar.tags.map(\.tag),
                     onToggle: { tag, shouldApply in
                         if shouldApply { addTag(tag, to: row.id) }
                         else { removeTag(tag, from: row.id) }

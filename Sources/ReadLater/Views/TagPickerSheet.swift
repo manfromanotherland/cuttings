@@ -14,7 +14,7 @@ struct TagPickerSheet: View {
     /// Tags currently applied to the article. Re-supplied by the presenter on
     /// every render, so checkmarks stay in step as toggles take effect.
     var applied: [String]
-    /// All library tag names, most-used first (the order of `AppState.allTags`).
+    /// All library tag names, most-used first (the order of `SidebarCounts.tags`).
     var allTags: [String]
     /// `(tag, shouldApply)` — apply the tag when `true`, remove it when `false`.
     var onToggle: (String, Bool) -> Void
