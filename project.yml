@@ -57,6 +57,30 @@ targets:
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/native-host
 
+  # XCUITest end-to-end suite. Drives the real app as a separate process; see
+  # docs/e2e-testing.md for the (dependency-free) stack decision. The app stays
+  # on Swift 6; this target uses 5.0 to avoid strict-concurrency friction in
+  # XCTest code.
+  ReadLaterUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/ReadLaterUITests
+      # Shared with the app target (it also lives under Sources/ReadLater/) so
+      # tests and app compile the same accessibility identifiers. Its constants
+      # are filled in by E2E-4; the file starts as an empty namespace so this
+      # target has a real source to build.
+      - path: Sources/ReadLater/AccessibilityID.swift
+    dependencies:
+      - target: ReadLater
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.readlater.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: ReadLater
+
 # A shared scheme so `xcodebuild -scheme ReadLater` works from the command line
 # and CI. Without this, xcodegen emits no scheme and only Xcode.app auto-creates
 # a throwaway one under xcuserdata (not committed, wiped by `make clean`).
@@ -65,6 +89,13 @@ schemes:
     build:
       targets:
         ReadLater: all
+    # Serial: UI tests steal keyboard focus, so parallel runs are flaky.
+    # Per-test temp libraries keep future sharding open.
+    test:
+      config: Debug
+      targets:
+        - name: ReadLaterUITests
+          parallelizable: false
     run:
       config: Debug
     profile:
