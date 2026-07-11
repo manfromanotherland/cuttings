@@ -11,6 +11,12 @@ extension AppState {
     // ── Onboarding ────────────────────────────────────────────────────────
 
     func chooseLibrary() {
+        // UI-testing: pick the scripted folder directly — NSOpenPanel is a
+        // system dialog XCUITest can't reliably drive.
+        if let path = TestHooks.onboardingPickPath {
+            Task { await pickLibrary(url: URL(fileURLWithPath: path)) }
+            return
+        }
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -25,9 +31,14 @@ extension AppState {
         do {
             try LibrarySetup.scaffold(at: url)
             WelcomeArticle.seedIfEmpty(in: url)
-            try LibraryBookmark.save(url: url)
-            stopAccessing()
-            accessedURL = LibraryBookmark.resolve()
+            // Keep scaffolding + welcome seed so onboarding stays testable, but
+            // in UI-testing mode skip the security-scoped bookmark handoff so
+            // the dev's persisted library bookmark is never overwritten.
+            if !TestHooks.isUITesting {
+                try LibraryBookmark.save(url: url)
+                stopAccessing()
+                accessedURL = LibraryBookmark.resolve()
+            }
             await boot(url: url)
         } catch {
             self.error = error.localizedDescription
@@ -44,8 +55,13 @@ extension AppState {
             try await bridge.rebuild()
             core = bridge
             libraryURL = url
-            writeLibraryPathConfig(url.path)
-            HostInstaller.installIfNeeded()
+            // Host-machine side effects (the ~/.config/read-later/library file
+            // and the browser native-messaging manifest) are neutralized under
+            // UI testing so runs don't touch the real machine's config.
+            if !TestHooks.isUITesting {
+                writeLibraryPathConfig(url.path)
+                HostInstaller.installIfNeeded()
+            }
             startWatcher(libraryPath: url.path)
             await refresh()
         } catch {
@@ -101,6 +117,9 @@ extension AppState {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     static func dbPath() -> String {
+        // UI-testing: use the pinned temp DB so the real per-device index is
+        // never opened or mutated.
+        if let path = TestHooks.dbPath { return path }
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ReadLater", isDirectory: true)

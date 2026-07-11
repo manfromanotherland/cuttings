@@ -133,7 +133,15 @@ final class AppState {
             .flatMap(ReadingSort.init(rawValue:)) ?? .savedAt
         sortAscending = defaults.bool(forKey: SortDefaultsKey.ascending)
 
-        if let url = LibraryBookmark.resolve() {
+        if TestHooks.isUITesting {
+            // UI-testing: never resolve the persisted bookmark (leave the dev's
+            // real library untouched). Boot the pinned temp library if one was
+            // given; otherwise fall through to the onboarding screen.
+            if let path = TestHooks.libraryPath {
+                isRestoringLibrary = true
+                Task { await boot(url: URL(fileURLWithPath: path)) }
+            }
+        } else if let url = LibraryBookmark.resolve() {
             accessedURL = url
             isRestoringLibrary = true
             Task { await boot(url: url) }
