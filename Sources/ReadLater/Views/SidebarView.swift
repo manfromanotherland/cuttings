@@ -102,11 +102,12 @@ struct SidebarView: View {
     // ── Smart view row ────────────────────────────────────────────────────────
 
     private func viewRow(_ item: SidebarItem) -> some View {
-        HStack {
+        let count = appState.sidebar.viewCounts[item] ?? 0
+        return HStack {
             Label(item.label, systemImage: item.icon)
                 .labelStyle(.tightIcon)
             Spacer()
-            if let count = appState.sidebar.viewCounts[item], count > 0 {
+            if count > 0 {
                 Text("\(count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -116,6 +117,11 @@ struct SidebarView: View {
                     .accessibilityIdentifier(A11y.Sidebar.viewCount(item.id))
             }
         }
+        // Expose the count as the row's accessibility value: the List collapses
+        // each row into a single element, so the inner badge Text is not
+        // separately queryable — but the row's own value is. Always set (even 0)
+        // so the UI-test suite reads a definite number.
+        .accessibilityValue("\(count)")
         .accessibilityIdentifier(A11y.Sidebar.viewRow(item.id))
     }
 
@@ -148,6 +154,9 @@ struct SidebarView: View {
             .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
+        // Count exposed as the tile's accessibility value (same reason as the
+        // smart-view rows).
+        .accessibilityValue("\(tagCount.count)")
         .accessibilityIdentifier(A11y.Sidebar.tagTile(tagCount.tag))
     }
 
