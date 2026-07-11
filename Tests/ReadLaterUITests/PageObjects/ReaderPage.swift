@@ -76,15 +76,24 @@ struct ReaderPage {
         star(n).clickWhenReady()
     }
 
-    /// Scroll the reader to reveal the end-of-article rating footer.
+    /// Scroll the reader to reveal the end-of-article rating footer. The reader's
+    /// scroll view has no identifier and isn't necessarily the first, so swipe up
+    /// on each scroll view until the last star appears.
     @discardableResult
-    func scrollToFooter(timeout: TimeInterval = 8) -> Bool {
+    func scrollToFooter(timeout: TimeInterval = 10) -> Bool {
         let anchor = star(5)
         let deadline = Date().addingTimeInterval(timeout)
-        while !anchor.exists {
-            if Date() >= deadline { return false }
-            app.scrollViews.firstMatch.swipeUp()
+        while !anchor.exists && Date() < deadline {
+            let scrollViews = app.scrollViews.allElementsBoundByIndex
+            if scrollViews.isEmpty {
+                app.swipeUp()
+            } else {
+                for scrollView in scrollViews where scrollView.exists {
+                    scrollView.swipeUp()
+                    if anchor.exists { break }
+                }
+            }
         }
-        return true
+        return anchor.exists
     }
 }

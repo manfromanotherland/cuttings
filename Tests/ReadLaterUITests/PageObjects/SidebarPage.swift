@@ -64,6 +64,18 @@ struct SidebarPage {
 
     func ratingRow(_ rating: UInt8) -> XCUIElement { app.byId(A11y.Sidebar.ratingRow(rating)) }
 
+    /// Reading count in a rating row, parsed from its label ("N stars, M readings").
+    func ratingCount(_ rating: UInt8) -> Int {
+        let row = ratingRow(rating)
+        guard row.exists else { return 0 }
+        return Self.lastNumber(in: row.label) ?? 0
+    }
+
+    @discardableResult
+    func waitForRatingCount(_ rating: UInt8, equals expected: Int, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { ratingCount(rating) == expected }
+    }
+
     // ── Appearance popover ────────────────────────────────────────────────
 
     func openAppearancePopover() {
@@ -79,6 +91,26 @@ struct SidebarPage {
 
     var fontPicker: XCUIElement { app.byId(A11y.Sidebar.fontPicker) }
     var fontSizeSlider: XCUIElement { app.byId(A11y.Sidebar.fontSizeSlider) }
+
+    /// Set the reader font from the appearance popover's menu picker
+    /// (`label` mirrors `ReaderFont.label`: "System" / "Serif" / "Monospace").
+    /// Opens the popover and the picker menu, then selects the option.
+    func setFont(_ label: String) {
+        openAppearancePopover()
+        fontPicker.clickWhenReady()
+        // Scope to the picker's own menu: the app's "Typography" menu bar also has
+        // a "Serif" item, so an app-wide `menuItems[label]` is ambiguous.
+        fontPicker.menuItems[label].clickWhenReady()
+    }
+
+    /// Waits until the font picker reads `value` ("System" / "Serif" /
+    /// "Monospace"), reflecting the live `readerFont` setting. Reads the element's
+    /// value directly — a separate `defaults` process can't reliably see a running
+    /// app's just-written preference. Requires the appearance popover to be open.
+    @discardableResult
+    func waitForFontValue(_ value: String, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { (fontPicker.value as? String) == value }
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 

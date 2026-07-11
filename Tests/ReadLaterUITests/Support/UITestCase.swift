@@ -112,6 +112,25 @@ class UITestCase: XCTestCase {
         return false
     }
 
+    // ── Reading persisted preferences ────────────────────────────────────
+    // For asserting a preference the app wrote (e.g. after a typography change).
+    // These keys aren't pinned in such tests, so the app's write lands in the
+    // real domain and is restored on teardown like the others.
+
+    func defaultValue(_ key: String) -> String? {
+        Self.runDefaults(["read", Self.appDomain, key])
+    }
+
+    @discardableResult
+    func waitForDefault(_ key: String, equals expected: String, timeout: TimeInterval = 8) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if defaultValue(key) == expected { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
     // ── Defaults isolation ──────────────────────────────────────────────────
     // The app writes preferences to the real `com.readlater.app` domain — only
     // the library and DB are redirected under test, never the defaults — so a
