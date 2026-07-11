@@ -1,2 +1,0 @@
-# Keeps this directory tracked by git until the XCUITest suite lands (E2E-5+).
-# XcodeGen ignores dot-files, so this is not added to the generated project.
