@@ -29,7 +29,7 @@ enum Fixtures {
         static let favoriteRead = id(5)    // active, read, favorite
         static let ratedThree = id(6)      // active, read
         static let swiftTips = id(7)       // active, unread, favorite
-        static let archived = id(8)        // archived, read ("sabbatical")
+        static let archived = id(8)        // archived, read ("voyage")
         static let archivedFavorite = id(9)// archived AND favorite (crosses archive)
         static let oversize = id(200)      // ~11 MB body; not in standardCorpus
     }
@@ -107,14 +107,14 @@ enum Fixtures {
             author: "Frankie Dev", site: "example.com",
             excerpt: "Handy tips.", wordCount: 3200, lang: "en"
         ),
-        // 8 — Archived, read; the only place the term "sabbatical" appears.
+        // 8 — Archived, read; the only place the term "voyage" appears.
         ArticleFixture(
             id: id(8), url: "https://example.com/archived",
             title: "Archived Notes", savedAt: saved(8),
             archived: true, tags: ["archived-tag"], readAt: readAt("2026-02-20T09:00:00Z"),
             author: "Gale Filer", site: "example.com",
             excerpt: "Set aside for later.", wordCount: 900, lang: "en",
-            body: "# Archived Notes\n\nWritten during a long sabbatical away from the office.\n"
+            body: "# Archived Notes\n\nFiled away after a long voyage.\n"
         ),
         // 9 — Archived AND favorite, rating 5: proves favorites cross the archive
         //     boundary, and that archived rows are excluded from tag/rating counts.
@@ -184,7 +184,7 @@ enum Fixtures {
         /// Appears only in the active Swift article (index 1).
         static let swiftTerm = "concurrency"
         /// Appears only in an *archived* article (index 8): found in Archive, not in All.
-        static let archivedOnlyTerm = "sabbatical"
+        static let archivedOnlyTerm = "voyage"
         /// Matches nothing — reserved for the no-results / empty-state check.
         static let noResults = "zzzqxk"
         /// Diacritic-insensitive: this query matches "café" in the unicode article.

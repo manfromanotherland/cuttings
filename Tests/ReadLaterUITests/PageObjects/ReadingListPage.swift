@@ -120,15 +120,27 @@ struct ReadingListPage {
 
     var searchField: XCUIElement { app.searchFields.firstMatch }
 
+    /// Clears the field and types `text`, verifying the field's value and retrying
+    /// once. Search is debounced with a live list reload, so a keystroke can be
+    /// dropped if a reload fires mid-type — keep search terms short, and the
+    /// verify/retry covers an occasional miss.
     func search(_ text: String) {
         let field = searchField
         field.clickWhenReady()
-        field.typeText(text)
+        for _ in 0..<2 {
+            clearField(field)
+            field.typeText(text)
+            if (field.value as? String) == text { return }
+        }
     }
 
     func clearSearch() {
         let field = searchField
         field.clickWhenReady()
+        clearField(field)
+    }
+
+    private func clearField(_ field: XCUIElement) {
         field.typeKey("a", modifierFlags: .command)
         field.typeKey(.delete, modifierFlags: [])
     }
