@@ -37,6 +37,7 @@ struct RatingFooter: View {
                 .buttonStyle(.plain)
                 .help("Rate \(star) star\(star == 1 ? "" : "s")")
                 .accessibilityLabel("Rate \(star) star\(star == 1 ? "" : "s")")
+                .accessibilityIdentifier(A11y.RatingFooter.star(star))
             }
         }
         .font(.title3)

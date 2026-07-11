@@ -68,6 +68,7 @@ struct TagPickerSheet: View {
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier(A11y.TagPicker.done)
             }
             .padding(12)
         }
@@ -85,6 +86,7 @@ struct TagPickerSheet: View {
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
                 .onSubmit(submit)
+                .accessibilityIdentifier(A11y.TagPicker.searchField)
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -105,6 +107,7 @@ struct TagPickerSheet: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(A11y.TagPicker.addRow)
             }
             ForEach(listed, id: \.self) { tag in
                 Button { toggle(tag) } label: {
@@ -119,6 +122,7 @@ struct TagPickerSheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(A11y.TagPicker.row(tag))
             }
             if listed.isEmpty, creatable == nil {
                 Text(allTags.isEmpty

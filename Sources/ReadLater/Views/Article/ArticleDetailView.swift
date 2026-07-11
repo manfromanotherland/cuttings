@@ -84,6 +84,7 @@ struct ArticleDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(row.title.isEmpty ? "Untitled" : row.title)
                 .font(.largeTitle.bold())
+                .accessibilityIdentifier(A11y.Detail.title)
             metadataRow(row: row)
         }
         .padding(.horizontal, 24)
@@ -112,6 +113,7 @@ struct ArticleDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .accessibilityIdentifier(A11y.Detail.tags)
             }
         }
     }
@@ -191,6 +193,7 @@ struct ArticleDetailView: View {
 
     private var emptyDetail: some View {
         ContentUnavailableView("Select an article to read", systemImage: "doc.text")
+            .accessibilityIdentifier(A11y.Detail.empty)
     }
 
     /// Shown instead of the reader when a reading's body is too large to parse
@@ -214,10 +217,12 @@ struct ArticleDetailView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 4)
+                .accessibilityIdentifier(A11y.Detail.oversizeOpenInBrowser)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
+        .accessibilityIdentifier(A11y.Detail.oversize)
     }
 
     // ── Toolbar ───────────────────────────────────────────────────────────

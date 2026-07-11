@@ -68,6 +68,7 @@ struct ReadingListView: View {
         List(appState.readings, id: \.id, selection: listSelection) { row in
             ReadingRowView(row: row)
                 .tag(row.id)
+                .accessibilityIdentifier(A11y.List.row(row.id))
                 .contextMenu { contextMenu(for: row) }
                 .onAppear {
                     if row.id == appState.readings.last?.id {
@@ -76,6 +77,7 @@ struct ReadingListView: View {
                 }
         }
         .listStyle(.inset)
+        .accessibilityIdentifier(A11y.List.table)
         .focused($focusedColumn, equals: .list)
         // ← hands focus back to the sidebar; ↑/↓ keep moving through the
         // readings. (→ into the reader isn't part of the arrow cycle.)
@@ -100,6 +102,7 @@ struct ReadingListView: View {
         if !appState.searchQuery.isEmpty {
             // System-provided, auto-localized "No Results for …" state.
             ContentUnavailableView.search(text: appState.searchQuery)
+                .accessibilityIdentifier(A11y.List.searchEmptyState)
         } else if appState.selectedTag != nil {
             ContentUnavailableView {
                 Label("Nothing here yet", systemImage: "tray")
@@ -107,9 +110,12 @@ struct ReadingListView: View {
                 Button("Clear tag filter") {
                     Task { await appState.clearTag() }
                 }
+                .accessibilityIdentifier(A11y.List.clearTagFilter)
             }
+            .accessibilityIdentifier(A11y.List.tagEmptyState)
         } else {
             ContentUnavailableView("Nothing here yet", systemImage: "tray")
+                .accessibilityIdentifier(A11y.List.emptyState)
         }
     }
 
@@ -143,6 +149,7 @@ struct ReadingListView: View {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
                 .help("Sort readings")
+                .accessibilityIdentifier(A11y.List.sortMenu)
             }
         }
     }

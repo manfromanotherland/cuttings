@@ -44,10 +44,12 @@ struct ShortcutsView: View {
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier(A11y.Shortcuts.done)
             }
             .padding(12)
         }
         .frame(width: 420, height: 540)
+        .accessibilityIdentifier(A11y.Shortcuts.sheet)
     }
 }
 

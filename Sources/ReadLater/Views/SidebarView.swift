@@ -93,6 +93,7 @@ struct SidebarView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(A11y.Sidebar.settingsButton)
         .popover(isPresented: $showAppearancePopover, arrowEdge: .trailing) {
             AppearancePopoverView()
         }
@@ -112,8 +113,10 @@ struct SidebarView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(.secondary.opacity(0.15), in: Capsule())
+                    .accessibilityIdentifier(A11y.Sidebar.viewCount(item.id))
             }
         }
+        .accessibilityIdentifier(A11y.Sidebar.viewRow(item.id))
     }
 
     // ── Tag tile ──────────────────────────────────────────────────────────────
@@ -132,6 +135,7 @@ struct SidebarView: View {
                     .font(.system(size: 11))
                     .lineLimit(1)
                 tileBadge(count: tagCount.count, isSelected: isSelected)
+                    .accessibilityIdentifier(A11y.Sidebar.tagCount(tagCount.tag))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -144,6 +148,7 @@ struct SidebarView: View {
             .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(A11y.Sidebar.tagTile(tagCount.tag))
     }
 
     /// The count badge inside a tag tile, tinted to read against the selected
@@ -181,6 +186,7 @@ struct SidebarView: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier(A11y.Sidebar.ratingRow(ratingCount.rating))
         .accessibilityLabel(
             "\(ratingCount.rating) star\(ratingCount.rating == 1 ? "" : "s"), "
             + "\(ratingCount.count) reading\(ratingCount.count == 1 ? "" : "s")"
@@ -222,6 +228,7 @@ private struct AppearancePopoverView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(A11y.Sidebar.themeButton(mode.id))
                 }
             }
             .padding(3)
@@ -241,6 +248,7 @@ private struct AppearancePopoverView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .controlSize(.regular)
+                .accessibilityIdentifier(A11y.Sidebar.fontPicker)
             }
 
             // Font size slider
@@ -251,6 +259,7 @@ private struct AppearancePopoverView: View {
                 Slider(
                     value: fontSizeBinding, in: 0...Double(ReaderFontSize.allCases.count - 1),
                     step: 1)
+                    .accessibilityIdentifier(A11y.Sidebar.fontSizeSlider)
                 Text("Aa")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)

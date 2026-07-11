@@ -94,6 +94,7 @@ private struct OnboardingView: View {
                 .foregroundStyle(.secondary)
             Text("Welcome to Read Later")
                 .font(.title)
+                .accessibilityIdentifier(A11y.Onboarding.title)
             Text("Choose an existing library folder or create a new one.")
                 .foregroundStyle(.secondary)
             Button("Choose Library…") {
@@ -101,6 +102,7 @@ private struct OnboardingView: View {
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
+            .accessibilityIdentifier(A11y.Onboarding.chooseLibrary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

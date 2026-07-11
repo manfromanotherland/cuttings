@@ -35,9 +35,11 @@ private struct AppearanceSettingsTab: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier(A11y.Settings.themePicker)
         }
         .formStyle(.grouped)
         .frame(minHeight: 120)
+        .accessibilityIdentifier(A11y.Settings.appearanceTab)
     }
 }
 
@@ -55,6 +57,7 @@ private struct TypographySettingsTab: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier(A11y.Settings.fontPicker)
 
             Picker("Size", selection: $readerFontSize) {
                 ForEach(ReaderFontSize.allCases) { size in
@@ -62,6 +65,7 @@ private struct TypographySettingsTab: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier(A11y.Settings.sizePicker)
 
             Text("The quick brown fox jumps over the lazy dog.")
                 .font(.custom(previewFontName, size: CGFloat(readerFontSize.rawValue)))
@@ -71,6 +75,7 @@ private struct TypographySettingsTab: View {
         }
         .formStyle(.grouped)
         .frame(minHeight: 160)
+        .accessibilityIdentifier(A11y.Settings.typographyTab)
     }
 
     private var previewFontName: String {
@@ -105,9 +110,11 @@ private struct LibrarySettingsTab: View {
             Button("Change Library…") {
                 appState.chooseLibrary()
             }
+            .accessibilityIdentifier(A11y.Settings.changeLibrary)
         }
         .formStyle(.grouped)
         .frame(minHeight: 120)
+        .accessibilityIdentifier(A11y.Settings.libraryTab)
     }
 }
 
@@ -144,9 +151,11 @@ private struct NativeHostSettingsTab: View {
                 reinstalling = false
             }
             .disabled(hostPath == nil || reinstalling)
+            .accessibilityIdentifier(A11y.Settings.reinstallManifest)
         }
         .formStyle(.grouped)
         .frame(minHeight: 140)
+        .accessibilityIdentifier(A11y.Settings.extensionsTab)
         .onAppear {
             let lastPath = UserDefaults.standard.string(forKey: "nativeHostInstalledPath")
             installed = lastPath != nil && lastPath == hostPath

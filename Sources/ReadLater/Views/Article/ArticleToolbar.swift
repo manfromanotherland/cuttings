@@ -24,6 +24,7 @@ struct ArticleToolbar: ToolbarContent {
                 )
             }
             .help(row.read ? "Mark as unread" : "Mark as read")
+            .accessibilityIdentifier(A11y.Toolbar.markRead)
 
             Button {
                 Task { await appState.toggleFavorite(row) }
@@ -34,6 +35,7 @@ struct ArticleToolbar: ToolbarContent {
                 )
             }
             .help(row.favorite ? "Remove from favorites" : "Add to favorites")
+            .accessibilityIdentifier(A11y.Toolbar.favorite)
 
             if row.archived {
                 Button {
@@ -42,6 +44,7 @@ struct ArticleToolbar: ToolbarContent {
                     Label("Move to Library", systemImage: "tray.and.arrow.up")
                 }
                 .help("Move back to library")
+                .accessibilityIdentifier(A11y.Toolbar.unarchive)
             } else {
                 Button {
                     Task { await appState.archive(row) }
@@ -49,6 +52,7 @@ struct ArticleToolbar: ToolbarContent {
                     Label("Archive", systemImage: "archivebox")
                 }
                 .help("Archive this article")
+                .accessibilityIdentifier(A11y.Toolbar.archive)
             }
 
             Button {
@@ -59,6 +63,7 @@ struct ArticleToolbar: ToolbarContent {
                 Label("Open in Browser", systemImage: "safari")
             }
             .help("Open original URL")
+            .accessibilityIdentifier(A11y.Toolbar.openInBrowser)
 
             Button {
                 appState.showTagSheet = true
@@ -66,6 +71,7 @@ struct ArticleToolbar: ToolbarContent {
                 Label("Tags", systemImage: "number")
             }
             .help("Edit tags")
+            .accessibilityIdentifier(A11y.Toolbar.tags)
 
             Button {
                 appState.showHighlights.toggle()
@@ -73,6 +79,7 @@ struct ArticleToolbar: ToolbarContent {
                 Label("Highlights", systemImage: "highlighter")
             }
             .help("Show highlights")
+            .accessibilityIdentifier(A11y.Toolbar.highlights)
 
             Button(role: .destructive) {
                 appState.pendingDelete = row
@@ -80,6 +87,7 @@ struct ArticleToolbar: ToolbarContent {
                 Label("Delete", systemImage: "trash")
             }
             .help("Permanently delete this reading")
+            .accessibilityIdentifier(A11y.Toolbar.delete)
         }
     }
 }

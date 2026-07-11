@@ -31,6 +31,7 @@ struct HighlightsInspector: View {
                     delete(highlight.id)
                 }
                 .listRowSeparator(.visible)
+                .accessibilityIdentifier(A11y.Highlights.row(highlight.id))
                 .contextMenu {
                     Button("Copy") {
                         let pasteboard = NSPasteboard.general
@@ -49,6 +50,7 @@ struct HighlightsInspector: View {
             }
         }
         .listStyle(.inset)
+        .accessibilityIdentifier(A11y.Highlights.list)
     }
 
     private var emptyState: some View {
@@ -57,6 +59,7 @@ struct HighlightsInspector: View {
             systemImage: "highlighter",
             description: Text("Select text in the article and right-click to add one.")
         )
+        .accessibilityIdentifier(A11y.Highlights.emptyState)
     }
 
     private func delete(_ highlightId: String) {
