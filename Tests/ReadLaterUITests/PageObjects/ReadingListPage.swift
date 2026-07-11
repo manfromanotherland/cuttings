@@ -36,10 +36,29 @@ struct ReadingListPage {
     func open(_ id: String) { select(id) }
 
     /// The ids of the currently loaded rows, in list order — for sort-oracle and
-    /// membership assertions.
+    /// membership assertions. A row's id can appear on several static texts, so
+    /// dedupe while preserving first-seen (top-to-bottom) order.
     var orderedRowIds: [String] {
         let prefix = A11y.List.row("")
-        return app.allByIdPrefix(prefix).map { String($0.identifier.dropFirst(prefix.count)) }
+        var seen = Set<String>()
+        var result: [String] = []
+        for element in app.allByIdPrefix(prefix) {
+            let id = String(element.identifier.dropFirst(prefix.count))
+            if !id.isEmpty, seen.insert(id).inserted { result.append(id) }
+        }
+        return result
+    }
+
+    /// Polls until the number of loaded rows equals `expected` — for asserting a
+    /// search narrowed the list (search is debounced and applied asynchronously).
+    @discardableResult
+    func waitForRowCount(_ expected: Int, timeout: TimeInterval = 8) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if orderedRowIds.count == expected { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
     }
 
     /// Whether row `id` contains a static text matching `text` (title, site, …).

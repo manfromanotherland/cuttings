@@ -14,12 +14,14 @@ extension XCUIApplication {
         descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    /// Every element whose identifier begins with `prefix` (e.g. all reading rows
-    /// under `list.row.`), snapshotted into an array so callers can count them.
+    /// The static-text elements whose identifier begins with `prefix` (e.g. all
+    /// reading rows under `list.row.`). Filtering the `identifier` property in
+    /// Swift matches the collapsed SwiftUI `List` cells (where an `identifier
+    /// BEGINSWITH` predicate does not), and scoping to `staticTexts` keeps it fast
+    /// — materializing every element type is pathologically slow. A row's id can
+    /// appear on more than one static text, so callers dedupe.
     func allByIdPrefix(_ prefix: String) -> [XCUIElement] {
-        let predicate = NSPredicate(format: "identifier BEGINSWITH %@", prefix)
-        let query = descendants(matching: .any).matching(predicate)
-        return (0..<query.count).map { query.element(boundBy: $0) }
+        staticTexts.allElementsBoundByIndex.filter { $0.identifier.hasPrefix(prefix) }
     }
 
     /// Clicks a button by title in the frontmost confirmation dialog. A SwiftUI

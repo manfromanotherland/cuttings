@@ -13,7 +13,21 @@ struct ReaderPage {
     var tags: XCUIElement { app.byId(A11y.Detail.tags) }
     var emptyState: XCUIElement { app.byId(A11y.Detail.empty) }
 
-    var titleText: String { title.label }
+    /// The reader's title text. The `.accessibilityIdentifier` can resolve to a
+    /// wrapper whose own label is empty, so prefer the `staticText` carrying the
+    /// identifier; poll briefly since the detail loads asynchronously.
+    var titleText: String {
+        let deadline = Date().addingTimeInterval(4)
+        repeat {
+            let text = app.staticTexts.matching(identifier: A11y.Detail.title).firstMatch
+            if text.exists, !text.label.isEmpty { return text.label }
+            let any = title
+            if any.exists, !any.label.isEmpty { return any.label }
+            if let value = any.value as? String, !value.isEmpty { return value }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return ""
+    }
 
     // ── Body ──────────────────────────────────────────────────────────────
     // The Markdown body renders into AppKit text views without identifiers (out

@@ -19,12 +19,14 @@ struct SidebarPage {
         app.byId(A11y.Sidebar.viewRow(view.rawValue)).clickWhenReady()
     }
 
-    /// The badge count for a view, or 0 when the badge is absent (the app hides
-    /// the badge at zero).
+    /// The count for a view. The sidebar List collapses each row into a single
+    /// element, so the count is read from the row's accessibility value (set by
+    /// the app), with label/badge fallbacks.
     func count(of view: SmartView) -> Int {
-        let badge = app.byId(A11y.Sidebar.viewCount(view.rawValue))
-        guard badge.exists else { return 0 }
-        return Int(badge.label) ?? 0
+        Self.count(
+            row: app.byId(A11y.Sidebar.viewRow(view.rawValue)),
+            badge: app.byId(A11y.Sidebar.viewCount(view.rawValue))
+        )
     }
 
     /// Polls until a view's count equals `expected` (counts load asynchronously
@@ -43,9 +45,10 @@ struct SidebarPage {
     func tagTile(_ tag: String) -> XCUIElement { app.byId(A11y.Sidebar.tagTile(tag)) }
 
     func tagCount(_ tag: String) -> Int {
-        let badge = app.byId(A11y.Sidebar.tagCount(tag))
-        guard badge.exists else { return 0 }
-        return Int(badge.label) ?? 0
+        Self.count(
+            row: app.byId(A11y.Sidebar.tagTile(tag)),
+            badge: app.byId(A11y.Sidebar.tagCount(tag))
+        )
     }
 
     @discardableResult
@@ -86,5 +89,34 @@ struct SidebarPage {
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
+    }
+
+    /// Reads a count for a collapsed sidebar row: prefer the row's accessibility
+    /// value (set by the app), then a trailing number in its label, then a
+    /// separately-queryable badge if one exists. Absent row ⇒ 0.
+    private static func count(row: XCUIElement, badge: XCUIElement) -> Int {
+        guard row.exists else {
+            return badge.exists ? (Int(badge.label) ?? 0) : 0
+        }
+        if let value = row.value as? String, let number = lastNumber(in: value) { return number }
+        if let number = lastNumber(in: row.label) { return number }
+        return badge.exists ? (Int(badge.label) ?? 0) : 0
+    }
+
+    /// The last run of digits in `text` (the count always sits at the end of a
+    /// row's label/value, after the view or tag name).
+    private static func lastNumber(in text: String) -> Int? {
+        var last: Int?
+        var current = ""
+        for character in text {
+            if character.isNumber {
+                current.append(character)
+            } else if !current.isEmpty {
+                last = Int(current)
+                current = ""
+            }
+        }
+        if !current.isEmpty { last = Int(current) }
+        return last
     }
 }
