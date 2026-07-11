@@ -16,9 +16,13 @@ struct HighlightsPage {
         app.allByIdPrefix(A11y.Highlights.row("")).count
     }
 
-    /// Delete a highlight via its row context menu (matching the journey).
+    /// Delete a highlight via its row's × button. That button carries the row's
+    /// identifier (with label "Close") and is only visible on hover, so hover the
+    /// row's text to reveal it, then click the button — filtered from the row's
+    /// static text by element type.
     func delete(_ highlightId: String) {
-        row(highlightId).rightClick()
-        app.menuItems["Delete"].clickWhenReady()
+        let identifier = A11y.Highlights.row(highlightId)
+        app.staticTexts.matching(identifier: identifier).firstMatch.hover()
+        app.buttons.matching(identifier: identifier).firstMatch.clickWhenReady()
     }
 }

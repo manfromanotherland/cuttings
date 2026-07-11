@@ -80,6 +80,11 @@ final class TestLibrary {
         FileManager.default.fileExists(atPath: highlightsFileURL(id: articleId).path)
     }
 
+    /// Raw contents of a reading's highlights file, or nil if it doesn't exist.
+    func highlightsContents(articleId: String) -> String? {
+        try? String(contentsOf: highlightsFileURL(id: articleId), encoding: .utf8)
+    }
+
     // ── URL accessors ─────────────────────────────────────────────────────
 
     func articleFileURL(id: String) -> URL {

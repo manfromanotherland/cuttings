@@ -112,6 +112,18 @@ class UITestCase: XCTestCase {
         return false
     }
 
+    /// Generic poll: waits until `condition()` holds or `timeout` elapses. For
+    /// on-disk / cross-cutting assertions that aren't a single element or default.
+    @discardableResult
+    func wait(timeout: TimeInterval = 8, until condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
     // ── Reading persisted preferences ────────────────────────────────────
     // For asserting a preference the app wrote (e.g. after a typography change).
     // These keys aren't pinned in such tests, so the app's write lands in the
