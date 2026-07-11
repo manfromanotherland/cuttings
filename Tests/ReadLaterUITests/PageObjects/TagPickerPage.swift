@@ -14,6 +14,21 @@ struct TagPickerPage {
 
     func row(_ tag: String) -> XCUIElement { app.byId(A11y.TagPicker.row(tag)) }
 
+    /// The picker's tag rows, top-to-bottom. Each row is a Button carrying
+    /// `tagPicker.row.<tag>`; the "Add …" and "Done" buttons use other ids, so a
+    /// prefix filter keeps only the tag rows in their displayed order — enough to
+    /// assert the picker floats the article's own tags to the top.
+    var orderedRowTags: [String] {
+        let prefix = A11y.TagPicker.row("")
+        var seen = Set<String>()
+        var result: [String] = []
+        for element in app.buttons.allElementsBoundByIndex where element.identifier.hasPrefix(prefix) {
+            let tag = String(element.identifier.dropFirst(prefix.count))
+            if !tag.isEmpty, seen.insert(tag).inserted { result.append(tag) }
+        }
+        return result
+    }
+
     func type(_ text: String) {
         searchField.clickWhenReady()
         searchField.typeText(text)

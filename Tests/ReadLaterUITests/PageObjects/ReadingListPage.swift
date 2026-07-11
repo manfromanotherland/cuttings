@@ -167,7 +167,15 @@ struct ReadingListPage {
     var emptyState: XCUIElement { app.byId(A11y.List.emptyState) }
     var searchEmptyState: XCUIElement { app.byId(A11y.List.searchEmptyState) }
     var tagEmptyState: XCUIElement { app.byId(A11y.List.tagEmptyState) }
-    var clearTagFilterButton: XCUIElement { app.byId(A11y.List.clearTagFilter) }
+
+    /// The "Clear tag filter" action in the tag-empty state. `ContentUnavailableView`
+    /// surfaces the outer view's `accessibilityIdentifier` but not its action
+    /// button's on macOS, so the id match usually misses — fall back to the button
+    /// by title (the `tagEmptyState` id already anchors that we're in the right state).
+    var clearTagFilterButton: XCUIElement {
+        let identified = app.byId(A11y.List.clearTagFilter)
+        return identified.exists ? identified : app.buttons["Clear tag filter"]
+    }
 
     func clearTagFilter() { clearTagFilterButton.clickWhenReady() }
 

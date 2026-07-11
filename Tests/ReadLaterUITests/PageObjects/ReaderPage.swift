@@ -13,6 +13,47 @@ struct ReaderPage {
     var tags: XCUIElement { app.byId(A11y.Detail.tags) }
     var emptyState: XCUIElement { app.byId(A11y.Detail.empty) }
 
+    /// The header's tag-chips text ("#a #b …"), or "" when the article has no tags
+    /// (the label is hidden). SwiftUI carries this Text's string in the element's
+    /// `.value` on some renders and `.label` on others (the same quirk the list
+    /// rows hit), and the identifier can resolve to an empty wrapper, so scan every
+    /// static text carrying the identifier and return the first non-empty of the
+    /// two, then fall back to the any-type match.
+    var tagsText: String {
+        for element in app.staticTexts.matching(identifier: A11y.Detail.tags).allElementsBoundByIndex {
+            if !element.label.isEmpty { return element.label }
+            if let value = element.value as? String, !value.isEmpty { return value }
+        }
+        let any = tags
+        if any.exists {
+            if !any.label.isEmpty { return any.label }
+            if let value = any.value as? String, !value.isEmpty { return value }
+        }
+        return ""
+    }
+
+    /// Polls until the header shows a chip for `tag` (tag edits reconcile
+    /// asynchronously after the write).
+    @discardableResult
+    func waitForTag(_ tag: String, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { tagsText.localizedCaseInsensitiveContains("#\(tag)") }
+    }
+
+    /// Polls until the header no longer shows a chip for `tag`.
+    @discardableResult
+    func waitForNoTag(_ tag: String, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { !tagsText.localizedCaseInsensitiveContains("#\(tag)") }
+    }
+
+    private func poll(timeout: TimeInterval, until condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
     /// The reader's title text. The `.accessibilityIdentifier` can resolve to a
     /// wrapper whose own label is empty, so prefer the `staticText` carrying the
     /// identifier; poll briefly since the detail loads asynchronously.
