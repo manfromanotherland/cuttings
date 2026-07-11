@@ -35,8 +35,17 @@ struct ReaderPage {
     // the reader.
 
     func bodyContains(_ text: String, timeout: TimeInterval = 8) -> Bool {
+        // Scope to text-bearing element types — the reader body renders into
+        // AppKit static texts / text views — rather than `.descendants(.any)`,
+        // which is far too slow over a full article and times out.
         let predicate = NSPredicate(format: "label CONTAINS[c] %@ OR value CONTAINS[c] %@", text, text)
-        return app.descendants(matching: .any).matching(predicate).firstMatch.waitForExistence(timeout: timeout)
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if app.staticTexts.matching(predicate).firstMatch.exists { return true }
+            if app.textViews.matching(predicate).firstMatch.exists { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        } while Date() < deadline
+        return false
     }
 
     /// Whether any image is present in the reader (the kitchen-sink asset).
