@@ -75,13 +75,18 @@ struct ReadingListPage {
             .contains { ((($0.value as? String) ?? "").localizedCaseInsensitiveContains(text)) }
     }
 
-    /// Whether row `id` shows the indicator glyph named `label` ("Unread" /
-    /// "Favorite"). The glyph is an `Other` element carrying the row id in its
-    /// identifier and the indicator name in its label.
+    /// Whether row `id` shows the indicator glyph named `label`. The glyphs carry
+    /// the row id in their identifier and the indicator name in their label, but
+    /// their element type varies — the unread dot is a `Circle` (`Other`), the
+    /// favorite heart is an SF Symbol (`Image`) — so check both.
     func rowHasIndicator(_ id: String, label: String) -> Bool {
-        app.otherElements.matching(identifier: A11y.List.row(id))
-            .allElementsBoundByIndex
-            .contains { $0.label == label }
+        let identifier = A11y.List.row(id)
+        func hasMatch(in query: XCUIElementQuery) -> Bool {
+            query.matching(identifier: identifier)
+                .allElementsBoundByIndex
+                .contains { $0.label == label }
+        }
+        return hasMatch(in: app.otherElements) || hasMatch(in: app.images)
     }
 
     // ── Context menu ────────────────────────────────────────────────────────

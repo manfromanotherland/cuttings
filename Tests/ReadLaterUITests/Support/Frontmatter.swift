@@ -11,6 +11,9 @@ struct Frontmatter {
     /// Raw scalar text per key (values keep their surrounding quotes, if any).
     private let fields: [String: String]
 
+    /// Block-sequence items per key, e.g. `tags:` followed by `- a` / `- b` lines.
+    private let listFields: [String: [String]]
+
     /// Parses the frontmatter block, or returns nil if the file has no fence yet
     /// (e.g. a mid-write read).
     init?(contents: String) {
@@ -20,15 +23,33 @@ struct Frontmatter {
         let block = afterOpen[..<fence.lowerBound]
 
         var parsed: [String: String] = [:]
-        for line in block.split(separator: "\n", omittingEmptySubsequences: true) {
+        var lists: [String: [String]] = [:]
+        // Tracks the key a block sequence belongs to: a `key:` line with an empty
+        // value opens one, and the following `- item` lines accumulate under it.
+        var currentListKey: String?
+
+        for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("- "), let key = currentListKey {
+                lists[key, default: []].append(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces))
+                continue
+            }
+            currentListKey = nil
+
             // The key is everything before the first colon; keys never contain
             // one, so values with colons (URLs, timestamps, `sha256:`) are safe.
             guard let colon = line.firstIndex(of: ":") else { continue }
             let key = line[..<colon].trimmingCharacters(in: .whitespaces)
             let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
             parsed[key] = value
+            // An empty value may head a block sequence (the core writes tags this
+            // way after an edit); the inline `[...]` form keeps a non-empty value.
+            if value.isEmpty { currentListKey = key }
         }
         fields = parsed
+        listFields = lists
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────
@@ -45,9 +66,14 @@ struct Frontmatter {
     /// Star rating; a missing field means 0 (unrated).
     var rating: Int { Int(fields["rating"] ?? "0") ?? 0 }
 
-    /// Tags parsed from the inline flow sequence (`["a", "b"]` / `[]`).
+    /// Tags, from either the block-sequence form the core writes on edit
+    /// (`tags:` + `- a` / `- b` lines) or the inline flow form `ArticleFixture`
+    /// emits (`["a", "b"]` / `[]`).
     var tags: [String] {
-        guard let raw = fields["tags"] else { return [] }
+        if let list = listFields["tags"], !list.isEmpty {
+            return list.map(Self.unquote)
+        }
+        guard let raw = fields["tags"], !raw.isEmpty else { return [] }
         let inner = raw.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
         if inner.trimmingCharacters(in: .whitespaces).isEmpty { return [] }
         return inner.split(separator: ",").map { Self.unquote($0.trimmingCharacters(in: .whitespaces)) }
