@@ -69,11 +69,11 @@ struct ReaderPage {
 
     // ── Rating footer ─────────────────────────────────────────────────────
 
-    func star(_ n: Int) -> XCUIElement { app.byId(A11y.RatingFooter.star(n)) }
+    func star(_ index: Int) -> XCUIElement { app.byId(A11y.RatingFooter.star(index)) }
 
-    func rate(_ n: Int) {
+    func rate(_ index: Int) {
         scrollToFooter()
-        star(n).clickWhenReady()
+        star(index).clickWhenReady()
     }
 
     /// Scroll the reader to reveal the end-of-article rating footer. The reader's

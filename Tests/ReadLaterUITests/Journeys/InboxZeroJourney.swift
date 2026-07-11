@@ -12,6 +12,8 @@ import XCTest
 /// removals advance the selection to the next row *without* re-clicking:
 ///   swiftTips(7) → minimal(4) → unicode(3) → kitchenSink(2) → swift(1)
 final class InboxZeroJourney: UITestCase {
+    // A single end-to-end triage walk; asserting every beat keeps it over the limit.
+    // swiftlint:disable:next function_body_length
     func testTriageUnreadToZero() throws {
         // Pin the sort so the Unread order is deterministic regardless of the
         // machine's persisted sort preference: saved-at descending → [7,4,3,2,1].

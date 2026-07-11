@@ -6,11 +6,6 @@ import Foundation
 struct TestHighlight {
     var id: String
     var text: String
-
-    init(id: String, text: String) {
-        self.id = id
-        self.text = text
-    }
 }
 
 /// Renders `highlights/<id>.md` in the core's exact format (`core/src/highlights.rs`):

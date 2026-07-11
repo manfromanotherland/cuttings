@@ -162,7 +162,7 @@ class UITestCase: XCTestCase {
         ("sortAscending", "-bool"),
         ("sidebarLibraryExpanded", "-bool"),
         ("sidebarRatingsExpanded", "-bool"),
-        ("sidebarTagsExpanded", "-bool"),
+        ("sidebarTagsExpanded", "-bool")
     ]
 
     private func snapshotDefaults() {

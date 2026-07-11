@@ -124,13 +124,14 @@ enum Fixtures {
             archived: true, favorite: true, tags: ["rust"], readAt: readAt("2026-02-25T09:00:00Z"),
             rating: 5, author: "Harper Keep", site: "example.com",
             excerpt: "Kept even though archived.", wordCount: 1500, lang: "en"
-        ),
+        )
     ]
 
     // ── Oracles ─────────────────────────────────────────────────────────────
 
     enum Oracle {
-        /// Sidebar smart-view badge counts.
+        // Sidebar smart-view badge counts.
+        // swiftlint:disable:next nesting
         enum ViewCounts {
             static let all = 8
             static let unread = 5
@@ -141,19 +142,20 @@ enum Fixtures {
 
         /// Sidebar Tags section: non-archived only, count desc then name asc.
         static let tagCounts: [(tag: String, count: Int)] = [
-            ("programming", 3), ("rust", 2), ("swift", 2), ("markdown", 1), ("unicode", 1),
+            ("programming", 3), ("rust", 2), ("swift", 2), ("markdown", 1), ("unicode", 1)
         ]
 
         /// Sidebar Ratings section: non-archived, ratings 1–5, rating desc. Each
         /// bucket has one article (5→idx0, 4→idx5, 3→idx6, 2→idx7, 1→idx3); idx9
         /// is rating 5 but archived, so it's excluded.
         static let ratingCounts: [(rating: UInt8, count: Int)] = [
-            (5, 1), (4, 1), (3, 1), (2, 1), (1, 1),
+            (5, 1), (4, 1), (3, 1), (2, 1), (1, 1)
         ]
 
-        /// Expected row order (by id) in the **All** view for each sort field and
-        /// direction. Indices below map to `Fixtures.id(_:)`; see the per-field
-        /// reasoning inline.
+        // Expected row order (by id) in the **All** view for each sort field and
+        // direction. Indices below map to `Fixtures.id(_:)`; see the per-field
+        // reasoning inline.
+        // swiftlint:disable:next nesting
         enum Sort {
             // saved_at increases with index → DESC is reverse index order.
             static let savedAtDescending = ids([7, 6, 5, 4, 3, 2, 1, 0]) // also the app default
@@ -197,7 +199,7 @@ enum Fixtures {
         static let articleId = Ids.kitchenSink
         static let seeded: [TestHighlight] = [
             TestHighlight(id: TestULID.make(101), text: "Local-first software keeps your data on your device."),
-            TestHighlight(id: TestULID.make(102), text: "Plain files outlive the apps that created them."),
+            TestHighlight(id: TestULID.make(102), text: "Plain files outlive the apps that created them.")
         ]
     }
 
