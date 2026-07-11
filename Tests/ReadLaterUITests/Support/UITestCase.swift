@@ -6,21 +6,12 @@ import XCTest
 /// (so tests never see each other's data), launches the app against it, and — on
 /// teardown — terminates the app, destroys the temp library, and restores the
 /// dev's real preferences. The dev's real library bookmark is never touched.
-///
-/// E2E-6 layers the fake-readings engine on top: a `launchApp(articles:)` overload
-/// that seeds fixtures before launch, and a typed `Frontmatter` reader. This base
-/// deliberately only knows how to launch an *empty* library.
 class UITestCase: XCTestCase {
     /// The running app under test, set by a `launch*` call.
     private(set) var app: XCUIApplication!
 
-    /// Library root the app was booted against (`<temp>/library`). For an
-    /// onboarding launch it's the folder onboarding will scaffold.
-    private(set) var libraryRoot: URL?
-
-    /// Per-test temp directory (parent of `library/` and `index.db`); destroyed on
-    /// teardown.
-    private var tempRoot: URL?
+    /// The isolated temp library the app was launched against; destroyed on teardown.
+    private(set) var library: TestLibrary!
 
     /// Pre-test values of the managed defaults keys, restored on teardown. The
     /// value is `String?`: `nil` means the key was unset before the test.
@@ -37,22 +28,25 @@ class UITestCase: XCTestCase {
         app?.terminate()
         app = nil
         restoreDefaults()
-        if let tempRoot { try? FileManager.default.removeItem(at: tempRoot) }
-        tempRoot = nil
-        libraryRoot = nil
+        library?.destroy()
+        library = nil
     }
 
     // ── Launch ────────────────────────────────────────────────────────────
 
-    /// Launch straight into the main view against a fresh, empty temp library.
-    /// (E2E-6 adds an `articles:` overload that seeds fixtures before launch.)
+    /// Launch straight into the main view against a fresh temp library seeded
+    /// with `articles` (empty by default). The boot rebuild indexes them before
+    /// the window appears.
     @discardableResult
-    func launchApp(configure: (inout LaunchOptions) -> Void = { _ in }) throws -> XCUIApplication {
-        let library = try makeEmptyLibrary()
-        var options = LaunchOptions(
-            libraryPath: library.root.path,
-            dbPath: library.dbPath.path
-        )
+    func launchApp(
+        articles: [ArticleFixture] = [],
+        configure: (inout LaunchOptions) -> Void = { _ in }
+    ) throws -> XCUIApplication {
+        let library = try TestLibrary()
+        try library.write(articles)
+        self.library = library
+
+        var options = LaunchOptions(libraryPath: library.libraryURL.path, dbPath: library.dbURL.path)
         configure(&options)
         app = AppLauncher.launch(options)
         XCTAssertTrue(
@@ -63,16 +57,16 @@ class UITestCase: XCTestCase {
     }
 
     /// Launch into onboarding (no library configured). `onboardingPickPath` is
-    /// pointed at a fresh temp folder, so clicking "Choose Library…" scaffolds
-    /// *that* — keeping the flow testable without a system open panel.
+    /// pointed at the temp library's folder, so clicking "Choose Library…"
+    /// scaffolds *that* — keeping the flow testable without a system open panel.
     @discardableResult
     func launchOnboarding(configure: (inout LaunchOptions) -> Void = { _ in }) throws -> XCUIApplication {
-        let base = try makeTempRoot()
-        let pick = base.appendingPathComponent("library", isDirectory: true)
-        libraryRoot = pick
+        let library = try TestLibrary()
+        self.library = library
+
         var options = LaunchOptions(
-            dbPath: base.appendingPathComponent("index.db").path,
-            onboardingPickPath: pick.path
+            dbPath: library.dbURL.path,
+            onboardingPickPath: library.libraryURL.path
         )
         configure(&options)
         app = AppLauncher.launch(options)
@@ -85,57 +79,23 @@ class UITestCase: XCTestCase {
 
     // ── On-disk assertions ────────────────────────────────────────────────
 
-    /// Polls the on-disk article file for `id` until `predicate(contents)` holds
-    /// or `timeout` elapses — the "file is the source of truth" check after a
-    /// mutation. Reads `<libraryRoot>/articles/<id>.md` raw; E2E-6 adds a typed
-    /// overload that hands the predicate a parsed `Frontmatter` instead.
+    /// Polls the on-disk article file for `id` until `predicate(frontmatter)`
+    /// holds or `timeout` elapses — the "file is the source of truth" check after
+    /// a mutation. Returns whether the predicate was satisfied in time.
     @discardableResult
     func waitForFrontmatter(
         id: String,
         timeout: TimeInterval = 8,
-        _ predicate: (String) -> Bool
+        _ predicate: (Frontmatter) -> Bool
     ) -> Bool {
-        guard let libraryRoot else {
-            XCTFail("waitForFrontmatter called before a library was launched.")
-            return false
-        }
-        let url = libraryRoot.appendingPathComponent("articles/\(id).md")
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if let contents = try? String(contentsOf: url, encoding: .utf8), predicate(contents) {
+            if let frontmatter = library?.frontmatter(id: id), predicate(frontmatter) {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
-    }
-
-    // ── Temp library ────────────────────────────────────────────────────────
-
-    /// Creates a unique per-test temp directory and remembers it for teardown.
-    private func makeTempRoot() throws -> URL {
-        let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ReadLaterUITests", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        tempRoot = base
-        return base
-    }
-
-    /// Scaffolds an empty library (`articles/`, `assets/`, `highlights/`) with a
-    /// sibling `index.db` path, matching the on-disk layout `TestLibrary` (E2E-6)
-    /// will manage.
-    private func makeEmptyLibrary() throws -> (root: URL, dbPath: URL) {
-        let base = try makeTempRoot()
-        let library = base.appendingPathComponent("library", isDirectory: true)
-        for sub in ["articles", "assets", "highlights"] {
-            try FileManager.default.createDirectory(
-                at: library.appendingPathComponent(sub, isDirectory: true),
-                withIntermediateDirectories: true
-            )
-        }
-        libraryRoot = library
-        return (library, base.appendingPathComponent("index.db"))
     }
 
     // ── Defaults isolation ──────────────────────────────────────────────────
