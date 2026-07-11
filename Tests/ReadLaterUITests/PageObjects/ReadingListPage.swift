@@ -61,13 +61,27 @@ struct ReadingListPage {
         return false
     }
 
-    /// Whether row `id` contains a static text matching `text` (title, site, …).
+    /// Whether row `id` shows `text`. Each field in a row (title, site, reading
+    /// time, excerpt) is a separate static text carrying the row's identifier,
+    /// with the text in its **`.value`** (not `.label`), so match on any static
+    /// text tagged with the row id whose value contains it. Reads the property
+    /// directly — `CONTAINS` predicates don't match these SwiftUI elements.
     func row(_ id: String, contains text: String) -> Bool {
-        row(id)
-            .descendants(matching: .staticText)
-            .matching(NSPredicate(format: "label CONTAINS[c] %@", text))
-            .firstMatch
-            .exists
+        // Narrow to this row's static texts server-side (matching(identifier:) is
+        // reliable and cheap) before materializing — scanning every static text
+        // in the app is what makes these tests slow.
+        app.staticTexts.matching(identifier: A11y.List.row(id))
+            .allElementsBoundByIndex
+            .contains { ((($0.value as? String) ?? "").localizedCaseInsensitiveContains(text)) }
+    }
+
+    /// Whether row `id` shows the indicator glyph named `label` ("Unread" /
+    /// "Favorite"). The glyph is an `Other` element carrying the row id in its
+    /// identifier and the indicator name in its label.
+    func rowHasIndicator(_ id: String, label: String) -> Bool {
+        app.otherElements.matching(identifier: A11y.List.row(id))
+            .allElementsBoundByIndex
+            .contains { $0.label == label }
     }
 
     // ── Context menu ────────────────────────────────────────────────────────
