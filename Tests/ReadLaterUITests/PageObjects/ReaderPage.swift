@@ -79,9 +79,8 @@ struct ReaderPage {
     }
 
     // ── Body ──────────────────────────────────────────────────────────────
-    // The Markdown body renders into AppKit text views without identifiers (out
-    // of scope for E2E-4), so body assertions match on rendered text anywhere in
-    // the reader.
+    // The Markdown body renders into AppKit text views without identifiers, so
+    // body assertions match on rendered text anywhere in the reader.
 
     func bodyContains(_ text: String, timeout: TimeInterval = 8) -> Bool {
         // Scope to text-bearing element types — the reader body renders into

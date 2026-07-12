@@ -66,9 +66,7 @@ targets:
     sources:
       - path: Tests/ReadLaterUITests
       # Shared with the app target (it also lives under Sources/ReadLater/) so
-      # tests and app compile the same accessibility identifiers. Its constants
-      # are filled in by E2E-4; the file starts as an empty namespace so this
-      # target has a real source to build.
+      # tests and app compile the same accessibility identifiers.
       - path: Sources/ReadLater/AccessibilityID.swift
     dependencies:
       - target: ReadLater

@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S10 — Living with sync: files change underneath the app. With the app open on
+/// Living with sync: files change underneath the app. With the app open on
 /// a seeded library, the test plays the "other device" and writes directly to the
 /// library folder; each change must land live through the FSEvents watcher +
 /// reconcile — no restart. This validates the project's crown-jewel principles:
@@ -45,7 +45,7 @@ final class SyncJourney: UITestCase {
         // Change the body too: the core's incremental diff keys solely on
         // source_hash (sha256 of the body), so a title-only rewrite carries the
         // same hash and is skipped as a no-op. Real external content edits
-        // recompute it — hence the scenario's "recomputes source_hash".
+        // recompute the body, so this rewrites it to force a fresh source_hash.
         edited.body = "# Swift Concurrency — Revised Edition\n\nRevised externally while the app was open.\n"
         try library.write(edited)
         XCTAssertTrue(

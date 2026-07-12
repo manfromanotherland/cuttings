@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S8 — Revisiting the best: curating favorites. Switch to the Favorites view and
+/// Revisiting the best: curating favorites. Switch to the Favorites view and
 /// confirm it includes the archived favorite (favorites cross the archive
 /// boundary), sort by rating descending so the highest-rated favorite floats to
 /// the top, open it, then un-favorite it (⌘⇧F) and assert it leaves the view in
@@ -14,7 +14,7 @@ import XCTest
 /// both the membership proof (step 1) and the highest-rated top row (step 2).
 ///
 /// The sort is set through the UI rather than a launch pin: pinning `sortField`
-/// would shadow the in-app change via the NSArgumentDomain (see E2E-20).
+/// would shadow the in-app change via the NSArgumentDomain.
 final class CuratingFavoritesJourney: UITestCase {
     private static let ratingDescOrder = [
         Fixtures.Ids.archivedFavorite, // rating 5 (archived — favorites cross archive)

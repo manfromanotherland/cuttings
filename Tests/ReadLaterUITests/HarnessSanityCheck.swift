@@ -2,10 +2,10 @@
 
 import XCTest
 
-/// The E2E-5 harness proving itself: launch against a fresh, empty temp library,
+/// The harness proving itself: launch against a fresh, empty temp library,
 /// confirm the app came up, then let `UITestCase.tearDown` terminate it, destroy
 /// the temp library, and restore the dev's real defaults. The full bring-up smoke
-/// test (against a seeded corpus) is E2E-9.
+/// test runs against a seeded corpus (see `SmokeTest`).
 final class HarnessSanityCheck: UITestCase {
     func testLaunchesEmptyLibraryAndTearsDown() throws {
         let app = try launchApp()

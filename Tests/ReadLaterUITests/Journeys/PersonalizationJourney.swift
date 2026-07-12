@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S11 — Making it mine (and it sticks). Set a theme, reader typography, and a
+/// Making it mine (and it sticks). Set a theme, reader typography, and a
 /// list sort, confirm each applies live, then quit and relaunch against the same
 /// library and confirm all of it was preserved.
 ///

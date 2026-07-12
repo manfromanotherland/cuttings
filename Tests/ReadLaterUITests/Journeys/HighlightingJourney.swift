@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S5 — Reading with a highlighter: an article seeded with two highlights on
+/// Reading with a highlighter: an article seeded with two highlights on
 /// disk. Open the highlights inspector (⌘⇧H) and see both, delete the first (the
 /// file keeps the second), then delete the last (empty state + the highlights
 /// file removed from disk entirely).

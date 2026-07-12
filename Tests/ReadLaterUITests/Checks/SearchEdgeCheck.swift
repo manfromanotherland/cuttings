@@ -7,7 +7,7 @@ import XCTest
 /// query restoring the full list.
 ///
 /// Queries are entered via the pasteboard (`pasteSearch`): two of them contain
-/// "c", which this host drops from `typeText` (see E2E-16); pasting sidesteps it
+/// "c", which this host drops from `typeText`; pasting sidesteps it
 /// so the check can assert the real terms rather than c-free stand-ins.
 final class SearchEdgeCheck: UITestCase {
     func testEmptyStateDiacriticsAndTagsNotSearched() throws {

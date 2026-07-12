@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S12 — Keyboard-only power run. A power user blasts through the Unread pile
+/// Keyboard-only power run. A power user blasts through the Unread pile
 /// without ever touching the mouse: arrow-key navigation with the reader
 /// following each selection, ⌘U / ⌘⇧F / ⌘⌫ acting on the selected row, ⌘K to jump
 /// to search and Escape back, ⌘/ for the shortcuts cheat sheet, and ⌃⌘S to toggle
@@ -67,7 +67,7 @@ final class KeyboardPowerJourney: UITestCase {
         // 3. ⌘K jumps focus to the search field; the typed term filters the list;
         //    Escape clears it and the list returns. Type with a verify/retry — the
         //    first synthesized keystroke into a freshly-focused field is dropped on
-        //    this host (the E2E-16 quirk) — but never click, so this still proves ⌘K
+        //    this host — but never click, so this still proves ⌘K
         //    put focus there. "Tips" is unique to Swift Tips and carries no "c".
         //    Assert the filter via targeted rows, not a full row-count enumeration:
         //    the kitchen-sink article is open in the reader, and walking its many
@@ -101,7 +101,7 @@ final class KeyboardPowerJourney: UITestCase {
 
     /// Types `text` into the already-focused search field, retrying if a keystroke
     /// is dropped — the first character into a just-focused field is lost on this
-    /// host (see E2E-16). Deliberately never clicks the field, so the caller can
+    /// host. Deliberately never clicks the field, so the caller can
     /// prove ⌘K (not a click) put keyboard focus there.
     private func typeIntoFocusedSearch(_ text: String) {
         let field = list.searchField

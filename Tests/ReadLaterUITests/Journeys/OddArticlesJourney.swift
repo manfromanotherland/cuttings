@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S13 — The odd article: real-world content variety. Real libraries hold messy,
+/// The odd article: real-world content variety. Real libraries hold messy,
 /// varied content, and the app should degrade gracefully:
 ///   1. a unicode/emoji title renders in both the list row and the reader header,
 ///   2. an article with only the required frontmatter (no site/author/excerpt/tags)

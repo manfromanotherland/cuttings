@@ -2,11 +2,11 @@
 
 import XCTest
 
-/// S2 — Morning catch-up: boot an existing seeded library, confirm the sidebar
+/// Morning catch-up: boot an existing seeded library, confirm the sidebar
 /// counts match the oracles, switch to Unread and see only the unread articles
 /// with their row content (title, site, reading time, excerpt, unread indicator).
 ///
-/// Note vs the original S2 wording: the list row does not render author or tag
+/// Note: the list row does not render author or tag
 /// chips (those appear in the reader), and the reading-time "raw word count"
 /// tooltip is a hover tooltip in the reader that XCUITest can't query — so this
 /// asserts the reading-time label instead.

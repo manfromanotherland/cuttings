@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S3 — Inbox zero: the core triage loop in the Unread view. Archive (⌘⌫), mark
+/// Inbox zero: the core triage loop in the Unread view. Archive (⌘⌫), mark
 /// read (⌘U), favorite (⌘⇧F), and add a tag, asserting the one-motion row removal
 /// + selection advance, live sidebar counts, the empty state, and on-disk
 /// frontmatter after each mutation.

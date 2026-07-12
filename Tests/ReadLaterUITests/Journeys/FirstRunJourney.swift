@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S1 — First run: onboarding → choose an empty folder → the app scaffolds the
+/// First run: onboarding → choose an empty folder → the app scaffolds the
 /// library and seeds the Welcome article → the main view appears with All 1 /
 /// Unread 1, the Welcome article auto-selected and rendered → mark it read →
 /// Unread 0 (it stays in All).

@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S6 — "Where did I put that article?": ⌘K search a distinctive term to a single
+/// "Where did I put that article?": ⌘K search a distinctive term to a single
 /// match, open it, clear to restore the list, then search an archived-only term
 /// in All (no results — search excludes archived), switch to Archive to find it,
 /// and Move to Library (unarchive), confirming counts and the file update.

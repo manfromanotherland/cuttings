@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S4 — A proper deep read: open the long kitchen-sink article, confirm its
+/// A proper deep read: open the long kitchen-sink article, confirm its
 /// markdown blocks and asset image render, bump the text size (⌘+) and switch to
 /// Serif live, scroll to the end, rate it 5 stars, and favorite it — verifying
 /// the rating and favorite land on disk.

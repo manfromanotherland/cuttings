@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S9 — Weekend cleanup: declutter by archiving what's done and purging what's
+/// Weekend cleanup: declutter by archiving what's done and purging what's
 /// dead. Batch-archive the read articles from All (each leaving in one motion
 /// with the selection advancing), review the Archive pile, move one back to the
 /// library, then permanently delete a couple — asserting the confirmation

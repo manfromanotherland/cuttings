@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// S7 — Organizing a messy library with tags. Open an article and the tag picker
+/// Organizing a messy library with tags. Open an article and the tag picker
 /// (#), create-and-apply a brand-new tag, apply that (now existing) tag to a
 /// second article, filter the list by its sidebar tile, then remove the tag from
 /// each filtered article until the view empties into the "Clear tag filter"
@@ -17,8 +17,7 @@ import XCTest
 /// minimal(4) before unicode(3)).
 final class TagOrganizingJourney: UITestCase {
     // Deliberately avoids the letter "c": `typeText` drops a bare "c" on the test
-    // Mac, so a name containing it is mistyped ("focus" → "fous"). See the
-    // "Known issue: typed 'c' is dropped" note under E2E-16 in E2E-TEST-TICKETS.md.
+    // Mac, so a name containing it is mistyped ("focus" → "fous").
     private static let newTag = "important"
 
     // One end-to-end tag-organizing walk; asserting every beat keeps it long.

@@ -143,7 +143,7 @@ struct ReadingListPage {
 
     /// Enters `text` into the search field via the pasteboard (⌘V) rather than
     /// synthetic keystrokes: this host drops the letter "c" and the first keystroke
-    /// from `typeText` (see E2E-16), and a single paste sidesteps both — while also
+    /// from `typeText`, and a single paste sidesteps both — while also
     /// landing atomically, past the search debounce.
     func pasteSearch(_ text: String) {
         let field = searchField

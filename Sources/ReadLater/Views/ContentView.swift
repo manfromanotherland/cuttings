@@ -82,7 +82,7 @@ private struct RestoringView: View {
     }
 }
 
-// ── Onboarding placeholder (fleshed out in MAC-2) ─────────────────────────────
+// ── Onboarding placeholder ────────────────────────────────────────────────────
 
 private struct OnboardingView: View {
     @Environment(AppState.self) private var appState
