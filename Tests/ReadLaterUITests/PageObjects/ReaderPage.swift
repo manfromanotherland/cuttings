@@ -62,9 +62,17 @@ struct ReaderPage {
         repeat {
             let text = app.staticTexts.matching(identifier: A11y.Detail.title).firstMatch
             if text.exists, !text.label.isEmpty { return text.label }
+            // Every `any` read stays behind `exists`: while the reader loads a
+            // freshly-opened article it shows a spinner with no title element, and
+            // reading `.value` off an absent element throws a snapshot error rather
+            // than returning empty — which a tight polling caller (e.g. a
+            // "reader followed the selection" wait) would surface as a hard failure
+            // instead of simply polling again.
             let any = title
-            if any.exists, !any.label.isEmpty { return any.label }
-            if let value = any.value as? String, !value.isEmpty { return value }
+            if any.exists {
+                if !any.label.isEmpty { return any.label }
+                if let value = any.value as? String, !value.isEmpty { return value }
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return ""
