@@ -57,10 +57,9 @@ targets:
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/native-host
 
-  # XCUITest end-to-end suite. Drives the real app as a separate process; see
-  # docs/e2e-testing.md for the (dependency-free) stack decision. The app stays
-  # on Swift 6; this target uses 5.0 to avoid strict-concurrency friction in
-  # XCTest code.
+  # XCUITest end-to-end suite. Drives the real app as a separate process, and is
+  # dependency-free (only Xcode + the macOS SDK). The app stays on Swift 6; this
+  # target uses 5.0 to avoid strict-concurrency friction in XCTest code.
   ReadLaterUITests:
     type: bundle.ui-testing
     platform: macOS

@@ -56,6 +56,67 @@ Or build from the command line:
 xcodebuild build -project ReadLater.xcodeproj -scheme ReadLater
 ```
 
+## Running the tests
+
+The end-to-end suite is XCUITest (`ReadLaterUITests`) — it launches the real app against a
+throwaway temp library and drives it through the UI. It's dependency-free: only Xcode and the
+macOS SDK, no third-party test libraries.
+
+Regenerate the project after adding or removing test files:
+
+```bash
+make xcodegen
+```
+
+Compile the test bundle without running — the fastest way to surface Swift compile errors:
+
+```bash
+xcodebuild build-for-testing -scheme ReadLater
+```
+
+Run a single test class (or a single test) while iterating:
+
+```bash
+xcodebuild test -scheme ReadLater -only-testing:ReadLaterUITests/SmokeTest
+xcodebuild test -scheme ReadLater -only-testing:ReadLaterUITests/SmokeTest/testLaunchCountsOpenAndSearch
+```
+
+Run the whole suite, capturing results (screenshots-on-failure and logs land in the bundle):
+
+```bash
+xcodebuild test -scheme ReadLater -resultBundlePath Results.xcresult
+```
+
+Pipe any of these through `xcbeautify` (`brew install xcbeautify`) for readable logs, and open
+`Results.xcresult` in Xcode — or extract attachments with `xcparse` — to inspect failures.
+
+### First run: permissions & signing
+
+- **Accessibility + Automation.** XCUITest synthesizes keyboard/mouse events and controls the app,
+  so the process running the tests needs permission. Grant the terminal app (or Xcode) both
+  **Accessibility** and **Automation** under System Settings → Privacy & Security; the first run
+  also prompts to allow controlling `ReadLater` — accept it.
+- **Signing.** If CLI signing fails for the new `ReadLaterUITests` bundle, set a development team
+  (`DEVELOPMENT_TEAM`) or enable automatic signing in Xcode once.
+- **Hardened runtime.** If the app fails to launch under test, set `ENABLE_HARDENED_RUNTIME: NO`
+  for the **Debug** config only (in `project.yml`, then `make xcodegen`).
+- **Keyboard focus.** A running test steals keyboard focus and the suite runs serially
+  (`parallelizable: false`) — don't type on the machine while it runs.
+
+### Known host quirk: dropped keystrokes
+
+On some Macs, XCUITest's `typeText` drops the letter **"c"** and the **first keystroke** into a
+freshly focused field (`"coffee"` → `"offee"`), while paste (`⌘V`) inserts text correctly. If
+search/tag tests fail with mangled input, disable press-and-hold and restart, or check the active
+keyboard layout:
+
+```bash
+defaults write -g ApplePressAndHoldEnabled -bool false
+```
+
+The suite already routes search text through the pasteboard (`ReadingListPage.pasteSearch`) to
+sidestep this, so it isn't machine-dependent.
+
 ## Debugging: SQL tracing
 
 The app embeds `read-later-core`, which logs every SQL statement to stderr when the `SQL_TRACE`
