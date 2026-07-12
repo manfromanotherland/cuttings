@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import XCTest
+import AppKit
 
 /// The middle column: the reading list, its rows, sort menu, search, and empty
 /// states.
@@ -140,6 +141,19 @@ struct ReadingListPage {
         clearField(field)
     }
 
+    /// Enters `text` into the search field via the pasteboard (⌘V) rather than
+    /// synthetic keystrokes: this host drops the letter "c" and the first keystroke
+    /// from `typeText` (see E2E-16), and a single paste sidesteps both — while also
+    /// landing atomically, past the search debounce.
+    func pasteSearch(_ text: String) {
+        let field = searchField
+        field.clickWhenReady()
+        clearField(field)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        field.typeKey("v", modifierFlags: .command)
+    }
+
     private func clearField(_ field: XCUIElement) {
         field.typeKey("a", modifierFlags: .command)
         field.typeKey(.delete, modifierFlags: [])
@@ -147,7 +161,11 @@ struct ReadingListPage {
 
     // ── Sort ──────────────────────────────────────────────────────────────
 
-    func openSortMenu() { app.byId(A11y.List.sortMenu).clickWhenReady() }
+    /// The sort menu button. Only present when the list has rows — it's hidden
+    /// for every empty state (see `ReadingListView.toolbarItems`).
+    var sortMenu: XCUIElement { app.byId(A11y.List.sortMenu) }
+
+    func openSortMenu() { sortMenu.clickWhenReady() }
 
     /// Pick a sort field (see `Sort`). Opens the menu, clicks the field, and the
     /// menu closes.
