@@ -44,9 +44,9 @@ struct ArticleDetailView: View {
                 emptyDetail
             }
         }
-        .onChange(of: appState.selectedId) { _, id in
-            Task { await load(id: id) }
-        }
+        // Load on appear too; `.onChange` alone misses the boot-time auto-selected reading.
+        .onChange(of: appState.selectedId) { _, id in Task { await load(id: id) } }
+        .task { await load(id: appState.selectedId) }
         .toolbar { toolbarItems }
         .inspector(isPresented: $appState.showHighlights) {
             HighlightsInspector(readingId: appState.selectedId)
