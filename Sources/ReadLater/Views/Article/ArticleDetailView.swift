@@ -25,6 +25,11 @@ struct ArticleDetailView: View {
     /// reader shows an "open in browser" notice instead. ~10 MB is already
     /// ~1.5M words, far beyond any real article.
     private let maxParseBytes = 10 * 1024 * 1024
+    /// Word-count companion to `maxParseBytes`: a reading this long is treated as
+    /// too large *without* fetching its body (see `load`). No real article nears
+    /// 1M words, so this short-circuits a pathological body before the reader reads
+    /// and marshals megabytes across the FFI.
+    private let maxParseWords: UInt32 = 1_000_000
 
     var body: some View {
         @Bindable var appState = appState
@@ -131,7 +136,7 @@ struct ArticleDetailView: View {
     private func articleContent(row: FfiReadingRow) -> some View {
         // Native reader handles its own scrolling and fills remaining height
         if bodyTooLarge {
-            oversizeNotice(row: row)
+            OversizeNotice(url: row.url)
         } else if let articleDocument {
             MarkdownDocumentView(
                 document: articleDocument,
@@ -196,35 +201,6 @@ struct ArticleDetailView: View {
             .accessibilityIdentifier(A11y.Detail.empty)
     }
 
-    /// Shown instead of the reader when a reading's body is too large to parse
-    /// (see `maxParseBytes`). The full text is still available in the browser.
-    private func oversizeNotice(row: FfiReadingRow) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
-            Text("This article is too large to display in the reader")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Text("Open it in your browser to read the full text.")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-            if let url = URL(string: row.url) {
-                Button("Open in Browser") {
-                    NSWorkspace.shared.open(url)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top, 4)
-                .accessibilityIdentifier(A11y.Detail.oversizeOpenInBrowser)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
-        .accessibilityIdentifier(A11y.Detail.oversize)
-    }
-
     // ── Toolbar ───────────────────────────────────────────────────────────
 
     /// The selected row resolved straight from the shared, synchronously
@@ -261,6 +237,17 @@ struct ArticleDetailView: View {
             return
         }
         row = appState.readings.first(where: { $0.id == id })
+
+        // Short-circuit a pathological body straight to the oversize notice from the
+        // cheap indexed word count — before fetching (synchronously, on the main
+        // thread) and parsing megabytes of text, the very cost this guard exists to
+        // avoid. `present`'s exact byte check still backstops a missing word count.
+        if let words = row?.wordCount, words > maxParseWords {
+            articleDocument = nil
+            bodyTooLarge = true
+            isLoading = false
+            return
+        }
 
         // Revisiting an already-opened reading: show its parsed body straight
         // from the cache — no re-parse, no spinner — then revalidate just this
