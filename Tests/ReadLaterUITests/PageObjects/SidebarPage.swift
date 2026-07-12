@@ -112,6 +112,35 @@ struct SidebarPage {
         poll(timeout: timeout) { (fontPicker.value as? String) == value }
     }
 
+    /// Apply theme, reader font, and font size in a single popover session, and
+    /// leave the popover open so the caller can read the live font value. Opening
+    /// the popover once per setter would toggle it shut between calls (the gear is
+    /// a toggle). `sizePosition` is a normalized slider position (0 = smallest);
+    /// with the size slider's discrete steps it snaps to the nearest option.
+    func setAppearance(theme: String, font: String, sizePosition: Double) {
+        openAppearancePopover()
+        app.byId(A11y.Sidebar.themeButton(theme)).clickWhenReady()
+        fontPicker.clickWhenReady()
+        fontPicker.menuItems[font].clickWhenReady()
+        fontSizeSlider.adjust(toNormalizedSliderPosition: sizePosition)
+    }
+
+    /// Dismiss the appearance popover (Escape), e.g. before interacting with the
+    /// list again.
+    func dismissAppearancePopover() {
+        if fontPicker.exists { app.typeKey(XCUIKeyboardKey.escape, modifierFlags: []) }
+    }
+
+    /// Whether the given theme (`light`/`dark`/`system`) is the active one, read
+    /// from the theme button's selected trait. Requires the popover to be open.
+    func themeSelected(_ mode: String) -> Bool {
+        app.byId(A11y.Sidebar.themeButton(mode)).isSelected
+    }
+
+    /// The reader-size slider's normalized position (0 = smallest). Requires the
+    /// popover to be open; used to assert the size setting live and after relaunch.
+    var fontSizePosition: Double { Double(fontSizeSlider.normalizedSliderPosition) }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private func poll(timeout: TimeInterval, until condition: () -> Bool) -> Bool {

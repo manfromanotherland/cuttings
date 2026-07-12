@@ -25,7 +25,7 @@ struct SettingsView: View {
 // ── Appearance ────────────────────────────────────────────────────────────────
 
 private struct AppearanceSettingsTab: View {
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("appearanceMode", store: AppDefaults.store) private var appearanceMode: AppearanceMode = .system
 
     var body: some View {
         Form {
@@ -46,8 +46,8 @@ private struct AppearanceSettingsTab: View {
 // ── Typography ────────────────────────────────────────────────────────────────
 
 private struct TypographySettingsTab: View {
-    @AppStorage("readerFont") private var readerFont: ReaderFont = .system
-    @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
+    @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
 
     var body: some View {
         Form {

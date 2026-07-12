@@ -30,6 +30,11 @@ enum TestHooks {
     /// instead of showing an `NSOpenPanel` (which XCUITest can't drive).
     static var onboardingPickPath: String? { env("READLATER_TEST_ONBOARDING_PICK") }
 
+    /// Throwaway `UserDefaults` suite name for persisted preferences, so a test
+    /// that changes theme/font/size/sort never touches the real defaults domain
+    /// (see `AppDefaults`). `nil` in production. The harness destroys the suite.
+    static var defaultsSuiteName: String? { env("READLATER_TEST_DEFAULTS") }
+
     /// Reads an environment variable, but only in UI-testing mode, so a
     /// production build can never be redirected by a stray variable.
     private static func env(_ key: String) -> String? {

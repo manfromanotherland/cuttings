@@ -11,9 +11,9 @@ struct SidebarView: View {
 
     // Per-section collapse state, persisted across launches so the sidebar
     // reopens the way the user left it. Default to expanded.
-    @AppStorage("sidebarLibraryExpanded") private var libraryExpanded = true
-    @AppStorage("sidebarRatingsExpanded") private var ratingsExpanded = true
-    @AppStorage("sidebarTagsExpanded") private var tagsExpanded = true
+    @AppStorage("sidebarLibraryExpanded", store: AppDefaults.store) private var libraryExpanded = true
+    @AppStorage("sidebarRatingsExpanded", store: AppDefaults.store) private var ratingsExpanded = true
+    @AppStorage("sidebarTagsExpanded", store: AppDefaults.store) private var tagsExpanded = true
 
     var body: some View {
         @Bindable var appState = appState
@@ -206,9 +206,9 @@ struct SidebarView: View {
 // ── Appearance popover ────────────────────────────────────────────────────────
 
 private struct AppearancePopoverView: View {
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
-    @AppStorage("readerFont") private var readerFont: ReaderFont = .system
-    @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("appearanceMode", store: AppDefaults.store) private var appearanceMode: AppearanceMode = .system
+    @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
+    @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -238,6 +238,9 @@ private struct AppearancePopoverView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(A11y.Sidebar.themeButton(mode.id))
+                    // Announce the active theme (the selection is otherwise only a
+                    // background tint) — for VoiceOver and so tests can read it back.
+                    .accessibilityAddTraits(appearanceMode == mode ? [.isSelected] : [])
                 }
             }
             .padding(3)

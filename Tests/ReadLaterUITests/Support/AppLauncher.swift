@@ -16,6 +16,10 @@ struct LaunchOptions {
     /// `NSOpenPanel` (sets `READLATER_TEST_ONBOARDING_PICK`).
     var onboardingPickPath: String?
 
+    /// Throwaway `UserDefaults` suite the app persists preferences to (sets
+    /// `READLATER_TEST_DEFAULTS`), so a test never touches the real defaults domain.
+    var defaultsSuite: String?
+
     /// Defaults pinned through the NSArgumentDomain (`-key value` launch args),
     /// which `UserDefaults` reads ahead of the persisted store — so a run starts
     /// from a known theme/font/sort no matter what's on disk, without writing to
@@ -60,6 +64,7 @@ enum AppLauncher {
         if let libraryPath = options.libraryPath { environment["READLATER_TEST_LIBRARY"] = libraryPath }
         if let dbPath = options.dbPath { environment["READLATER_TEST_DB"] = dbPath }
         if let pick = options.onboardingPickPath { environment["READLATER_TEST_ONBOARDING_PICK"] = pick }
+        if let suite = options.defaultsSuite { environment["READLATER_TEST_DEFAULTS"] = suite }
         app.launchEnvironment = environment
 
         app.launch()

@@ -3,8 +3,8 @@
 import SwiftUI
 
 struct TypographyCommands: Commands {
-    @AppStorage("readerFont") private var readerFont: ReaderFont = .system
-    @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
+    @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
 
     var body: some Commands {
         CommandMenu("Typography") {

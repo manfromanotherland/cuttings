@@ -47,7 +47,7 @@ final class AppState {
     /// with the persisted preference (re-persisting the same value harmlessly).
     var sortField: ReadingSort = .savedAt {
         didSet {
-            UserDefaults.standard.set(sortField.rawValue, forKey: SortDefaultsKey.field)
+            AppDefaults.store.set(sortField.rawValue, forKey: SortDefaultsKey.field)
         }
     }
 
@@ -55,7 +55,7 @@ final class AppState {
     /// Descending is the default for every field.
     var sortAscending: Bool = false {
         didSet {
-            UserDefaults.standard.set(sortAscending, forKey: SortDefaultsKey.ascending)
+            AppDefaults.store.set(sortAscending, forKey: SortDefaultsKey.ascending)
         }
     }
 
@@ -128,7 +128,7 @@ final class AppState {
 
     init() {
         // Restore the persisted sort preference (defaults: saved-at, descending).
-        let defaults = UserDefaults.standard
+        let defaults = AppDefaults.store
         sortField = defaults.string(forKey: SortDefaultsKey.field)
             .flatMap(ReadingSort.init(rawValue:)) ?? .savedAt
         sortAscending = defaults.bool(forKey: SortDefaultsKey.ascending)

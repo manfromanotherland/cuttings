@@ -6,7 +6,7 @@ import AppKit
 @main
 struct ReadLaterApp: App {
     @State private var appState = AppState()
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("appearanceMode", store: AppDefaults.store) private var appearanceMode: AppearanceMode = .system
 
     init() {
         // Single-window app: disable macOS automatic window tabbing so the

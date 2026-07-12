@@ -14,16 +14,23 @@ final class TestLibrary {
     /// The index DB path (`root/index.db`), kept outside the library per the contract.
     let dbURL: URL
 
+    /// A throwaway `UserDefaults` suite name the app is pointed at for this test, so
+    /// preference changes never touch the real `com.readlater.app` domain. Destroyed
+    /// in `destroy()`.
+    let defaultsSuiteName: String
+
     var articlesDir: URL { libraryURL.appendingPathComponent("articles", isDirectory: true) }
     var assetsDir: URL { libraryURL.appendingPathComponent("assets", isDirectory: true) }
     var highlightsDir: URL { libraryURL.appendingPathComponent("highlights", isDirectory: true) }
 
     init() throws {
+        let id = UUID().uuidString
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ReadLaterUITests", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
         libraryURL = root.appendingPathComponent("library", isDirectory: true)
         dbURL = root.appendingPathComponent("index.db")
+        defaultsSuiteName = "com.readlater.app.uitest.\(id)"
         for dir in [articlesDir, assetsDir, highlightsDir] {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
@@ -98,6 +105,9 @@ final class TestLibrary {
     // ── Teardown ────────────────────────────────────────────────────────────
 
     func destroy() {
+        // Drop the isolated preferences suite the app wrote to (values + backing
+        // plist), then the temp library tree.
+        UserDefaults().removePersistentDomain(forName: defaultsSuiteName)
         try? FileManager.default.removeItem(at: root)
     }
 }

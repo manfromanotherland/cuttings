@@ -4,8 +4,8 @@ import SwiftUI
 
 struct ArticleDetailView: View {
     @Environment(AppState.self) private var appState
-    @AppStorage("readerFont") private var readerFont: ReaderFont = .system
-    @AppStorage("readerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
+    @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
 
     @State private var row: FfiReadingRow?
     @State private var articleDocument: ArticleDocument?
