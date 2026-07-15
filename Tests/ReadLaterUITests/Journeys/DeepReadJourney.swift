@@ -3,9 +3,10 @@
 import XCTest
 
 /// A proper deep read: open the long kitchen-sink article, confirm its
-/// markdown blocks and asset image render, bump the text size (⌘+) and switch to
-/// Serif live, scroll to the end, rate it 5 stars, and favorite it — verifying
-/// the rating and favorite land on disk.
+/// markdown blocks and asset image render, zoom the image in the full-screen
+/// lightbox, bump the text size (⌘+) and switch to Serif live, scroll to the
+/// end, rate it 5 stars, and favorite it — verifying the rating and favorite
+/// land on disk.
 ///
 /// Notes: font/size changes can't be inspected pixel-by-pixel in XCUITest, so the
 /// font switch is verified by the persisted `readerFont` preference and ⌘+ is
@@ -33,6 +34,14 @@ final class DeepReadJourney: UITestCase {
         XCTAssertTrue(reader.bodyContains("Unchecked task"), "task list")
         XCTAssertTrue(reader.bodyContains("Plain files outlive"), "blockquote")
         XCTAssertTrue(reader.bodyContains("Sample image"), "asset image caption")
+
+        // 1b. Click the figure to zoom it: the full-screen lightbox opens, and
+        //     Escape dismisses it.
+        XCTAssertTrue(reader.revealFigure(), "figure scrolled into view")
+        reader.openImageZoom()
+        XCTAssertTrue(reader.lightboxImage.waitExists(), "image zoom lightbox opened")
+        keyboard.escape()
+        XCTAssertTrue(reader.lightboxImage.waitDisappears(), "lightbox dismissed with Escape")
 
         // 2. Scroll to the end and rate 5 stars → ★5 sidebar bucket updates (rust
         //    already has one, so it becomes 2), rating: 5 on disk.

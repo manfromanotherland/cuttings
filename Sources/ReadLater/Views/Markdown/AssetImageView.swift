@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
-import ImageIO
 import SwiftUI
 
 /// Renders a single Markdown image natively, with an optional caption drawn from
 /// the image's alt text (a "figure"). Local library assets
 /// (`../assets/<id>/<file>`) load from disk under `libraryURL/assets/`;
-/// remote `http(s)` images use `AsyncImage`. Replaces the `readlater://`
-/// custom-scheme handler the WebView relied on.
+/// remote `http(s)` images use `AsyncImage`. Path resolution and downsampled
+/// decoding live in `AssetImageLoader`, shared with the zoom `ImageLightbox`.
+///
+/// Clicking the picture raises the lightbox (via `ImageZoomPresenter`, injected
+/// into the reader's environment) so the reader can zoom into detail the inline
+/// thumbnail doesn't hold. When no presenter is present (e.g. previews) the
+/// figure stays a plain, non-interactive image.
 struct AssetImageView: View {
     let source: String
     let alt: String
@@ -16,6 +20,8 @@ struct AssetImageView: View {
     let theme: MarkdownTheme
     var highlights: [String] = []
     var onHighlight: (String) -> Void = { _ in }
+
+    @Environment(ImageZoomPresenter.self) private var zoomPresenter: ImageZoomPresenter?
 
     @State private var localImage: NSImage?
     @State private var failed = false
@@ -58,7 +64,7 @@ struct AssetImageView: View {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
-                    image.resizable().scaledToFit()
+                    zoomable(image.resizable().scaledToFit())
                 case .failure:
                     placeholder
                 default:
@@ -66,15 +72,42 @@ struct AssetImageView: View {
                 }
             }
         } else if let localImage {
-            Image(nsImage: localImage)
-                .resizable()
-                .scaledToFit()
+            zoomable(Image(nsImage: localImage).resizable().scaledToFit())
         } else if failed {
             placeholder
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 80)
                 .task(id: source) { await loadLocal() }
+        }
+    }
+
+    /// Make a successfully loaded figure clickable: a `CursorSurface` over the
+    /// image owns the pointing-hand cursor (reliably, unlike a hover overlay that
+    /// loses to the reader's text views) and opens the lightbox on click. When no
+    /// presenter is in the environment the image is returned unchanged (no zoom
+    /// affordance).
+    @ViewBuilder
+    private func zoomable(_ image: some View) -> some View {
+        if let zoomPresenter {
+            image
+                .overlay {
+                    CursorSurface(cursor: .pointingHand, onClick: {
+                        zoomPresenter.present(source: source, alt: alt, libraryURL: libraryURL)
+                    })
+                    // The surface must win *hit-testing* to own the cursor and
+                    // carry the click, which also makes it occlude the figure in
+                    // the accessibility hit test — leaving the figure button "not
+                    // hittable" for VoiceOver and XCUITest. Hide it from
+                    // accessibility so the figure element beneath is what the hit
+                    // test resolves to; the click still lands on the surface.
+                    .accessibilityHidden(true)
+                }
+                .help("Click to zoom")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier(A11y.Reader.figure)
+        } else {
+            image
         }
     }
 
@@ -91,75 +124,30 @@ struct AssetImageView: View {
 
     // ── Resolution ──────────────────────────────────────────────────────────
 
-    private var remoteURL: URL? {
-        guard let scheme = URL(string: source)?.scheme?.lowercased(),
-              scheme == "http" || scheme == "https"
-        else { return nil }
-        return URL(string: source)
-    }
-
-    /// Resolve a relative library asset path to an on-disk URL. The stored
-    /// Markdown references assets as `../assets/<id>/<file>`; strip the known
-    /// prefixes and resolve under `libraryURL/assets/` (the path the old
-    /// `AssetSchemeHandler` reconstructed).
-    private var localURL: URL? {
-        guard let libraryURL else { return nil }
-        var path = source
-        for prefix in ["../assets/", "./assets/", "assets/"] where path.hasPrefix(prefix) {
-            path = String(path.dropFirst(prefix.count))
-            break
-        }
-        return libraryURL
-            .appendingPathComponent("assets")
-            .appendingPathComponent(path)
-    }
+    private var remoteURL: URL? { AssetImageLoader.remoteURL(source: source) }
 
     private func loadLocal() async {
-        guard let url = localURL else { failed = true; return }
+        guard let url = AssetImageLoader.localURL(source: source, libraryURL: libraryURL) else {
+            failed = true
+            return
+        }
         // The reader never lays an image out wider than `contentMaxWidth`, so a
-        // thumbnail that many device pixels across is all the display needs.
-        // Loading at native resolution instead would hold far more memory than
-        // the on-screen size warrants, and a long article stacks several images.
+        // thumbnail that many device pixels across is all the inline display
+        // needs. Loading at native resolution instead would hold far more memory
+        // than the on-screen size warrants, and a long article stacks several
+        // images. (The lightbox loads a larger decode on demand for zooming.)
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         let maxPixel = theme.contentMaxWidth * scale
         // Decode the downsampled image off the main actor. ImageIO reads only
         // what it needs from disk and never materializes the full-resolution
-        // bitmap (`NSImage` is not Sendable, hence the wrapper).
+        // bitmap.
         let decoded = await Task.detached(priority: .userInitiated) {
-            AssetImageView.downsampledImage(at: url, maxPixel: maxPixel)
+            AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
         }.value
         if let decoded {
             localImage = decoded.image
         } else {
             failed = true
         }
-    }
-
-    /// Wraps an `NSImage` so it can cross the actor boundary out of the detached
-    /// decode task. Safe because the image is fully built inside that task and
-    /// never mutated afterward — ownership transfers to the main actor.
-    private struct DecodedImage: @unchecked Sendable {
-        let image: NSImage
-    }
-
-    /// Decode `url` into an image whose largest dimension is at most `maxPixel`
-    /// device pixels, using ImageIO so the full-resolution bitmap is never
-    /// materialized. Smaller source images are left as-is (no upscaling).
-    /// Returns `nil` if the file can't be read or decoded.
-    private static nonisolated func downsampledImage(at url: URL, maxPixel: CGFloat) -> DecodedImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            return nil
-        }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel.rounded())
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        let size = NSSize(width: cgImage.width, height: cgImage.height)
-        return DecodedImage(image: NSImage(cgImage: cgImage, size: size))
     }
 }

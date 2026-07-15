@@ -1,32 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
-import CryptoKit
 
-/// A tiny but valid 1×1 PNG for asset tests, plus the filename the library
-/// contract mandates: `assets/<id>/<sha256>.<ext>`, where `<sha256>` is the
-/// lowercase hex SHA-256 of the file's raw bytes.
+/// The sample image an asset test writes into a per-test library, and the
+/// filename it's stored under. `Fixtures` references it from the article body and
+/// `DeepReadJourney` writes the bytes to disk — both go through here so the name
+/// they use always matches.
+///
+/// `SampleImage.png` is a real image file (the Markdown mark, fitting the
+/// "The Complete Markdown Sample" fixture article) shipped in the UITest bundle.
+/// The test copies it onto disk in the library's `assets/` and the app reads it
+/// back on render — exactly how a normal article's image is stored and loaded.
 enum PNGFixture {
-    /// A valid 1×1 transparent RGBA PNG (the canonical smallest PNG): signature,
-    /// IHDR, a single-pixel IDAT, and IEND, each chunk with its correct CRC.
-    static let bytes: [UInt8] = [
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // signature
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR length + type
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // width=1, height=1
-        0x08, 0x06, 0x00, 0x00, 0x00,                   // 8-bit, RGBA, deflate, no filter/interlace
-        0x1F, 0x15, 0xC4, 0x89,                         // IHDR CRC
-        0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, // IDAT length=10 + type
-        0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, // zlib: one transparent pixel
-        0x0D, 0x0A, 0x2D, 0xB4,                         // IDAT CRC
-        0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND length=0 + type
-        0xAE, 0x42, 0x60, 0x82                          // IEND CRC
-    ]
+    /// The asset filename inside `assets/<id>/`. The reader resolves the body's
+    /// image path literally, so any stable name works; it just has to match on
+    /// both sides.
+    static let fileName = "SampleImage.png"
 
-    static var data: Data { Data(bytes) }
-
-    /// `<sha256>.png` — the contract-mandated asset filename for `bytes`.
-    static var fileName: String {
-        let hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        return "\(hex).png"
+    /// The image's raw bytes, read from the bundled `SampleImage.png`.
+    static var data: Data {
+        guard let url = Bundle(for: BundleToken.self).url(forResource: "SampleImage", withExtension: "png"),
+              let data = try? Data(contentsOf: url) else {
+            fatalError("SampleImage.png is missing from the UITest bundle resources.")
+        }
+        return data
     }
+
+    /// Anchors `Bundle(for:)` to the UITest bundle that carries `SampleImage.png`.
+    private final class BundleToken {}
 }

@@ -65,6 +65,19 @@ enum A11y {
         static let oversizeOpenInBrowser = "detail.oversize.openInBrowser"
     }
 
+    // ── Reader content ────────────────────────────────────────────────────────
+    enum Reader {
+        /// A tappable article image (figure). Shared by every figure in the
+        /// reader, so tests match the first one.
+        static let figure = "reader.figure"
+    }
+
+    // ── Image zoom lightbox ───────────────────────────────────────────────────
+    enum Lightbox {
+        static let image = "lightbox.image"
+        static let close = "lightbox.close"
+    }
+
     // ── Reader toolbar (7 actions; archive/unarchive share the slot) ──────────
     enum Toolbar {
         static let markRead = "toolbar.markRead"

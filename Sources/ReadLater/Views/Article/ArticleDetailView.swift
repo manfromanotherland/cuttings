@@ -20,6 +20,11 @@ struct ArticleDetailView: View {
     /// each open, so toggles made elsewhere still show on return.
     @State private var cache = ArticleDocumentCache()
 
+    /// Drives the full-screen image-zoom overlay. Injected into the reader's
+    /// environment so a clicked figure can raise the lightbox; observed here to
+    /// present it over the whole detail pane (see `ImageLightbox`).
+    @State private var imageZoom = ImageZoomPresenter()
+
     /// Bodies larger than this are not parsed at all — swift-markdown would
     /// freeze the main thread and spike memory on a pathological file. The
     /// reader shows an "open in browser" notice instead. ~10 MB is already
@@ -49,8 +54,15 @@ struct ArticleDetailView: View {
                 emptyDetail
             }
         }
+        // Reader figures raise the full-screen zoom; the lightbox layers over the
+        // whole detail pane (see `imageZoomOverlay`). Navigating away dismisses it.
+        .imageZoomOverlay(imageZoom)
         // Load on appear too; `.onChange` alone misses the boot-time auto-selected reading.
-        .onChange(of: appState.selectedId) { _, id in Task { await load(id: id) } }
+        // Navigating away also closes any open lightbox so it can't linger.
+        .onChange(of: appState.selectedId) { _, id in
+            imageZoom.dismiss()
+            Task { await load(id: id) }
+        }
         .task { await load(id: appState.selectedId) }
         .toolbar { toolbarItems }
         .inspector(isPresented: $appState.showHighlights) {

@@ -99,6 +99,35 @@ struct ReaderPage {
     /// Whether any image is present in the reader (the kitchen-sink asset).
     var hasImage: Bool { app.images.firstMatch.exists }
 
+    // ── Image zoom lightbox ───────────────────────────────────────────────────
+
+    /// The first tappable figure in the reader body.
+    var figure: XCUIElement { app.byId(A11y.Reader.figure) }
+    var lightboxImage: XCUIElement { app.byId(A11y.Lightbox.image) }
+    var lightboxClose: XCUIElement { app.byId(A11y.Lightbox.close) }
+
+    /// Scroll the reader until the figure renders (the body lazily builds blocks,
+    /// so an image near the end isn't in the tree until scrolled toward).
+    @discardableResult
+    func revealFigure(timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !figure.exists && Date() < deadline {
+            let scrollViews = app.scrollViews.allElementsBoundByIndex
+            if scrollViews.isEmpty {
+                app.swipeUp()
+            } else {
+                for scrollView in scrollViews where scrollView.exists {
+                    scrollView.swipeUp()
+                    if figure.exists { break }
+                }
+            }
+        }
+        return figure.exists
+    }
+
+    /// Click the figure to open the zoom lightbox.
+    func openImageZoom() { figure.clickWhenReady() }
+
     // ── Oversize guard ──────────────────────────────────────────────────────
 
     var oversizeNotice: XCUIElement { app.byId(A11y.Detail.oversize) }
