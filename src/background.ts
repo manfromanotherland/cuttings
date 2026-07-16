@@ -13,72 +13,18 @@ const NOTIF_HOST_MISSING = "host-missing";
 
 type IconState = "default" | "saved";
 
-function paintIcon(ctx: OffscreenCanvasRenderingContext2D, size: number, state: IconState): void {
-  const r = size * 0.15;
-  ctx.fillStyle = state === "saved" ? "#22C55E" : "#3B82F6";
-  ctx.beginPath();
-  ctx.roundRect(0, 0, size, size, r);
-  ctx.fill();
-
-  if (state === "saved") {
-    const pad = size * 0.26;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = size * 0.13;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(pad, size * 0.5);
-    ctx.lineTo(size * 0.44, size - pad);
-    ctx.lineTo(size - pad, pad);
-    ctx.stroke();
-  } else {
-    const pad = size * 0.22;
-    const bw = size - pad * 2;
-    const bh = size - pad * 1.5;
-    const notchY = size - pad * 0.6;
-    const midX = pad + bw / 2;
-
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.beginPath();
-    ctx.moveTo(pad, pad);
-    ctx.lineTo(pad + bw, pad);
-    ctx.lineTo(pad + bw, notchY);
-    ctx.lineTo(midX, notchY - bh * 0.2);
-    ctx.lineTo(pad, notchY);
-    ctx.closePath();
-    ctx.fill();
-  }
-}
-
-function drawIcon(size: number, state: IconState): ImageData {
-  const canvas = new OffscreenCanvas(size, size);
-  const ctx = canvas.getContext("2d")!;
-  paintIcon(ctx, size, state);
-  return ctx.getImageData(0, 0, size, size);
-}
-
-/** Render the icon to a PNG data URL — required for chrome.notifications, which can't decode SVG. */
-async function iconDataUrl(size: number, state: IconState): Promise<string> {
-  const canvas = new OffscreenCanvas(size, size);
-  const ctx = canvas.getContext("2d")!;
-  paintIcon(ctx, size, state);
-  const blob = await canvas.convertToBlob({ type: "image/png" });
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return "data:image/png;base64," + btoa(binary);
+/** The saved state is the same artwork carrying a green check badge. */
+function iconPaths(state: IconState): Record<number, string> {
+  const stem = state === "saved" ? "icons/icon-saved" : "icons/icon";
+  return { 16: `${stem}-16.png`, 32: `${stem}-32.png`, 48: `${stem}-48.png` };
 }
 
 async function setIcon(state: IconState = "default", tabId?: number): Promise<void> {
-  const imageData = {
-    16: drawIcon(16, state),
-    32: drawIcon(32, state),
-    48: drawIcon(48, state),
-  };
+  const path = iconPaths(state);
   if (tabId !== undefined) {
-    await chrome.action.setIcon({ imageData, tabId });
+    await chrome.action.setIcon({ path, tabId });
   } else {
-    await chrome.action.setIcon({ imageData });
+    await chrome.action.setIcon({ path });
   }
 }
 
@@ -277,11 +223,9 @@ async function notifyHostMissing(tabId: number): Promise<void> {
     "Click the notification to see how to install it.",
   );
   try {
-    // iconUrl must be a raster image — the notifications API can't decode SVG.
-    const iconUrl = await iconDataUrl(48, "default");
     await chrome.notifications.create(NOTIF_HOST_MISSING, {
       type: "basic",
-      iconUrl,
+      iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
       title: "Read Later — Native Host Not Found",
       message:
         "The native helper isn't installed yet. Click this notification to see how to install it.",
