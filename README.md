@@ -124,6 +124,69 @@ keeps working after you publish.
 > The native messaging host must be installed and running for saves to work — see
 > [read-later-core](https://github.com/boniattirodrigo/read-later-core).
 
+## Extraction pipeline
+
+Saving a page runs three stages in `src/extraction.ts`:
+
+1. **DOM pre-processing** — the live document is cloned, then reshaped so the
+   generic extractor handles it well. Two kinds of fixes live here:
+   - _Global_ tweaks that apply to every page (e.g. `preserveHeadings`, which
+     neutralises class names that would otherwise trip Readability's filters).
+   - _Site adapters_ (`src/site-adapters/`) — host-scoped fixes for pages whose
+     markup Readability mishandles. See below.
+2. **Readability** — Mozilla Readability selects the main article content and
+   drops boilerplate.
+3. **Turndown** — the article HTML is converted to Markdown
+   (`htmlToMarkdown`), with a few per-element rules (in-page anchors, images).
+
+These are three different layers, and a fix belongs in the one that matches the
+problem:
+
+| You want to…                                        | Layer                          |
+| :-------------------------------------------------- | :----------------------------- |
+| Change how one **HTML element renders** as Markdown | a Turndown rule (`addRule`)    |
+| Fix **one host's markup** before content selection  | a **site adapter** (see below) |
+| Change extraction **for every page**                | a global step in `extractPage` |
+
+Turndown's own rule/plugin API only decides how nodes that survive Readability
+are _rendered_; it can't restore content Readability removed or restructure the
+DOM. Site fixes that need to run **before** Readability therefore live in the
+adapter layer, not in Turndown.
+
+### Site adapters
+
+A `SiteAdapter` (`src/site-adapters/types.ts`) is a host-scoped pre-processor
+that mutates the cloned document before Readability runs:
+
+```ts
+export interface SiteAdapter {
+  readonly id: string;
+  matches(url: URL): boolean;
+  preprocess(doc: Document): void;
+}
+```
+
+The bundled `x` adapter fixes X (Twitter) longform Articles, where inline
+citations and @-mentions are rendered as standalone link nodes that Readability
+strips as boilerplate — dropping the reference's URL _and_ its visible text. The
+adapter folds each such link into adjacent prose so it survives extraction. (An
+`options`-level Readability knob, `linkDensityModifier`, was ruled out: it can't
+rescue short labels at all and, set high enough to help, disables link-density
+cleaning for the whole page across every site.)
+
+**To add a new site:**
+
+1. Create `src/site-adapters/<site>.ts` exporting a `SiteAdapter`. Scope
+   `matches` tightly to the host(s), and keep `preprocess` defensive — assume
+   markup drifts and never assume a node exists.
+2. Register it in the `ADAPTERS` array in `src/site-adapters/index.ts`.
+3. Add tests in `src/site-adapters/<site>.test.ts` — cover host matching (incl.
+   look-alike hosts that must _not_ match), the transform itself, and an
+   end-to-end `extractPage` assertion.
+
+Adapters are best-effort: a throw from one is caught by the registry so it can
+never block a save.
+
 ## Test & lint
 
 ```bash

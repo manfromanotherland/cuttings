@@ -4,6 +4,7 @@ import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
 
 import type { SaveRequestMetadata } from "./protocol.js";
+import { applySiteAdapters } from "./site-adapters/index.js";
 
 export interface ExtractionResult {
   metadata: SaveRequestMetadata;
@@ -18,6 +19,7 @@ export interface ExtractionResult {
 export function extractPage(doc: Document, pageUrl: string): ExtractionResult | null {
   const clone = doc.cloneNode(true) as Document;
   preserveHeadings(clone);
+  applySiteAdapters(clone, pageUrl);
   const article = new Readability(clone).parse();
   if (!article?.content) return null;
 
