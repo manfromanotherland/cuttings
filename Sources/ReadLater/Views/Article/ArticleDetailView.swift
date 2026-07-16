@@ -57,13 +57,15 @@ struct ArticleDetailView: View {
         // Reader figures raise the full-screen zoom; the lightbox layers over the
         // whole detail pane (see `imageZoomOverlay`). Navigating away dismisses it.
         .imageZoomOverlay(imageZoom)
-        // Load on appear too; `.onChange` alone misses the boot-time auto-selected reading.
-        // Navigating away also closes any open lightbox so it can't linger.
-        .onChange(of: appState.selectedId) { _, id in
+        // The one trigger for loading: runs on appear *and* on every selection
+        // change, and cancels a load still in flight when the selection moves on. A
+        // `.task` plus a separate `.onChange` both fired for the same reading, so it
+        // was fetched and parsed twice over. Navigating away also closes any open
+        // lightbox so it can't linger.
+        .task(id: appState.selectedId) {
             imageZoom.dismiss()
-            Task { await load(id: id) }
+            await load(id: appState.selectedId)
         }
-        .task { await load(id: appState.selectedId) }
         .toolbar { toolbarItems }
         .inspector(isPresented: $appState.showHighlights) {
             HighlightsInspector(readingId: appState.selectedId)
