@@ -224,13 +224,13 @@ struct ArticleDetailView: View {
             articleDocument = cached.document
             bodyTooLarge = false
             isLoading = false
-            await appState.loadHighlights(id: id)
+            loadHighlightsInBackground(id: id)
             await revalidate(id: id, cachedBody: cached.body)
             return
         }
 
         isLoading = true
-        await appState.loadHighlights(id: id)
+        loadHighlightsInBackground(id: id)
         // The native reader parses Markdown directly (linked images like
         // `[![alt](img)](url)` are handled by the renderer), so no HTML
         // conversion or asset-path rewriting is needed. Parse here, off the
@@ -261,6 +261,17 @@ struct ArticleDetailView: View {
         let document = ArticleDocument(markdown: body)
         cache.store(body: body, document: document, for: id)
         articleDocument = document
+    }
+
+    /// Fetch the reading's highlights *off* the reader's critical path.
+    ///
+    /// Highlights are a tint applied over already-rendered text, so nothing about
+    /// showing the article depends on them — yet this was awaited *before* the body
+    /// was even fetched, gating the whole reader on it. Firing it as a detached task
+    /// lets the article render immediately; `appState.highlights` is observed, so the
+    /// tint applies on the next render once it lands.
+    private func loadHighlightsInBackground(id: String) {
+        Task { await appState.loadHighlights(id: id) }
     }
 
     /// After showing a reading from cache, re-read its body and re-parse only if

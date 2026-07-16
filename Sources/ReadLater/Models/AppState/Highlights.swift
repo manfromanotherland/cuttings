@@ -9,7 +9,12 @@ extension AppState {
     /// (e.g. when no reading is selected).
     func loadHighlights(id: String?) async {
         guard let core, let id else { highlights = []; return }
-        highlights = (try? await core.listHighlights(readingId: id)) ?? []
+        let loaded = (try? await core.listHighlights(readingId: id)) ?? []
+        // The reader no longer awaits this (see `loadHighlightsInBackground`), so a
+        // slow fetch can land after the user has moved to another reading — don't let
+        // it overwrite that one's highlights.
+        guard selectedId == id else { return }
+        highlights = loaded
     }
 
     /// Save a new highlight for `id` from the user's selected text, then reload.
