@@ -25,7 +25,7 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 }
 
 enum ReaderFontSize: Int, CaseIterable, Identifiable {
-    case small = 15, medium = 17, large = 19, xlarge = 21
+    case small = 15, medium = 17, large = 19, xlarge = 21, huge = 23, giant = 25
     var id: Int { rawValue }
 
     var label: String {
@@ -34,6 +34,8 @@ enum ReaderFontSize: Int, CaseIterable, Identifiable {
         case .medium: "Medium"
         case .large: "Large"
         case .xlarge: "Extra Large"
+        case .huge: "Huge"
+        case .giant: "Giant"
         }
     }
 

@@ -21,7 +21,7 @@ struct TypographyCommands: Commands {
                     }
                 }
                 .keyboardShortcut(ShortcutCatalog.increaseFont)
-                .disabled(readerFontSize == .xlarge)
+                .disabled(readerFontSize == ReaderFontSize.allCases.last)
 
                 Button("Decrease Size") {
                     if let prev = ReaderFontSize.allCases.last(where: { $0.rawValue < readerFontSize.rawValue }) {

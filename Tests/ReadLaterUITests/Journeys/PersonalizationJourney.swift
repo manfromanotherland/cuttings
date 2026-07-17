@@ -18,8 +18,9 @@ import XCTest
 /// sort via the row order.
 final class PersonalizationJourney: UITestCase {
     private static let wordCountDesc = Fixtures.Oracle.Sort.wordCountDescending
-    /// "Large" is index 2 of [small, medium, large, xlarge] → 2/3 on the 0…1 slider.
-    private static let largeSliderPosition = 2.0 / 3.0
+    /// "Huge" is index 4 of [small, medium, large, xlarge, huge, giant] → 4/5 on the 0…1
+    /// slider.
+    private static let hugeSliderPosition = 4.0 / 5.0
 
     func testPreferencesApplyLiveAndPersist() throws {
         try launchApp(articles: Fixtures.standardCorpus)
@@ -32,9 +33,9 @@ final class PersonalizationJourney: UITestCase {
         list.selectSortDirection(ReadingListPage.Sort.longestFirst)
         XCTAssertTrue(wait { list.orderedRowIds == Self.wordCountDesc }, "list reorders by time-to-read desc")
 
-        // 1+2. Theme Dark, reader font Serif, size Large — applied in one popover
+        // 1+2. Theme Dark, reader font Serif, size Huge — applied in one popover
         //      session, then verified live while the popover is still open.
-        sidebar.setAppearance(theme: "dark", font: "Serif", sizePosition: Self.largeSliderPosition)
+        sidebar.setAppearance(theme: "dark", font: "Serif", sizePosition: Self.hugeSliderPosition)
         assertAppearanceApplied(context: "live")
         sidebar.dismissAppearancePopover()
 
@@ -52,14 +53,14 @@ final class PersonalizationJourney: UITestCase {
         sidebar.dismissAppearancePopover()
     }
 
-    /// Asserts the appearance popover reflects Dark / Serif / Large. Assumes the
+    /// Asserts the appearance popover reflects Dark / Serif / Huge. Assumes the
     /// popover is open.
     private func assertAppearanceApplied(context: String) {
         XCTAssertTrue(wait { sidebar.themeSelected("dark") }, "Dark theme (\(context))")
         XCTAssertTrue(sidebar.waitForFontValue("Serif"), "Serif font (\(context))")
         XCTAssertTrue(
-            wait { abs(sidebar.fontSizePosition - Self.largeSliderPosition) < 0.1 },
-            "Large size (\(context))"
+            wait { abs(sidebar.fontSizePosition - Self.hugeSliderPosition) < 0.1 },
+            "Huge size (\(context))"
         )
     }
 }
