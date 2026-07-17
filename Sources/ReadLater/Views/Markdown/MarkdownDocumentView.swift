@@ -128,6 +128,27 @@ struct ArticleDocument {
     }
 }
 
+extension ArticleDocument {
+    /// Parse `markdown` off the calling actor. swift-markdown builds the whole
+    /// tree in one synchronous pass — long enough on a large article to stall
+    /// the main thread — so callers await this rather than calling
+    /// `init(markdown:)` on the main actor.
+    static func parse(markdown: String) async -> ArticleDocument {
+        let parsed = await Task.detached(priority: .userInitiated) {
+            Parsed(document: ArticleDocument(markdown: markdown))
+        }.value
+        return parsed.document
+    }
+
+    /// Lets a document parsed in a detached task cross back to the caller's
+    /// actor. Safe because the tree is fully built inside the task and never
+    /// mutated afterward — ownership transfers with the box. (swift-markdown's
+    /// `Markup` nodes don't declare `Sendable`.)
+    private struct Parsed: @unchecked Sendable {
+        let document: ArticleDocument
+    }
+}
+
 /// Native reader: renders a pre-parsed `ArticleDocument` as a SwiftUI view tree.
 /// Replaces the `WKWebView`-based `MarkdownWebView`. Light/Dark adapt
 /// automatically via semantic colors (appearance is applied app-wide in

@@ -216,9 +216,9 @@ struct ArticleDetailView: View {
         row = appState.readings.first(where: { $0.id == id })
 
         // Short-circuit a pathological body straight to the oversize notice from the
-        // cheap indexed word count — before fetching (synchronously, on the main
-        // thread) and parsing megabytes of text, the very cost this guard exists to
-        // avoid. `present`'s exact byte check still backstops a missing word count.
+        // cheap indexed word count — before fetching and parsing megabytes of text,
+        // the very cost this guard exists to avoid. `present`'s exact byte check
+        // still backstops a missing word count.
         if let words = row?.wordCount, words > maxParseWords {
             articleDocument = nil
             bodyTooLarge = true
@@ -245,15 +245,22 @@ struct ArticleDetailView: View {
         // conversion or asset-path rewriting is needed. Parse here, off the
         // per-render path, so re-rendering the reader never re-parses.
         let body = await appState.getBody(id: id)
-        present(body: body, id: id)
+        // A load can be superseded while the body is in flight: `.task(id:)` cancels
+        // us, but neither the fetch above nor the detached parse in `present` observes
+        // that cancellation. Bail before touching shared reader state so a stale load
+        // can't paint over — or clear the spinner of — the reading now loading.
+        guard appState.selectedId == id else { return }
+        await present(body: body, id: id)
+        guard appState.selectedId == id else { return }
         isLoading = false
     }
 
     /// Show a freshly fetched body: parse, cache, and display it — unless it
-    /// exceeds `maxParseBytes`, in which case skip parsing entirely (it would
-    /// freeze the main thread) and flag it so the reader shows the oversize
-    /// notice. A nil body (nothing fetched) clears the reader.
-    private func present(body: String?, id: String) {
+    /// exceeds `maxParseBytes`, in which case skip parsing entirely and flag it
+    /// so the reader shows the oversize notice. The parse runs off the main
+    /// thread (see `ArticleDocument.parse`), so a large article can't stall the
+    /// UI. A nil body (nothing fetched) clears the reader.
+    private func present(body: String?, id: String) async {
         guard let body else {
             articleDocument = nil
             bodyTooLarge = false
@@ -267,8 +274,14 @@ struct ArticleDetailView: View {
             return
         }
         bodyTooLarge = false
-        let document = ArticleDocument(markdown: body)
+        let document = await ArticleDocument.parse(markdown: body)
+        // Cache the finished parse under its own id even if the selection moved on
+        // while it ran — the work is done and keyed by `id`, so revisiting hits the
+        // cache instead of re-parsing.
         cache.store(body: body, document: document, for: id)
+        // A detached parse can outlive the selection that asked for it — don't paint
+        // it over the reading now on screen if the user moved on.
+        guard appState.selectedId == id else { return }
         articleDocument = document
     }
 
@@ -292,7 +305,7 @@ struct ArticleDetailView: View {
         let body = await appState.getBody(id: id)
         // Bail if the user moved on, or nothing changed.
         guard appState.selectedId == id, let body, body != cachedBody else { return }
-        present(body: body, id: id)
+        await present(body: body, id: id)
     }
 
     /// Apply a tag to the article: optimistically show the chip now (exact-match
