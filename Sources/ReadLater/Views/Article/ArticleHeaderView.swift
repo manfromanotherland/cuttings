@@ -16,9 +16,11 @@ struct ArticleHeaderView: View {
                 .accessibilityIdentifier(A11y.Detail.title)
             metadataRow
         }
-        .padding(.horizontal, 24)
         .padding(.top, 24)
         .padding(.bottom, 16)
+        .frame(maxWidth: 680, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 20)
     }
 
     private var metadataRow: some View {

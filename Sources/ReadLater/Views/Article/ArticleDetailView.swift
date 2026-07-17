@@ -89,22 +89,23 @@ struct ArticleDetailView: View {
     // ── Article content ───────────────────────────────────────────────────
 
     private func articleView(row: FfiReadingRow) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ArticleHeaderView(row: row)
-            Divider()
-            articleContent(row: row)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(row.title.isEmpty ? "Article" : row.title)
+        articleContent(row: row)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle(row.title.isEmpty ? "Article" : row.title)
     }
 
-    /// The reader area below the header: the oversize notice, the parsed
-    /// document, an excerpt-only fallback, or nothing.
+    /// The reader: the oversize notice, the parsed document, an excerpt-only
+    /// fallback, or nothing. The article header is embedded inside the scroll
+    /// area of each branch so it moves with the content.
     @ViewBuilder
     private func articleContent(row: FfiReadingRow) -> some View {
-        // Native reader handles its own scrolling and fills remaining height
         if bodyTooLarge {
-            OversizeNotice(url: row.url)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ArticleHeaderView(row: row)
+                    OversizeNotice(url: row.url)
+                }
+            }
         } else if let articleDocument {
             MarkdownDocumentView(
                 document: articleDocument,
@@ -115,6 +116,7 @@ struct ArticleDetailView: View {
                 onHighlight: { text in
                     Task { await appState.toggleHighlight(id: row.id, text: text) }
                 },
+                header: { ArticleHeaderView(row: row) },
                 footer: { ratingFooter(row: row) }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -136,13 +138,20 @@ struct ArticleDetailView: View {
     private func excerptFallback(row: FfiReadingRow, excerpt: String) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(excerpt)
-                    .foregroundStyle(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                ratingFooter(row: row)
+                ArticleHeaderView(row: row)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(excerpt)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ratingFooter(row: row)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: 680, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 80)
             }
-            .padding(24)
         }
     }
 

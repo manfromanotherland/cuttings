@@ -132,7 +132,7 @@ struct ArticleDocument {
 /// Replaces the `WKWebView`-based `MarkdownWebView`. Light/Dark adapt
 /// automatically via semantic colors (appearance is applied app-wide in
 /// `ReadLaterApp`), and links open in the system browser.
-struct MarkdownDocumentView<Footer: View>: View {
+struct MarkdownDocumentView<Header: View, Footer: View>: View {
     let document: ArticleDocument
     let libraryURL: URL?
     var font: ReaderFont = .system
@@ -141,6 +141,8 @@ struct MarkdownDocumentView<Footer: View>: View {
     var highlights: [String] = []
     /// Called with the selected text when the user highlights a passage.
     var onHighlight: (String) -> Void = { _ in }
+    /// Leading content rendered inside the scroll, before the article body.
+    @ViewBuilder var header: () -> Header
     /// Trailing content rendered inside the scroll, after the article body — so
     /// it comes into view only when the reader reaches the end of the article.
     @ViewBuilder var footer: () -> Footer
@@ -148,6 +150,7 @@ struct MarkdownDocumentView<Footer: View>: View {
     init(document: ArticleDocument, libraryURL: URL?,
          font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
          highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
+         @ViewBuilder header: @escaping () -> Header = { EmptyView() },
          @ViewBuilder footer: @escaping () -> Footer = { EmptyView() }) {
         self.document = document
         self.libraryURL = libraryURL
@@ -155,6 +158,7 @@ struct MarkdownDocumentView<Footer: View>: View {
         self.fontSize = fontSize
         self.highlights = highlights
         self.onHighlight = onHighlight
+        self.header = header
         self.footer = footer
     }
 
@@ -164,33 +168,36 @@ struct MarkdownDocumentView<Footer: View>: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
-                ForEach(document.groups) { group in
-                    switch group {
-                    case .textRun(_, let blocks):
-                        SelectableTextView(
-                            attributed: MarkdownTextRun.attributed(blocks, theme: theme),
-                            highlights: highlights,
-                            onHighlight: onHighlight
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    case .other(let item):
-                        MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
-                                          highlights: highlights, onHighlight: onHighlight)
+            VStack(alignment: .leading, spacing: 0) {
+                header()
+                LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
+                    ForEach(document.groups) { group in
+                        switch group {
+                        case .textRun(_, let blocks):
+                            SelectableTextView(
+                                attributed: MarkdownTextRun.attributed(blocks, theme: theme),
+                                highlights: highlights,
+                                onHighlight: onHighlight
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        case .other(let item):
+                            MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
+                                              highlights: highlights, onHighlight: onHighlight)
+                        }
                     }
+                    footer()
+                        .frame(maxWidth: .infinity)
                 }
-                footer()
-                    .frame(maxWidth: .infinity)
+                .font(theme.bodyFont)
+                .frame(maxWidth: theme.contentMaxWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .padding(.bottom, 80)
+                // Behind the content: a click in the margins or between blocks clears
+                // any active text selection, so clicking outside the text deselects.
+                .background(SelectionClearingBackground())
             }
-            .font(theme.bodyFont)
-            .frame(maxWidth: theme.contentMaxWidth, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 80)
-            // Behind the content: a click in the margins or between blocks clears
-            // any active text selection, so clicking outside the text deselects.
-            .background(SelectionClearingBackground())
         }
         .environment(\.openURL, OpenURLAction { url in
             NSWorkspace.shared.open(url)
