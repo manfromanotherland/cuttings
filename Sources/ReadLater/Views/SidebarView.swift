@@ -52,6 +52,7 @@ struct SidebarView: View {
                 }
             }
         }
+        .padding(.top, 1) // Remove the white background color at the traffic lights
         .listStyle(.sidebar)
         .focused($focusedColumn, equals: .sidebar)
         // → crosses into the reading list; ↑/↓ keep navigating the sidebar's own
