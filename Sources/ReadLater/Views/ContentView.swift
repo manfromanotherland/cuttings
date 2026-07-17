@@ -9,6 +9,8 @@ struct ContentView: View {
     /// with both column views so the ←/→ arrows can hand focus back and forth.
     @FocusState private var focusedColumn: FocusColumn?
 
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
     var body: some View {
         @Bindable var appState = appState
         Group {
@@ -26,17 +28,32 @@ struct ContentView: View {
         .sheet(isPresented: $appState.showShortcuts) {
             ShortcutsView()
         }
+        .onChange(of: appState.isFocusMode) { _, isFocus in
+            if isFocus { appState.searchQuery = "" }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                columnVisibility = isFocus ? .doubleColumn : .all
+            }
+        }
+        .onChange(of: columnVisibility) { _, newValue in
+            if appState.isFocusMode && newValue != .doubleColumn {
+                appState.isFocusMode = false
+            }
+        }
     }
 
     @ViewBuilder
     private var mainContent: some View {
         @Bindable var appState = appState
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(focusedColumn: $focusedColumn)
                 .navigationSplitViewColumnWidth(min: 160, ideal: 200)
         } content: {
             ReadingListView(focusedColumn: $focusedColumn)
-                .navigationSplitViewColumnWidth(min: 260, ideal: 320)
+                .navigationSplitViewColumnWidth(
+                    min: appState.isFocusMode ? 0 : 260,
+                    ideal: appState.isFocusMode ? 0 : 320,
+                    max: appState.isFocusMode ? 0 : .infinity
+                )
         } detail: {
             ArticleDetailView()
         }

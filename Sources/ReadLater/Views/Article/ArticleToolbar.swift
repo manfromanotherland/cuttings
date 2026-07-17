@@ -88,6 +88,19 @@ struct ArticleToolbar: ToolbarContent {
             }
             .help("Permanently delete this reading")
             .accessibilityIdentifier(A11y.Toolbar.delete)
+
+            Button {
+                appState.isFocusMode.toggle()
+            } label: {
+                Label(
+                    appState.isFocusMode ? "Exit Focus" : "Focus",
+                    systemImage: appState.isFocusMode
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right"
+                )
+            }
+            .keyboardShortcut(ShortcutCatalog.toggleFocusMode)
+            .help(appState.isFocusMode ? "Exit focus mode" : "Enter focus mode")
         }
     }
 }

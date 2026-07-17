@@ -19,7 +19,7 @@ struct ReadingListView: View {
                 list
             }
         }
-        .navigationTitle(navigationTitle)
+        .navigationTitle(appState.isFocusMode ? "" : navigationTitle)
         .task { await appState.loadReadings() }
         .onChange(of: appState.sortField) { _, _ in
             Task { await appState.loadReadings() }
@@ -124,7 +124,7 @@ struct ReadingListView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         @Bindable var appState = appState
-        if !appState.readings.isEmpty {
+        if !appState.readings.isEmpty && !appState.isFocusMode {
             let searching = !appState.searchQuery.isEmpty
             let effectiveSort = searching ? appState.searchSort : appState.sortField
             ToolbarItem(placement: .primaryAction) {

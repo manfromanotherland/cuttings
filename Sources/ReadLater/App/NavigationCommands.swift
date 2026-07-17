@@ -19,6 +19,11 @@ struct NavigationCommands: Commands {
                 appState.focusSearchField()
             }
             .keyboardShortcut(ShortcutCatalog.focusSearch)
+
+            Button(appState.isFocusMode ? "Exit Focus Mode" : "Focus Mode") {
+                appState.isFocusMode.toggle()
+            }
+            .keyboardShortcut(ShortcutCatalog.toggleFocusMode)
         }
     }
 }

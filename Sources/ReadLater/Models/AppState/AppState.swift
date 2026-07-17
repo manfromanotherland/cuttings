@@ -116,6 +116,7 @@ final class AppState {
     /// keystroke fall through to standard text editing. Kept in sync by
     /// `editingMonitor` (see `TextEditingMonitor`).
     var isEditingText: Bool = false
+    var isFocusMode: Bool = false
 
     // Internal rather than private so the sibling extension files in this
     // folder can reach them — Swift's `private` is file-scoped.

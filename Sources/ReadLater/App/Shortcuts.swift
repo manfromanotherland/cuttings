@@ -60,8 +60,9 @@ enum ShortcutCatalog {
     static let openInBrowser    = AppShortcut(title: "Open in Browser",         key: "o",     modifiers: [.command, .shift],  keyGlyph: "O")
 
     // View / navigation
-    static let focusSearch      = AppShortcut(title: "Focus Search",            key: "k",     modifiers: .command,            keyGlyph: "K")
+    static let focusSearch      = AppShortcut(title: "Focus Search",            key: "k",     modifiers: .command,             keyGlyph: "K")
     static let toggleSidebar    = AppShortcut(title: "Toggle Sidebar",          key: "s",     modifiers: [.control, .command], keyGlyph: "S")
+    static let toggleFocusMode  = AppShortcut(title: "Toggle Focus Mode",       key: "r",     modifiers: [.command, .shift],   keyGlyph: "R")
 
     // Reading
     static let increaseFont     = AppShortcut(title: "Increase Text Size",      key: "+",     modifiers: .command,            keyGlyph: "+")
@@ -73,7 +74,7 @@ enum ShortcutCatalog {
     /// Groups in cheat-sheet display order.
     static let groups: [Group] = [
         Group(name: "Article", shortcuts: [toggleRead, toggleFavorite, editTags, toggleHighlights, archive, delete, openInBrowser]),
-        Group(name: "View",    shortcuts: [focusSearch, toggleSidebar]),
+        Group(name: "View",    shortcuts: [focusSearch, toggleSidebar, toggleFocusMode]),
         Group(name: "Reading", shortcuts: [increaseFont, decreaseFont]),
         Group(name: "Help",    shortcuts: [showShortcuts])
     ]
