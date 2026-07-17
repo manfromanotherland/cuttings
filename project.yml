@@ -7,10 +7,8 @@ options:
 
 packages:
   Markdown:
-    # Apple's swift-markdown publishes no semver tags; the documented integration
-    # is the main branch. Pin to a specific revision here for reproducible builds.
     url: https://github.com/apple/swift-markdown.git
-    branch: main
+    exactVersion: "0.8.0"
 
 targets:
   ReadLater:
