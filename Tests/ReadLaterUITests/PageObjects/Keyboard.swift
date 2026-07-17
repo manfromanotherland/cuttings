@@ -20,6 +20,7 @@ struct Keyboard {
     // ── View / navigation ─────────────────────────────────────────────────
     func focusSearch() { app.typeKey("k", modifierFlags: .command) }           // ⌘K
     func toggleSidebar() { app.typeKey("s", modifierFlags: [.command, .control]) } // ⌃⌘S
+    func toggleFocusMode() { app.typeKey("r", modifierFlags: [.command, .shift]) } // ⌘⇧R
 
     // ── Reading ────────────────────────────────────────────────────────────
     func increaseFontSize() { app.typeKey("+", modifierFlags: .command) }      // ⌘+

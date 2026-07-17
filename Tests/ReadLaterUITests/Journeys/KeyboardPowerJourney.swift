@@ -5,8 +5,8 @@ import XCTest
 /// Keyboard-only power run. A power user blasts through the Unread pile
 /// without ever touching the mouse: arrow-key navigation with the reader
 /// following each selection, ⌘U / ⌘⇧F / ⌘⌫ acting on the selected row, ⌘K to jump
-/// to search and Escape back, ⌘/ for the shortcuts cheat sheet, and ⌃⌘S to toggle
-/// the sidebar — the full keyboard surface in one flow.
+/// to search and Escape back, ⌘/ for the shortcuts cheat sheet, ⌃⌘S to toggle
+/// the sidebar, and ⌘⇧R for focus mode — the full keyboard surface in one flow.
 ///
 /// The sort is pinned (saved-at descending) so the Unread order is deterministic
 /// regardless of the machine's persisted preference:
@@ -97,6 +97,21 @@ final class KeyboardPowerJourney: UITestCase {
         XCTAssertTrue(wait { !sidebarAll.isHittable }, "⌃⌘S hides the sidebar")
         keyboard.toggleSidebar()
         XCTAssertTrue(wait { sidebarAll.isHittable }, "⌃⌘S brings the sidebar back")
+
+        // 6. ⌘⇧R enters focus mode — hiding BOTH the sidebar and the reading list so
+        //    only the reader remains — then exits, restoring both. The open reading
+        //    stays put throughout (focus mode reflows columns, never reloads the
+        //    detail).
+        let anyRow = list.row(Fixtures.Ids.swiftTips)
+        let openReaderTitle = reader.titleText
+        XCTAssertTrue(wait { anyRow.isHittable }, "reading list visible before focus")
+        keyboard.toggleFocusMode()
+        XCTAssertTrue(wait { !sidebarAll.isHittable }, "⌘⇧R hides the sidebar")
+        XCTAssertTrue(wait { !anyRow.isHittable }, "⌘⇧R hides the reading list")
+        XCTAssertEqual(reader.titleText, openReaderTitle, "the reader stays put in focus mode")
+        keyboard.toggleFocusMode()
+        XCTAssertTrue(wait { sidebarAll.isHittable }, "⌘⇧R restores the sidebar")
+        XCTAssertTrue(wait { anyRow.isHittable }, "⌘⇧R restores the reading list")
     }
 
     /// Types `text` into the already-focused search field, retrying if a keystroke
