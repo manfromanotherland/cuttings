@@ -293,7 +293,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn failed_image_download_leaves_comment_in_markdown() {
+    fn failed_image_download_leaves_remote_url_intact() {
         with_library(|dir| {
             let msg = serde_json::to_vec(&serde_json::json!({
                 "protocol_version": 1,
@@ -320,8 +320,12 @@ mod integration_tests {
                 std::fs::read_to_string(dir.path().join("articles").join(format!("{id}.md")))
                     .unwrap();
             assert!(
-                content.contains("asset-fetch-failed"),
-                "expected <!-- asset-fetch-failed --> comment for unreachable image"
+                content.contains("http://127.0.0.1:1/photo.jpg"),
+                "an image that can't be fetched keeps its remote URL in the Markdown"
+            );
+            assert!(
+                !content.contains("asset-fetch-failed"),
+                "a failed image must not be flagged for a later re-fetch"
             );
         });
     }

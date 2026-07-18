@@ -10,9 +10,10 @@ use crate::writer::sha256_hex;
 /// Download all `image_urls` into `assets/<id>/`, rewrite their occurrences in `markdown`
 /// to relative paths, and return the updated Markdown.
 ///
-/// On per-image download failure: leaves the remote URL intact and appends an HTML comment
-/// `<!-- asset-fetch-failed: <url> -->` after the broken image reference so the failure
-/// is visible and recoverable.
+/// This save-time fetch is the only attempt made for an image. On per-image download
+/// failure the remote URL is left untouched in the Markdown — the reference and its alt
+/// text survive so the reader can show a labelled placeholder — and the image is never
+/// fetched again.
 pub fn download_images(
     library: &LibraryRoot,
     id: &str,
@@ -25,19 +26,15 @@ pub fn download_images(
     let mut result = markdown.to_string();
 
     for url in image_urls {
-        match fetch_image(url) {
-            Ok((bytes, ext)) => {
-                let hash = sha256_hex(&bytes);
-                let filename = format!("{hash}.{ext}");
-                fs::write(assets_dir.join(&filename), &bytes)?;
+        // The save-time fetch is the only attempt. If it fails, the remote URL is
+        // left as-is in the Markdown and the image is not downloaded later.
+        if let Ok((bytes, ext)) = fetch_image(url) {
+            let hash = sha256_hex(&bytes);
+            let filename = format!("{hash}.{ext}");
+            fs::write(assets_dir.join(&filename), &bytes)?;
 
-                let rel = format!("../assets/{id}/{filename}");
-                result = result.replace(url.as_str(), &rel);
-            }
-            Err(_) => {
-                let marker = format!("\n<!-- asset-fetch-failed: {url} -->");
-                result = result.replace(&format!("]({url})"), &format!("]({url}){marker}"));
-            }
+            let rel = format!("../assets/{id}/{filename}");
+            result = result.replace(url.as_str(), &rel);
         }
     }
 
