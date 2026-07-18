@@ -14,24 +14,22 @@ final class ImageZoomPresenter {
     /// The image currently shown in the lightbox, or `nil` when none is open.
     var target: Target?
 
-    /// One presentable image. `remoteURL` is set for `http(s)` sources; otherwise
-    /// `localURL` points at the on-disk asset. `id` is unique per `present` call
-    /// so the SwiftUI transition animates fresh even when the same image reopens.
+    /// One presentable image. `localURL` points at the on-disk asset. `id` is
+    /// unique per `present` call so the SwiftUI transition animates fresh even
+    /// when the same image reopens.
     struct Target: Identifiable, Equatable {
         let id = UUID()
         let alt: String
-        let remoteURL: URL?
-        let localURL: URL?
+        let localURL: URL
     }
 
-    /// Open the lightbox for a Markdown image source. No-ops when the source
-    /// resolves to neither a remote nor a local URL, so a broken reference can't
-    /// raise an empty overlay.
+    /// Open the lightbox for a Markdown image source. Only local library assets
+    /// open; a source that never downloaded is still a remote `http(s)` URL —
+    /// `localURL` returns nil for it — so this no-ops and the reader keeps showing
+    /// its placeholder rather than fetching the image over the network.
     func present(source: String, alt: String, libraryURL: URL?) {
-        let remote = AssetImageLoader.remoteURL(source: source)
-        let local = remote == nil ? AssetImageLoader.localURL(source: source, libraryURL: libraryURL) : nil
-        guard remote != nil || local != nil else { return }
-        target = Target(alt: alt, remoteURL: remote, localURL: local)
+        guard let local = AssetImageLoader.localURL(source: source, libraryURL: libraryURL) else { return }
+        target = Target(alt: alt, localURL: local)
     }
 
     func dismiss() {

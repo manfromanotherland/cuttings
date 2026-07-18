@@ -18,19 +18,18 @@ enum AssetImageLoader {
         let image: NSImage
     }
 
-    /// The remote URL for an `http(s)` source, or `nil` for a local asset.
-    static func remoteURL(source: String) -> URL? {
-        guard let scheme = URL(string: source)?.scheme?.lowercased(),
-              scheme == "http" || scheme == "https"
-        else { return nil }
-        return URL(string: source)
-    }
-
     /// Resolve a relative library asset path to an on-disk URL. The stored
     /// Markdown references assets as `../assets/<id>/<file>`; strip the known
-    /// prefixes and resolve under `libraryURL/assets/`.
+    /// prefixes and resolve under `libraryURL/assets/`. An image the core
+    /// couldn't download at save time is still an absolute `http(s)` URL — not a
+    /// local asset — so this returns `nil` for it and the reader shows a
+    /// placeholder instead of fetching it over the network.
     static func localURL(source: String, libraryURL: URL?) -> URL? {
         guard let libraryURL else { return nil }
+        if let scheme = URL(string: source)?.scheme?.lowercased(),
+           scheme == "http" || scheme == "https" {
+            return nil
+        }
         var path = source
         for prefix in ["../assets/", "./assets/", "assets/"] where path.hasPrefix(prefix) {
             path = String(path.dropFirst(prefix.count))

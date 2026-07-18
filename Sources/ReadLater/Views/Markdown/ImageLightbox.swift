@@ -54,18 +54,7 @@ struct ImageLightbox: View {
 
     @ViewBuilder
     private var picture: some View {
-        if let remote = target.remoteURL {
-            AsyncImage(url: remote) { phase in
-                switch phase {
-                case .success(let image):
-                    displayed(image.resizable().scaledToFit())
-                case .failure:
-                    failureView
-                default:
-                    ProgressView().controlSize(.large).tint(.white)
-                }
-            }
-        } else if let localImage {
+        if let localImage {
             displayed(Image(nsImage: localImage).resizable().scaledToFit())
         } else if failed {
             failureView
@@ -117,7 +106,7 @@ struct ImageLightbox: View {
     // ── Loading ───────────────────────────────────────────────────────────────
 
     private func loadLocal() async {
-        guard let url = target.localURL else { failed = true; return }
+        let url = target.localURL
         let maxPixel = Self.zoomMaxPixel()
         let decoded = await Task.detached(priority: .userInitiated) {
             AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)

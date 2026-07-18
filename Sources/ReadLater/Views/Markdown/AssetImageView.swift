@@ -5,9 +5,11 @@ import SwiftUI
 
 /// Renders a single Markdown image natively, with an optional caption drawn from
 /// the image's alt text (a "figure"). Local library assets
-/// (`../assets/<id>/<file>`) load from disk under `libraryURL/assets/`;
-/// remote `http(s)` images use `AsyncImage`. Path resolution and downsampled
-/// decoding live in `AssetImageLoader`, shared with the zoom `ImageLightbox`.
+/// (`../assets/<id>/<file>`) load from disk under `libraryURL/assets/`. An image
+/// the core couldn't download at save time is left as a remote `http(s)` URL; the
+/// reader shows a labelled placeholder for it and never fetches it over the
+/// network. Path resolution and downsampled decoding live in `AssetImageLoader`,
+/// shared with the zoom `ImageLightbox`.
 ///
 /// Clicking the picture raises the lightbox (via `ImageZoomPresenter`, injected
 /// into the reader's environment) so the reader can zoom into detail the inline
@@ -60,18 +62,7 @@ struct AssetImageView: View {
 
     @ViewBuilder
     private var picture: some View {
-        if let url = remoteURL {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    zoomable(image.resizable().scaledToFit())
-                case .failure:
-                    placeholder
-                default:
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 80)
-                }
-            }
-        } else if let localImage {
+        if let localImage {
             zoomable(Image(nsImage: localImage).resizable().scaledToFit())
         } else if failed {
             placeholder
@@ -123,8 +114,6 @@ struct AssetImageView: View {
     }
 
     // ── Resolution ──────────────────────────────────────────────────────────
-
-    private var remoteURL: URL? { AssetImageLoader.remoteURL(source: source) }
 
     private func loadLocal() async {
         guard let url = AssetImageLoader.localURL(source: source, libraryURL: libraryURL) else {
