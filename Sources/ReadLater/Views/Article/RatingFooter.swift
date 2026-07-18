@@ -13,7 +13,6 @@ struct RatingFooter: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Divider()
             Text("Rate this article")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
