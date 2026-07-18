@@ -6,6 +6,8 @@ import SwiftUI
 /// reader reaches the end — rating is a judgment formed once you've read.
 struct RatingFooter: View {
     let row: FfiReadingRow
+    /// Reader typography, so the prompt and stars rescale with the body copy.
+    let theme: MarkdownTheme
 
     /// Called with the new rating (0 clears back to unrated). The parent owns
     /// the optimistic swap and the reconcile after the write.
@@ -14,7 +16,7 @@ struct RatingFooter: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Rate this article")
-                .font(.subheadline)
+                .font(theme.metadataFont)
                 .foregroundStyle(.secondary)
             ratingControl
         }
@@ -39,6 +41,6 @@ struct RatingFooter: View {
                 .accessibilityIdentifier(A11y.RatingFooter.star(star))
             }
         }
-        .font(.title3)
+        .font(theme.ratingStarFont)
     }
 }

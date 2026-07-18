@@ -8,11 +8,14 @@ import SwiftUI
 /// loading state.
 struct ArticleHeaderView: View {
     let row: FfiReadingRow
+    /// Reader typography, so the title and metadata rescale with the body copy.
+    let theme: MarkdownTheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(row.title.isEmpty ? "Untitled" : row.title)
-                .font(.largeTitle.bold())
+                .font(theme.titleFont)
+                .tracking(theme.titleTracking)
                 .accessibilityIdentifier(A11y.Detail.title)
             metadataRow
         }
@@ -41,7 +44,7 @@ struct ArticleHeaderView: View {
                 // / removing tags happens in the tag sheet (the # toolbar
                 // button).
                 Text(row.tags.map { "#\($0)" }.joined(separator: " "))
-                    .font(.subheadline)
+                    .font(theme.metadataFont)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .accessibilityIdentifier(A11y.Detail.tags)
@@ -52,7 +55,7 @@ struct ArticleHeaderView: View {
     private func metadataLabel(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .labelStyle(.tightIcon)
-            .font(.subheadline)
+            .font(theme.metadataFont)
             .foregroundStyle(.secondary)
     }
 }

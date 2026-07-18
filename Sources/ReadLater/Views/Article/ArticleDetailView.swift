@@ -37,6 +37,13 @@ struct ArticleDetailView: View {
     /// and marshals megabytes across the FFI.
     private let maxParseWords: UInt32 = 1_000_000
 
+    /// Reader typography, derived once from the persisted font settings and shared
+    /// by the body (`MarkdownDocumentView`) and the surrounding chrome
+    /// (`ArticleHeaderView`, `RatingFooter`) so they all rescale together.
+    private var theme: MarkdownTheme {
+        MarkdownTheme(font: readerFont, fontSize: readerFontSize)
+    }
+
     var body: some View {
         @Bindable var appState = appState
         Group {
@@ -103,7 +110,7 @@ struct ArticleDetailView: View {
         if bodyTooLarge {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ArticleHeaderView(row: row)
+                    ArticleHeaderView(row: row, theme: theme)
                     OversizeNotice(url: row.url)
                 }
             }
@@ -117,7 +124,7 @@ struct ArticleDetailView: View {
                 onHighlight: { text in
                     Task { await appState.toggleHighlight(id: row.id, text: text) }
                 },
-                header: { ArticleHeaderView(row: row) },
+                header: { ArticleHeaderView(row: row, theme: theme) },
                 footer: { ratingFooter(row: row) }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -139,7 +146,7 @@ struct ArticleDetailView: View {
     private func excerptFallback(row: FfiReadingRow, excerpt: String) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ArticleHeaderView(row: row)
+                ArticleHeaderView(row: row, theme: theme)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(excerpt)
                         .foregroundStyle(.secondary)
@@ -163,7 +170,7 @@ struct ArticleDetailView: View {
     /// then reconcile with the authoritative row once the core write + refresh
     /// land (falling back to the prior row if the write didn't take).
     private func ratingFooter(row: FfiReadingRow) -> some View {
-        RatingFooter(row: row) { newValue in
+        RatingFooter(row: row, theme: theme) { newValue in
             let previous = self.row
             var optimistic = row
             optimistic.rating = newValue

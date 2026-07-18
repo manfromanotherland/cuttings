@@ -1,5 +1,3 @@
-# Welcome to Read Later
-
 Read Later is a distraction-free reading app that keeps your saved articles in a folder you control — on iCloud Drive, Dropbox, or any directory you like. No accounts, no servers, just files.
 
 ## Saving Articles
