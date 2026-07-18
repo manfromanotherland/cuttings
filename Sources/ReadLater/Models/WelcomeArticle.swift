@@ -53,7 +53,7 @@ enum WelcomeArticle {
         content += "saved_at: \(savedAt)\n"
         content += "archived: false\n"
         content += "favorite: false\n"
-        content += "rating: 0\n"
+        content += "rating: 5\n"
         content += "tags:\n- welcome\n"
         content += "excerpt: A guide to getting started with Read Later \u{2014} and a taste of what it can do.\n"
         content += "word_count: \(wordCount)\n"

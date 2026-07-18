@@ -4,8 +4,8 @@ import XCTest
 
 /// First run: onboarding → choose an empty folder → the app scaffolds the
 /// library and seeds the Welcome article → the main view appears with All 1 /
-/// Unread 1, the Welcome article auto-selected and rendered → mark it read →
-/// Unread 0 (it stays in All).
+/// Unread 1, the Welcome article auto-selected and rendered → it carries a
+/// pre-set 5-star rating → mark it read → Unread 0 (it stays in All).
 final class FirstRunJourney: UITestCase {
     /// The Welcome article's fixed id, seeded by the app into a fresh library.
     private let welcomeId = "01JZWC0M0000000000000001"
@@ -34,7 +34,13 @@ final class FirstRunJourney: UITestCase {
             "Reader should render the welcome body as text"
         )
 
-        // 5. Mark it read → Unread drops to 0, but it stays in All (read, not
+        // 5. The seeded article ships with a pre-set 5-star rating on disk.
+        XCTAssertTrue(
+            waitForFrontmatter(id: welcomeId) { $0.rating == 5 },
+            "The seeded Welcome article should have a 5-star rating"
+        )
+
+        // 6. Mark it read → Unread drops to 0, but it stays in All (read, not
         //    archived), and the file records the read state.
         reader.markReadToggle()
         XCTAssertTrue(sidebar.waitForCount(.unread, equals: 0), "Unread should drop to 0")
