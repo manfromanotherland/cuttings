@@ -5,14 +5,20 @@ import { describe, expect, it } from "vitest";
 import { countWords, extractPage, htmlToMarkdown } from "./extraction.js";
 
 describe("htmlToMarkdown", () => {
-  it("converts h1 headings", () => {
+  it("demotes h1 to h2 so the reading keeps a single top-level title", () => {
     const { markdown } = htmlToMarkdown("<h1>Title</h1>");
-    expect(markdown.trim()).toBe("# Title");
+    expect(markdown.trim()).toBe("## Title");
   });
 
   it("converts h2 headings", () => {
     const { markdown } = htmlToMarkdown("<h2>Section</h2>");
     expect(markdown.trim()).toBe("## Section");
+  });
+
+  it("leaves headings below h1 unchanged when demoting", () => {
+    const { markdown } = htmlToMarkdown("<h1>Title</h1><h3>Sub</h3>");
+    expect(markdown).toMatch(/^## Title$/m);
+    expect(markdown).toMatch(/^### Sub$/m);
   });
 
   it("converts paragraphs", () => {

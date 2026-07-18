@@ -86,6 +86,17 @@ export function htmlToMarkdown(html: string): { markdown: string; imageUrls: str
     },
   });
 
+  // The reading's own title is captured separately (in metadata) and rendered as
+  // the article's sole h1. A body <h1> would be a second top-level heading, so
+  // demote it to <h2> ("##") — one h1 per reading. Deeper levels (h2–h6) are left
+  // as they are.
+  td.addRule("demoteH1", {
+    filter: "h1",
+    replacement(content) {
+      return `\n\n## ${content}\n\n`;
+    },
+  });
+
   td.addRule("images", {
     filter: "img",
     replacement(_content, node) {
