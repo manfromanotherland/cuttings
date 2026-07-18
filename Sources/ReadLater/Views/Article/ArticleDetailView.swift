@@ -20,10 +20,11 @@ struct ArticleDetailView: View {
     /// each open, so toggles made elsewhere still show on return.
     @State private var cache = ArticleDocumentCache()
 
-    /// Drives the full-screen image-zoom overlay. Injected into the reader's
-    /// environment so a clicked figure can raise the lightbox; observed here to
-    /// present it over the whole detail pane (see `ImageLightbox`).
-    @State private var imageZoom = ImageZoomPresenter()
+    /// Drives the full-screen image-zoom overlay. Owned by `ContentView` (so the
+    /// window toolbar can hide while it's up) and passed in here; injected into the
+    /// reader's environment so a clicked figure can raise the lightbox, and
+    /// observed to present it over the whole detail pane (see `ImageLightbox`).
+    let imageZoom: ImageZoomPresenter
 
     /// Bodies larger than this are not parsed at all — swift-markdown would
     /// freeze the main thread and spike memory on a pathological file. The
