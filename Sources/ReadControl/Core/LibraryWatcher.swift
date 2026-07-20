@@ -10,7 +10,7 @@ import Foundation
 /// so the caller doesn't need its own debounce.
 final class LibraryWatcher: @unchecked Sendable {
     private var stream: FSEventStreamRef?
-    private let queue = DispatchQueue(label: "com.readlater.fsevents", qos: .utility)
+    private let queue = DispatchQueue(label: "app.readcontrol.fsevents", qos: .utility)
     private let onChange: @Sendable () -> Void
 
     init(libraryPath: String, onChange: @escaping @Sendable () -> Void) {

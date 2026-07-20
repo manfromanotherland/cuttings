@@ -55,7 +55,7 @@ extension AppState {
             try await bridge.rebuild()
             core = bridge
             libraryURL = url
-            // Host-machine side effects (the ~/.config/read-later/library file
+            // Host-machine side effects (the ~/.config/readcontrol/library file
             // and the browser native-messaging manifest) are neutralized under
             // UI testing so runs don't touch the real machine's config.
             if !TestHooks.isUITesting {
@@ -71,11 +71,11 @@ extension AppState {
         isRestoringLibrary = false
     }
 
-    /// Write the library path to ~/.config/read-later/library so the native
+    /// Write the library path to ~/.config/readcontrol/library so the native
     /// messaging host can find it without needing a security-scoped bookmark.
     private func writeLibraryPathConfig(_ path: String) {
         let configDir = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent(".config/read-later", isDirectory: true)
+            .appendingPathComponent(".config/readcontrol", isDirectory: true)
         try? FileManager.default.createDirectory(
             at: configDir, withIntermediateDirectories: true)
         try? (path + "\n").write(
@@ -122,7 +122,7 @@ extension AppState {
         if let path = TestHooks.dbPath { return path }
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ReadLater", isDirectory: true)
+            .appendingPathComponent("ReadControl", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         return support.appendingPathComponent("index.db").path
     }

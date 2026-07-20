@@ -152,7 +152,7 @@ extension ArticleDocument {
 /// Native reader: renders a pre-parsed `ArticleDocument` as a SwiftUI view tree.
 /// Replaces the `WKWebView`-based `MarkdownWebView`. Light/Dark adapt
 /// automatically via semantic colors (appearance is applied app-wide in
-/// `ReadLaterApp`), and links open in the system browser.
+/// `ReadControlApp`), and links open in the system browser.
 struct MarkdownDocumentView<Header: View, Footer: View>: View {
     let document: ArticleDocument
     let libraryURL: URL?

@@ -11,7 +11,7 @@ import Foundation
 enum WelcomeArticle {
     private static let articleId = "01JZWC0M0000000000000001"
     private static let highlightId = "01JZWC0M0000000000000002"
-    private static let highlightedText = "Read Later keeps your articles where you can always find them."
+    private static let highlightedText = "Read Control keeps your articles where you can always find them."
 
     /// Write the welcome article into `libraryURL/articles/` only if that
     /// folder contains no `.md` files — i.e. the user picked an empty folder.
@@ -45,17 +45,17 @@ enum WelcomeArticle {
         var content = "---\n"
         content += "format_version: 1\n"
         content += "id: \(articleId)\n"
-        content += "url: https://read-later.app/welcome\n"
-        content += "canonical_url: https://read-later.app/welcome\n"
-        content += "title: Welcome to Read Later\n"
+        content += "url: https://readcontrol.app/welcome\n"
+        content += "canonical_url: https://readcontrol.app/welcome\n"
+        content += "title: Welcome to Read Control\n"
         content += "author: Rodrigo Boniatti\n"
-        content += "site: read-later.app\n"
+        content += "site: readcontrol.app\n"
         content += "saved_at: \(savedAt)\n"
         content += "archived: false\n"
         content += "favorite: false\n"
         content += "rating: 5\n"
         content += "tags:\n- welcome\n"
-        content += "excerpt: A guide to getting started with Read Later \u{2014} and a taste of what it can do.\n"
+        content += "excerpt: A guide to getting started with Read Control \u{2014} and a taste of what it can do.\n"
         content += "word_count: \(wordCount)\n"
         content += "lang: en\n"
         content += "source_hash: \(sourceHash)\n"

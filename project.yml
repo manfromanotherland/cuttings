@@ -1,6 +1,6 @@
-name: ReadLater
+name: ReadControl
 options:
-  bundleIdPrefix: com.readlater
+  bundleIdPrefix: app.readcontrol
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -11,15 +11,15 @@ packages:
     exactVersion: "0.8.0"
 
 targets:
-  ReadLater:
+  ReadControl:
     type: application
     platform: macOS
     sources:
-      - Sources/ReadLater
+      - Sources/ReadControl
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:
-      - framework: Frameworks/ReadLaterCore.xcframework
+      - framework: Frameworks/ReadControlCore.xcframework
         embed: false
       - sdk: SystemConfiguration.framework
       - package: Markdown
@@ -27,16 +27,16 @@ targets:
       base:
         SWIFT_VERSION: "6.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
-        PRODUCT_BUNDLE_IDENTIFIER: com.readlater.app
-        PRODUCT_NAME: ReadLater
+        PRODUCT_BUNDLE_IDENTIFIER: app.readcontrol.app
+        PRODUCT_NAME: ReadControl
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        INFOPLIST_FILE: Sources/ReadLater/App/Info.plist
+        INFOPLIST_FILE: Sources/ReadControl/App/Info.plist
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
-        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/read_later_coreFFI.modulemap
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/readcontrol_coreFFI.modulemap
     entitlements:
-      path: Sources/ReadLater/App/ReadLater.entitlements
+      path: Sources/ReadControl/App/ReadControl.entitlements
     preBuildScripts:
       - name: Build and copy native-host
         script: |
@@ -44,52 +44,52 @@ targets:
           # Xcode runs build phases with a sanitized PATH that omits ~/.cargo/bin,
           # so make cargo discoverable before invoking it.
           source "$HOME/.cargo/env" 2>/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
-          CORE="${SRCROOT}/../read-later-core"
+          CORE="${SRCROOT}/../readcontrol-core"
           cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin native-host
           SRC="${CORE}/target/release/native-host"
           DST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/native-host"
           cp "${SRC}" "${DST}"
           chmod +x "${DST}"
         inputFiles:
-          - $(SRCROOT)/../read-later-core/native-host/src/main.rs
+          - $(SRCROOT)/../readcontrol-core/native-host/src/main.rs
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/native-host
 
   # XCUITest end-to-end suite. Drives the real app as a separate process, and is
   # dependency-free (only Xcode + the macOS SDK). The app stays on Swift 6; this
   # target uses 5.0 to avoid strict-concurrency friction in XCTest code.
-  ReadLaterUITests:
+  ReadControlUITests:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - path: Tests/ReadLaterUITests
-      # Shared with the app target (it also lives under Sources/ReadLater/) so
+      - path: Tests/ReadControlUITests
+      # Shared with the app target (it also lives under Sources/ReadControl/) so
       # tests and app compile the same accessibility identifiers.
-      - path: Sources/ReadLater/AccessibilityID.swift
+      - path: Sources/ReadControl/AccessibilityID.swift
     dependencies:
-      - target: ReadLater
+      - target: ReadControl
     settings:
       base:
         SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
-        PRODUCT_BUNDLE_IDENTIFIER: com.readlater.app.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: app.readcontrol.app.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: ReadLater
+        TEST_TARGET_NAME: ReadControl
 
-# A shared scheme so `xcodebuild -scheme ReadLater` works from the command line
+# A shared scheme so `xcodebuild -scheme ReadControl` works from the command line
 # and CI. Without this, xcodegen emits no scheme and only Xcode.app auto-creates
 # a throwaway one under xcuserdata (not committed, wiped by `make clean`).
 schemes:
-  ReadLater:
+  ReadControl:
     build:
       targets:
-        ReadLater: all
+        ReadControl: all
     # Serial: UI tests steal keyboard focus, so parallel runs are flaky.
     # Per-test temp libraries keep future sharding open.
     test:
       config: Debug
       targets:
-        - name: ReadLaterUITests
+        - name: ReadControlUITests
           parallelizable: false
     run:
       config: Debug

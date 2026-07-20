@@ -6,8 +6,8 @@ import Foundation
 /// tests locate controls by identifier rather than by (localizable, ambiguous)
 /// on-screen wording.
 ///
-/// This file is compiled into **both** the `ReadLater` app target and the
-/// `ReadLaterUITests` target (it lives under `Sources/ReadLater/`, and the test
+/// This file is compiled into **both** the `ReadControl` app target and the
+/// `ReadControlUITests` target (it lives under `Sources/ReadControl/`, and the test
 /// target lists it explicitly) so the two sides agree on one source of truth.
 ///
 /// **Dependency-free by design:** the UI-test target can't see app types, so the

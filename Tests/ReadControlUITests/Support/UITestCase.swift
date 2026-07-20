@@ -4,7 +4,7 @@ import XCTest
 
 /// Base class every UI test sits on. It gives each test an isolated temp library
 /// (so tests never see each other's data) *and* an isolated `UserDefaults` suite
-/// (so preference changes never touch the real `com.readlater.app` domain),
+/// (so preference changes never touch the real `app.readcontrol.app` domain),
 /// launches the app against both, and — on teardown — terminates the app and
 /// destroys the temp library and its defaults suite. The dev's real library
 /// bookmark and preferences are never touched.

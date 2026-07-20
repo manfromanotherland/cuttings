@@ -15,7 +15,7 @@ final class TestLibrary {
     let dbURL: URL
 
     /// A throwaway `UserDefaults` suite name the app is pointed at for this test, so
-    /// preference changes never touch the real `com.readlater.app` domain. Destroyed
+    /// preference changes never touch the real `app.readcontrol.app` domain. Destroyed
     /// in `destroy()`.
     let defaultsSuiteName: String
 
@@ -26,11 +26,11 @@ final class TestLibrary {
     init() throws {
         let id = UUID().uuidString
         root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ReadLaterUITests", isDirectory: true)
+            .appendingPathComponent("ReadControlUITests", isDirectory: true)
             .appendingPathComponent(id, isDirectory: true)
         libraryURL = root.appendingPathComponent("library", isDirectory: true)
         dbURL = root.appendingPathComponent("index.db")
-        defaultsSuiteName = "com.readlater.app.uitest.\(id)"
+        defaultsSuiteName = "app.readcontrol.app.uitest.\(id)"
         for dir in [articlesDir, assetsDir, highlightsDir] {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }

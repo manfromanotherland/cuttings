@@ -6,9 +6,9 @@ import Foundation
 /// (theme, reader typography, list sort, sidebar section state).
 ///
 /// In production this is `.standard`. Under UI testing, when the harness passes a
-/// suite name via `READLATER_TEST_DEFAULTS`, it's a throwaway suite in that name
+/// suite name via `READCONTROL_TEST_DEFAULTS`, it's a throwaway suite in that name
 /// instead — so a test that changes a preference never reads or writes the real
-/// `com.readlater.app` domain, and the dev's own preferences stay untouched. The
+/// `app.readcontrol.app` domain, and the dev's own preferences stay untouched. The
 /// harness creates the suite per test and destroys it on teardown.
 ///
 /// Every `@AppStorage` for a preference key passes `store: AppDefaults.store`, and

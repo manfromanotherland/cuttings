@@ -68,7 +68,7 @@ struct SidebarView: View {
             }
             .background(.background)
         }
-        .navigationTitle("Read Later")
+        .navigationTitle("Read Control")
         .onChange(of: appState.sidebarSelection) { _, _ in
             // Don't clear the selection here: loadReadings() re-selects the
             // first item (or keeps a still-valid one), so clearing first only

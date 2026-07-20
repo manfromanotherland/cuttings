@@ -6,18 +6,18 @@ import XCTest
 /// which onboarding folder to auto-pick, which defaults to pin for determinism,
 /// and any extra environment or launch arguments. Consumed by `AppLauncher`.
 struct LaunchOptions {
-    /// Boots the app straight against this library (sets `READLATER_TEST_LIBRARY`).
+    /// Boots the app straight against this library (sets `READCONTROL_TEST_LIBRARY`).
     var libraryPath: String?
 
-    /// Redirects the index DB here (sets `READLATER_TEST_DB`).
+    /// Redirects the index DB here (sets `READCONTROL_TEST_DB`).
     var dbPath: String?
 
     /// Makes onboarding's "Choose Library…" pick this folder without an
-    /// `NSOpenPanel` (sets `READLATER_TEST_ONBOARDING_PICK`).
+    /// `NSOpenPanel` (sets `READCONTROL_TEST_ONBOARDING_PICK`).
     var onboardingPickPath: String?
 
     /// Throwaway `UserDefaults` suite the app persists preferences to (sets
-    /// `READLATER_TEST_DEFAULTS`), so a test never touches the real defaults domain.
+    /// `READCONTROL_TEST_DEFAULTS`), so a test never touches the real defaults domain.
     var defaultsSuite: String?
 
     /// Defaults pinned through the NSArgumentDomain (`-key value` launch args),
@@ -61,10 +61,10 @@ enum AppLauncher {
         app.launchArguments = arguments
 
         var environment = options.environment
-        if let libraryPath = options.libraryPath { environment["READLATER_TEST_LIBRARY"] = libraryPath }
-        if let dbPath = options.dbPath { environment["READLATER_TEST_DB"] = dbPath }
-        if let pick = options.onboardingPickPath { environment["READLATER_TEST_ONBOARDING_PICK"] = pick }
-        if let suite = options.defaultsSuite { environment["READLATER_TEST_DEFAULTS"] = suite }
+        if let libraryPath = options.libraryPath { environment["READCONTROL_TEST_LIBRARY"] = libraryPath }
+        if let dbPath = options.dbPath { environment["READCONTROL_TEST_DB"] = dbPath }
+        if let pick = options.onboardingPickPath { environment["READCONTROL_TEST_ONBOARDING_PICK"] = pick }
+        if let suite = options.defaultsSuite { environment["READCONTROL_TEST_DEFAULTS"] = suite }
         app.launchEnvironment = environment
 
         app.launch()

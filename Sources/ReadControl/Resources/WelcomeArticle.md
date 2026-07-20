@@ -1,8 +1,8 @@
-Read Later is a distraction-free reading app that keeps your saved articles in a folder you control — on iCloud Drive, Dropbox, or any directory you like. No accounts, no servers, just files.
+Read Control is a distraction-free reading app that keeps your saved articles in a folder you control — on iCloud Drive, Dropbox, or any directory you like. No accounts, no servers, just files.
 
 ## Saving Articles
 
-Install the [browser extension](https://read-later.app/extension) and click its toolbar button to save any page. The article is cleaned up, converted to Markdown, and added to your library instantly. The app watches your library folder and picks up new articles the moment they arrive.
+Install the [browser extension](https://readcontrol.app/extension) and click its toolbar button to save any page. The article is cleaned up, converted to Markdown, and added to your library instantly. The app watches your library folder and picks up new articles the moment they arrive.
 
 ## Your Reading List
 
@@ -26,7 +26,7 @@ Select any passage of text in the reader and right-click to choose **Highlight**
 
 The sentence below has been highlighted so you can see what it looks like:
 
-Read Later keeps your articles where you can always find them.
+Read Control keeps your articles where you can always find them.
 
 ## Search
 
@@ -46,10 +46,10 @@ Open **Preferences → Typography** to choose your font family, size, and line w
 
 ## Keyboard Shortcuts
 
-Press **⌘/** to open the keyboard-shortcuts cheat sheet. Every action in Read Later has a shortcut so you can move through your library without lifting your hands from the keyboard.
+Press **⌘/** to open the keyboard-shortcuts cheat sheet. Every action in Read Control has a shortcut so you can move through your library without lifting your hands from the keyboard.
 
 ---
 
-*Welcome. I hope Read Later becomes your favourite place to read.*
+*Welcome. I hope Read Control becomes your favourite place to read.*
 
 — Rodrigo Boniatti

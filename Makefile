@@ -1,11 +1,11 @@
-# Build helpers for the read-later macOS app.
-# Run these on macOS from the read-later-macos/ directory.
+# Build helpers for the readcontrol macOS app.
+# Run these on macOS from the readcontrol-macos/ directory.
 #
 # Prerequisites:
 #   brew install xcodegen
 #   rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-CORE_DIR := ../read-later-core
+CORE_DIR := ../readcontrol-core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
 
@@ -17,8 +17,8 @@ all: xcframework bindings xcodegen
 xcframework:
 	cd $(CORE_DIR) && ./scripts/build-xcframework.sh --release
 	mkdir -p $(FRAMEWORKS_DIR)
-	rm -rf $(FRAMEWORKS_DIR)/ReadLaterCore.xcframework
-	cp -R $(CORE_DIR)/dist/ReadLaterCore.xcframework $(FRAMEWORKS_DIR)/
+	rm -rf $(FRAMEWORKS_DIR)/ReadControlCore.xcframework
+	cp -R $(CORE_DIR)/dist/ReadControlCore.xcframework $(FRAMEWORKS_DIR)/
 
 ## Copy generated Swift bindings into GeneratedBindings/
 bindings: xcframework
@@ -32,4 +32,4 @@ xcodegen:
 	xcodegen generate
 
 clean:
-	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadLater.xcodeproj
+	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadControl.xcodeproj

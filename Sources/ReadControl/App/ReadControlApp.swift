@@ -4,7 +4,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct ReadLaterApp: App {
+struct ReadControlApp: App {
     @State private var appState = AppState()
     @AppStorage("appearanceMode", store: AppDefaults.store) private var appearanceMode: AppearanceMode = .system
 
