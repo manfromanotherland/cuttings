@@ -23,7 +23,7 @@ pub fn handle(req: CheckRequest) -> anyhow::Result<SaveResponse> {
         return Ok(SaveResponse::check(false, None));
     }
 
-    let conn = read_later_core::open_index(&db_path)?;
+    let conn = readcontrol_core::open_index(&db_path)?;
     let id: Option<String> = conn
         .query_row(
             "SELECT id FROM readings WHERE canonical_url = ?1",

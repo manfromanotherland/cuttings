@@ -895,7 +895,7 @@ name = "native-host"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "read-later-core",
+ "readcontrol-core",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1133,7 +1133,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "read-later-core"
+name = "readcontrol-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",

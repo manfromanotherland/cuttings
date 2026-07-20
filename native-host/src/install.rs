@@ -6,10 +6,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde_json::json;
 
-const HOST_NAME: &str = "com.readlater.host";
+const HOST_NAME: &str = "app.readcontrol.host";
 
 /// Extension ID pinned by the `key` field in the extension's manifest.json.
-/// Keep this in sync with read-later-extension/manifest.json — the ID is
+/// Keep this in sync with readcontrol-extension/manifest.json — the ID is
 /// derived from that public key, so both must change together.
 const DEFAULT_EXTENSION_ID: &str = "alanikmfkpbfompcnmmjngdeedmgdlpk";
 
@@ -23,7 +23,7 @@ const CHROME_PATHS: &[&str] = &[
 /// Path for Firefox-style manifests on macOS.
 const FIREFOX_PATH: &str = "Library/Application Support/Mozilla/NativeMessagingHosts";
 
-/// Write `com.readlater.host.json` to all per-browser manifest directories.
+/// Write `app.readcontrol.host.json` to all per-browser manifest directories.
 ///
 /// `extension_id` is the Chrome extension ID (e.g. `abcdefghijklmnopqrstuvwxyz123456`).
 /// Pass `None` to use `DEFAULT_EXTENSION_ID`, the ID pinned by the extension's
@@ -45,7 +45,7 @@ pub fn install_manifest(extension_id: Option<&str>) -> Result<()> {
 
     let chrome_manifest = json!({
         "name": HOST_NAME,
-        "description": "read-later native messaging host",
+        "description": "Read Control native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_origins": [origin]
@@ -53,11 +53,11 @@ pub fn install_manifest(extension_id: Option<&str>) -> Result<()> {
 
     let firefox_manifest = json!({
         "name": HOST_NAME,
-        "description": "read-later native messaging host",
+        "description": "Read Control native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_extensions": [
-            extension_id.unwrap_or("readlater@localhost")
+            extension_id.unwrap_or("readcontrol@localhost")
         ]
     });
 

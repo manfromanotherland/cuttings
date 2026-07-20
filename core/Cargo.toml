@@ -1,6 +1,6 @@
 [package]
-name = "read-later-core"
-description = "Engine library for the read-later system."
+name = "readcontrol-core"
+description = "Engine library for the readcontrol system."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

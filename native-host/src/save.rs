@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Result};
-use read_later_core::{
+use readcontrol_core::{
     download_images, find_duplicate, new_id, write_reading, LibraryRoot, Metadata,
 };
 
@@ -28,7 +28,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         Err(_) => {
             return Ok(SaveResponse::error(
                 "library_not_configured",
-                "No library folder has been set. Open the read-later app to configure one.",
+                "No library folder has been set. Open the Read Control app to configure one.",
             ))
         }
     };
@@ -79,12 +79,12 @@ pub fn classify_error(e: &anyhow::Error) -> (&'static str, String) {
 }
 
 pub(crate) fn find_library_path() -> Result<PathBuf> {
-    if let Ok(path) = std::env::var("READ_LATER_LIBRARY") {
+    if let Ok(path) = std::env::var("READCONTROL_LIBRARY") {
         return Ok(PathBuf::from(path));
     }
 
     let home = std::env::var("HOME")?;
-    let config_file = PathBuf::from(home).join(".config/read-later/library");
+    let config_file = PathBuf::from(home).join(".config/readcontrol/library");
     if config_file.is_file() {
         let path = std::fs::read_to_string(config_file)?.trim().to_string();
         if !path.is_empty() {

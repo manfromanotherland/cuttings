@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build read-later-core as an XCFramework for use in the macOS SwiftUI app.
+# Build readcontrol-core as an XCFramework for use in the macOS SwiftUI app.
 #
 # Prerequisites (macOS only):
 #   rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -9,7 +9,7 @@
 #   ./scripts/build-xcframework.sh [--release]
 #
 # Outputs:
-#   dist/ReadLaterCore.xcframework   — linkable XCFramework
+#   dist/ReadControlCore.xcframework   — linkable XCFramework
 #   dist/swift/                      — generated Swift bindings
 
 set -euo pipefail
@@ -19,7 +19,7 @@ WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
 CORE_DIR="$WORKSPACE_DIR/core"
 DIST_DIR="$WORKSPACE_DIR/dist"
 SWIFT_DIR="$DIST_DIR/swift"
-FW_DIR="$DIST_DIR/ReadLaterCore.xcframework"
+FW_DIR="$DIST_DIR/ReadControlCore.xcframework"
 
 PROFILE="${1:-debug}"
 CARGO_FLAGS=()
@@ -28,7 +28,7 @@ if [[ "$PROFILE" == "--release" ]]; then
     CARGO_FLAGS+=(--release)
 fi
 
-LIB_NAME="libread_later_core.a"
+LIB_NAME="libreadcontrol_core.a"
 TARGET_DIR="$WORKSPACE_DIR/target"
 
 echo "==> Building for aarch64-apple-darwin ($PROFILE)"

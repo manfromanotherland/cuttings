@@ -1,9 +1,9 @@
-# read-later-core
+# readcontrol-core
 
-The Rust engine for **read-later**, a local-first read-it-later system. This repo is a Cargo
+The Rust engine for **Read Control**, a local-first read-it-later system. This repo is a Cargo
 workspace containing two crates:
 
-- **`core`** (`read-later-core`) — the engine: library scanning/indexing, full-text search
+- **`core`** (`readcontrol-core`) — the engine: library scanning/indexing, full-text search
   (SQLite + FTS5), tags, item state, and reading read/write. Embedded by the macOS client via
   UniFFI.
 - **`native-host`** — the browser **native messaging host**: receives cleaned Markdown + image
@@ -12,8 +12,8 @@ workspace containing two crates:
 
 **License:** MIT — see [LICENSE](./LICENSE).
 
-Part of the **read-later** project →
-[github.com/boniattirodrigo/read-later-main](https://github.com/boniattirodrigo/read-later-main)
+Part of the **Read Control** project →
+[github.com/boniattirodrigo/readcontrol-main](https://github.com/boniattirodrigo/readcontrol-main)
 (architecture, library-format contract, design, and backlog).
 
 ## Prerequisites
@@ -42,7 +42,7 @@ set, so normal builds pay nothing. Useful for spotting chatty callers and N+1 pa
 that repeats dozens of times per action shows up as an obvious run of identical lines.
 
 ```bash
-SQL_TRACE=1 cargo test -p read-later-core -- --nocapture
+SQL_TRACE=1 cargo test -p readcontrol-core -- --nocapture
 ```
 
 Each line is one statement SQLite ran (including the FTS-sync triggers). Durations under 1ms are
@@ -57,14 +57,14 @@ To find the worst offenders, capture stderr to a file and collapse duplicates so
 frequent statements float to the top:
 
 ```bash
-SQL_TRACE=1 cargo test -p read-later-core -- --nocapture 2> /tmp/sql.log
+SQL_TRACE=1 cargo test -p readcontrol-core -- --nocapture 2> /tmp/sql.log
 grep '^\[sql' /tmp/sql.log \
   | sed -E 's/^\[sql #[0-9]+ +[^]]*\] //' \
   | sort | uniq -c | sort -rn | head -20
 ```
 
 The macOS app embeds this crate, so the same variable works there — see the
-[app's README](../read-later-macos/README.md#debugging-sql-tracing) for how to launch it with
+[app's README](../readcontrol-macos/README.md#debugging-sql-tracing) for how to launch it with
 `SQL_TRACE` set.
 
 ## Native messaging host
@@ -81,13 +81,13 @@ cargo build -p native-host --release
 ./target/release/native-host --install-manifest --extension-id <your-32-char-id>
 ```
 
-This creates `com.readlater.host.json` in the appropriate native messaging manifest directories
+This creates `app.readcontrol.host.json` in the appropriate native messaging manifest directories
 for Chrome, Edge, Chromium, and Firefox on macOS.
 
 **Wiring the extension ID:** the `--extension-id` value gates which extension may connect — it
 becomes `chrome-extension://<id>/` in the manifest's `allowed_origins` (Chrome/Edge) and the
 `allowed_extensions` entry (Firefox). Get the ID from `chrome://extensions` after loading the
-unpacked extension (see [read-later-extension](https://github.com/boniattirodrigo/read-later-extension)).
+unpacked extension (see [readcontrol-extension](https://github.com/boniattirodrigo/readcontrol-extension)).
 
 If you omit `--extension-id`, the manifest is written with a placeholder origin
 (`chrome-extension://PLACEHOLDER_EXTENSION_ID/`) and the browser will refuse to connect — useful
@@ -96,14 +96,14 @@ at a new path (the manifest records the absolute path to the host binary).
 
 ## XCFramework (for the macOS app)
 
-The macOS SwiftUI client embeds `read-later-core` as an XCFramework via UniFFI bindings.
+The macOS SwiftUI client embeds `readcontrol-core` as an XCFramework via UniFFI bindings.
 
 ```bash
 ./scripts/build-xcframework.sh --release
 ```
 
 Outputs:
-- `dist/ReadLaterCore.xcframework` — linkable XCFramework
+- `dist/ReadControlCore.xcframework` — linkable XCFramework
 - `dist/swift/` — generated Swift bindings
 
 The macOS app's `Makefile` (`make xcframework`) runs this automatically.
