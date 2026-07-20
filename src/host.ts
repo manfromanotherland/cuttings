@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-export const HOST_ID = "com.readlater.host";
+export const HOST_ID = "app.readcontrol.host";
 
 // Chrome embeds one of these phrases in lastError when the native host
 // binary is absent or its manifest isn't registered.

@@ -1,15 +1,15 @@
-# read-later-extension
+# readcontrol-extension
 
-The browser plugin (Manifest V3, TypeScript) for **read-later**, a local-first read-it-later
+The browser plugin (Manifest V3, TypeScript) for **Read Control**, a local-first read-it-later
 system. It extracts and cleans the current page (Readability-style extraction + HTML→Markdown)
 and hands the result to the native messaging host, which saves it into your library folder.
 
 **License:** MIT — see [LICENSE](./LICENSE).
 
-Part of the **read-later** project →
-[github.com/boniattirodrigo/read-later-main](https://github.com/boniattirodrigo/read-later-main)
+Part of the **Read Control** project →
+[github.com/boniattirodrigo/readcontrol-main](https://github.com/boniattirodrigo/readcontrol-main)
 (architecture, library-format contract, design, and backlog). The native messaging host lives in
-[read-later-core](https://github.com/boniattirodrigo/read-later-core).
+[readcontrol-core](https://github.com/boniattirodrigo/readcontrol-core).
 
 ## Prerequisites
 
@@ -34,7 +34,7 @@ Bundles the extension into `dist/`.
 
 1. Open `chrome://extensions` (or `edge://extensions`).
 2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the **extension root** (this `read-later-extension/`
+3. Click **Load unpacked** and select the **extension root** (this `readcontrol-extension/`
    folder) — **not** `dist/`.
 
 `manifest.json` lives at the root and references the built bundles inside `dist/`
@@ -42,7 +42,7 @@ Bundles the extension into `dist/`.
 the folder that contains `manifest.json`, so pointing it at `dist/` (which has no manifest) fails.
 
 ```
-read-later-extension/      ← select THIS folder
+readcontrol-extension/      ← select THIS folder
 ├── manifest.json          ← Chrome needs this here
 ├── options.html
 └── dist/                  ← build output, referenced by the manifest
@@ -69,7 +69,7 @@ don't move the folder, but unique per machine). To wire it up:
 1. Load the unpacked extension (above).
 2. On `chrome://extensions`, copy the **ID** shown on the extension card (32 lowercase letters).
 3. Register the native host with that ID — see
-   [read-later-core](https://github.com/boniattirodrigo/read-later-core)'s "Native messaging host"
+   [readcontrol-core](https://github.com/boniattirodrigo/readcontrol-core)'s "Native messaging host"
    section:
 
    ```bash
@@ -122,7 +122,7 @@ keeps working after you publish.
 > ID. It is already covered by `.gitignore`.
 
 > The native messaging host must be installed and running for saves to work — see
-> [read-later-core](https://github.com/boniattirodrigo/read-later-core).
+> [readcontrol-core](https://github.com/boniattirodrigo/readcontrol-core).
 
 ## Extraction pipeline
 

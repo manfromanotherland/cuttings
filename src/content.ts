@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
-const TOAST_HOST_ID = "read-later-toast-host";
+const TOAST_HOST_ID = "readcontrol-toast-host";
 
 /**
  * Show or update the toast. If a loading toast is already present and the new

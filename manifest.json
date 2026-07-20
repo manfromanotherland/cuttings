@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "read-later",
+  "name": "Read Control",
   "version": "0.1.0",
   "description": "Save pages to read later, locally.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0PjLu+sEhyo7gmHkVkU4q4xSrfH2yJrVf38M9EbDDLZzIb/GjisFx7a1NV4H8C+RryNdgWkwY5ZCmAaiwGIzB8G1HDOXEjgmG2KOCDSie3zIE5wSVtoV7eAIr3H+PqPdOlCxaGbkLbzI9lsLQb0qcvZ5JcdfqiOluKyD2Q6zFzpPU5I6SD4fMjsseJmqkyVv7LL6z5IUmQ/hdXan9Y0aCVxMh1Lp48E03PHo/Yf3ytfvfzvUlML9yk++/wQjP1Q3C0hlygXR6eqMFjkXvmmS3P29P9zv5R4JyotWOHyQ2oBOIoeqrE6xG1zw47903HY32nZoum3R1JEze6XaqmKG6QIDAQAB",
@@ -30,7 +30,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Save to Read Later",
+    "default_title": "Save to Read Control",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -45,7 +45,7 @@
         "default": "Alt+Shift+S",
         "mac": "MacCtrl+Shift+S"
       },
-      "description": "Save current page to Read Later"
+      "description": "Save current page to Read Control"
     }
   }
 }
