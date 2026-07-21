@@ -2,11 +2,11 @@
 
 use rusqlite::OptionalExtension;
 
-use crate::protocol::{CheckRequest, SaveResponse};
+use crate::protocol::{CheckRequest, SaveResponse, PROTOCOL_VERSION};
 use crate::save::find_library_path;
 
 pub fn handle(req: CheckRequest) -> anyhow::Result<SaveResponse> {
-    if req.protocol_version != 1 {
+    if req.protocol_version != PROTOCOL_VERSION {
         return Ok(SaveResponse::error(
             "invalid_request",
             &format!("unsupported protocol_version: {}", req.protocol_version),

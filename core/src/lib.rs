@@ -27,7 +27,7 @@ pub use highlights::{
     add_highlight, delete_highlight, list_highlights, toggle_highlight, Highlight,
 };
 pub use id::new_id;
-pub use images::download_images;
+pub use images::{write_images, ImageBytes};
 pub use index::open as open_index;
 pub use list::{
     get_reading, list_readings, view_counts, ListOptions, ReadingRow, SortField, View, ViewCounts,

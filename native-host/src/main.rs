@@ -155,7 +155,7 @@ mod tests {
                 "saved_at": "2026-06-13T15:00:00Z"
             },
             "markdown": "# Test",
-            "image_urls": []
+            "images": []
         });
         let resp = dispatch(serde_json::to_vec(&msg).unwrap().as_slice());
         assert!(!resp.ok);
@@ -166,6 +166,7 @@ mod tests {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
+    use base64::Engine;
     use std::sync::Mutex;
     use tempfile::TempDir;
 
@@ -183,7 +184,7 @@ mod integration_tests {
                 "saved_at": "2026-06-13T15:00:00Z"
             },
             "markdown": "# Test Article\n\nSome content here.\n",
-            "image_urls": []
+            "images": []
         }))
         .unwrap()
     }
@@ -293,39 +294,58 @@ mod integration_tests {
     }
 
     #[test]
-    fn failed_image_download_leaves_remote_url_intact() {
+    fn supplied_image_is_written_and_unsupplied_stays_remote() {
         with_library(|dir| {
+            // One image comes with bytes; the other has none supplied.
+            let bytes = b"\x89PNG\r\n\x1a\npixels";
+            let data_b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
             let msg = serde_json::to_vec(&serde_json::json!({
                 "protocol_version": 1,
                 "action": "save",
                 "metadata": {
                     "url": "https://example.com/img-test",
                     "canonical_url": "https://example.com/img-test",
-                    "title": "Image Fail Test",
+                    "title": "Image Test",
                     "saved_at": "2026-06-13T15:00:00Z"
                 },
-                "markdown": "# Image Fail Test\n\n![Photo](http://127.0.0.1:1/photo.jpg)\n",
-                "image_urls": ["http://127.0.0.1:1/photo.jpg"]
+                "markdown": "# Image Test\n\n![Got](https://cdn.example.com/got.png)\n![Missing](https://cdn.example.com/missing.png)\n",
+                "images": [
+                    {
+                        "url": "https://cdn.example.com/got.png",
+                        "content_type": "image/png",
+                        "data_base64": data_b64
+                    }
+                ]
             }))
             .unwrap();
 
             let resp = dispatch(&msg);
-            assert!(
-                resp.ok,
-                "save should succeed even when image download fails"
-            );
+            assert!(resp.ok, "save should succeed: {:?}", resp.error);
 
             let id = resp.id.as_deref().unwrap();
             let content =
                 std::fs::read_to_string(dir.path().join("articles").join(format!("{id}.md")))
                     .unwrap();
+            // The supplied image is rewritten to a local asset...
             assert!(
-                content.contains("http://127.0.0.1:1/photo.jpg"),
-                "an image that can't be fetched keeps its remote URL in the Markdown"
+                content.contains(&format!("../assets/{id}/")),
+                "supplied image should be rewritten to a local path:\n{content}"
             );
             assert!(
-                !content.contains("asset-fetch-failed"),
-                "a failed image must not be flagged for a later re-fetch"
+                !content.contains("cdn.example.com/got.png"),
+                "supplied image's remote URL should be gone"
+            );
+            // ...and its bytes are on disk.
+            let asset = dir
+                .path()
+                .join("assets")
+                .join(id)
+                .join(format!("{}.png", readcontrol_core::sha256_hex(bytes)));
+            assert_eq!(std::fs::read(&asset).unwrap(), bytes);
+            // The unsupplied image keeps its remote URL as a placeholder.
+            assert!(
+                content.contains("https://cdn.example.com/missing.png"),
+                "an image with no supplied bytes keeps its remote URL"
             );
         });
     }
@@ -400,7 +420,7 @@ mod integration_tests {
             "action": "save",
             "metadata": { "url": "https://example.com" },
             "markdown": "# Test",
-            "image_urls": []
+            "images": []
         }))
         .unwrap();
 

@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+/// The wire protocol version shared with the browser extension.
+pub const PROTOCOL_VERSION: u32 = 1;
+
 /// Incoming save request from the browser extension.
 #[derive(Debug, Deserialize)]
 pub struct SaveRequest {
@@ -9,7 +12,21 @@ pub struct SaveRequest {
     pub action: String,
     pub metadata: RequestMetadata,
     pub markdown: String,
-    pub image_urls: Vec<String>,
+    /// Image bytes captured by the extension. The host writes these to disk; it
+    /// never downloads anything itself.
+    pub images: Vec<RequestImage>,
+}
+
+/// One image, captured and base64-encoded by the extension.
+#[derive(Debug, Deserialize)]
+pub struct RequestImage {
+    /// The URL exactly as it appears in `markdown`, used to rewrite the link.
+    pub url: String,
+    /// The `Content-Type` the browser saw, used to pick a file extension.
+    #[serde(default)]
+    pub content_type: String,
+    /// Standard base64 of the raw image bytes.
+    pub data_base64: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,7 +70,7 @@ pub struct SaveResponse {
 impl SaveResponse {
     pub fn success(id: String, path: String) -> Self {
         Self {
-            protocol_version: 1,
+            protocol_version: PROTOCOL_VERSION,
             ok: true,
             id: Some(id),
             path: Some(path),
@@ -65,7 +82,7 @@ impl SaveResponse {
 
     pub fn error(code: &str, msg: &str) -> Self {
         Self {
-            protocol_version: 1,
+            protocol_version: PROTOCOL_VERSION,
             ok: false,
             id: None,
             path: None,
@@ -77,7 +94,7 @@ impl SaveResponse {
 
     pub fn check(is_saved: bool, id: Option<String>) -> Self {
         Self {
-            protocol_version: 1,
+            protocol_version: PROTOCOL_VERSION,
             ok: true,
             saved: Some(is_saved),
             id,

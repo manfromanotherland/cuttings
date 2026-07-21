@@ -3,14 +3,15 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Result};
+use base64::Engine;
 use readcontrol_core::{
-    download_images, find_duplicate, new_id, write_reading, LibraryRoot, Metadata,
+    find_duplicate, new_id, write_images, write_reading, ImageBytes, LibraryRoot, Metadata,
 };
 
-use crate::protocol::{SaveRequest, SaveResponse};
+use crate::protocol::{SaveRequest, SaveResponse, PROTOCOL_VERSION};
 
 pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
-    if req.protocol_version != 1 {
+    if req.protocol_version != PROTOCOL_VERSION {
         return Ok(SaveResponse::error(
             "invalid_request",
             &format!("unsupported protocol_version: {}", req.protocol_version),
@@ -44,8 +45,25 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
 
     let id = new_id();
 
-    // Download images and rewrite markdown links
-    let markdown = download_images(&library, &id, &req.markdown, &req.image_urls)?;
+    // Decode the image bytes the extension captured. An image whose base64 won't
+    // decode is skipped, so its URL stays in the Markdown as a placeholder.
+    let images: Vec<ImageBytes> = req
+        .images
+        .iter()
+        .filter_map(|img| {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&img.data_base64)
+                .ok()?;
+            Some(ImageBytes {
+                url: img.url.clone(),
+                content_type: img.content_type.clone(),
+                bytes,
+            })
+        })
+        .collect();
+
+    // Write the supplied images and rewrite their links. The host never downloads.
+    let markdown = write_images(&library, &id, &req.markdown, &images)?;
 
     let metadata = Metadata {
         format_version: 1,
