@@ -214,48 +214,53 @@ struct ReadingRowView: View {
     let row: FfiReadingRow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Title + indicators
-            HStack(alignment: .top, spacing: 6) {
-                if !row.read {
-                    Circle()
-                        .fill(.blue)
-                        .frame(width: 7, height: 7)
-                        .padding(.top, 5)
-                        .accessibilityLabel("Unread")
+        // The unread dot lives in its own fixed-width leading column so the
+        // title, author and excerpt all share the same text column, aligned
+        // whether or not the dot is present.
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(.blue)
+                .frame(width: 7, height: 7)
+                .padding(.top, 6)
+                .opacity(row.read ? 0 : 1)
+                .accessibilityLabel(row.read ? "" : "Unread")
+
+            VStack(alignment: .leading, spacing: 4) {
+                // Title + indicators
+                HStack(alignment: .top, spacing: 6) {
+                    Text(row.title.isEmpty ? row.url : row.title)
+                        .font(.headline)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    if row.favorite {
+                        Image(systemName: "heart.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("Favorite")
+                    }
                 }
-                Text(row.title.isEmpty ? row.url : row.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                Spacer(minLength: 0)
-                if row.favorite {
-                    Image(systemName: "heart.fill")
+
+                // Site + reading time
+                HStack(spacing: 10) {
+                    if let site = row.site, !site.isEmpty {
+                        Text(site)
+                            .lineLimit(1)
+                    }
+                    if let readingTime = row.readingTimeLabel {
+                        Text(readingTime)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                // Excerpt
+                if let excerpt = row.excerpt, !excerpt.isEmpty {
+                    Text(excerpt)
                         .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("Favorite")
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
                 }
-            }
-
-            // Site + reading time
-            HStack(spacing: 6) {
-                if let site = row.site, !site.isEmpty {
-                    Text(site)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                if let readingTime = row.readingTimeLabel {
-                    Text(readingTime)
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            // Excerpt
-            if let excerpt = row.excerpt, !excerpt.isEmpty {
-                Text(excerpt)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
             }
         }
         .padding(.vertical, 4)
