@@ -20,8 +20,8 @@ enum AssetImageLoader {
 
     /// Resolve a relative library asset path to an on-disk URL. The stored
     /// Markdown references assets as `../assets/<id>/<file>`; strip the known
-    /// prefixes and resolve under `libraryURL/assets/`. An image the core
-    /// couldn't download at save time is still an absolute `http(s)` URL — not a
+    /// prefixes and resolve under `libraryURL/assets/`. An image the extension
+    /// couldn't capture at save time is still an absolute `http(s)` URL — not a
     /// local asset — so this returns `nil` for it and the reader shows a
     /// placeholder instead of fetching it over the network.
     static func localURL(source: String, libraryURL: URL?) -> URL? {

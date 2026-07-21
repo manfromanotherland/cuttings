@@ -6,8 +6,8 @@ import SwiftUI
 /// Renders a single Markdown image natively, with an optional caption drawn from
 /// the image's alt text (a "figure"). Local library assets
 /// (`../assets/<id>/<file>`) load from disk under `libraryURL/assets/`. An image
-/// the core couldn't download at save time is left as a remote `http(s)` URL; the
-/// reader shows a labelled placeholder for it and never fetches it over the
+/// the extension couldn't capture at save time is left as a remote `http(s)` URL;
+/// the reader shows a labelled placeholder for it and never fetches it over the
 /// network. Path resolution and downsampled decoding live in `AssetImageLoader`,
 /// shared with the zoom `ImageLightbox`.
 ///

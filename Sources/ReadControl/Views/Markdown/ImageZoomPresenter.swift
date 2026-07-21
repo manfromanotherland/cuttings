@@ -24,9 +24,9 @@ final class ImageZoomPresenter {
     }
 
     /// Open the lightbox for a Markdown image source. Only local library assets
-    /// open; a source that never downloaded is still a remote `http(s)` URL —
-    /// `localURL` returns nil for it — so this no-ops and the reader keeps showing
-    /// its placeholder rather than fetching the image over the network.
+    /// open; a source the extension couldn't capture is still a remote `http(s)`
+    /// URL — `localURL` returns nil for it — so this no-ops and the reader keeps
+    /// showing its placeholder rather than fetching the image over the network.
     func present(source: String, alt: String, libraryURL: URL?) {
         guard let local = AssetImageLoader.localURL(source: source, libraryURL: libraryURL) else { return }
         target = Target(alt: alt, localURL: local)
