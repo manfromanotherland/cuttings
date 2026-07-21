@@ -32,7 +32,6 @@ struct AssetImageView: View {
         VStack(spacing: theme.captionGap) {
             picture
                 .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: theme.imageCornerRadius))
                 .accessibilityLabel(alt)
             if !alt.isEmpty {
                 // A selectable text view (rather than SwiftUI `Text`) so the
@@ -63,7 +62,17 @@ struct AssetImageView: View {
     @ViewBuilder
     private var picture: some View {
         if let localImage {
-            zoomable(Image(nsImage: localImage).resizable().scaledToFit())
+            // Cap the display width at the image's own width so a picture narrower
+            // than the content column keeps its natural size instead of being
+            // upscaled to fill the width. A larger image still scales down to the
+            // column, via `scaledToFit` under the surrounding `maxWidth: .infinity`.
+            zoomable(
+                Image(nsImage: localImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: localImage.size.width)
+                    .clipShape(RoundedRectangle(cornerRadius: theme.imageCornerRadius))
+            )
         } else if failed {
             placeholder
         } else {
