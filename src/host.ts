@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+import { PROTOCOL_VERSION } from "./protocol.js";
+
 export const HOST_ID = "app.readcontrol.host";
 
 // Chrome embeds one of these phrases in lastError when the native host
@@ -21,13 +23,17 @@ export function pingHost(): Promise<HostStatus> {
   return new Promise((resolve) => {
     // The host ignores unknown actions and returns an error response,
     // which still means it IS reachable. A Chrome-level error means it isn't.
-    chrome.runtime.sendNativeMessage(HOST_ID, { protocol_version: 1, action: "ping" }, () => {
-      if (chrome.runtime.lastError) {
-        const err = new Error(chrome.runtime.lastError.message ?? "");
-        resolve(isHostMissing(err) ? "missing" : "error");
-      } else {
-        resolve("connected");
-      }
-    });
+    chrome.runtime.sendNativeMessage(
+      HOST_ID,
+      { protocol_version: PROTOCOL_VERSION, action: "ping" },
+      () => {
+        if (chrome.runtime.lastError) {
+          const err = new Error(chrome.runtime.lastError.message ?? "");
+          resolve(isHostMissing(err) ? "missing" : "error");
+        } else {
+          resolve("connected");
+        }
+      },
+    );
   });
 }

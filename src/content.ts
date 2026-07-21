@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 import { extractPage } from "./extraction.js";
+import { fetchImages } from "./images.js";
+import type { ImageData, SaveRequestMetadata } from "./protocol.js";
 
 /** In-page toast request sent by the background worker after a save attempt. */
 export interface ToastMessage {
@@ -10,11 +12,39 @@ export interface ToastMessage {
   detail?: string;
 }
 
+/**
+ * Result of extracting a page and capturing its images. Images the content
+ * script could read (same-origin or CORS-enabled, served from the browser cache)
+ * come back in `images`; the rest are listed in `unresolved` for the background
+ * worker to retry with its cross-origin reach.
+ */
+export interface PageCapture {
+  metadata: SaveRequestMetadata;
+  markdown: string;
+  images: ImageData[];
+  unresolved: string[];
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.action === "extract") {
-    const result = extractPage(document, window.location.href);
-    sendResponse(result ?? { error: "Could not extract article content from this page." });
-    return true;
+    void (async () => {
+      const result = extractPage(document, window.location.href);
+      if (!result) {
+        sendResponse({ error: "Could not extract article content from this page." });
+        return;
+      }
+      // Fetch images here first: in the page's context these reuse the browser's
+      // cache, so images the browser already loaded need no network request.
+      const { images, unresolved } = await fetchImages(result.image_urls);
+      const capture: PageCapture = {
+        metadata: result.metadata,
+        markdown: result.markdown,
+        images,
+        unresolved,
+      };
+      sendResponse(capture);
+    })();
+    return true; // keep the message channel open for the async sendResponse
   }
 
   if (msg?.action === "toast") {

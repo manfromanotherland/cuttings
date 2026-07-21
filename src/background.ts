@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: MIT
 
-import type { ToastMessage } from "./content.js";
-import type { ExtractionResult } from "./extraction.js";
+import type { PageCapture, ToastMessage } from "./content.js";
 import type { CheckRequest, CheckResponse, SaveRequest, SaveResponse } from "./protocol.js";
+import { PROTOCOL_VERSION } from "./protocol.js";
+import { capTotalBytes, fetchImages } from "./images.js";
 import { HOST_ID, isHostMissing } from "./host.js";
 import { log } from "./log.js";
 
 const CONTEXT_MENU_ID = "save-page";
 const NOTIF_HOST_MISSING = "host-missing";
+
+/** Cap on the total decoded image bytes inlined into one save message. Images
+ *  beyond this stay as remote-URL placeholders so a save can't buffer unbounded. */
+const MAX_TOTAL_IMAGE_BYTES = 40 * 1024 * 1024;
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 
@@ -51,7 +56,7 @@ async function checkAndSetIcon(tabId: number, rawUrl: string): Promise<void> {
 
   try {
     const response = await sendNativeMessage<CheckRequest, CheckResponse>({
-      protocol_version: 1,
+      protocol_version: PROTOCOL_VERSION,
       action: "check",
       url,
     });
@@ -102,7 +107,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
  * message fails, inject the script programmatically (allowed on the active tab
  * via the `activeTab` grant from the user's click) and retry once.
  */
-async function requestExtraction(tabId: number): Promise<ExtractionResult | { error: string }> {
+async function requestExtraction(tabId: number): Promise<PageCapture | { error: string }> {
   try {
     return await chrome.tabs.sendMessage(tabId, { action: "extract" });
   } catch {
@@ -121,7 +126,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
   await log("info", "Save triggered", { url: tab.url });
   await showToast(tabId, "loading", "Saving…");
 
-  let extraction: ExtractionResult;
+  let capture: PageCapture;
   try {
     const result = await requestExtraction(tabId);
     if (result && "error" in result && result.error) {
@@ -130,7 +135,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
       await log("error", "Extraction failed", { url: tab.url, error: result.error });
       return;
     }
-    extraction = result as ExtractionResult;
+    capture = result as PageCapture;
   } catch (err) {
     await showBadge(tabId, "error");
     await showToast(
@@ -143,14 +148,27 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     return;
   }
 
+  // The content script captured images it could read from the page cache. Images
+  // it couldn't (cross-origin without CORS) are retried here in the background
+  // worker, which can read them via host permissions. The host writes them all —
+  // it never downloads anything.
+  const fallback = await fetchImages(capture.unresolved);
+  const images = capTotalBytes([...capture.images, ...fallback.images], MAX_TOTAL_IMAGE_BYTES);
+  await log("info", "Captured images", {
+    fromPage: capture.images.length,
+    fromBackground: fallback.images.length,
+    sent: images.length,
+    requested: capture.images.length + capture.unresolved.length,
+  });
+
   const { defaultTags } = await chrome.storage.sync.get({ defaultTags: [] as string[] });
 
   const request: SaveRequest = {
-    protocol_version: 1,
+    protocol_version: PROTOCOL_VERSION,
     action: "save",
-    metadata: { ...extraction.metadata, tags: defaultTags.length ? defaultTags : undefined },
-    markdown: extraction.markdown,
-    image_urls: extraction.image_urls,
+    metadata: { ...capture.metadata, tags: defaultTags.length ? defaultTags : undefined },
+    markdown: capture.markdown,
+    images,
   };
 
   let response: SaveResponse;
@@ -170,13 +188,13 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
 
   if (response.ok) {
     await showBadge(tabId, "ok");
-    await showToast(tabId, "ok", "Saved to Read Control", extraction.metadata.title);
-    markSaved(tabId, tab.url, extraction.metadata.canonical_url);
-    await log("info", "Saved", { url: tab.url, title: extraction.metadata.title });
+    await showToast(tabId, "ok", "Saved to Read Control", capture.metadata.title);
+    markSaved(tabId, tab.url, capture.metadata.canonical_url);
+    await log("info", "Saved", { url: tab.url, title: capture.metadata.title });
   } else if (response.error === "duplicate") {
     await showBadge(tabId, "ok");
-    await showToast(tabId, "ok", "Already in Reading List", extraction.metadata.title);
-    markSaved(tabId, tab.url, extraction.metadata.canonical_url);
+    await showToast(tabId, "ok", "Already in Reading List", capture.metadata.title);
+    markSaved(tabId, tab.url, capture.metadata.canonical_url);
     await log("info", "Already saved (duplicate)", { url: tab.url });
   } else {
     await showBadge(tabId, "error");
