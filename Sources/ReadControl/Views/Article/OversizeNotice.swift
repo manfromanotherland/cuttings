@@ -24,7 +24,7 @@ struct OversizeNotice: View {
                 .multilineTextAlignment(.center)
             if let link = URL(string: url) {
                 Button("Open in Browser") {
-                    NSWorkspace.shared.open(link)
+                    ReadingLink.open(link)
                 }
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 4)

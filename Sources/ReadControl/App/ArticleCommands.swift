@@ -57,7 +57,7 @@ struct ArticleCommands: Commands {
 
                 Button("Open in Browser") {
                     if let url = URL(string: row.url) {
-                        NSWorkspace.shared.open(url)
+                        ReadingLink.open(url)
                     }
                 }
                 .keyboardShortcut(ShortcutCatalog.openInBrowser)

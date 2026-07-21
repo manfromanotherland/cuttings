@@ -57,7 +57,7 @@ struct ArticleToolbar: ToolbarContent {
 
             Button {
                 if let url = URL(string: row.url) {
-                    NSWorkspace.shared.open(url)
+                    ReadingLink.open(url)
                 }
             } label: {
                 Label("Open in Browser", systemImage: "safari")
