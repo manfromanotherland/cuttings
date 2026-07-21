@@ -2,38 +2,39 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::types::LibraryRoot;
 use crate::writer::sha256_hex;
-
-/// Images are fetched on at most this many worker threads at once. A page can
-/// reference dozens of images; downloading them serially makes a save needlessly
-/// slow and widens the window in which the batch could be interrupted.
-const MAX_CONCURRENCY: usize = 8;
 
 /// Caps on a single request so one stalled connection can never hang the save.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// A single image is attempted up to this many times. Transient failures
-/// (timeouts, connection resets, 429/5xx) are retried with a short backoff so a
-/// momentary blip doesn't permanently drop the image.
-const MAX_ATTEMPTS: u32 = 3;
-const RETRY_BACKOFF: Duration = Duration::from_millis(250);
+/// A single image is attempted up to this many times before it is given up on.
+const MAX_ATTEMPTS: u32 = 4;
+
+/// Backoff for a transient failure that carries no `Retry-After` hint. Grows per
+/// attempt (500ms, 1s, 1.5s, …).
+const BASE_BACKOFF: Duration = Duration::from_millis(500);
+
+/// Upper bound on how long we'll wait between attempts, even if a server asks for
+/// more via `Retry-After`. Keeps a hostile/broken hint from stalling the save.
+const MAX_BACKOFF: Duration = Duration::from_secs(10);
 
 /// Download every image referenced by the Markdown into `assets/<id>/`, rewrite
 /// each URL to its local relative path, and return the updated Markdown.
 ///
-/// Every distinct URL is fetched — with retries, concurrently across a small
-/// thread pool — and all of those fetches complete before this function returns,
-/// so the process never moves on (or exits) with downloads still outstanding. On
-/// per-image failure (after retries) the remote URL is left untouched in the
-/// Markdown, so the reference and its alt text survive as a labelled placeholder.
+/// Images are fetched **one at a time**, on purpose: hosts like Wikimedia's
+/// `upload.wikimedia.org` burst-limit a client that fires dozens of requests at
+/// once and answer `429 Too Many Requests`. A transient failure (429, 5xx, a
+/// dropped connection) is retried, honoring the server's `Retry-After` hint, so
+/// the batch stays within the limit and every image still lands. All fetches
+/// finish before this function returns — the process never moves on with a
+/// download outstanding. On per-image failure (after retries) the remote URL is
+/// left in the Markdown, so its alt text survives as a labelled placeholder.
 pub fn download_images(
     library: &LibraryRoot,
     id: &str,
@@ -48,37 +49,18 @@ pub fn download_images(
     let unique = dedup_urls(image_urls);
     let client = image_client()?;
 
-    // (url → local relative path) for every image that downloaded successfully.
-    // Populated by the workers; the Markdown string edits happen afterwards on a
-    // single thread so they can't race.
-    let downloaded: Mutex<Vec<(&str, String)>> = Mutex::new(Vec::new());
-    let next = AtomicUsize::new(0);
-
-    // Scoped threads borrow `unique`, `client`, `downloaded`, … from this frame.
-    // `scope` joins every worker before returning — that join is what guarantees
-    // all downloads have finished by the time we rewrite the Markdown below.
-    std::thread::scope(|scope| {
-        for _ in 0..unique.len().min(MAX_CONCURRENCY) {
-            scope.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                let Some(&url) = unique.get(i) else { break };
-                if let Ok((bytes, ext)) = fetch_image(&client, url) {
-                    let hash = sha256_hex(&bytes);
-                    let filename = format!("{hash}.{ext}");
-                    // A single image that can't be written is skipped rather than
-                    // failing the whole save; its remote URL stays in the Markdown.
-                    if fs::write(assets_dir.join(&filename), &bytes).is_ok() {
-                        let rel = format!("../assets/{id}/{filename}");
-                        downloaded.lock().unwrap().push((url, rel));
-                    }
-                }
-            });
-        }
-    });
-
     let mut result = markdown.to_string();
-    for (url, rel) in downloaded.into_inner().unwrap() {
-        result = result.replace(url, &rel);
+    for url in unique {
+        if let Ok((bytes, ext)) = fetch_image(&client, url) {
+            let hash = sha256_hex(&bytes);
+            let filename = format!("{hash}.{ext}");
+            // A single image that can't be written is skipped rather than failing
+            // the whole save; its remote URL stays in the Markdown.
+            if fs::write(assets_dir.join(&filename), &bytes).is_ok() {
+                let rel = format!("../assets/{id}/{filename}");
+                result = result.replace(url, &rel);
+            }
+        }
     }
     Ok(result)
 }
@@ -109,46 +91,60 @@ fn image_client() -> Result<reqwest::blocking::Client> {
         .build()?)
 }
 
-/// Fetch one image, retrying transient failures with a short backoff.
+/// Fetch one image, retrying transient failures (a dropped connection, `429`, or
+/// a `5xx`) up to `MAX_ATTEMPTS`, waiting the server's `Retry-After` when given.
 fn fetch_image(client: &reqwest::blocking::Client, url: &str) -> Result<(Vec<u8>, String)> {
-    let mut attempt = 1;
+    let mut attempt = 0;
     loop {
-        match try_fetch_image(client, url) {
-            Ok(image) => return Ok(image),
+        attempt += 1;
+        match client.get(url).send() {
+            // Transport-level failure (timeout, connection reset, DNS): retry.
             Err(e) => {
-                if attempt >= MAX_ATTEMPTS || !is_retryable(&e) {
+                if attempt >= MAX_ATTEMPTS {
                     return Err(e.into());
                 }
-                std::thread::sleep(RETRY_BACKOFF * attempt);
-                attempt += 1;
+                std::thread::sleep(default_backoff(attempt));
+            }
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    let ext = ext_from_response(&resp, url);
+                    let bytes = resp.bytes()?.to_vec();
+                    return Ok((bytes, ext));
+                }
+                // A 429 or 5xx is transient — retry, honoring Retry-After. Any
+                // other status (e.g. 403/404) is permanent, so give up now and
+                // let the remote URL stay in the Markdown as a placeholder.
+                let transient =
+                    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+                if !transient || attempt >= MAX_ATTEMPTS {
+                    return Err(anyhow!("image fetch failed: HTTP {status} for {url}"));
+                }
+                let wait = retry_after(&resp).unwrap_or_else(|| default_backoff(attempt));
+                std::thread::sleep(wait);
             }
         }
     }
 }
 
-/// A single fetch attempt. `error_for_status` turns a non-2xx response (e.g. a
-/// 403 or 404) into an `Err` so a failed fetch keeps the remote URL in the
-/// Markdown rather than saving the error page's body as a broken asset.
-fn try_fetch_image(
-    client: &reqwest::blocking::Client,
-    url: &str,
-) -> reqwest::Result<(Vec<u8>, String)> {
-    let resp = client.get(url).send()?.error_for_status()?;
-    let ext = ext_from_response(&resp, url);
-    let bytes = resp.bytes()?.to_vec();
-    Ok((bytes, ext))
+/// Backoff when the server gives no `Retry-After`: `BASE_BACKOFF * attempt`,
+/// capped at `MAX_BACKOFF`.
+fn default_backoff(attempt: u32) -> Duration {
+    (BASE_BACKOFF * attempt).min(MAX_BACKOFF)
 }
 
-/// Whether a failed attempt is worth retrying: transport errors (no HTTP status —
-/// timeout, connection reset, DNS) and the transient HTTP codes 429 and 5xx. A
-/// 4xx other than 429 is a permanent client error and is not retried.
-fn is_retryable(e: &reqwest::Error) -> bool {
-    match e.status() {
-        Some(status) => {
-            status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
-        }
-        None => true,
-    }
+/// The `Retry-After` delay in delta-seconds form, capped at `MAX_BACKOFF`. The
+/// HTTP-date form is not parsed (servers that rate-limit use delta-seconds).
+fn retry_after(resp: &reqwest::blocking::Response) -> Option<Duration> {
+    let secs: u64 = resp
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()?;
+    Some(Duration::from_secs(secs).min(MAX_BACKOFF))
 }
 
 fn ext_from_response(resp: &reqwest::blocking::Response, url: &str) -> String {
@@ -248,61 +244,70 @@ mod tests {
     }
 
     #[test]
-    fn is_retryable_only_for_transient_failures() {
-        // 5xx and 429 are transient and retried; other 4xx are permanent.
-        assert!(is_retryable(&status_error("503 Service Unavailable")));
-        assert!(is_retryable(&status_error("429 Too Many Requests")));
-        assert!(!is_retryable(&status_error("404 Not Found")));
-        assert!(!is_retryable(&status_error("403 Forbidden")));
-    }
-
-    // A `reqwest::Error` whose `.status()` is the given code, produced by hitting
-    // a one-shot loopback server (there is no public constructor for these).
-    fn status_error(status_line: &'static str) -> reqwest::Error {
-        let url = serve_once(status_line, b"x".to_vec(), "text/plain");
-        no_proxy_client()
-            .get(&url)
-            .send()
-            .unwrap()
-            .error_for_status()
-            .expect_err("status line was a non-success code")
+    fn retry_after_parses_delta_seconds_and_caps() {
+        assert_eq!(serve_and_retry_after("2"), Some(Duration::from_secs(2)));
+        // Absurd values are capped so a hostile hint can't stall the save.
+        assert_eq!(serve_and_retry_after("99999"), Some(MAX_BACKOFF));
+        // The HTTP-date form is intentionally ignored.
+        assert_eq!(serve_and_retry_after("Wed, 21 Oct 2099 07:28:00 GMT"), None);
     }
 
     #[test]
-    fn fetch_image_treats_permanent_4xx_as_failure() {
-        // A 403 is not retryable, so the single scripted response is enough.
-        let url = serve_once("403 Forbidden", b"forbidden".to_vec(), "text/html");
+    fn fetch_image_gives_up_on_permanent_4xx_without_retrying() {
+        // 403 is permanent: a single scripted response is enough. If fetch_image
+        // wrongly retried, the server (one response) would hang and the body read
+        // would fail — either way `is_err` must hold and the call must be quick.
+        let url = serve(vec![("403 Forbidden", b"no".to_vec(), "text/html", None)]);
         let result = fetch_image(&no_proxy_client(), &url);
         assert!(
             result.is_err(),
-            "a 403 response must be treated as a failure"
+            "a 403 must be treated as a permanent failure"
         );
     }
 
     #[test]
-    fn fetch_image_retries_transient_failure_then_succeeds() {
-        // Two 503s followed by a real image: fetch_image must ride through the
-        // transient failures (MAX_ATTEMPTS == 3) and return the final bytes.
+    fn fetch_image_honors_retry_after_then_succeeds() {
+        // A 429 with Retry-After: 1, then the real image on the retry.
         let png = b"\x89PNG\r\n\x1a\npixels".to_vec();
-        let responses = vec![
-            ("503 Service Unavailable", b"busy".to_vec(), "text/plain"),
-            ("503 Service Unavailable", b"busy".to_vec(), "text/plain"),
-            ("200 OK", png.clone(), "image/png"),
-        ];
-        let url = serve_scripted(responses);
+        let url = serve(vec![
+            (
+                "429 Too Many Requests",
+                b"slow down".to_vec(),
+                "text/plain",
+                Some("1"),
+            ),
+            ("200 OK", png.clone(), "image/png", None),
+        ]);
         let (bytes, ext) =
-            fetch_image(&no_proxy_client(), &url).expect("should succeed by attempt 3");
+            fetch_image(&no_proxy_client(), &url).expect("should succeed after waiting");
         assert_eq!(bytes, png);
         assert_eq!(ext, "png");
     }
 
     #[test]
+    fn fetch_image_retries_5xx_then_succeeds() {
+        let png = b"\x89PNG\r\n\x1a\npixels".to_vec();
+        let url = serve(vec![
+            (
+                "503 Service Unavailable",
+                b"busy".to_vec(),
+                "text/plain",
+                None,
+            ),
+            ("200 OK", png.clone(), "image/png", None),
+        ]);
+        let (bytes, _) = fetch_image(&no_proxy_client(), &url).expect("should succeed on retry");
+        assert_eq!(bytes, png);
+    }
+
+    #[test]
     fn download_images_writes_asset_and_rewrites_markdown() {
         let png = b"\x89PNG\r\n\x1a\npixels".to_vec();
-        let url = serve_once("200 OK", png.clone(), "image/png");
+        let url = serve(vec![("200 OK", png.clone(), "image/png", None)]);
         let dir = tempfile::TempDir::new().unwrap();
         let library = LibraryRoot::new(dir.path()).unwrap();
         let id = "TESTID";
+        // The duplicate URL must be fetched once (only one scripted response).
         let markdown = format!("![alt]({url})");
 
         let out = download_images(&library, id, &markdown, &[url.clone(), url.clone()]).unwrap();
@@ -315,7 +320,7 @@ mod tests {
 
         let assets: Vec<_> = fs::read_dir(library.assets_dir(id))
             .unwrap()
-            .filter_map(Result::ok)
+            .filter_map(std::result::Result::ok)
             .collect();
         assert_eq!(assets.len(), 1, "the duplicate URL should be fetched once");
         assert_eq!(fs::read(assets[0].path()).unwrap(), png);
@@ -329,25 +334,37 @@ mod tests {
             .unwrap()
     }
 
-    /// Serve a single scripted HTTP response on a fresh loopback port and return
-    /// its URL. The server thread is detached; it exits after one connection.
-    fn serve_once(status_line: &'static str, body: Vec<u8>, content_type: &'static str) -> String {
-        serve_scripted(vec![(status_line, body, content_type)])
+    /// Hit a one-shot server serving a single response with the given
+    /// `Retry-After` header and return the parsed `retry_after` Duration.
+    fn serve_and_retry_after(header_value: &'static str) -> Option<Duration> {
+        let url = serve(vec![(
+            "503 Service Unavailable",
+            b"x".to_vec(),
+            "text/plain",
+            Some(header_value),
+        )]);
+        let resp = no_proxy_client().get(&url).send().unwrap();
+        retry_after(&resp)
     }
 
-    /// Serve each `(status, body, content-type)` in order — one per connection —
-    /// then stop. Returns the URL clients should hit.
-    fn serve_scripted(responses: Vec<(&'static str, Vec<u8>, &'static str)>) -> String {
+    /// Serve each `(status, body, content-type, retry-after)` in order — one per
+    /// connection — then stop. Returns the URL clients should hit.
+    fn serve(
+        responses: Vec<(&'static str, Vec<u8>, &'static str, Option<&'static str>)>,
+    ) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
         let addr = listener.local_addr().unwrap();
         std::thread::spawn(move || {
-            for (status_line, body, content_type) in responses {
+            for (status_line, body, content_type, retry_after) in responses {
                 let Ok((mut stream, _)) = listener.accept() else {
                     return;
                 };
                 let _ = stream.read(&mut [0u8; 1024]);
+                let ra = retry_after
+                    .map(|v| format!("Retry-After: {v}\r\n"))
+                    .unwrap_or_default();
                 let head = format!(
-                    "HTTP/1.1 {status_line}\r\nContent-Type: {content_type}\r\n\
+                    "HTTP/1.1 {status_line}\r\nContent-Type: {content_type}\r\n{ra}\
                      Content-Length: {}\r\nConnection: close\r\n\r\n",
                     body.len()
                 );
