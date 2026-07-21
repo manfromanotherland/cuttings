@@ -23,12 +23,13 @@ pub fn download_images(
     let assets_dir = library.assets_dir(id);
     fs::create_dir_all(&assets_dir)?;
 
+    let client = image_client()?;
     let mut result = markdown.to_string();
 
     for url in image_urls {
         // The save-time fetch is the only attempt. If it fails, the remote URL is
         // left as-is in the Markdown and the image is not downloaded later.
-        if let Ok((bytes, ext)) = fetch_image(url) {
+        if let Ok((bytes, ext)) = fetch_image(&client, url) {
             let hash = sha256_hex(&bytes);
             let filename = format!("{hash}.{ext}");
             fs::write(assets_dir.join(&filename), &bytes)?;
@@ -41,8 +42,26 @@ pub fn download_images(
     Ok(result)
 }
 
-fn fetch_image(url: &str) -> Result<(Vec<u8>, String)> {
-    let resp = reqwest::blocking::get(url)?;
+/// The `User-Agent` sent with every image request.
+///
+/// It must be non-empty and identifiable: some hosts — notably Wikimedia's
+/// `upload.wikimedia.org`, which serves every Wikipedia article image — reject
+/// requests without one with `403 Forbidden`. The version is taken from the
+/// crate version so the User-Agent and the release never drift.
+const USER_AGENT: &str = concat!("ReadControl/", env!("CARGO_PKG_VERSION"));
+
+/// Build the HTTP client used for image downloads.
+fn image_client() -> Result<reqwest::blocking::Client> {
+    Ok(reqwest::blocking::Client::builder()
+        .user_agent(USER_AGENT)
+        .build()?)
+}
+
+fn fetch_image(client: &reqwest::blocking::Client, url: &str) -> Result<(Vec<u8>, String)> {
+    // `error_for_status` turns a non-2xx response (e.g. a 403 or 404) into an
+    // `Err` so the caller keeps the remote URL in the Markdown as a labelled
+    // placeholder, rather than saving the error page's body as a broken asset.
+    let resp = client.get(url).send()?.error_for_status()?;
     let ext = ext_from_response(&resp, url);
     let bytes = resp.bytes()?.to_vec();
     Ok((bytes, ext))
@@ -116,4 +135,53 @@ mod tests {
         );
         assert_eq!(content_type_to_ext("text/html"), None);
     }
-}
+
+    // A non-empty, identifiable User-Agent is what stops hosts like Wikimedia
+    // from answering image requests with `403 Forbidden`, so pin its shape and
+    // tie it to the crate version (its single source of truth).
+    #[test]
+    fn user_agent_is_identifiable_and_versioned() {
+        let version = USER_AGENT
+            .strip_prefix("ReadControl/")
+            .expect("User-Agent must identify the client as ReadControl");
+        assert!(!version.is_empty(), "User-Agent must carry a version");
+        assert_eq!(version, env!("CARGO_PKG_VERSION"));
+    }
+
+    // A non-2xx response must surface as an `Err` so `download_images` keeps the
+    // remote URL as a labelled placeholder instead of saving the error body as a
+    // broken asset. Served from a one-shot loopback server so the test is
+    // hermetic and needs no network.
+    #[test]
+    fn fetch_image_treats_non_success_status_as_failure() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let _ = stream.read(&mut [0u8; 1024]);
+                let body = "forbidden";
+                let resp = format!(
+                    "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\
+                     Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+
+        // Bypass any ambient proxy so the request reaches the loopback server.
+        let client = reqwest::blocking::Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap();
+        let result = fetch_image(&client, &format!("http://{addr}/img.png"));
+        assert!(
+            result.is_err(),
+            "a 403 response must be treated as a failure"
+        );
+
+      
