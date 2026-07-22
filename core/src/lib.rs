@@ -30,7 +30,8 @@ pub use id::new_id;
 pub use images::{write_images, ImageBytes};
 pub use index::open as open_index;
 pub use list::{
-    get_reading, list_readings, view_counts, ListOptions, ReadingRow, SortField, View, ViewCounts,
+    get_reading, list_readings, sidebar_counts, view_counts, CountScope, ListOptions, ReadingRow,
+    SidebarCounts, SortField, View, ViewCounts,
 };
 pub use rating::{list_ratings, set_rating};
 pub use reconcile::{apply_diffs, rebuild};

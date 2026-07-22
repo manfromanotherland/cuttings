@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    list::{ListOptions, SortField, View},
+    list::{CountScope, ListOptions, SortField, View},
     scanner::ScannedReading,
     LibraryRoot,
 };
@@ -73,6 +73,15 @@ pub struct FfiViewCounts {
     pub favorites: u64,
 }
 
+/// Every sidebar count section in one payload: the view badges, the tag counts,
+/// and the rating counts. Returned by [`Database::sidebar_counts`].
+#[derive(uniffi::Record)]
+pub struct FfiSidebarCounts {
+    pub views: FfiViewCounts,
+    pub tags: Vec<FfiTagCount>,
+    pub ratings: Vec<FfiRatingCount>,
+}
+
 #[derive(uniffi::Record)]
 pub struct FfiHighlight {
     pub id: String,
@@ -110,6 +119,19 @@ pub struct FfiListOptions {
     pub query: Option<String>,
     pub limit: u32,
     pub offset: u32,
+}
+
+/// The active sidebar filters behind the faceted counts. All four compose as an
+/// intersection — the current search, the selected smart view, the selected tag,
+/// and the selected rating (at most one of each, any may be unset; `view`
+/// defaults to `All`). Each count query ignores its own axis — see
+/// [`crate::list::CountScope`].
+#[derive(uniffi::Record)]
+pub struct FfiCountScope {
+    pub view: FfiView,
+    pub tag: Option<String>,
+    pub rating: Option<u8>,
+    pub query: Option<String>,
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -157,16 +179,51 @@ impl From<crate::list::ViewCounts> for FfiViewCounts {
     }
 }
 
+impl From<crate::list::SidebarCounts> for FfiSidebarCounts {
+    fn from(c: crate::list::SidebarCounts) -> Self {
+        Self {
+            views: c.views.into(),
+            tags: c
+                .tags
+                .into_iter()
+                .map(|(tag, count)| FfiTagCount { tag, count })
+                .collect(),
+            ratings: c
+                .ratings
+                .into_iter()
+                .map(|(rating, count)| FfiRatingCount { rating, count })
+                .collect(),
+        }
+    }
+}
+
+impl From<FfiView> for View {
+    fn from(v: FfiView) -> Self {
+        match v {
+            FfiView::All => View::All,
+            FfiView::Unread => View::Unread,
+            FfiView::Read => View::Read,
+            FfiView::Archive => View::Archive,
+            FfiView::Favorites => View::Favorites,
+        }
+    }
+}
+
+impl From<FfiCountScope> for CountScope {
+    fn from(s: FfiCountScope) -> Self {
+        Self {
+            view: s.view.into(),
+            tag: s.tag,
+            rating: s.rating,
+            query: s.query,
+        }
+    }
+}
+
 impl From<FfiListOptions> for ListOptions {
     fn from(o: FfiListOptions) -> Self {
         Self {
-            view: match o.view {
-                FfiView::All => View::All,
-                FfiView::Unread => View::Unread,
-                FfiView::Read => View::Read,
-                FfiView::Archive => View::Archive,
-                FfiView::Favorites => View::Favorites,
-            },
+            view: o.view.into(),
             sort: match o.sort {
                 FfiSortField::SavedAt => SortField::SavedAt,
                 FfiSortField::ReadAt => SortField::ReadAt,
@@ -253,12 +310,15 @@ impl Database {
             .map(|v| v.into_iter().map(Into::into).collect())
     }
 
-    /// Per-view reading counts in a single pass over the table — the aggregates
-    /// behind the sidebar's view badges. Replaces five
-    /// `list_readings(limit: 9999).len()` calls; see `view_counts`.
-    pub fn view_counts(&self) -> Result<FfiViewCounts, CoreError> {
+    /// Every sidebar count section — the view badges, the tag counts, and the
+    /// rating counts — in one call, scoped by the active search and the selected
+    /// facets. Resolves the full-text `MATCH` once and returns all three
+    /// together; see `sidebar_counts`.
+    pub fn sidebar_counts(&self, scope: FfiCountScope) -> Result<FfiSidebarCounts, CoreError> {
         let conn = self.conn.lock().unwrap();
-        crate::view_counts(&conn).map_err(e).map(Into::into)
+        crate::sidebar_counts(&conn, &scope.into())
+            .map_err(e)
+            .map(Into::into)
     }
 
     /// Fetch a reading's metadata row. Returns `None` if not found.
@@ -296,15 +356,6 @@ impl Database {
         crate::remove_tag(&lib, &conn, &id, &tag).map_err(e)
     }
 
-    pub fn list_tags(&self) -> Result<Vec<FfiTagCount>, CoreError> {
-        let conn = self.conn.lock().unwrap();
-        crate::list_tags(&conn).map_err(e).map(|v| {
-            v.into_iter()
-                .map(|(tag, count)| FfiTagCount { tag, count })
-                .collect()
-        })
-    }
-
     // ── Ratings ───────────────────────────────────────────────────────────
 
     /// Set a reading's star rating (0–5, where 0 clears it).
@@ -317,16 +368,6 @@ impl Database {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::set_rating(&lib, &conn, &id, rating).map_err(e)
-    }
-
-    /// Per-value counts of rated readings (1–5) for the sidebar filter.
-    pub fn list_ratings(&self) -> Result<Vec<FfiRatingCount>, CoreError> {
-        let conn = self.conn.lock().unwrap();
-        crate::list_ratings(&conn).map_err(e).map(|v| {
-            v.into_iter()
-                .map(|(rating, count)| FfiRatingCount { rating, count })
-                .collect()
-        })
     }
 
     // ── Status flags ──────────────────────────────────────────────────────

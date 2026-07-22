@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 use anyhow::{bail, Result};
-use rusqlite::Connection;
+use rusqlite::{params_from_iter, types::Value, Connection};
 
 use crate::{
+    list::{pinned_count_filter, CountScope, Facet, ResolvedSearch},
     parse_reading,
     reconcile::apply_diffs,
     scanner::{ScanDiff, ScannedReading},
@@ -56,18 +57,50 @@ pub fn remove_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str)
     sync_index(library, conn, &written.metadata.id)
 }
 
-/// Return all tags that appear on at least one non-archived reading,
-/// with their occurrence counts, sorted by count descending then name ascending.
-pub fn list_tags(conn: &Connection) -> Result<Vec<(String, u64)>> {
-    let mut stmt = conn.prepare(
-        "SELECT value, COUNT(*) AS cnt
-         FROM readings, json_each(readings.tags_json)
-         WHERE readings.archived = 0
-         GROUP BY value
-         ORDER BY cnt DESC, value ASC",
-    )?;
+/// Return the tags to show in the sidebar's Tags section, each with its badge
+/// count, sorted **alphabetically by name**.
+///
+/// The tiles behave like the smart-view rows, which are a fixed set: *every* tag
+/// in the library is always present, so switching view, searching, or picking a
+/// rating only changes the *badge*, zeroing it rather than hiding the tile. This
+/// is the Tags facet, so `scope`'s own tag selection is ignored (a facet never
+/// filters itself).
+///
+/// The order is alphabetical, not by count, precisely *because* the set is fixed:
+/// a count-based order would make tiles jump around as a search or facet changes
+/// their badges. Alphabetical keeps every tile in the same position no matter
+/// what the counts do.
+///
+/// The count re-applies the full view, the search, and the selected rating
+/// through a `COUNT(...) FILTER`, so a tag with no matching reading reports 0
+/// while keeping its tile. With the default scope (`view = All`) an archived-only
+/// tag therefore shows a 0, and every other tag its plain non-archived count.
+pub fn list_tags(conn: &Connection, scope: &CountScope) -> Result<Vec<(String, u64)>> {
+    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    list_tags_with(conn, scope, &search)
+}
 
-    let rows = stmt.query_map([], |row| {
+/// [`list_tags`] with the search pre-resolved, so [`crate::list::sidebar_counts`]
+/// can share one resolution across all three sidebar sections.
+pub(crate) fn list_tags_with(
+    conn: &Connection,
+    scope: &CountScope,
+    search: &ResolvedSearch,
+) -> Result<Vec<(String, u64)>> {
+    // Presence = every tag in the library (fixed set). The badge narrows to the
+    // exact view plus the search and sibling rating facet.
+    let mut vals: Vec<Value> = Vec::new();
+    let count_filter = pinned_count_filter(scope, Facet::Rating, search, &mut vals);
+
+    let sql = format!(
+        "SELECT value, COUNT(*) FILTER (WHERE {count_filter}) AS cnt
+         FROM readings, json_each(readings.tags_json)
+         GROUP BY value
+         ORDER BY value ASC"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+
+    let rows = stmt.query_map(params_from_iter(vals), |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
     })?;
 
@@ -160,7 +193,7 @@ mod tests {
         rebuild(&conn, &lib).unwrap();
         add_tag(&lib, &conn, &id, "rust").unwrap();
 
-        let tags = list_tags(&conn).unwrap();
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
         assert_eq!(tags, vec![("rust".to_string(), 1)]);
     }
 
@@ -176,7 +209,7 @@ mod tests {
         add_tag(&lib, &conn, &id, "rust").unwrap();
         add_tag(&lib, &conn, &id, "rust").unwrap();
 
-        let tags = list_tags(&conn).unwrap();
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].1, 1);
     }
@@ -200,7 +233,7 @@ mod tests {
             "removed tag should be gone from frontmatter"
         );
 
-        let tags = list_tags(&conn).unwrap();
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].0, "async");
     }
@@ -234,14 +267,14 @@ mod tests {
         write_reading(&lib, m2, "body".into()).unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        let tags = list_tags(&conn).unwrap();
-        // rust appears twice, async once; sorted by count desc then name asc
-        assert_eq!(tags[0], ("rust".to_string(), 2));
-        assert_eq!(tags[1], ("async".to_string(), 1));
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
+        // Sorted alphabetically by name (not by count): async before rust.
+        assert_eq!(tags[0], ("async".to_string(), 1));
+        assert_eq!(tags[1], ("rust".to_string(), 2));
     }
 
     #[test]
-    fn list_tags_excludes_archived() {
+    fn list_tags_archived_only_tag_shows_zero_in_active_view() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
 
@@ -251,10 +284,358 @@ mod tests {
         write_reading(&lib, m, "body".into()).unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        let tags = list_tags(&conn).unwrap();
-        assert!(
-            tags.is_empty(),
-            "archived readings should not contribute to tag counts"
+        // The tag set is fixed, so an archived-only tag stays present, but the All
+        // view's count excludes archived readings — so it shows a pinned 0.
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
+        assert_eq!(tags, vec![("hidden".to_string(), 0)]);
+    }
+
+    /// Build the faceting corpus shared by the scoped tag-count tests:
+    /// A (active, rust+prog, 5★, "alpha"), B (active, rust, 3★, "beta"),
+    /// C (archived, rust+old, 5★, "gamma").
+    fn faceting_corpus(lib: &LibraryRoot, conn: &Connection) {
+        let mut a = meta(&new_id(), "https://a.com");
+        a.tags = vec!["rust".into(), "prog".into()];
+        a.rating = 5;
+        write_reading(lib, a, "alpha".into()).unwrap();
+        let mut b = meta(&new_id(), "https://b.com");
+        b.tags = vec!["rust".into()];
+        b.rating = 3;
+        write_reading(lib, b, "beta".into()).unwrap();
+        let mut c = meta(&new_id(), "https://c.com");
+        c.tags = vec!["rust".into(), "old".into()];
+        c.rating = 5;
+        c.archived = true;
+        write_reading(lib, c, "gamma".into()).unwrap();
+        rebuild(conn, lib).unwrap();
+    }
+
+    #[test]
+    fn list_tags_scoped_by_search() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // "beta" is only in B (tags: rust). The search scopes the *counts*, not the
+        // visible tiles: rust reports 1, while "prog" (on A, which doesn't match)
+        // and "old" (archived) both stay pinned at 0 rather than disappearing.
+        // Order is alphabetical, independent of the counts.
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                query: Some("beta".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            tags,
+            vec![
+                ("old".to_string(), 0),
+                ("prog".to_string(), 0),
+                ("rust".to_string(), 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn list_tags_follow_the_archive_view_facet() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // Selecting the Archive view flips the tag counts to the archived side:
+        // C's tags (rust, old) count, while the active-only "prog" stays pinned at 0.
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                view: crate::list::View::Archive,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            tags,
+            vec![
+                ("old".to_string(), 1),
+                ("prog".to_string(), 0),
+                ("rust".to_string(), 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn list_tags_scoped_by_rating_facet() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // 5★ + default All view: only A qualifies for the counts (C is 5★ but
+        // archived), so rust/prog report 1 and the archived-only "old" is pinned at 0.
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                rating: Some(5),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            tags,
+            vec![
+                ("old".to_string(), 0),
+                ("prog".to_string(), 1),
+                ("rust".to_string(), 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn list_tags_pins_zero_count_tiles_under_a_rating_facet() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        // A: rust, 5★. B: cook, 3★. Both non-archived.
+        let mut a = meta(&new_id(), "https://a.com");
+        a.tags = vec!["rust".into()];
+        a.rating = 5;
+        write_reading(&lib, a, "alpha".into()).unwrap();
+        let mut b = meta(&new_id(), "https://b.com");
+        b.tags = vec!["cook".into()];
+        b.rating = 3;
+        write_reading(&lib, b, "beta".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Selecting 5★ keeps BOTH tiles visible (presence ignores the rating
+        // facet); "cook" reports 0 instead of vanishing, since its only reading
+        // is 3★. Order is alphabetical: cook before rust.
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                rating: Some(5),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(tags, vec![("cook".to_string(), 0), ("rust".to_string(), 1)]);
+    }
+
+    #[test]
+    fn list_tags_pins_zero_under_search_plus_rating_facet() {
+        // The exact sidebar flow: search narrows the set, then a rating facet is
+        // clicked. Tags matching the search stay pinned; those with no reading at
+        // the selected rating show 0 instead of disappearing.
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut a = meta(&new_id(), "https://a.com"); // scifi, 5★, matches search
+        a.tags = vec!["scifi".into()];
+        a.rating = 5;
+        write_reading(&lib, a, "a lone starship".into()).unwrap();
+        let mut b = meta(&new_id(), "https://b.com"); // space, 3★, matches search
+        b.tags = vec!["space".into()];
+        b.rating = 3;
+        write_reading(&lib, b, "a docking starship".into()).unwrap();
+        let mut c = meta(&new_id(), "https://c.com"); // cooking, 5★, NO search match
+        c.tags = vec!["cooking".into()];
+        c.rating = 5;
+        write_reading(&lib, c, "today I cooked pasta".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                query: Some("starship".into()),
+                rating: Some(5),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // Presence is the whole (non-archived) view, so every tag stays visible:
+        // scifi counts its one 5★ starship hit; space (3★) and cooking (no search
+        // match at all) both stay pinned at 0. Order is alphabetical.
+        assert_eq!(
+            tags,
+            vec![
+                ("cooking".to_string(), 0),
+                ("scifi".to_string(), 1),
+                ("space".to_string(), 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn list_tags_pins_all_under_search_plus_tag_selection() {
+        // The reported case: a tag is selected AND a search is typed. Every tag in
+        // the view must stay visible; only the badges reflect the search.
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut a = meta(&new_id(), "https://a.com"); // scifi, matches "starship"
+        a.tags = vec!["scifi".into()];
+        a.rating = 5;
+        write_reading(&lib, a, "a lone starship".into()).unwrap();
+        let mut b = meta(&new_id(), "https://b.com"); // space, matches "starship"
+        b.tags = vec!["space".into()];
+        b.rating = 3;
+        write_reading(&lib, b, "a docking starship".into()).unwrap();
+        let mut c = meta(&new_id(), "https://c.com"); // cooking, NO "starship"
+        c.tags = vec!["cooking".into()];
+        c.rating = 2;
+        write_reading(&lib, c, "today I cooked pasta".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                tag: Some("scifi".into()),
+                query: Some("starship".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // The selected tag is the Tags section's own axis, so it's ignored here —
+        // every tag stays. "cooking" (no search match) is pinned at 0. Order is
+        // alphabetical.
+        assert_eq!(
+            tags,
+            vec![
+                ("cooking".to_string(), 0),
+                ("scifi".to_string(), 1),
+                ("space".to_string(), 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn list_tags_pins_across_the_unread_view() {
+        // The reported case: searching, then clicking a smart view (Unread) must
+        // not drop tags. A tag whose only reading is *read* stays visible at 0,
+        // because All/Unread/Read share one presence pool.
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut a = meta(&new_id(), "https://a.com"); // unread, #alpha
+        a.tags = vec!["alpha".into()];
+        write_reading(&lib, a, "coding in rust".into()).unwrap();
+        let mut b = meta(&new_id(), "https://b.com"); // read, #beta
+        b.tags = vec!["beta".into()];
+        b.read_at = Some("2026-06-13T16:00:00.000Z".into());
+        write_reading(&lib, b, "coding in swift".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                view: crate::list::View::Unread,
+                query: Some("coding".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // "beta" (on the read article) is pinned at 0 rather than hidden.
+        assert_eq!(
+            tags,
+            vec![("alpha".to_string(), 1), ("beta".to_string(), 0)]
+        );
+    }
+
+    #[test]
+    fn list_tags_pins_across_the_favorites_view_without_search() {
+        // The reported case: selecting Favorites (no search) must keep every tag.
+        // A tag on a non-favorite reading stays visible at 0.
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut a = meta(&new_id(), "https://a.com"); // favorite, #keep
+        a.tags = vec!["keep".into()];
+        a.favorite = true;
+        write_reading(&lib, a, "body".into()).unwrap();
+        let mut b = meta(&new_id(), "https://b.com"); // not favorite, #other
+        b.tags = vec!["other".into()];
+        write_reading(&lib, b, "body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let tags = list_tags(
+            &conn,
+            &CountScope {
+                view: crate::list::View::Favorites,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // "other" (on the non-favorite reading) is pinned at 0, not hidden.
+        assert_eq!(
+            tags,
+            vec![("keep".to_string(), 1), ("other".to_string(), 0)]
+        );
+    }
+
+    #[test]
+    fn list_tags_order_is_alphabetical_and_stable_across_search() {
+        // Tiles must keep the same position regardless of counts, so a search
+        // never reshuffles them. zulu has the highest count, alpha the lowest, yet
+        // the order stays alphabetical both unfiltered and under a search.
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let mut a = meta(&new_id(), "https://a.com"); // alpha, matches "widget"
+        a.tags = vec!["alpha".into()];
+        write_reading(&lib, a, "a widget".into()).unwrap();
+        let mut z1 = meta(&new_id(), "https://z1.com"); // zulu x2, no "widget"
+        z1.tags = vec!["zulu".into()];
+        write_reading(&lib, z1, "nothing here".into()).unwrap();
+        let mut z2 = meta(&new_id(), "https://z2.com");
+        z2.tags = vec!["zulu".into()];
+        write_reading(&lib, z2, "still nothing".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Unfiltered: alpha(1) before zulu(2) despite zulu's higher count.
+        let names = |tags: Vec<(String, u64)>| tags.into_iter().map(|t| t.0).collect::<Vec<_>>();
+        assert_eq!(
+            names(list_tags(&conn, &CountScope::default()).unwrap()),
+            vec!["alpha", "zulu"]
+        );
+
+        // Under a search that zeroes zulu, the positions are unchanged.
+        let searched = list_tags(
+            &conn,
+            &CountScope {
+                query: Some("widget".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            searched,
+            vec![("alpha".to_string(), 1), ("zulu".to_string(), 0)]
+        );
+    }
+
+    #[test]
+    fn list_tags_ignores_its_own_tag_selection() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // A selected tag must NOT filter the tag list — the facet shows every
+        // sibling tag so the user can switch — so it matches the default listing.
+        let selected = list_tags(
+            &conn,
+            &CountScope {
+                tag: Some("rust".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(selected, list_tags(&conn, &CountScope::default()).unwrap());
+        assert_eq!(
+            selected,
+            vec![
+                ("old".to_string(), 0),
+                ("prog".to_string(), 1),
+                ("rust".to_string(), 2),
+            ]
         );
     }
 

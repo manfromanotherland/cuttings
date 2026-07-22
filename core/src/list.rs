@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, params_from_iter, types::Value, Connection};
 
 /// Smart-view filter applied when listing readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +106,7 @@ pub struct ReadingRow {
 /// The SQL predicate that selects a smart view. Single source of truth shared
 /// by [`list_readings`] and [`view_counts`] so a view's count can never
 /// disagree with the list it produces.
-fn view_clause(view: View) -> &'static str {
+pub(crate) fn view_clause(view: View) -> &'static str {
     match view {
         View::All => "archived = 0",
         View::Unread => "archived = 0 AND read_at IS NULL",
@@ -126,34 +126,281 @@ pub struct ViewCounts {
     pub favorites: u64,
 }
 
-/// Count the readings in every smart view in a single pass over the table.
+/// Every sidebar count section — the view badges, the tag counts, and the rating
+/// counts — gathered in a single call. See [`sidebar_counts`].
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SidebarCounts {
+    /// Per-smart-view badge counts.
+    pub views: ViewCounts,
+    /// `(tag, count)` for every tag in the library, alphabetical (`list_tags`).
+    pub tags: Vec<(String, u64)>,
+    /// `(rating, count)` for every in-use star bucket, highest first
+    /// (`list_ratings`).
+    pub ratings: Vec<(u8, u64)>,
+}
+
+/// The active sidebar filters that scope the faceted counts. All four fields
+/// compose as an intersection — the current search, the selected smart view, the
+/// selected tag, and the selected rating (`View ∩ Tag ∩ Rating ∩ Search`). The UI
+/// lets at most one of each be active at a time, and any may be unset (`view`
+/// defaults to `All`, the unfiltered base; the rest to `None`).
+///
+/// Each count query applies every field of the scope *except its own axis* — a
+/// facet never constrains itself, so its badges still show the alternatives you
+/// could switch to (see [`count_where`]). This is standard faceted navigation:
+/// selecting 5★ recounts the Library and Tags sections against the 5★ subset
+/// while the Ratings section keeps showing every rating you could pick instead.
+#[derive(Debug, Clone)]
+pub struct CountScope {
+    /// The selected smart view (`All` when none is chosen — the unfiltered base).
+    /// Constrains the tag and rating counts; ignored by [`view_counts`] itself
+    /// (which groups every view via `FILTER`).
+    pub view: View,
+    /// The selected tag, if one is active. Constrains the view and rating counts;
+    /// ignored by [`list_tags`].
+    pub tag: Option<String>,
+    /// The selected rating, if one is active. Constrains the view and tag counts;
+    /// ignored by [`list_ratings`].
+    pub rating: Option<u8>,
+    /// The active full-text query. Composes with every facet. `None` means no
+    /// search; a present-but-unmatchable query scopes every count to zero,
+    /// mirroring [`list_readings`].
+    pub query: Option<String>,
+}
+
+impl Default for CountScope {
+    fn default() -> Self {
+        Self {
+            view: View::All,
+            tag: None,
+            rating: None,
+            query: None,
+        }
+    }
+}
+
+/// The facet axis a count query groups by — the one scope filter it must skip so
+/// a section never constrains its own badges.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Facet {
+    View,
+    Tag,
+    Rating,
+}
+
+/// A [`CountScope`]'s search resolved to its FTS state exactly once. Resolving
+/// the `MATCH` string probes the FTS index (the phrase-vs-AND fallback in
+/// [`crate::search::match_query`]), so [`sidebar_counts`] plans it a single time
+/// and shares the result across all three sections.
+#[derive(Debug, Clone)]
+pub(crate) enum ResolvedSearch {
+    /// The scope carried no query — no full-text predicate applies.
+    Unfiltered,
+    /// A query was present but tokenized/matched to nothing; every count is zero.
+    Unmatchable,
+    /// The query resolved to this FTS5 `MATCH` string.
+    Fts(String),
+}
+
+impl ResolvedSearch {
+    /// Resolve `query` against the FTS index once. `None` query is
+    /// [`Unfiltered`](Self::Unfiltered); a present query becomes
+    /// [`Fts`](Self::Fts) or, when it tokenizes/matches to nothing,
+    /// [`Unmatchable`](Self::Unmatchable) — mirroring how `list_readings` treats
+    /// an unmatchable search as "no results".
+    pub(crate) fn resolve(conn: &Connection, query: Option<&str>) -> Result<Self> {
+        Ok(match query {
+            None => Self::Unfiltered,
+            Some(q) => match crate::search::match_query(conn, q)? {
+                None => Self::Unmatchable,
+                Some(m) => Self::Fts(m),
+            },
+        })
+    }
+}
+
+/// Build the shared `WHERE` fragment (and its positional bind values) for a
+/// faceted count over `readings`, applying every [`CountScope`] filter except
+/// the one for `axis`, plus the pre-resolved `search`. Columns are qualified
+/// `readings.` so the fragment is safe to splice into `list_tags`'
+/// `readings, json_each(...)` cross join.
+///
+/// Returns `None` when `search` is [`ResolvedSearch::Unmatchable`]: the caller
+/// yields empty counts rather than a full listing, exactly as `list_readings`
+/// treats an unmatchable search as "no results".
+pub(crate) fn count_where(
+    scope: &CountScope,
+    axis: Facet,
+    search: &ResolvedSearch,
+) -> Option<(String, Vec<Value>)> {
+    let mut clauses: Vec<String> = Vec::new();
+    let mut vals: Vec<Value> = Vec::new();
+
+    // The selected view constrains tag/rating counts; view_counts skips it and
+    // partitions every view itself via FILTER.
+    if axis != Facet::View {
+        clauses.push(view_clause(scope.view).to_string());
+    }
+
+    if axis != Facet::Tag {
+        if let Some(tag) = scope.tag.as_deref() {
+            vals.push(Value::Text(tag.to_string()));
+            clauses.push(format!(
+                "EXISTS (SELECT 1 FROM json_each(readings.tags_json) WHERE value = ?{})",
+                vals.len()
+            ));
+        }
+    }
+
+    if axis != Facet::Rating {
+        if let Some(rating) = scope.rating {
+            vals.push(Value::Integer(rating as i64));
+            clauses.push(format!("readings.rating = ?{}", vals.len()));
+        }
+    }
+
+    // A search composes with every facet; the caller resolved it once so counts
+    // and results always agree. An unmatchable search means the whole count is
+    // empty.
+    match search {
+        ResolvedSearch::Unmatchable => return None,
+        ResolvedSearch::Fts(m) => {
+            vals.push(Value::Text(m.clone()));
+            clauses.push(format!(
+                "readings.rowid IN \
+                 (SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{})",
+                vals.len()
+            ));
+        }
+        ResolvedSearch::Unfiltered => {}
+    }
+
+    let where_sql = if clauses.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", clauses.join(" AND "))
+    };
+    Some((where_sql, vals))
+}
+
+/// Build the `COUNT(...) FILTER (WHERE …)` predicate for a *pinned* facet section
+/// (Tags or Ratings). The presence set (which tiles show) is every tag / rating
+/// in the library, regardless of view, so the badge must re-apply the *full*
+/// faceted scope: the exact view clause, the pre-resolved `search`, and the
+/// sibling facet. `sibling` is the cross facet that is neither the section's own
+/// axis nor the view (`Facet::Rating` for the Tags section, `Facet::Tag` for the
+/// Ratings section).
+///
+/// Returns the predicate SQL and pushes any bound values onto `vals`. An
+/// [`ResolvedSearch::Unmatchable`] search contributes the constant-false
+/// predicate `0`, so every tile reports 0 while staying pinned, rather than the
+/// section emptying out.
+pub(crate) fn pinned_count_filter(
+    scope: &CountScope,
+    sibling: Facet,
+    search: &ResolvedSearch,
+    vals: &mut Vec<Value>,
+) -> String {
+    // Start from the exact view clause: presence is broader than the view (e.g.
+    // Unread pins every non-archived tag), so the badge itself must narrow back to
+    // the actual view.
+    let mut conds: Vec<String> = vec![view_clause(scope.view).to_string()];
+
+    match search {
+        ResolvedSearch::Unmatchable => conds.push("0".to_string()),
+        ResolvedSearch::Fts(m) => {
+            vals.push(Value::Text(m.clone()));
+            conds.push(format!(
+                "readings.rowid IN \
+                 (SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{})",
+                vals.len()
+            ));
+        }
+        ResolvedSearch::Unfiltered => {}
+    }
+
+    match sibling {
+        Facet::Rating => {
+            if let Some(rating) = scope.rating {
+                vals.push(Value::Integer(rating as i64));
+                conds.push(format!("readings.rating = ?{}", vals.len()));
+            }
+        }
+        Facet::Tag => {
+            if let Some(tag) = scope.tag.as_deref() {
+                vals.push(Value::Text(tag.to_string()));
+                conds.push(format!(
+                    "EXISTS (SELECT 1 FROM json_each(readings.tags_json) WHERE value = ?{})",
+                    vals.len()
+                ));
+            }
+        }
+        Facet::View => unreachable!("view is the presence axis, never a sibling"),
+    }
+
+    conds.join(" AND ")
+}
+
+/// Count the readings in every smart view in a single pass over the table,
+/// scoped by the active search and cross-facet selection (tag/rating) so the
+/// Library badges track what a search or facet actually narrows to.
 ///
 /// One grouped aggregate — not five `SELECT COUNT(*)`s, and emphatically not
 /// `list_readings(..).len()` — so the cost is a single table scan regardless of
 /// library size, with no rows materialized and no `LIMIT` to silently cap the
-/// result. The `FILTER` clause needs SQLite >= 3.30 (satisfied by the bundled
-/// build) and yields 0 rather than NULL for an empty view.
-pub fn view_counts(conn: &Connection) -> Result<ViewCounts> {
-    conn.query_row(
+/// result. The `WHERE` restricts the population to the scope (minus the view
+/// axis); each `FILTER` then partitions that population per view. `FILTER` needs
+/// SQLite >= 3.30 (satisfied by the bundled build) and yields 0 rather than NULL
+/// for an empty view.
+pub fn view_counts(conn: &Connection, scope: &CountScope) -> Result<ViewCounts> {
+    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    view_counts_with(conn, scope, &search)
+}
+
+/// [`view_counts`] with the search pre-resolved, so [`sidebar_counts`] can share
+/// one resolution across all three sections.
+pub(crate) fn view_counts_with(
+    conn: &Connection,
+    scope: &CountScope,
+    search: &ResolvedSearch,
+) -> Result<ViewCounts> {
+    let Some((where_sql, vals)) = count_where(scope, Facet::View, search) else {
+        // A present-but-unmatchable search scopes every view to zero.
+        return Ok(ViewCounts::default());
+    };
+    let sql = format!(
         "SELECT
              COUNT(*) FILTER (WHERE archived = 0),
              COUNT(*) FILTER (WHERE archived = 0 AND read_at IS NULL),
              COUNT(*) FILTER (WHERE archived = 0 AND read_at IS NOT NULL),
              COUNT(*) FILTER (WHERE archived = 1),
              COUNT(*) FILTER (WHERE favorite = 1)
-         FROM readings",
-        [],
-        |row| {
-            Ok(ViewCounts {
-                all: row.get::<_, i64>(0)? as u64,
-                unread: row.get::<_, i64>(1)? as u64,
-                read: row.get::<_, i64>(2)? as u64,
-                archive: row.get::<_, i64>(3)? as u64,
-                favorites: row.get::<_, i64>(4)? as u64,
-            })
-        },
-    )
+         FROM readings {where_sql}"
+    );
+    conn.query_row(&sql, params_from_iter(vals), |row| {
+        Ok(ViewCounts {
+            all: row.get::<_, i64>(0)? as u64,
+            unread: row.get::<_, i64>(1)? as u64,
+            read: row.get::<_, i64>(2)? as u64,
+            archive: row.get::<_, i64>(3)? as u64,
+            favorites: row.get::<_, i64>(4)? as u64,
+        })
+    })
     .map_err(Into::into)
+}
+
+/// Compute all three sidebar sections — the view badges, the tag counts, and the
+/// rating counts — in one call, resolving the search's FTS `MATCH` string a
+/// single time and threading it through every section. The sidebar always
+/// recounts all three together on a settled search or facet change, so gathering
+/// them here plans the query once and returns them in a single pass.
+pub fn sidebar_counts(conn: &Connection, scope: &CountScope) -> Result<SidebarCounts> {
+    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    Ok(SidebarCounts {
+        views: view_counts_with(conn, scope, &search)?,
+        tags: crate::tags::list_tags_with(conn, scope, &search)?,
+        ratings: crate::rating::list_ratings_with(conn, scope, &search)?,
+    })
 }
 
 /// List readings from the index according to `opts`.
@@ -596,7 +843,7 @@ mod tests {
 
         rebuild(&conn, &lib).unwrap();
 
-        let counts = view_counts(&conn).unwrap();
+        let counts = view_counts(&conn, &CountScope::default()).unwrap();
         assert_eq!(counts.all, 3); // A, B, D (C is archived)
         assert_eq!(counts.unread, 2); // A, D
         assert_eq!(counts.read, 1); // B
@@ -628,7 +875,177 @@ mod tests {
     fn view_counts_zero_on_empty_library() {
         let (_dir, conn) = setup();
         // FILTER yields 0, not NULL, so every field is a clean zero.
-        assert_eq!(view_counts(&conn).unwrap(), ViewCounts::default());
+        assert_eq!(
+            view_counts(&conn, &CountScope::default()).unwrap(),
+            ViewCounts::default()
+        );
+    }
+
+    /// Build the four-reading faceting corpus shared by the scoped view-count
+    /// tests. "space" appears in X, Y, W but not Z; ratings and archived state
+    /// are spread so search/tag/rating facets each narrow differently.
+    fn faceting_corpus(lib: &LibraryRoot, conn: &Connection) {
+        // X: active, unread, tag "sci", rating 5.
+        let mut x = meta(&new_id(), "https://a.com", "X");
+        x.tags = vec!["sci".into()];
+        x.rating = 5;
+        write_reading(lib, x, "space opera".into()).unwrap();
+        // Y: active, read, tag "sci", rating 3.
+        let mut y = meta(&new_id(), "https://b.com", "Y");
+        y.tags = vec!["sci".into()];
+        y.rating = 3;
+        y.read_at = Some("2026-06-13T16:00:00.000Z".into());
+        write_reading(lib, y, "space station".into()).unwrap();
+        // Z: active, unread, tag "cook", rating 2 — never matches "space".
+        let mut z = meta(&new_id(), "https://c.com", "Z");
+        z.tags = vec!["cook".into()];
+        z.rating = 2;
+        write_reading(lib, z, "pasta recipe".into()).unwrap();
+        // W: archived, tag "sci", rating 5.
+        let mut w = meta(&new_id(), "https://d.com", "W");
+        w.tags = vec!["sci".into()];
+        w.rating = 5;
+        w.archived = true;
+        write_reading(lib, w, "space archived".into()).unwrap();
+        rebuild(conn, lib).unwrap();
+    }
+
+    #[test]
+    fn view_counts_scoped_by_search() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // "space" matches X (active unread), Y (active read), W (archived); Z is out.
+        let counts = view_counts(
+            &conn,
+            &CountScope {
+                query: Some("space".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(counts.all, 2, "X, Y (W archived)");
+        assert_eq!(counts.unread, 1, "X");
+        assert_eq!(counts.read, 1, "Y");
+        assert_eq!(counts.archive, 1, "W");
+        assert_eq!(counts.favorites, 0);
+    }
+
+    #[test]
+    fn view_counts_scoped_by_rating_facet_composes_with_search() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // Selecting 5★ narrows the "space" set to X (active) and W (archived);
+        // Y is rating 3 and drops out. The view axis is never applied to itself.
+        let counts = view_counts(
+            &conn,
+            &CountScope {
+                query: Some("space".into()),
+                rating: Some(5),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(counts.all, 1, "X only (Y is 3★, W archived)");
+        assert_eq!(counts.unread, 1, "X");
+        assert_eq!(counts.read, 0, "Y dropped by the 5★ facet");
+        assert_eq!(counts.archive, 1, "W");
+    }
+
+    #[test]
+    fn view_counts_scoped_by_tag_facet() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // The "cook" tag matches only Z (active, unread) — no search.
+        let counts = view_counts(
+            &conn,
+            &CountScope {
+                tag: Some("cook".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(counts.all, 1, "Z");
+        assert_eq!(counts.unread, 1, "Z");
+        assert_eq!(counts.read, 0);
+        assert_eq!(counts.archive, 0);
+    }
+
+    #[test]
+    fn view_counts_unmatchable_search_is_all_zero() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // A real word that matches nothing (Some(match) but no rows) and a
+        // blank/punctuation query (early None) both scope every view to zero.
+        for q in ["zzzznomatch", "   "] {
+            let counts = view_counts(
+                &conn,
+                &CountScope {
+                    query: Some(q.into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(counts, ViewCounts::default(), "query {q:?} matches nothing");
+        }
+    }
+
+    #[test]
+    fn sidebar_counts_matches_the_individual_sections() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        faceting_corpus(&lib, &conn);
+
+        // The batched call resolves the search once, but every section must return
+        // exactly what its standalone function does — across plain, searched,
+        // faceted, view-scoped, and unmatchable-search scopes. This ties the
+        // batched path to the individual functions' behavior tests.
+        let scopes = [
+            CountScope::default(),
+            CountScope {
+                query: Some("space".into()),
+                ..Default::default()
+            },
+            CountScope {
+                query: Some("space".into()),
+                rating: Some(5),
+                ..Default::default()
+            },
+            CountScope {
+                view: View::Unread,
+                tag: Some("sci".into()),
+                ..Default::default()
+            },
+            CountScope {
+                query: Some("zzzznomatch".into()),
+                ..Default::default()
+            },
+        ];
+        for scope in scopes {
+            let batched = sidebar_counts(&conn, &scope).unwrap();
+            assert_eq!(
+                batched.views,
+                view_counts(&conn, &scope).unwrap(),
+                "views for {scope:?}"
+            );
+            assert_eq!(
+                batched.tags,
+                crate::list_tags(&conn, &scope).unwrap(),
+                "tags for {scope:?}"
+            );
+            assert_eq!(
+                batched.ratings,
+                crate::list_ratings(&conn, &scope).unwrap(),
+                "ratings for {scope:?}"
+            );
+        }
     }
 
     #[test]
