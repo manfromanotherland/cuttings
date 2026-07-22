@@ -3,6 +3,17 @@
 import SwiftUI
 
 struct SidebarView: View {
+    // Shared insets for the smart-view and rating rows (both custom toggle
+    // buttons) so they line up and stand at the same, comfortably tall height.
+    // Horizontal padding sets the flush-left label offset; vertical sets the row
+    // height (taller than a default compact list row).
+    private static let rowHPadding: CGFloat = 10
+    private static let rowVPadding: CGFloat = 7
+
+    /// Count-badge vertical padding, also applied to the content beside it (tag
+    /// name, rating stars) so a row keeps one height with or without a badge.
+    private static let badgeVPadding: CGFloat = 2
+
     @Environment(AppState.self) private var appState
     @State private var showAppearancePopover = false
 
@@ -16,12 +27,10 @@ struct SidebarView: View {
     @AppStorage("sidebarTagsExpanded", store: AppDefaults.store) private var tagsExpanded = true
 
     var body: some View {
-        @Bindable var appState = appState
-        List(selection: $appState.sidebarSelection) {
+        List {
             Section("Library", isExpanded: $libraryExpanded) {
                 ForEach(SidebarItem.allCases) { item in
                     viewRow(item)
-                        .tag(SidebarSelection.view(item))
                 }
             }
 
@@ -29,7 +38,6 @@ struct SidebarView: View {
                 Section("Ratings", isExpanded: $ratingsExpanded) {
                     ForEach(appState.sidebar.ratings, id: \.rating) { ratingCount in
                         ratingRow(ratingCount)
-                            .tag(SidebarSelection.rating(ratingCount.rating))
                     }
                 }
             }
@@ -55,8 +63,9 @@ struct SidebarView: View {
         .padding(.top, 1) // Remove the white background color at the traffic lights
         .listStyle(.sidebar)
         .focused($focusedColumn, equals: .sidebar)
-        // → crosses into the reading list; ↑/↓ keep navigating the sidebar's own
-        // rows. The list's ← arrow brings focus back here.
+        // → crosses into the reading list; the list's ← arrow brings focus back
+        // here. (The rows are toggle buttons, not a native List selection, so the
+        // filters can compose and deselect — see `viewRow`/`ratingRow`/`tagTile`.)
         .onKeyPress(.rightArrow) {
             focusedColumn = .list
             return .handled
@@ -69,13 +78,6 @@ struct SidebarView: View {
             .background(.background)
         }
         .navigationTitle("Read Control")
-        .onChange(of: appState.sidebarSelection) { _, _ in
-            // Don't clear the selection here: loadReadings() re-selects the
-            // first item (or keeps a still-valid one), so clearing first only
-            // makes the selection-dependent toolbar (sort + actions) blink off
-            // and back on while the new list loads.
-            Task { await appState.loadReadings() }
-        }
     }
 
     // ── Settings button ───────────────────────────────────────────────────────
@@ -102,27 +104,39 @@ struct SidebarView: View {
 
     // ── Smart view row ────────────────────────────────────────────────────────
 
+    /// A smart-view row. It's a toggle like the tag/rating filters (custom button,
+    /// not a native `List` selection) so clicking the active view can fall back to
+    /// `All` — `List` single-selection never fires on a re-click of the selected
+    /// row, so it can't express deselect. The selected row fills with the accent,
+    /// matching the ratings and tags.
     private func viewRow(_ item: SidebarItem) -> some View {
         let count = appState.sidebar.viewCounts[item] ?? 0
-        return HStack {
-            Label(item.label, systemImage: item.icon)
-                .labelStyle(.tightIcon)
-            Spacer()
-            if count > 0 {
-                Text("\(count)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.secondary.opacity(0.15), in: Capsule())
-                    .accessibilityIdentifier(A11y.Sidebar.viewCount(item.id))
+        let isSelected = appState.activeView == item
+        return Button {
+            appState.selectView(item)
+        } label: {
+            HStack {
+                Label(item.label, systemImage: item.icon)
+                    .labelStyle(.tightIcon)
+                Spacer()
+                if count > 0 {
+                    countBadge(count, isSelected: isSelected)
+                        .accessibilityIdentifier(A11y.Sidebar.viewCount(item.id))
+                }
             }
+            // No height-matching padding needed: the icon+label out-heights the badge.
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .modifier(RowChrome(isSelected: isSelected))
         }
-        // Expose the count as the row's accessibility value: the List collapses
-        // each row into a single element, so the inner badge Text is not
-        // separately queryable — but the row's own value is. Always set (even 0)
-        // so the UI-test suite reads a definite number.
+        .buttonStyle(.plain)
+        // Zero row insets (like the Tags section) so the row is flush-left with no
+        // extra margin; the padding above sets the label offset and row height.
+        .listRowInsets(EdgeInsets())
+        // Expose the count as the row's accessibility value so the UI-test suite
+        // reads a definite number (the button flattens its children, so the inner
+        // badge isn't separately queryable). Always set, even at 0.
         .accessibilityValue("\(count)")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityIdentifier(A11y.Sidebar.viewRow(item.id))
     }
 
@@ -134,15 +148,23 @@ struct SidebarView: View {
     private func tagTile(_ tagCount: FfiTagCount) -> some View {
         let isSelected = appState.selectedTag == tagCount.tag
         return Button {
-            appState.sidebarSelection = .tag(tagCount.tag)
+            appState.toggleTag(tagCount.tag)
         } label: {
             HStack(spacing: 5) {
                 Text("#\(tagCount.tag)")
                     // 2pt smaller than the sidebar's default (~13pt) row font.
                     .font(.system(size: 11))
                     .lineLimit(1)
-                tileBadge(count: tagCount.count, isSelected: isSelected)
-                    .accessibilityIdentifier(A11y.Sidebar.tagCount(tagCount.tag))
+                    // Height-match the badge so tiles stay one height (the name,
+                    // slightly larger than the badge, sets it). See badgeVPadding.
+                    .padding(.vertical, Self.badgeVPadding)
+                // A tag with no results under the current search/facet stays pinned
+                // (so you can still see and switch to it) but drops its badge, like
+                // the smart-view rows hide a 0.
+                if tagCount.count > 0 {
+                    countBadge(tagCount.count, isSelected: isSelected)
+                        .accessibilityIdentifier(A11y.Sidebar.tagCount(tagCount.tag))
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -161,42 +183,76 @@ struct SidebarView: View {
         .accessibilityIdentifier(A11y.Sidebar.tagTile(tagCount.tag))
     }
 
-    /// The count badge inside a tag tile, tinted to read against the selected
-    /// (accent-filled) tile as well as the resting one.
-    private func tileBadge(count: UInt64, isSelected: Bool) -> some View {
-        Text("\(count)")
+    /// The trailing count badge shared by every sidebar section, tinted to read
+    /// against both the resting and the accent-filled (selected) background.
+    private func countBadge(_ count: some BinaryInteger, isSelected: Bool) -> some View {
+        Text(String(count))
             .font(.caption2.monospacedDigit())
             .foregroundStyle(isSelected ? Color.white : .secondary)
             .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.vertical, Self.badgeVPadding)
             .background(
                 isSelected
                     ? AnyShapeStyle(.white.opacity(0.25))
-                    : AnyShapeStyle(.secondary.opacity(0.18)),
+                    : AnyShapeStyle(.secondary.opacity(0.15)),
                 in: Capsule()
             )
     }
 
+    /// Shared chrome for the full-width selectable rows (smart views + ratings;
+    /// tags are pills, apart): consistent height/inset, accent fill, hit target.
+    private struct RowChrome: ViewModifier {
+        let isSelected: Bool
+        func body(content: Content) -> some View {
+            content
+                .padding(.horizontal, SidebarView.rowHPadding)
+                .padding(.vertical, SidebarView.rowVPadding)
+                .frame(maxWidth: .infinity)
+                .background(
+                    isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear),
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .contentShape(Rectangle())
+        }
+    }
+
     // ── Rating row ──────────────────────────────────────────────────────────────
 
+    /// A rating filter row. Like the tags, it's an independent toggle: click to
+    /// filter by that star value, click again to clear it. The selected row fills
+    /// with the accent, matching the tag tiles.
     private func ratingRow(_ ratingCount: FfiRatingCount) -> some View {
-        HStack(spacing: 2) {
-            ForEach(0..<5) { star in
-                Image(systemName: star < Int(ratingCount.rating) ? "star.fill" : "star")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        let isSelected = appState.selectedRating == ratingCount.rating
+        return Button {
+            appState.toggleRating(ratingCount.rating)
+        } label: {
+            HStack(spacing: 2) {
+                // Height-match the badge so rows stay one height — the always-present
+                // stars (same `.caption2` size) set it, not the badge. See badgeVPadding.
+                HStack(spacing: 2) {
+                    ForEach(0..<5) { star in
+                        Image(systemName: star < Int(ratingCount.rating) ? "star.fill" : "star")
+                            .font(.caption2)
+                            .foregroundStyle(isSelected ? Color.white : .secondary)
+                    }
+                }
+                .padding(.vertical, Self.badgeVPadding)
+                Spacer()
+                // Pinned like the tag tiles: a bucket with no results under the
+                // current search/facet keeps its row but hides the count badge.
+                if ratingCount.count > 0 {
+                    countBadge(ratingCount.count, isSelected: isSelected)
+                }
             }
-            Spacer()
-            Text("\(ratingCount.count)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.15), in: Capsule())
+            .modifier(RowChrome(isSelected: isSelected))
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        // Match the smart-view rows: flush-left, no extra margin, same height.
+        .listRowInsets(EdgeInsets())
+        .selectionDisabled()
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier(A11y.Sidebar.ratingRow(ratingCount.rating))
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityLabel(
             "\(ratingCount.rating) star\(ratingCount.rating == 1 ? "" : "s"), "
             + "\(ratingCount.count) reading\(ratingCount.count == 1 ? "" : "s")"

@@ -40,7 +40,19 @@ final class AppState {
     /// only — not part of the observable UI state.
     @ObservationIgnored var searchTask: Task<Void, Never>?
 
-    var sidebarSelection: SidebarSelection? = .view(.all)
+    /// The active smart view. Always exactly one — `.all` is the unfiltered base.
+    /// Independent from the tag and rating filters so all three compose (together
+    /// with the search box): the reading list and the faceted counts are scoped by
+    /// `activeView` ∩ `selectedTag` ∩ `selectedRating` ∩ `searchQuery`.
+    var activeView: SidebarItem = .all
+
+    /// The active tag filter, if any. Composes with the view, rating, and search;
+    /// `nil` means no tag filter. At most one tag at a time.
+    var selectedTag: String?
+
+    /// The active rating filter (1–5), if any. Composes with the view, tag, and
+    /// search; `nil` means no rating filter. At most one rating at a time.
+    var selectedRating: UInt8?
 
     /// Sort field for the reading list, persisted across launches. The default
     /// here only initializes the backing store; `init` immediately overwrites it
@@ -77,24 +89,6 @@ final class AppState {
     /// Highlights for the currently open reading. Drives both the reader's
     /// in-text tinting and the highlights inspector.
     var highlights: [FfiHighlight] = []
-
-    /// Currently active smart view (derived from `sidebarSelection`).
-    var activeView: SidebarItem {
-        if case .view(let item) = sidebarSelection { return item }
-        return .all
-    }
-
-    /// Currently selected tag filter, if any (derived from `sidebarSelection`).
-    var selectedTag: String? {
-        if case .tag(let tag) = sidebarSelection { return tag }
-        return nil
-    }
-
-    /// Currently selected rating filter (1–5), if any.
-    var selectedRating: UInt8? {
-        if case .rating(let rating) = sidebarSelection { return rating }
-        return nil
-    }
 
     // ── Sidebar metadata ──────────────────────────────────────────────────
 

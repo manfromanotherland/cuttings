@@ -41,6 +41,9 @@ extension AppState {
             // term. So while a text field is being edited, leave the selection
             // put to keep focus in the field; re-home only when not editing.
             await self.loadReadings(resetSelectionIfMissing: !self.isEditingText)
+            // The sidebar badges are faceted by the search, so a query change has
+            // to recount them alongside the list.
+            await self.loadSidebar()
         }
     }
 
@@ -59,6 +62,21 @@ extension AppState {
             since: nil, until: nil,
             query: query,
             limit: pageSize, offset: offset
+        )
+    }
+
+    /// The active search + selected filters, as the core's faceted-count scope.
+    /// The view, tag, and rating compose (with the search) as an intersection, and
+    /// each count query drops its own axis — so passing the whole selection lets
+    /// the Library/Ratings/Tags sections each refine against the *other* filters
+    /// (see `list.rs` `CountScope`). `view` carries the active smart view (`.all`
+    /// is the unfiltered base), mirroring `makeListOptions`.
+    private func makeCountScope() -> FfiCountScope {
+        FfiCountScope(
+            view: activeView.ffiView,
+            tag: selectedTag,
+            rating: selectedRating,
+            query: searchQuery.isEmpty ? nil : searchQuery
         )
     }
 
@@ -107,28 +125,69 @@ extension AppState {
 
     func loadSidebar() async {
         guard let core else { return }
-        do {
-            // One grouped COUNT query for all five badges, instead of
-            // materializing up to 9,999 full rows per view. This is only the
-            // authoritative recount — the optimistic `SidebarCounts.applyDelta`
-            // path still updates the badges within a frame and reconciles here.
-            sidebar.setViewCounts(try await core.viewCounts())
-            sidebar.tags = try await core.listTags()
-            sidebar.ratings = try await core.listRatings()
-        } catch {
-            // Sidebar counts are non-critical; don't surface as an error.
+        // One batched recount for all three sidebar sections, scoped to the active
+        // search + selected facets (faceted navigation: each section refines
+        // against the *other* sections' selections). The core resolves the
+        // full-text match once and returns the view/tag/rating counts together in
+        // a single pass.
+        //
+        // This is the authoritative recount: the Tags/Ratings tiles come solely
+        // from here, while the optimistic `SidebarCounts.applyDelta` path updates
+        // the view badges within a frame (when not searching) and reconciles here.
+        // Sidebar counts are non-critical, so a failed fetch just leaves the
+        // sections as-is rather than surfacing an error.
+        let scope = makeCountScope()
+        guard let counts = try? await core.sidebarCounts(scope: scope) else { return }
+        sidebar.setViewCounts(counts.views)
+        sidebar.tags = counts.tags
+        sidebar.ratings = counts.ratings
+    }
+
+    /// Reload after a sidebar selection change (a new smart view, tag, or
+    /// rating): the list for the new selection, plus the faceted sidebar counts,
+    /// which now depend on the selection because selecting a facet refines the
+    /// other sections. Runs both concurrently, like `refresh()`.
+    func reloadForSelectionChange() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.loadReadings() }
+            group.addTask { await self.loadSidebar() }
         }
     }
 
-    // ── Tag navigation ────────────────────────────────────────────────────
+    // ── Sidebar filter selection ──────────────────────────────────────────
+    // The three sidebar filters — smart view, tag, rating — are independent and
+    // compose (with the search box). Selecting one leaves the others in place;
+    // clicking an active tag or rating toggles it off. The view always has a value
+    // (`.all` is the unfiltered base), so it switches rather than toggling off.
 
-    func selectTag(_ tag: String) async {
-        sidebarSelection = .tag(tag)
-        await loadReadings()
+    /// Switch the active smart view, or fall back to `.all` when the already-active
+    /// view is clicked again — mirroring how a tag/rating toggles off, except the
+    /// view always has a value so it deselects to the `.all` base rather than to
+    /// nothing. Clicking `.all` while it's active is a no-op (it's already the base).
+    func selectView(_ item: SidebarItem) {
+        let newView: SidebarItem = (item == activeView && item != .all) ? .all : item
+        guard newView != activeView else { return }
+        activeView = newView
+        Task { await reloadForSelectionChange() }
     }
 
+    /// Select a rating filter, or clear it if the same rating is already active.
+    func toggleRating(_ rating: UInt8) {
+        selectedRating = (selectedRating == rating) ? nil : rating
+        Task { await reloadForSelectionChange() }
+    }
+
+    /// Select a tag filter, or clear it if the same tag is already active.
+    func toggleTag(_ tag: String) {
+        selectedTag = (selectedTag == tag) ? nil : tag
+        Task { await reloadForSelectionChange() }
+    }
+
+    /// Clear the tag filter (the reading list's "Clear tag filter" empty-state
+    /// action); leaves the view, rating, and search in place.
     func clearTag() async {
-        sidebarSelection = .view(.all)
-        await loadReadings()
+        guard selectedTag != nil else { return }
+        selectedTag = nil
+        await reloadForSelectionChange()
     }
 }

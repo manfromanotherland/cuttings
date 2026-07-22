@@ -31,10 +31,11 @@ actor CoreBridge {
         try database.listReadings(opts: opts)
     }
 
-    /// Per-view counts in one pass — replaces five
-    /// `listReadings(limit: 9999).count` calls.
-    func viewCounts() throws -> FfiViewCounts {
-        try database.viewCounts()
+    /// All three sidebar count sections — view badges, tag counts, rating counts
+    /// — in one call, scoped by the active search + selected facets. Resolves the
+    /// full-text match once and returns them together.
+    func sidebarCounts(scope: FfiCountScope) throws -> FfiSidebarCounts {
+        try database.sidebarCounts(scope: scope)
     }
 
     func getReadingRow(id: String) throws -> FfiReadingRow? {
@@ -46,10 +47,6 @@ actor CoreBridge {
     }
 
     // ── Tags ──────────────────────────────────────────────────────────────
-
-    func listTags() throws -> [FfiTagCount] {
-        try database.listTags()
-    }
 
     func addTag(id: String, tag: String) throws {
         try database.addTag(libraryPath: libraryPath, id: id, tag: tag)
@@ -78,10 +75,6 @@ actor CoreBridge {
     /// Set a reading's star rating (0–5, where 0 clears it).
     func setRating(id: String, rating: UInt8) throws {
         try database.setRating(libraryPath: libraryPath, id: id, rating: rating)
-    }
-
-    func listRatings() throws -> [FfiRatingCount] {
-        try database.listRatings()
     }
 
     // ── Deletion ──────────────────────────────────────────────────────────

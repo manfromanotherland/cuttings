@@ -19,7 +19,14 @@ extension AppState {
         if let index = readings.firstIndex(where: { $0.id == old.id }) {
             readings[index] = new
         }
-        sidebar.applyDelta(from: old, to: new)
+        // The optimistic view-badge delta is faceted by the active tag/rating
+        // selection, mirroring the core's count queries. It can't evaluate the FTS
+        // query in Swift, so while searching we skip it and let the authoritative
+        // recount in `refresh()` → `loadSidebar()` update the badges instead. (The
+        // Tags/Ratings badges always come from that recount — see `applyDelta`.)
+        if searchQuery.isEmpty {
+            sidebar.applyDelta(from: old, to: new, tag: selectedTag, rating: selectedRating)
+        }
     }
 
     /// Mirror of the core's view/tag/rating filter (see `list.rs`): does `row`

@@ -5,7 +5,10 @@ import XCTest
 /// "Where did I put that article?": ⌘K search a distinctive term to a single
 /// match, open it, clear to restore the list, then search an archived-only term
 /// in All (no results — search excludes archived), switch to Archive to find it,
-/// and Move to Library (unarchive), confirming counts and the file update.
+/// and Move to Library (unarchive). The sidebar badges are faceted by the active
+/// search, so the match moves from the Archive badge to the Library badge; then
+/// clearing the search restores the full-library counts with the unarchive
+/// applied.
 final class FindingArticleJourney: UITestCase {
     func testSearchScopingAndUnarchive() throws {
         try launchApp(articles: Fixtures.standardCorpus)
@@ -22,21 +25,33 @@ final class FindingArticleJourney: UITestCase {
         list.clearSearch()
         XCTAssertTrue(list.waitForRowCount(Fixtures.Oracle.ViewCounts.all), "full list restored (All 8)")
 
-        // 3. Search an archived-only term in All → no results (All excludes archived).
+        // 3. Search an archived-only term in All → no results (All excludes
+        //    archived). The badges are now faceted by "voyage", whose only match
+        //    is the archived article: All 0, Archive 1.
         list.search(Fixtures.Search.archivedOnlyTerm)
         XCTAssertTrue(list.searchEmptyState.waitExists(), "no results in All")
+        XCTAssertTrue(sidebar.waitForCount(.all, equals: 0), "All ('voyage') is 0")
+        XCTAssertTrue(sidebar.waitForCount(.archive, equals: 1), "Archive ('voyage') is 1")
 
         // 4. Switch to Archive → the archived article is found.
         sidebar.select(.archive)
         XCTAssertTrue(list.row(Fixtures.Ids.archived).waitExists(), "archived article found in Archive")
 
-        // 5. Move to Library (unarchive) from the toolbar → leaves Archive, Archive
-        //    2→1 and All 8→9, and the file records archived: false.
+        // 5. Move to Library (unarchive) from the toolbar. The "voyage" search is
+        //    still active, so the badges stay faceted to it: the single match
+        //    moves off the Archive badge (1→0) and onto the Library badge (0→1),
+        //    and the file records archived: false.
         list.open(Fixtures.Ids.archived)
         reader.unarchive()
         XCTAssertTrue(list.row(Fixtures.Ids.archived).waitDisappears(), "leaves Archive")
-        XCTAssertTrue(sidebar.waitForCount(.archive, equals: 1), "Archive 2→1")
-        XCTAssertTrue(sidebar.waitForCount(.all, equals: 9), "All 8→9")
+        XCTAssertTrue(sidebar.waitForCount(.archive, equals: 0), "Archive ('voyage') 1→0")
+        XCTAssertTrue(sidebar.waitForCount(.all, equals: 1), "All ('voyage') 0→1")
         XCTAssertTrue(waitForFrontmatter(id: Fixtures.Ids.archived) { !$0.archived }, "archived: false on disk")
+
+        // 6. Clearing the search restores the full-library badges, now reflecting
+        //    the unarchive: Archive 2→1 and All 8→9.
+        list.clearSearch()
+        XCTAssertTrue(sidebar.waitForCount(.archive, equals: 1), "Archive 2→1 (full library)")
+        XCTAssertTrue(sidebar.waitForCount(.all, equals: 9), "All 8→9 (full library)")
     }
 }

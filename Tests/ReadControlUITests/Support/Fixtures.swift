@@ -140,9 +140,10 @@ enum Fixtures {
             static let favorites = 3
         }
 
-        /// Sidebar Tags section: non-archived only, count desc then name asc.
+        /// Sidebar Tags section: non-archived counts, listed alphabetically by name
+        /// (the fixed, count-independent order the tiles render in).
         static let tagCounts: [(tag: String, count: Int)] = [
-            ("programming", 3), ("rust", 2), ("swift", 2), ("markdown", 1), ("unicode", 1)
+            ("markdown", 1), ("programming", 3), ("rust", 2), ("swift", 2), ("unicode", 1)
         ]
 
         /// Sidebar Ratings section: non-archived, ratings 1–5, rating desc. Each

@@ -107,12 +107,23 @@ struct ReadingListView: View {
             ContentUnavailableView {
                 Label("Nothing here yet", systemImage: "tray")
             } actions: {
+                // Clears the tag; any view/rating filters stay put (they compose).
                 Button("Clear tag filter") {
                     Task { await appState.clearTag() }
                 }
                 .accessibilityIdentifier(A11y.List.clearTagFilter)
             }
             .accessibilityIdentifier(A11y.List.tagEmptyState)
+        } else if appState.selectedRating != nil {
+            ContentUnavailableView {
+                Label("Nothing here yet", systemImage: "tray")
+            } actions: {
+                // Clears the rating; the view filter stays put (they compose).
+                Button("Clear rating filter") {
+                    appState.toggleRating(appState.selectedRating!)
+                }
+            }
+            .accessibilityIdentifier(A11y.List.emptyState)
         } else {
             ContentUnavailableView("Nothing here yet", systemImage: "tray")
                 .accessibilityIdentifier(A11y.List.emptyState)
@@ -200,11 +211,14 @@ struct ReadingListView: View {
             let count = appState.readings.count
             return "\(count) result\(count == 1 ? "" : "s")"
         }
-        if let tag = appState.selectedTag { return "#\(tag)" }
+        // The view, tag, and rating filters compose, so the title joins whichever
+        // are active — e.g. "Unread · #rust · ★★★★" — rather than showing only one.
+        var parts = [appState.activeView.label]
+        if let tag = appState.selectedTag { parts.append("#\(tag)") }
         if let rating = appState.selectedRating {
-            return String(repeating: "★", count: Int(rating))
+            parts.append(String(repeating: "★", count: Int(rating)))
         }
-        return appState.activeView.label
+        return parts.joined(separator: " · ")
     }
 }
 

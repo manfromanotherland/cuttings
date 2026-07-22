@@ -7,7 +7,7 @@ enum ReadingLink {
     /// UTM parameters identifying ReadControl as the referrer, so sites can see
     /// the traffic came from the app.
     private static let utmParameters = [
-        URLQueryItem(name: "utm_source", value: "readcontrol.app"),
+        URLQueryItem(name: "utm_source", value: "readcontrol.app")
     ]
 
     /// Returns `url` with ReadControl's UTM reference appended. Existing query

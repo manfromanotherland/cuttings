@@ -2,17 +2,9 @@
 
 import Foundation
 
-// ── Sidebar selection ────────────────────────────────────────────────────────
-// A single selectable identity for the sidebar `List`, covering both the smart
-// views and tag filters so SwiftUI can drive native row highlighting for both.
-
-enum SidebarSelection: Hashable {
-    case view(SidebarItem)
-    case tag(String)
-    case rating(UInt8)
-}
-
 // ── Sidebar items ──────────────────────────────────────────────────────────────
+// The smart views are one of three independent, composable sidebar filters (view
+// + tag + rating); see `AppState.activeView` / `selectedTag` / `selectedRating`.
 
 enum SidebarItem: String, CaseIterable, Identifiable {
     case all, unread, read, archive, favorites
