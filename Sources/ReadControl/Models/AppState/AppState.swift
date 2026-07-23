@@ -115,7 +115,7 @@ final class AppState {
     // Internal rather than private so the sibling extension files in this
     // folder can reach them — Swift's `private` is file-scoped.
     let pageSize: UInt32 = 100
-    var core: CoreBridge?
+    var core: (any CoreBridging)?
     var accessedURL: URL?
     var watcher: LibraryWatcher?
 
