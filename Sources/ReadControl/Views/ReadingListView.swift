@@ -19,6 +19,9 @@ struct ReadingListView: View {
                 list
             }
         }
+        // Present in every state (including the empty list) so a count of 0 is
+        // still readable.
+        .background { rowsProbe }
         .navigationTitle(appState.isFocusMode ? "" : navigationTitle)
         .task { await appState.loadReadings() }
         .onChange(of: appState.sortField) { _, _ in
@@ -47,6 +50,28 @@ struct ReadingListView: View {
             Text("“\(row.title.isEmpty ? row.url : row.title)” will be permanently removed "
                 + "from your library, including its files. This cannot be undone.")
         }
+    }
+
+    // ── Rows probe ──────────────────────────────────────────────────────────
+
+    /// An invisible element describing the loaded rows to the UI-test suite: its
+    /// accessibility **label** is the row count and its **value** is the ordered
+    /// row ids (comma-joined), both read via a single `firstMatch` (see
+    /// `ReadingListPage.waitForRowCount` / `orderedRowIds`). Enumerating the row
+    /// elements to count or order them trips an XCUITest snapshot bug that fails on
+    /// any article heading in the reader; this one element sidesteps it.
+    ///
+    /// Hidden with a *clear foreground*, not `.opacity(0)`: a fully-transparent
+    /// view is dropped from the accessibility tree (so `exists` is false), whereas
+    /// a clear tint keeps the element queryable while leaving nothing on screen.
+    /// The label is the always-non-empty count ("0" for an empty list) so the
+    /// element is never pruned as empty; the value carries the ids.
+    private var rowsProbe: some View {
+        let ids = appState.readings.map(\.id)
+        return Text(verbatim: "\(ids.count)")
+            .foregroundStyle(.clear)
+            .accessibilityIdentifier(A11y.List.rows)
+            .accessibilityValue(ids.joined(separator: ","))
     }
 
     // ── List ──────────────────────────────────────────────────────────────

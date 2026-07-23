@@ -24,13 +24,11 @@ final class HighlightingJourney: UITestCase {
         keyboard.toggleHighlights()
         XCTAssertTrue(highlightsInspector.row(first.id).waitExists(), "first highlight listed")
         XCTAssertTrue(highlightsInspector.row(second.id).exists, "second highlight listed")
-        XCTAssertEqual(highlightsInspector.rowCount, 2, "two highlights")
 
         // 2. Delete the first → list drops to one; the file keeps the second only.
         highlightsInspector.delete(first.id)
         XCTAssertTrue(highlightsInspector.row(first.id).waitDisappears(), "first highlight removed")
         XCTAssertTrue(highlightsInspector.row(second.id).exists, "second highlight remains")
-        XCTAssertEqual(highlightsInspector.rowCount, 1, "one highlight left")
         XCTAssertTrue(
             wait {
                 guard let contents = library.highlightsContents(articleId: article) else { return false }

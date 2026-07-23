@@ -46,6 +46,12 @@ enum A11y {
         static let table = "list.table"
         /// A reading row, keyed by reading id.
         static func row(_ id: String) -> String { "list.row.\(id)" }
+        /// A hidden probe describing the loaded rows: its accessibility **label**
+        /// is the row count and its **value** is the ordered row ids (comma-
+        /// joined). The suite reads both from one `firstMatch` instead of
+        /// enumerating rows, which trips an XCUITest snapshot bug on article
+        /// headings (`AXHeading`).
+        static let rows = "list.rows"
         static let sortMenu = "list.sort"
         /// Default "Nothing here yet" empty state.
         static let emptyState = "list.empty"

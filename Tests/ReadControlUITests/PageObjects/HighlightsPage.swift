@@ -11,11 +11,6 @@ struct HighlightsPage {
 
     func row(_ highlightId: String) -> XCUIElement { app.byId(A11y.Highlights.row(highlightId)) }
 
-    /// The number of highlight rows currently listed.
-    var rowCount: Int {
-        app.allByIdPrefix(A11y.Highlights.row("")).count
-    }
-
     /// Delete a highlight via its row's × button. That button carries the row's
     /// identifier (with label "Close") and is only visible on hover, so hover the
     /// row's text to reveal it, then click the button — filtered from the row's

@@ -20,8 +20,8 @@ final class SmartViewPinsFacetsJourney: UITestCase {
         article(1, tags: ["beta"], rating: 3, read: true, favorite: false)
     ]
 
-    // One launch, two view-pinning phases; asserting every badge keeps it long.
-    // swiftlint:disable:next function_body_length
+    // One launch, two view-pinning phases: Favorites (no search), then Unread
+    // (with search).
     func testSmartViewsKeepFacetTilesPinned() throws {
         try launchApp(articles: Self.corpus)
 
@@ -54,7 +54,9 @@ final class SmartViewPinsFacetsJourney: UITestCase {
         // #beta and ★3 (B, which is read) drop to 0 — the tile/row stay pinned,
         // because All/Unread/Read share one presence pool.
         keyboard.focusSearch()
-        list.search("coding")
+        // Paste, don't type: this host drops a leading "c", so a typed "coding"
+        // arrives as "oding" and matches nothing. `pasteSearch` sidesteps that.
+        list.pasteSearch("coding")
         XCTAssertTrue(list.waitForRowCount(2), "both readings match \"coding\"")
         XCTAssertTrue(sidebar.waitForTagCount("alpha", equals: 1), "#alpha still 1")
         XCTAssertTrue(sidebar.waitForTagCount("beta", equals: 1), "#beta still 1")

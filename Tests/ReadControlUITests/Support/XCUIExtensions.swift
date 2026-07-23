@@ -14,16 +14,6 @@ extension XCUIApplication {
         descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    /// The static-text elements whose identifier begins with `prefix` (e.g. all
-    /// reading rows under `list.row.`). Filtering the `identifier` property in
-    /// Swift matches the collapsed SwiftUI `List` cells (where an `identifier
-    /// BEGINSWITH` predicate does not), and scoping to `staticTexts` keeps it fast
-    /// — materializing every element type is pathologically slow. A row's id can
-    /// appear on more than one static text, so callers dedupe.
-    func allByIdPrefix(_ prefix: String) -> [XCUIElement] {
-        staticTexts.allElementsBoundByIndex.filter { $0.identifier.hasPrefix(prefix) }
-    }
-
     /// Clicks a button by title in the frontmost confirmation dialog. A SwiftUI
     /// `confirmationDialog` surfaces on macOS as a sheet on the key window; fall
     /// back to a top-level dialog or plain button if the sheet query misses.

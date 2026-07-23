@@ -37,26 +37,30 @@ struct ReadingListPage {
     func open(_ id: String) { select(id) }
 
     /// The ids of the currently loaded rows, in list order — for sort-oracle and
-    /// membership assertions. A row's id can appear on several static texts, so
-    /// dedupe while preserving first-seen (top-to-bottom) order.
+    /// membership assertions.
+    ///
+    /// Read from the list's hidden probe (`A11y.List.rows`) via a single
+    /// `firstMatch`, not by enumerating the row elements: an app-wide static-text
+    /// enumeration trips an XCUITest snapshot bug that fails on the reader's
+    /// article headings (`AXHeading`). Reading one element's value is the same path
+    /// the sidebar counts use, which resolves fine through that bug.
     var orderedRowIds: [String] {
-        let prefix = A11y.List.row("")
-        var seen = Set<String>()
-        var result: [String] = []
-        for element in app.allByIdPrefix(prefix) {
-            let id = String(element.identifier.dropFirst(prefix.count))
-            if !id.isEmpty, seen.insert(id).inserted { result.append(id) }
+        guard let value = app.byId(A11y.List.rows).value as? String, !value.isEmpty else {
+            return []
         }
-        return result
+        return value.split(separator: ",").map(String.init)
     }
 
     /// Polls until the number of loaded rows equals `expected` — for asserting a
     /// search narrowed the list (search is debounced and applied asynchronously).
+    /// Reads the count from the same hidden probe (`A11y.List.rows`, count in its
+    /// label) via a single `firstMatch`, for the reason above.
     @discardableResult
     func waitForRowCount(_ expected: Int, timeout: TimeInterval = 8) -> Bool {
+        let probe = app.byId(A11y.List.rows)
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if orderedRowIds.count == expected { return true }
+            if probe.exists, Int(probe.label) == expected { return true }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
