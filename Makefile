@@ -9,7 +9,7 @@ CORE_DIR := ../readcontrol-core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
 
-.PHONY: all xcframework bindings xcodegen clean
+.PHONY: all xcframework bindings xcodegen test clean
 
 all: xcframework bindings xcodegen
 
@@ -30,6 +30,12 @@ bindings: xcframework
 ## Regenerate the Xcode project from project.yml
 xcodegen:
 	xcodegen generate
+
+## Run the test suites. The scheme runs the fast, hostless unit tests
+## (ReadControlTests) before the UI suite, so logic regressions surface first.
+## Assumes `make all` has generated the framework, bindings, and project.
+test:
+	xcodebuild test -scheme ReadControl
 
 clean:
 	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadControl.xcodeproj

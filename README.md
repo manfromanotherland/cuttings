@@ -58,9 +58,21 @@ xcodebuild build -project ReadControl.xcodeproj -scheme ReadControl
 
 ## Running the tests
 
-The end-to-end suite is XCUITest (`ReadControlUITests`) — it launches the real app against a
-throwaway temp library and drives it through the UI. It's dependency-free: only Xcode and the
-macOS SDK, no third-party test libraries.
+There are two suites, and the scheme runs them in this order:
+
+- **`ReadControlTests`** — fast, hostless unit tests for pure app logic (smart-view membership,
+  reading-time formatting). They compile the files under test directly instead of hosting in the
+  app, so they never launch a window or touch your real library or defaults.
+- **`ReadControlUITests`** — the end-to-end XCUITest suite. It launches the real app against a
+  throwaway temp library and drives it through the UI.
+
+Both are dependency-free: only Xcode and the macOS SDK, no third-party test libraries.
+
+Run everything (unit tests first, then UI):
+
+```bash
+make test        # xcodebuild test -scheme ReadControl
+```
 
 Regenerate the project after adding or removing test files:
 
@@ -68,15 +80,16 @@ Regenerate the project after adding or removing test files:
 make xcodegen
 ```
 
-Compile the test bundle without running — the fastest way to surface Swift compile errors:
+Compile the test bundles without running — the fastest way to surface Swift compile errors:
 
 ```bash
 xcodebuild build-for-testing -scheme ReadControl
 ```
 
-Run a single test class (or a single test) while iterating:
+Run just the fast unit suite, or a single test class or test, while iterating:
 
 ```bash
+xcodebuild test -scheme ReadControl -only-testing:ReadControlTests
 xcodebuild test -scheme ReadControl -only-testing:ReadControlUITests/SmokeTest
 xcodebuild test -scheme ReadControl -only-testing:ReadControlUITests/SmokeTest/testLaunchCountsOpenAndSearch
 ```

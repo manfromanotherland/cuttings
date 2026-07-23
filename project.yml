@@ -55,6 +55,37 @@ targets:
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/native-host
 
+  # Fast, hostless unit tests for pure app logic (smart-view membership and
+  # reading-time formatting today; FFI-to-presentation mappers as the ADR-0001
+  # refactor lands). It compiles the specific files under test directly — the
+  # same way ReadControlUITests shares AccessibilityID.swift — rather than
+  # hosting in the app, so the suite never launches the app, opens a window, or
+  # touches the dev's real library or defaults. The generated bindings and the
+  # static core framework are linked because today's logic still takes the
+  # `FfiReadingRow` boundary type; that dependency falls away once the mappers
+  # land and the tests speak `ReadingRow`.
+  ReadControlTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/ReadControlTests
+      - path: Sources/ReadControl/Models/SidebarItem.swift
+      - path: Sources/ReadControl/Models/ReadingTime.swift
+      - path: GeneratedBindings
+        optional: true   # populated by `make bindings`
+    dependencies:
+      - framework: Frameworks/ReadControlCore.xcframework
+        embed: false
+      - sdk: SystemConfiguration.framework
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: app.readcontrol.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/readcontrol_coreFFI.modulemap
+
   # XCUITest end-to-end suite. Drives the real app as a separate process, and is
   # dependency-free (only Xcode + the macOS SDK). The app stays on Swift 6; this
   # target uses 5.0 to avoid strict-concurrency friction in XCTest code.
@@ -89,6 +120,9 @@ schemes:
     test:
       config: Debug
       targets:
+        # Unit tests first: they're fast and hostless, so a logic regression
+        # fails the run before the slow UI suite even launches the app.
+        - name: ReadControlTests
         - name: ReadControlUITests
           parallelizable: false
     run:
