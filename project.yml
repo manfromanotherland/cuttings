@@ -72,7 +72,7 @@ targets:
       - path: Sources/ReadControl/State/SidebarItem.swift
       - path: Sources/ReadControl/State/SidebarCounts.swift
       - path: Sources/ReadControl/State/ComposedFilter.swift
-      - path: Sources/ReadControl/Models/ReadingTime.swift
+      - path: Sources/ReadControl/Shared/Formatting/ReadingTime.swift
       - path: Sources/ReadControl/Bridge/Mappers/ReadingRow.swift
       - path: Sources/ReadControl/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/ReadControl/Bridge/Mappers/HighlightRow.swift
