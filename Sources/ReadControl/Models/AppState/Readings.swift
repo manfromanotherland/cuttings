@@ -165,7 +165,7 @@ extension AppState {
     /// view always has a value so it deselects to the `.all` base rather than to
     /// nothing. Clicking `.all` while it's active is a no-op (it's already the base).
     func selectView(_ item: SidebarItem) {
-        let newView: SidebarItem = (item == activeView && item != .all) ? .all : item
+        let newView = ComposedFilter.resolveView(active: activeView, tapped: item)
         guard newView != activeView else { return }
         activeView = newView
         Task { await reloadForSelectionChange() }
@@ -173,13 +173,13 @@ extension AppState {
 
     /// Select a rating filter, or clear it if the same rating is already active.
     func toggleRating(_ rating: UInt8) {
-        selectedRating = (selectedRating == rating) ? nil : rating
+        selectedRating = ComposedFilter.toggle(selectedRating, rating)
         Task { await reloadForSelectionChange() }
     }
 
     /// Select a tag filter, or clear it if the same tag is already active.
     func toggleTag(_ tag: String) {
-        selectedTag = (selectedTag == tag) ? nil : tag
+        selectedTag = ComposedFilter.toggle(selectedTag, tag)
         Task { await reloadForSelectionChange() }
     }
 

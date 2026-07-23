@@ -32,10 +32,7 @@ extension AppState {
     /// Mirror of the core's view/tag/rating filter (see `list.rs`): does `row`
     /// still belong in the list the user is currently looking at?
     private func rowMatchesCurrentFilter(_ row: ReadingRow) -> Bool {
-        guard activeView.contains(row) else { return false }
-        if let tag = selectedTag, !row.tags.contains(tag) { return false }
-        if let rating = selectedRating, row.rating != rating { return false }
-        return true
+        ComposedFilter.matches(row, view: activeView, tag: selectedTag, rating: selectedRating)
     }
 
     /// Pair with `applyOptimistic` for status changes: if the optimistic edit
@@ -50,8 +47,7 @@ extension AppState {
               !rowMatchesCurrentFilter(readings[index]) else { return }
         withAnimation {
             if selectedId == id {
-                selectedId = index + 1 < readings.count ? readings[index + 1].id
-                    : (index > 0 ? readings[index - 1].id : nil)
+                selectedId = ComposedFilter.selectionAfterRemoving(at: index, from: readings)
             }
             readings.remove(at: index)
         }

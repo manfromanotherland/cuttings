@@ -71,6 +71,7 @@ targets:
       - path: Tests/ReadControlTests
       - path: Sources/ReadControl/Models/SidebarItem.swift
       - path: Sources/ReadControl/Models/SidebarCounts.swift
+      - path: Sources/ReadControl/Models/ComposedFilter.swift
       - path: Sources/ReadControl/Models/ReadingTime.swift
       - path: Sources/ReadControl/Bridge/Mappers/ReadingRow.swift
       - path: Sources/ReadControl/Bridge/Mappers/SidebarCountModels.swift
