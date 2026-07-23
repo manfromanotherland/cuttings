@@ -47,37 +47,23 @@ extension AppState {
         }
     }
 
-    /// List options for the current view/filter/sort/search state at `offset`.
-    /// Search is just another filter: a full-text query flows through the same
-    /// list path (composing with the active view), ranked by the chosen sort —
-    /// Relevance while searching, the persisted field otherwise.
-    private func makeListOptions(offset: UInt32) -> FfiListOptions {
-        let query = searchQuery.isEmpty ? nil : searchQuery
-        return FfiListOptions(
-            view: activeView.ffiView,
-            sort: (query == nil ? sortField : searchSort).ffi,
-            ascending: sortAscending,
-            tag: selectedTag,
-            rating: selectedRating,
-            since: nil, until: nil,
-            query: query,
-            limit: pageSize, offset: offset
-        )
-    }
+    /// The full-text query for the current search box, or nil when it's empty.
+    private var activeQuery: String? { searchQuery.isEmpty ? nil : searchQuery }
 
-    /// The active search + selected filters, as the core's faceted-count scope.
-    /// The view, tag, and rating compose (with the search) as an intersection, and
-    /// each count query drops its own axis — so passing the whole selection lets
-    /// the Library/Ratings/Tags sections each refine against the *other* filters
-    /// (see `list.rs` `CountScope`). `view` carries the active smart view (`.all`
-    /// is the unfiltered base), mirroring `makeListOptions`.
-    private func makeCountScope() -> FfiCountScope {
-        FfiCountScope(
-            view: activeView.ffiView,
-            tag: selectedTag,
-            rating: selectedRating,
-            query: searchQuery.isEmpty ? nil : searchQuery
-        )
+    /// The sort to apply: Relevance while searching, the persisted field
+    /// otherwise (search is just another filter through the same list path).
+    private var activeSort: ReadingSort { activeQuery == nil ? sortField : searchSort }
+
+    /// One page of readings for the current view/filter/sort/search at `offset`,
+    /// as presentation rows. The view, tag, and rating compose with the search as
+    /// an intersection; the bridge turns these Swift values into the core's query
+    /// (see `CoreBridge.listReadings`).
+    private func fetchReadings(_ core: any CoreBridging, offset: UInt32) async throws -> [ReadingRow] {
+        try await core.listReadings(
+            view: activeView, sort: activeSort, ascending: sortAscending,
+            tag: selectedTag, rating: selectedRating, query: activeQuery,
+            limit: pageSize, offset: offset
+        ).map { ReadingRow($0) }
     }
 
     /// `resetSelectionIfMissing` controls what happens when the current
@@ -89,9 +75,9 @@ extension AppState {
     func loadReadings(resetSelectionIfMissing: Bool = true) async {
         guard let core else { return }
         do {
-            let result = try await core.listReadings(opts: makeListOptions(offset: 0))
-            readings = result.map { ReadingRow($0) }
-            hasMoreReadings = result.count == Int(pageSize)
+            let rows = try await fetchReadings(core, offset: 0)
+            readings = rows
+            hasMoreReadings = rows.count == Int(pageSize)
 
             // Open the first reading by default so selection-dependent UI (the
             // reader and its toolbar, including Sort) is visible without an extra
@@ -111,10 +97,9 @@ extension AppState {
         guard hasMoreReadings, !isLoadingMore, let core else { return }
         isLoadingMore = true
         do {
-            let opts = makeListOptions(offset: UInt32(readings.count))
-            let result = try await core.listReadings(opts: opts)
-            readings.append(contentsOf: result.map { ReadingRow($0) })
-            hasMoreReadings = result.count == Int(pageSize)
+            let rows = try await fetchReadings(core, offset: UInt32(readings.count))
+            readings.append(contentsOf: rows)
+            hasMoreReadings = rows.count == Int(pageSize)
         } catch {
             self.error = error.localizedDescription
         }
@@ -136,8 +121,9 @@ extension AppState {
         // the view badges within a frame (when not searching) and reconciles here.
         // Sidebar counts are non-critical, so a failed fetch just leaves the
         // sections as-is rather than surfacing an error.
-        let scope = makeCountScope()
-        guard let counts = try? await core.sidebarCounts(scope: scope) else { return }
+        guard let counts = try? await core.sidebarCounts(
+            view: activeView, tag: selectedTag, rating: selectedRating, query: activeQuery
+        ) else { return }
         sidebar.setViewCounts(ViewCounts(counts.views))
         sidebar.tags = counts.tags.map { TagCount($0) }
         sidebar.ratings = counts.ratings.map { RatingCount($0) }

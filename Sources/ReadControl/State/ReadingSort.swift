@@ -2,8 +2,8 @@
 
 import Foundation
 
-/// User-selectable sort field for the reading list. Mirrors the core's
-/// `FfiSortField`; persisted as its `rawValue` in `UserDefaults`.
+/// User-selectable sort field for the reading list. Mirrors the core's sort
+/// field; persisted as its `rawValue` in `UserDefaults`.
 enum ReadingSort: String, CaseIterable, Identifiable {
     case relevance
     case savedAt
@@ -21,16 +21,6 @@ enum ReadingSort: String, CaseIterable, Identifiable {
         case .readAt: "Date read"
         case .rating: "Rating"
         case .timeToRead: "Time to read"
-        }
-    }
-
-    var ffi: FfiSortField {
-        switch self {
-        case .relevance: .relevance
-        case .savedAt: .savedAt
-        case .readAt: .readAt
-        case .rating: .rating
-        case .timeToRead: .wordCount
         }
     }
 

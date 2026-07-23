@@ -72,10 +72,13 @@ targets:
       - path: Sources/ReadControl/State/SidebarItem.swift
       - path: Sources/ReadControl/State/SidebarCounts.swift
       - path: Sources/ReadControl/State/ComposedFilter.swift
+      - path: Sources/ReadControl/State/ReadingSort.swift
       - path: Sources/ReadControl/Shared/Formatting/ReadingTime.swift
       - path: Sources/ReadControl/Bridge/Mappers/ReadingRow.swift
       - path: Sources/ReadControl/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/ReadControl/Bridge/Mappers/HighlightRow.swift
+      - path: Sources/ReadControl/Bridge/Mappers/SidebarItem+FFI.swift
+      - path: Sources/ReadControl/Bridge/Mappers/ReadingSort+FFI.swift
       - path: Sources/ReadControl/Platform/Library/LibrarySetup.swift
       - path: Sources/ReadControl/Platform/NativeHost/NativeHostInstaller.swift
       - path: GeneratedBindings

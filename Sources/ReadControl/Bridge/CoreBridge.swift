@@ -27,15 +27,36 @@ actor CoreBridge {
 
     // ── Query ─────────────────────────────────────────────────────────────
 
-    func listReadings(opts: FfiListOptions) throws -> [FfiReadingRow] {
-        try database.listReadings(opts: opts)
+    /// One page of readings for the composed view/tag/rating filter, the chosen
+    /// sort, and an optional full-text query. Takes app-language values and builds
+    /// the core's `FfiListOptions` here so the `Ffi*` query DTO stays in the bridge.
+    func listReadings(
+        view: SidebarItem, sort: ReadingSort, ascending: Bool,
+        tag: String?, rating: UInt8?, query: String?,
+        limit: UInt32, offset: UInt32
+    ) throws -> [FfiReadingRow] {
+        let opts = FfiListOptions(
+            view: view.ffiView,
+            sort: sort.ffiSort,
+            ascending: ascending,
+            tag: tag,
+            rating: rating,
+            since: nil, until: nil,
+            query: query,
+            limit: limit, offset: offset
+        )
+        return try database.listReadings(opts: opts)
     }
 
     /// All three sidebar count sections — view badges, tag counts, rating counts
     /// — in one call, scoped by the active search + selected facets. Resolves the
-    /// full-text match once and returns them together.
-    func sidebarCounts(scope: FfiCountScope) throws -> FfiSidebarCounts {
-        try database.sidebarCounts(scope: scope)
+    /// full-text match once and returns them together. Builds the core's
+    /// `FfiCountScope` here so the query DTO stays in the bridge.
+    func sidebarCounts(
+        view: SidebarItem, tag: String?, rating: UInt8?, query: String?
+    ) throws -> FfiSidebarCounts {
+        let scope = FfiCountScope(view: view.ffiView, tag: tag, rating: rating, query: query)
+        return try database.sidebarCounts(scope: scope)
     }
 
     func getReadingRow(id: String) throws -> FfiReadingRow? {

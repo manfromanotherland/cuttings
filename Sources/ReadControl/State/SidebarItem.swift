@@ -30,16 +30,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         }
     }
 
-    var ffiView: FfiView {
-        switch self {
-        case .all: .all
-        case .unread: .unread
-        case .read: .read
-        case .archive: .archive
-        case .favorites: .favorites
-        }
-    }
-
     /// Whether `row` belongs in this smart view — the single Swift mirror of the
     /// core's view clauses (see `list.rs`). Used both to filter rows against the
     /// current view and to fold optimistic edits into the sidebar view counts,

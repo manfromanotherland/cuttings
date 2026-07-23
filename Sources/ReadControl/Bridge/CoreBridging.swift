@@ -13,8 +13,14 @@ protocol CoreBridging: Sendable {
     func rebuild() async throws
     @discardableResult func sync() async throws -> UInt32
 
-    func listReadings(opts: FfiListOptions) async throws -> [FfiReadingRow]
-    func sidebarCounts(scope: FfiCountScope) async throws -> FfiSidebarCounts
+    func listReadings(
+        view: SidebarItem, sort: ReadingSort, ascending: Bool,
+        tag: String?, rating: UInt8?, query: String?,
+        limit: UInt32, offset: UInt32
+    ) async throws -> [FfiReadingRow]
+    func sidebarCounts(
+        view: SidebarItem, tag: String?, rating: UInt8?, query: String?
+    ) async throws -> FfiSidebarCounts
     func getReadingRow(id: String) async throws -> FfiReadingRow?
     func getBody(id: String) async throws -> String?
 
