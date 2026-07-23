@@ -117,7 +117,7 @@ final class AppState {
     let pageSize: UInt32 = 100
     var core: (any CoreBridging)?
     var accessedURL: URL?
-    var watcher: LibraryWatcher?
+    var watcher: FolderWatcher?
 
     private var editingMonitor: TextEditingMonitor?
 

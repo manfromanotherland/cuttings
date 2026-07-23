@@ -121,7 +121,7 @@ private struct LibrarySettingsTab: View {
 // ── Native Host ───────────────────────────────────────────────────────────────
 
 private struct NativeHostSettingsTab: View {
-    @State private var hostPath: String? = HostInstaller.bundledHostURL()?.path
+    @State private var hostPath: String? = NativeHostInstaller.bundledHostURL()?.path
     @State private var installed: Bool = false
     @State private var reinstalling: Bool = false
 
@@ -147,7 +147,7 @@ private struct NativeHostSettingsTab: View {
             Button(reinstalling ? "Installing…" : "Reinstall Manifest") {
                 reinstalling = true
                 UserDefaults.standard.removeObject(forKey: "nativeHostInstalledPath")
-                installed = HostInstaller.installIfNeeded()
+                installed = NativeHostInstaller.installIfNeeded()
                 reinstalling = false
             }
             .disabled(hostPath == nil || reinstalling)

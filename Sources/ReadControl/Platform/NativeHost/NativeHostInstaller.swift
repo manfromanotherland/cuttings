@@ -4,7 +4,7 @@ import Foundation
 
 /// Installs the bundled `native-host` binary's native-messaging manifest
 /// into all supported browsers on first launch (and whenever the app moves).
-enum HostInstaller {
+enum NativeHostInstaller {
     private static let installedPathKey = "nativeHostInstalledPath"
 
     // ── Public API ────────────────────────────────────────────────────────
@@ -13,22 +13,22 @@ enum HostInstaller {
     @discardableResult
     static func installIfNeeded() -> Bool {
         guard let hostURL = bundledHostURL() else {
-            print("HostInstaller: native-host binary not found in bundle")
+            print("NativeHostInstaller: native-host binary not found in bundle")
             return false
         }
         let path = hostURL.path
 
         // Re-install whenever the binary path changes (e.g. app moved).
         let lastPath = UserDefaults.standard.string(forKey: installedPathKey)
-        guard lastPath != path else { return true }
+        guard needsReinstall(lastInstalledPath: lastPath, currentPath: path) else { return true }
 
         do {
             try run(hostURL: hostURL)
             UserDefaults.standard.set(path, forKey: installedPathKey)
-            print("HostInstaller: manifest installed from \(path)")
+            print("NativeHostInstaller: manifest installed from \(path)")
             return true
         } catch {
-            print("HostInstaller: \(error.localizedDescription)")
+            print("NativeHostInstaller: \(error.localizedDescription)")
             return false
         }
     }
@@ -40,6 +40,13 @@ enum HostInstaller {
             .appendingPathComponent("Contents/MacOS/native-host")
             .resolvingSymlinksInPath()
             .existingFile()
+    }
+
+    /// Whether the manifest must be re-installed: true when the bundled host has
+    /// never been installed or its path changed since the last install (the app
+    /// moved). Pure, so it's unit-tested without touching `UserDefaults` or disk.
+    static func needsReinstall(lastInstalledPath: String?, currentPath: String) -> Bool {
+        lastInstalledPath != currentPath
     }
 
     private static func run(hostURL: URL) throws {
@@ -60,7 +67,7 @@ enum HostInstaller {
         ) ?? ""
 
         if process.terminationStatus != 0 {
-            throw HostInstallerError.nonZeroExit(
+            throw NativeHostInstallerError.nonZeroExit(
                 code: process.terminationStatus,
                 output: output
             )
@@ -70,7 +77,7 @@ enum HostInstaller {
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
-enum HostInstallerError: LocalizedError {
+enum NativeHostInstallerError: LocalizedError {
     case nonZeroExit(code: Int32, output: String)
 
     var errorDescription: String? {

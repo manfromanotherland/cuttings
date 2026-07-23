@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The FSEvents latency (0.5 s) coalesces rapid bursts into a single callback,
 /// so the caller doesn't need its own debounce.
-final class LibraryWatcher: @unchecked Sendable {
+final class FolderWatcher: @unchecked Sendable {
     private var stream: FSEventStreamRef?
     private let queue = DispatchQueue(label: "app.readcontrol.fsevents", qos: .utility)
     private let onChange: @Sendable () -> Void
@@ -45,7 +45,7 @@ final class LibraryWatcher: @unchecked Sendable {
             version: 0,
             info: retained.toOpaque(),
             retain: nil,
-            release: { Unmanaged<LibraryWatcher>.fromOpaque($0!).release() },
+            release: { Unmanaged<FolderWatcher>.fromOpaque($0!).release() },
             copyDescription: nil
         )
 
@@ -54,7 +54,7 @@ final class LibraryWatcher: @unchecked Sendable {
         )
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             guard let info else { return }
-            Unmanaged<LibraryWatcher>.fromOpaque(info).takeUnretainedValue().fire()
+            Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue().fire()
         }
 
         stream = FSEventStreamCreate(

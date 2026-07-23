@@ -60,7 +60,7 @@ extension AppState {
             // UI testing so runs don't touch the real machine's config.
             if !TestHooks.isUITesting {
                 writeLibraryPathConfig(url.path)
-                HostInstaller.installIfNeeded()
+                NativeHostInstaller.installIfNeeded()
             }
             startWatcher(libraryPath: url.path)
             await refresh()
@@ -102,7 +102,7 @@ extension AppState {
         // runs while we still hold the strong reference, so the release it
         // triggers can't deallocate the watcher mid-teardown.
         watcher?.invalidate()
-        watcher = LibraryWatcher(libraryPath: libraryPath) { [weak self] in
+        watcher = FolderWatcher(libraryPath: libraryPath) { [weak self] in
             Task { @MainActor [weak self] in await self?.sync() }
         }
     }
