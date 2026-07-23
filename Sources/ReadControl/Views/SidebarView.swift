@@ -145,7 +145,7 @@ struct SidebarView: View {
     /// A small pill showing `#tag` with its reading count in a trailing badge —
     /// the badge matching the smart-view rows. No icon; the name uses the same
     /// (default) font as those rows, and the selected tag fills with the accent.
-    private func tagTile(_ tagCount: FfiTagCount) -> some View {
+    private func tagTile(_ tagCount: TagCount) -> some View {
         let isSelected = appState.selectedTag == tagCount.tag
         return Button {
             appState.toggleTag(tagCount.tag)
@@ -221,7 +221,7 @@ struct SidebarView: View {
     /// A rating filter row. Like the tags, it's an independent toggle: click to
     /// filter by that star value, click again to clear it. The selected row fills
     /// with the accent, matching the tag tiles.
-    private func ratingRow(_ ratingCount: FfiRatingCount) -> some View {
+    private func ratingRow(_ ratingCount: RatingCount) -> some View {
         let isSelected = appState.selectedRating == ratingCount.rating
         return Button {
             appState.toggleRating(ratingCount.rating)

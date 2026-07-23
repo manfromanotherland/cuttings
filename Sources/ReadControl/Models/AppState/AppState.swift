@@ -88,7 +88,7 @@ final class AppState {
 
     /// Highlights for the currently open reading. Drives both the reader's
     /// in-text tinting and the highlights inspector.
-    var highlights: [FfiHighlight] = []
+    var highlights: [HighlightRow] = []
 
     // ── Sidebar metadata ──────────────────────────────────────────────────
 

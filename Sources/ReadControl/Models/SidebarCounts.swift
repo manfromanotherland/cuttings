@@ -9,14 +9,14 @@ struct SidebarCounts {
     var viewCounts: [SidebarItem: Int] = [:]
 
     /// All library tags with usage counts, alphabetical (`list_tags` order).
-    var tags: [FfiTagCount] = []
+    var tags: [TagCount] = []
 
     /// Star buckets in use, highest first (`list_ratings` order).
-    var ratings: [FfiRatingCount] = []
+    var ratings: [RatingCount] = []
 
     /// Authoritative recount: adopt the core's grouped view counts, replacing
     /// any optimistic drift.
-    mutating func setViewCounts(_ counts: FfiViewCounts) {
+    mutating func setViewCounts(_ counts: ViewCounts) {
         viewCounts = [
             .all: Int(counts.all),
             .unread: Int(counts.unread),

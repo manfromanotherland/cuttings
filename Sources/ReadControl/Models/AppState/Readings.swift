@@ -138,9 +138,9 @@ extension AppState {
         // sections as-is rather than surfacing an error.
         let scope = makeCountScope()
         guard let counts = try? await core.sidebarCounts(scope: scope) else { return }
-        sidebar.setViewCounts(counts.views)
-        sidebar.tags = counts.tags
-        sidebar.ratings = counts.ratings
+        sidebar.setViewCounts(ViewCounts(counts.views))
+        sidebar.tags = counts.tags.map { TagCount($0) }
+        sidebar.ratings = counts.ratings.map { RatingCount($0) }
     }
 
     /// Reload after a sidebar selection change (a new smart view, tag, or

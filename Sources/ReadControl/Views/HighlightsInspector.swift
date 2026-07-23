@@ -27,7 +27,7 @@ struct HighlightsInspector: View {
     private var list: some View {
         List {
             ForEach(appState.highlights, id: \.id) { highlight in
-                HighlightRow(text: highlight.text) {
+                HighlightRowView(text: highlight.text) {
                     delete(highlight.id)
                 }
                 .listRowSeparator(.visible)
@@ -68,7 +68,7 @@ struct HighlightsInspector: View {
     }
 }
 
-private struct HighlightRow: View {
+private struct HighlightRowView: View {
     let text: String
     let onDelete: () -> Void
 

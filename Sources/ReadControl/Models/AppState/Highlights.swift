@@ -14,7 +14,7 @@ extension AppState {
         // slow fetch can land after the user has moved to another reading — don't let
         // it overwrite that one's highlights.
         guard selectedId == id else { return }
-        highlights = loaded
+        highlights = loaded.map { HighlightRow($0) }
     }
 
     /// Save a new highlight for `id` from the user's selected text, then reload.
