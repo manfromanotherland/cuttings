@@ -15,7 +15,7 @@ extension AppState {
     /// `advancePastFilteredRow`; re-ordering is left to the follow-up `refresh()`.
     /// A failed write self-heals: the refresh re-reads the index and overwrites
     /// both the row and the counts.
-    private func applyOptimistic(_ old: FfiReadingRow, _ new: FfiReadingRow) {
+    private func applyOptimistic(_ old: ReadingRow, _ new: ReadingRow) {
         if let index = readings.firstIndex(where: { $0.id == old.id }) {
             readings[index] = new
         }
@@ -31,7 +31,7 @@ extension AppState {
 
     /// Mirror of the core's view/tag/rating filter (see `list.rs`): does `row`
     /// still belong in the list the user is currently looking at?
-    private func rowMatchesCurrentFilter(_ row: FfiReadingRow) -> Bool {
+    private func rowMatchesCurrentFilter(_ row: ReadingRow) -> Bool {
         guard activeView.contains(row) else { return false }
         if let tag = selectedTag, !row.tags.contains(tag) { return false }
         if let rating = selectedRating, row.rating != rating { return false }
@@ -57,7 +57,7 @@ extension AppState {
         }
     }
 
-    func toggleRead(_ row: FfiReadingRow) async {
+    func toggleRead(_ row: ReadingRow) async {
         guard let core else { return }
         var updated = row
         updated.read = !row.read
@@ -67,7 +67,7 @@ extension AppState {
         await refresh()
     }
 
-    func toggleFavorite(_ row: FfiReadingRow) async {
+    func toggleFavorite(_ row: ReadingRow) async {
         guard let core else { return }
         var updated = row
         updated.favorite = !row.favorite
@@ -80,7 +80,7 @@ extension AppState {
     /// Set a reading's star rating (0–5, 0 clears it). Returns the refreshed
     /// row so detail views can update their local copy.
     @discardableResult
-    func setRating(id: String, rating: UInt8) async -> FfiReadingRow? {
+    func setRating(id: String, rating: UInt8) async -> ReadingRow? {
         guard let core else { return nil }
         if let old = readings.first(where: { $0.id == id }) {
             var updated = old
@@ -92,10 +92,11 @@ extension AppState {
         // The row may have left the current filtered list (e.g. its rating no
         // longer matches), so fall back to fetching it straight from the index.
         if let row = readings.first(where: { $0.id == id }) { return row }
-        return try? await core.getReadingRow(id: id)
+        guard let fetched = try? await core.getReadingRow(id: id) else { return nil }
+        return ReadingRow(fetched)
     }
 
-    func archive(_ row: FfiReadingRow) async {
+    func archive(_ row: ReadingRow) async {
         guard let core else { return }
         var updated = row
         updated.archived = true
@@ -105,7 +106,7 @@ extension AppState {
         await refresh()
     }
 
-    func unarchive(_ row: FfiReadingRow) async {
+    func unarchive(_ row: ReadingRow) async {
         guard let core else { return }
         var updated = row
         updated.archived = false
@@ -117,7 +118,7 @@ extension AppState {
 
     /// Permanently delete a reading: removes its file and assets from disk and
     /// its row from the index. Irreversible — callers should confirm first.
-    func delete(_ row: FfiReadingRow) async {
+    func delete(_ row: ReadingRow) async {
         guard let core else { return }
         do {
             try await core.deleteReading(id: row.id)
@@ -160,8 +161,9 @@ extension AppState {
 
     /// Re-fetch a single reading row from the index (e.g. after a tag edit) so
     /// detail views can refresh their local copy without a full list reload.
-    func reloadRow(id: String) async -> FfiReadingRow? {
+    func reloadRow(id: String) async -> ReadingRow? {
         guard let core else { return nil }
-        return try? await core.getReadingRow(id: id)
+        guard let fetched = try? await core.getReadingRow(id: id) else { return nil }
+        return ReadingRow(fetched)
     }
 }

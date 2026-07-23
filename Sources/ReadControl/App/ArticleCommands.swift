@@ -68,7 +68,7 @@ struct ArticleCommands: Commands {
         }
     }
 
-    private var selectedRow: FfiReadingRow? {
+    private var selectedRow: ReadingRow? {
         guard let id = appState.selectedId else { return nil }
         return appState.readings.first(where: { $0.id == id })
     }

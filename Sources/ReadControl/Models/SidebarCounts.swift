@@ -40,16 +40,16 @@ struct SidebarCounts {
     /// is active — the FTS query can't be evaluated in Swift, so searching relies
     /// on the recount instead.
     mutating func applyDelta(
-        from old: FfiReadingRow, to new: FfiReadingRow,
+        from old: ReadingRow, to new: ReadingRow,
         tag selectedTag: String?, rating selectedRating: UInt8?
     ) {
-        func matchesCross(_ row: FfiReadingRow) -> Bool {
+        func matchesCross(_ row: ReadingRow) -> Bool {
             if let selectedTag, !row.tags.contains(selectedTag) { return false }
             if let selectedRating, row.rating != selectedRating { return false }
             return true
         }
         for item in SidebarItem.allCases {
-            func inView(_ row: FfiReadingRow) -> Bool { matchesCross(row) && item.contains(row) }
+            func inView(_ row: ReadingRow) -> Bool { matchesCross(row) && item.contains(row) }
             let delta = (inView(new) ? 1 : 0) - (inView(old) ? 1 : 0)
             if delta != 0 { viewCounts[item] = max(0, (viewCounts[item] ?? 0) + delta) }
         }

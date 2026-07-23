@@ -5,7 +5,7 @@ import SwiftUI
 /// End-of-article rating: shown after the body so it surfaces when the
 /// reader reaches the end — rating is a judgment formed once you've read.
 struct RatingFooter: View {
-    let row: FfiReadingRow
+    let row: ReadingRow
     /// Reader typography, so the prompt and stars rescale with the body copy.
     let theme: MarkdownTheme
 

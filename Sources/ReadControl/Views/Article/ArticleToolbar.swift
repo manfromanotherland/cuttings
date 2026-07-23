@@ -7,7 +7,7 @@ import SwiftUI
 /// it for (see `ArticleDetailView.currentRow`); actions write through
 /// `appState`, whose refresh supplies the updated row on the next render.
 struct ArticleToolbar: ToolbarContent {
-    let row: FfiReadingRow
+    let row: ReadingRow
     let appState: AppState
 
     var body: some ToolbarContent {

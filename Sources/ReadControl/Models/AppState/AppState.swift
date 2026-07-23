@@ -26,7 +26,7 @@ final class AppState {
     /// screen even when a saved library exists. Onboarding keys off both:
     /// show it only when there's no library *and* we aren't restoring one.
     var isRestoringLibrary: Bool = false
-    var readings: [FfiReadingRow] = []
+    var readings: [ReadingRow] = []
     var selectedId: String?
     var searchQuery: String = ""
 
@@ -72,7 +72,7 @@ final class AppState {
     }
 
     /// Reading awaiting delete confirmation, if any. Drives the confirm dialog.
-    var pendingDelete: FfiReadingRow?
+    var pendingDelete: ReadingRow?
 
     /// Drives the tag-picker sheet for the open reading. Held here (rather than in
     /// the detail view) so both the toolbar button and the ⌘⇧T menu command can

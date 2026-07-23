@@ -44,7 +44,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     /// core's view clauses (see `list.rs`). Used both to filter rows against the
     /// current view and to fold optimistic edits into the sidebar view counts,
     /// so the two can never drift apart.
-    func contains(_ row: FfiReadingRow) -> Bool {
+    func contains(_ row: ReadingRow) -> Bool {
         switch self {
         case .all:       !row.archived
         case .unread:    !row.archived && !row.read

@@ -193,7 +193,7 @@ struct ReadingListView: View {
     // ── Context menu ──────────────────────────────────────────────────────
 
     @ViewBuilder
-    private func contextMenu(for row: FfiReadingRow) -> some View {
+    private func contextMenu(for row: ReadingRow) -> some View {
         Button(row.read ? "Mark as Unread" : "Mark as Read") {
             Task { await appState.toggleRead(row) }
         }
@@ -250,7 +250,7 @@ struct ReadingListView: View {
 // ── Row ───────────────────────────────────────────────────────────────────────
 
 struct ReadingRowView: View {
-    let row: FfiReadingRow
+    let row: ReadingRow
 
     var body: some View {
         // The unread dot lives in its own fixed-width leading column so the

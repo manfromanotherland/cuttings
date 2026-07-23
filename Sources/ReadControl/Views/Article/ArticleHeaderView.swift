@@ -7,7 +7,7 @@ import SwiftUI
 /// entirely by the passed-in row, so it lives apart from `ArticleDetailView`'s
 /// loading state.
 struct ArticleHeaderView: View {
-    let row: FfiReadingRow
+    let row: ReadingRow
     /// Reader typography, so the title and metadata rescale with the body copy.
     let theme: MarkdownTheme
 

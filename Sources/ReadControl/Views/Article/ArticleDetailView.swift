@@ -7,7 +7,7 @@ struct ArticleDetailView: View {
     @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
     @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
 
-    @State private var row: FfiReadingRow?
+    @State private var row: ReadingRow?
     @State private var articleDocument: ArticleDocument?
     @State private var isLoading = false
     /// True when the selected reading's body is too large to render (see
@@ -96,7 +96,7 @@ struct ArticleDetailView: View {
 
     // ── Article content ───────────────────────────────────────────────────
 
-    private func articleView(row: FfiReadingRow) -> some View {
+    private func articleView(row: ReadingRow) -> some View {
         articleContent(row: row)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(row.title.isEmpty ? "Article" : row.title)
@@ -106,7 +106,7 @@ struct ArticleDetailView: View {
     /// fallback, or nothing. The article header is embedded inside the scroll
     /// area of each branch so it moves with the content.
     @ViewBuilder
-    private func articleContent(row: FfiReadingRow) -> some View {
+    private func articleContent(row: ReadingRow) -> some View {
         if bodyTooLarge {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -143,7 +143,7 @@ struct ArticleDetailView: View {
     }
 
     /// Excerpt-only fallback when there's no parsed body to show.
-    private func excerptFallback(row: FfiReadingRow, excerpt: String) -> some View {
+    private func excerptFallback(row: ReadingRow, excerpt: String) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ArticleHeaderView(row: row, theme: theme)
@@ -169,7 +169,7 @@ struct ArticleDetailView: View {
     /// here because this view owns the detail `row` state: flip the stars now,
     /// then reconcile with the authoritative row once the core write + refresh
     /// land (falling back to the prior row if the write didn't take).
-    private func ratingFooter(row: FfiReadingRow) -> some View {
+    private func ratingFooter(row: ReadingRow) -> some View {
         RatingFooter(row: row, theme: theme) { newValue in
             let previous = self.row
             var optimistic = row
@@ -194,7 +194,7 @@ struct ArticleDetailView: View {
     /// — makes the actions appear/disappear in the SAME render frame as the
     /// sort button (which also keys off `appState.readings`). Using the async
     /// `row` instead lets the two reflow a frame apart, which reads as a blink.
-    private var currentRow: FfiReadingRow? {
+    private var currentRow: ReadingRow? {
         guard let id = appState.selectedId else { return nil }
         // Fall back to the loaded detail row when the selection sits outside the
         // current list — e.g. after re-rating the open article inside a rating

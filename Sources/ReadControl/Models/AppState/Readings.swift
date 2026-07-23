@@ -90,7 +90,7 @@ extension AppState {
         guard let core else { return }
         do {
             let result = try await core.listReadings(opts: makeListOptions(offset: 0))
-            readings = result
+            readings = result.map { ReadingRow($0) }
             hasMoreReadings = result.count == Int(pageSize)
 
             // Open the first reading by default so selection-dependent UI (the
@@ -113,7 +113,7 @@ extension AppState {
         do {
             let opts = makeListOptions(offset: UInt32(readings.count))
             let result = try await core.listReadings(opts: opts)
-            readings.append(contentsOf: result)
+            readings.append(contentsOf: result.map { ReadingRow($0) })
             hasMoreReadings = result.count == Int(pageSize)
         } catch {
             self.error = error.localizedDescription

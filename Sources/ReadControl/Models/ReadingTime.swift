@@ -2,7 +2,7 @@
 
 import Foundation
 
-extension FfiReadingRow {
+extension ReadingRow {
     /// Estimated reading time as a short label (e.g. "5 min read", or
     /// "1 hr 20 min read" for longer articles), derived from the article's word
     /// count at an average adult silent reading speed of 200 wpm. Rounds up to a

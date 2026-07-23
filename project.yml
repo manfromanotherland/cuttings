@@ -55,15 +55,15 @@ targets:
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/native-host
 
-  # Fast, hostless unit tests for pure app logic (smart-view membership and
-  # reading-time formatting today; FFI-to-presentation mappers as the ADR-0001
-  # refactor lands). It compiles the specific files under test directly — the
-  # same way ReadControlUITests shares AccessibilityID.swift — rather than
-  # hosting in the app, so the suite never launches the app, opens a window, or
-  # touches the dev's real library or defaults. The generated bindings and the
-  # static core framework are linked because today's logic still takes the
-  # `FfiReadingRow` boundary type; that dependency falls away once the mappers
-  # land and the tests speak `ReadingRow`.
+  # Fast, hostless unit tests for pure app logic: smart-view membership,
+  # reading-time formatting, and the FFI-to-presentation ReadingRow mapper. It
+  # compiles the specific files under test directly — the same way
+  # ReadControlUITests shares AccessibilityID.swift — rather than hosting in the
+  # app, so the suite never launches the app, opens a window, or touches the
+  # dev's real library or defaults. The generated bindings and the static core
+  # framework are linked because the code under test still meets the FFI
+  # boundary: the mapper takes an `FfiReadingRow` and `SidebarItem.ffiView`
+  # returns an `FfiView`.
   ReadControlTests:
     type: bundle.unit-test
     platform: macOS
@@ -71,6 +71,7 @@ targets:
       - path: Tests/ReadControlTests
       - path: Sources/ReadControl/Models/SidebarItem.swift
       - path: Sources/ReadControl/Models/ReadingTime.swift
+      - path: Sources/ReadControl/Bridge/Mappers/ReadingRow.swift
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:
