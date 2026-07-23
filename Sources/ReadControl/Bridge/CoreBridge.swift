@@ -30,20 +30,16 @@ actor CoreBridge {
     /// One page of readings for the composed view/tag/rating filter, the chosen
     /// sort, and an optional full-text query. Takes app-language values and builds
     /// the core's `FfiListOptions` here so the `Ffi*` query DTO stays in the bridge.
-    func listReadings(
-        view: SidebarItem, sort: ReadingSort, ascending: Bool,
-        tag: String?, rating: UInt8?, query: String?,
-        limit: UInt32, offset: UInt32
-    ) throws -> [FfiReadingRow] {
+    func listReadings(_ query: ReadingQuery) throws -> [FfiReadingRow] {
         let opts = FfiListOptions(
-            view: view.ffiView,
-            sort: sort.ffiSort,
-            ascending: ascending,
-            tag: tag,
-            rating: rating,
+            view: query.view.ffiView,
+            sort: query.sort.ffiSort,
+            ascending: query.ascending,
+            tag: query.tag,
+            rating: query.rating,
             since: nil, until: nil,
-            query: query,
-            limit: limit, offset: offset
+            query: query.search,
+            limit: query.limit, offset: query.offset
         )
         return try database.listReadings(opts: opts)
     }

@@ -59,11 +59,12 @@ extension AppState {
     /// an intersection; the bridge turns these Swift values into the core's query
     /// (see `CoreBridge.listReadings`).
     private func fetchReadings(_ core: any CoreBridging, offset: UInt32) async throws -> [ReadingRow] {
-        try await core.listReadings(
+        let query = ReadingQuery(
             view: activeView, sort: activeSort, ascending: sortAscending,
-            tag: selectedTag, rating: selectedRating, query: activeQuery,
+            tag: selectedTag, rating: selectedRating, search: activeQuery,
             limit: pageSize, offset: offset
-        ).map { ReadingRow($0) }
+        )
+        return try await core.listReadings(query).map { ReadingRow($0) }
     }
 
     /// `resetSelectionIfMissing` controls what happens when the current

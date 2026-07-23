@@ -13,11 +13,7 @@ protocol CoreBridging: Sendable {
     func rebuild() async throws
     @discardableResult func sync() async throws -> UInt32
 
-    func listReadings(
-        view: SidebarItem, sort: ReadingSort, ascending: Bool,
-        tag: String?, rating: UInt8?, query: String?,
-        limit: UInt32, offset: UInt32
-    ) async throws -> [FfiReadingRow]
+    func listReadings(_ query: ReadingQuery) async throws -> [FfiReadingRow]
     func sidebarCounts(
         view: SidebarItem, tag: String?, rating: UInt8?, query: String?
     ) async throws -> FfiSidebarCounts
