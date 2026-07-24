@@ -50,18 +50,38 @@ struct TagPickerSheet: View {
     }
 
     /// The tag to offer creating — the typed name, when it doesn't already exist
-    /// (case-insensitive). `nil` hides the "Add" row.
+    /// (case-insensitive) and fits within the length limit. `nil` hides the
+    /// "Add" row (an over-length name shows `lengthError` instead).
     private var creatable: String? {
         let typed = trimmedQuery
         guard !typed.isEmpty,
+              TagRules.isWithinLength(typed),
               !allTags.contains(where: { $0.caseInsensitiveCompare(typed) == .orderedSame })
         else { return nil }
         return typed
     }
 
+    /// Inline error for a typed name that's too long to create, or `nil` when
+    /// the name fits. An over-length name can never match an existing tag (they
+    /// were all created under the same limit), so this only gates creation.
+    private var lengthError: String? {
+        let typed = trimmedQuery
+        guard !typed.isEmpty, !TagRules.isWithinLength(typed) else { return nil }
+        return "Tags can be at most \(TagRules.maxLength) characters."
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             searchField
+            if let lengthError {
+                Text(lengthError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                    .accessibilityIdentifier(A11y.TagPicker.lengthError)
+            }
             Divider()
             tagList
             Divider()
@@ -155,6 +175,9 @@ struct TagPickerSheet: View {
         if let existing = allTags.first(where: { $0.caseInsensitiveCompare(typed) == .orderedSame }) {
             if !appliedSet.contains(existing) { onToggle(existing, true) }
         } else {
+            // Block creating an over-length tag; keep the text so the inline
+            // error stays visible for the user to trim it down.
+            guard TagRules.isWithinLength(typed) else { return }
             if !order.contains(typed) { order.insert(typed, at: 0) }
             onToggle(typed, true)
         }

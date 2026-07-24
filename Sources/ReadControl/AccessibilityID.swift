@@ -106,6 +106,8 @@ enum A11y {
     enum TagPicker {
         static let searchField = "tagPicker.search"
         static let addRow = "tagPicker.add"
+        /// Inline message shown when the typed name exceeds the tag-length limit.
+        static let lengthError = "tagPicker.lengthError"
         /// An existing-tag toggle row, keyed by tag name.
         static func row(_ tag: String) -> String { "tagPicker.row.\(tag)" }
         static let done = "tagPicker.done"

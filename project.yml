@@ -74,6 +74,7 @@ targets:
       - path: Sources/ReadControl/State/ComposedFilter.swift
       - path: Sources/ReadControl/State/ReadingSort.swift
       - path: Sources/ReadControl/Shared/Formatting/ReadingTime.swift
+      - path: Sources/ReadControl/Features/Tags/TagRules.swift
       - path: Sources/ReadControl/Bridge/Mappers/ReadingRow.swift
       - path: Sources/ReadControl/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/ReadControl/Bridge/Mappers/HighlightRow.swift
