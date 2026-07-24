@@ -40,137 +40,48 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 1 {
         migrate_v1(conn)?;
     }
-    if version < 2 {
-        migrate_v2(conn)?;
-    }
-    if version < 3 {
-        migrate_v3(conn)?;
-    }
-    if version < 4 {
-        migrate_v4(conn)?;
-    }
-    if version < 5 {
-        migrate_v5(conn)?;
-    }
+    // Future schema changes append here as new, monotonically-numbered steps —
+    // never edit `migrate_v1`, add `if version < 2 { migrate_v2(conn)?; }` and a
+    // matching `migrate_v2` that alters the schema forward and stamps
+    // `PRAGMA user_version = 2`.
     Ok(())
 }
 
+/// v1: the initial schema.
+///
+/// This is a fresh baseline: the app has no released users, so the earlier
+/// incremental migrations were collapsed into this single step rather than
+/// carried forever. It creates the `readings` table, the `readings_fts`
+/// full-text index (covering title, body, and site), and the triggers that keep
+/// the two in sync. Later releases add migrations on top of this — see
+/// [`migrate`].
 fn migrate_v1(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "
         BEGIN;
 
         CREATE TABLE IF NOT EXISTS readings (
-            id           TEXT    PRIMARY KEY NOT NULL,
-            url          TEXT    NOT NULL,
-            canonical_url TEXT   NOT NULL,
-            title        TEXT    NOT NULL,
-            author       TEXT,
-            site         TEXT,
-            saved_at     TEXT    NOT NULL,
-            read         INTEGER NOT NULL DEFAULT 0,
-            archived     INTEGER NOT NULL DEFAULT 0,
-            favorite     INTEGER NOT NULL DEFAULT 0,
-            source_hash  TEXT    NOT NULL,
-            excerpt      TEXT,
-            word_count   INTEGER,
-            lang         TEXT,
-            tags_json    TEXT    NOT NULL DEFAULT '[]',
-            body_text    TEXT    NOT NULL DEFAULT ''
+            id            TEXT    PRIMARY KEY NOT NULL,
+            url           TEXT    NOT NULL,
+            canonical_url TEXT    NOT NULL,
+            title         TEXT    NOT NULL,
+            author        TEXT,
+            site          TEXT,
+            saved_at      TEXT    NOT NULL,
+            read_at       TEXT,
+            archived      INTEGER NOT NULL DEFAULT 0,
+            favorite      INTEGER NOT NULL DEFAULT 0,
+            rating        INTEGER NOT NULL DEFAULT 0,
+            source_hash   TEXT    NOT NULL,
+            excerpt       TEXT,
+            word_count    INTEGER,
+            lang          TEXT,
+            tags_json     TEXT    NOT NULL DEFAULT '[]',
+            body_text     TEXT    NOT NULL DEFAULT ''
             -- embedding BLOB reserved for future vector search (CORE-16)
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS readings_fts USING fts5(
-            title,
-            body_text,
-            content=readings,
-            content_rowid=rowid
-        );
-
-        -- Keep FTS in sync with the readings table.
-        CREATE TRIGGER IF NOT EXISTS readings_ai
-        AFTER INSERT ON readings BEGIN
-            INSERT INTO readings_fts(rowid, title, body_text)
-            VALUES (new.rowid, new.title, new.body_text);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS readings_ad
-        AFTER DELETE ON readings BEGIN
-            INSERT INTO readings_fts(readings_fts, rowid, title, body_text)
-            VALUES ('delete', old.rowid, old.title, old.body_text);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS readings_au
-        AFTER UPDATE ON readings BEGIN
-            INSERT INTO readings_fts(readings_fts, rowid, title, body_text)
-            VALUES ('delete', old.rowid, old.title, old.body_text);
-            INSERT INTO readings_fts(rowid, title, body_text)
-            VALUES (new.rowid, new.title, new.body_text);
-        END;
-
-        PRAGMA user_version = 1;
-
-        COMMIT;
-        ",
-    )?;
-    Ok(())
-}
-
-/// v2: add the `rating` column (0–5, 0 = unrated) for star ratings.
-fn migrate_v2(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        BEGIN;
-        ALTER TABLE readings ADD COLUMN rating INTEGER NOT NULL DEFAULT 0;
-        PRAGMA user_version = 2;
-        COMMIT;
-        ",
-    )?;
-    Ok(())
-}
-
-/// v3: index the `site` column with a plain B-tree index.
-///
-/// Superseded by v4, which makes `site` part of the FTS index instead. This
-/// step is kept verbatim because it may already have run on installs that were
-/// stamped at version 3; migrations are append-only, so v4 (not a redefinition
-/// of v3) carries the newer schema and drops this now-unused index.
-fn migrate_v3(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        BEGIN;
-        CREATE INDEX IF NOT EXISTS idx_readings_site ON readings(site);
-        PRAGMA user_version = 3;
-        COMMIT;
-        ",
-    )?;
-    Ok(())
-}
-
-/// v4: add `site` to the full-text index so search matches a reading's source
-/// site (e.g. "nytimes" surfaces articles from nytimes.com) using the same
-/// tokenized, ranked matching as title and body.
-///
-/// FTS5 columns can't be altered in place, so the external-content table and
-/// its sync triggers are dropped and recreated with the new column, then the
-/// index is rebuilt from the `readings` content table (which already holds
-/// `site`). `site` keeps column index 2, leaving the `snippet()` call on
-/// body_text (index 1) untouched. The v3 B-tree index is dropped — FTS now
-/// covers site lookups. This converges installs coming from v3 and fresh
-/// installs (v1→v4) on an identical schema.
-fn migrate_v4(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        BEGIN;
-
-        DROP INDEX IF EXISTS idx_readings_site;
-
-        DROP TRIGGER IF EXISTS readings_ai;
-        DROP TRIGGER IF EXISTS readings_ad;
-        DROP TRIGGER IF EXISTS readings_au;
-        DROP TABLE IF EXISTS readings_fts;
-
-        CREATE VIRTUAL TABLE readings_fts USING fts5(
             title,
             body_text,
             site,
@@ -178,19 +89,20 @@ fn migrate_v4(conn: &Connection) -> Result<()> {
             content_rowid=rowid
         );
 
-        CREATE TRIGGER readings_ai
+        -- Keep FTS in sync with the readings table.
+        CREATE TRIGGER IF NOT EXISTS readings_ai
         AFTER INSERT ON readings BEGIN
             INSERT INTO readings_fts(rowid, title, body_text, site)
             VALUES (new.rowid, new.title, new.body_text, new.site);
         END;
 
-        CREATE TRIGGER readings_ad
+        CREATE TRIGGER IF NOT EXISTS readings_ad
         AFTER DELETE ON readings BEGIN
             INSERT INTO readings_fts(readings_fts, rowid, title, body_text, site)
             VALUES ('delete', old.rowid, old.title, old.body_text, old.site);
         END;
 
-        CREATE TRIGGER readings_au
+        CREATE TRIGGER IF NOT EXISTS readings_au
         AFTER UPDATE ON readings BEGIN
             INSERT INTO readings_fts(readings_fts, rowid, title, body_text, site)
             VALUES ('delete', old.rowid, old.title, old.body_text, old.site);
@@ -198,38 +110,7 @@ fn migrate_v4(conn: &Connection) -> Result<()> {
             VALUES (new.rowid, new.title, new.body_text, new.site);
         END;
 
-        -- Repopulate the index from the content table.
-        INSERT INTO readings_fts(readings_fts) VALUES('rebuild');
-
-        PRAGMA user_version = 4;
-
-        COMMIT;
-        ",
-    )?;
-    Ok(())
-}
-
-/// v5: replace the `read` boolean with a `read_at` timestamp.
-///
-/// Read state is now carried by `read_at` (UTC ISO-8601, or NULL for unread)
-/// rather than a separate boolean — this lets the UI sort by when something was
-/// read. Already-read rows are backfilled with their `saved_at` so they stay
-/// read (we don't know the real read time for historical data; save time is the
-/// best available stamp and keeps them sorting sensibly). The `read` column is
-/// then dropped. The FTS index is rebuilt defensively: it never indexed `read`,
-/// but rebuilding guarantees its rowids stay aligned with the rewritten table.
-fn migrate_v5(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        BEGIN;
-
-        ALTER TABLE readings ADD COLUMN read_at TEXT;
-        UPDATE readings SET read_at = saved_at WHERE read = 1;
-        ALTER TABLE readings DROP COLUMN read;
-
-        INSERT INTO readings_fts(readings_fts) VALUES('rebuild');
-
-        PRAGMA user_version = 5;
+        PRAGMA user_version = 1;
 
         COMMIT;
         ",
@@ -255,7 +136,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 1);
 
         // readings table exists
         let count: i64 = conn
@@ -319,167 +200,6 @@ mod tests {
         // Open twice — second open should not fail.
         open(&db_path).unwrap();
         open(&db_path).unwrap();
-    }
-
-    #[test]
-    fn upgrade_from_v3_indexes_site_in_fts() {
-        let dir = TempDir::new().unwrap();
-        let db_path = dir.path().join("index.db");
-
-        // Simulate an install stamped at v3 (pre-FTS-site): run v1–v3 directly,
-        // insert a reading whose only occurrence of "nytimes" is its site, and
-        // confirm the v3-era FTS index can't find it.
-        {
-            let conn = rusqlite::Connection::open(&db_path).unwrap();
-            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-                .unwrap();
-            migrate_v1(&conn).unwrap();
-            migrate_v2(&conn).unwrap();
-            migrate_v3(&conn).unwrap();
-
-            conn.execute(
-                "INSERT INTO readings
-                 (id, url, canonical_url, title, site, saved_at, source_hash, body_text)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                rusqlite::params![
-                    "01TESTID",
-                    "https://nytimes.com",
-                    "https://nytimes.com",
-                    "Headline",
-                    "nytimes.com",
-                    "2026-06-13T15:00:00Z",
-                    "sha256:abc",
-                    "Body without the search term."
-                ],
-            )
-            .unwrap();
-
-            let version: u32 = conn
-                .pragma_query_value(None, "user_version", |r| r.get(0))
-                .unwrap();
-            assert_eq!(version, 3, "precondition: stamped at v3");
-
-            let before: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM readings_fts WHERE readings_fts MATCH 'nytimes'",
-                    [],
-                    |r| r.get(0),
-                )
-                .unwrap();
-            assert_eq!(before, 0, "v3 FTS has no site column to match");
-        }
-
-        // Reopen through the public path: migrations must carry it to v4 and
-        // rebuild the FTS index — so the *existing* row becomes site-searchable.
-        let conn = open(&db_path).unwrap();
-
-        let version: u32 = conn
-            .pragma_query_value(None, "user_version", |r| r.get(0))
-            .unwrap();
-        assert_eq!(
-            version, 5,
-            "migrations ran forward on top of the v3 database"
-        );
-
-        let after: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM readings_fts WHERE readings_fts MATCH 'nytimes'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(after, 1, "v4 rebuild indexed site for the existing row");
-
-        // The superseded B-tree index is cleaned up.
-        let idx: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_readings_site'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(idx, 0, "v3 index dropped by v4");
-    }
-
-    #[test]
-    fn upgrade_from_v4_backfills_read_at_and_drops_read() {
-        let dir = TempDir::new().unwrap();
-        let db_path = dir.path().join("index.db");
-
-        // Build a DB stamped at v4 (pre-read_at) with one read and one unread
-        // row, using the old `read` boolean column.
-        {
-            let conn = rusqlite::Connection::open(&db_path).unwrap();
-            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-                .unwrap();
-            migrate_v1(&conn).unwrap();
-            migrate_v2(&conn).unwrap();
-            migrate_v3(&conn).unwrap();
-            migrate_v4(&conn).unwrap();
-
-            for (id, read, saved) in [
-                ("01READ", 1, "2026-06-13T15:00:00Z"),
-                ("01UNREAD", 0, "2026-06-14T15:00:00Z"),
-            ] {
-                conn.execute(
-                    "INSERT INTO readings
-                     (id, url, canonical_url, title, saved_at, read, source_hash, body_text)
-                     VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7)",
-                    rusqlite::params![
-                        id,
-                        "https://example.com",
-                        "Title",
-                        saved,
-                        read,
-                        "sha256:abc",
-                        "body"
-                    ],
-                )
-                .unwrap();
-            }
-
-            let version: u32 = conn
-                .pragma_query_value(None, "user_version", |r| r.get(0))
-                .unwrap();
-            assert_eq!(version, 4, "precondition: stamped at v4");
-        }
-
-        // Reopen through the public path: migrations carry it to v5.
-        let conn = open(&db_path).unwrap();
-
-        let version: u32 = conn
-            .pragma_query_value(None, "user_version", |r| r.get(0))
-            .unwrap();
-        assert_eq!(version, 5);
-
-        // The read row keeps a read_at equal to its save time; unread stays NULL.
-        let read_at: Option<String> = conn
-            .query_row(
-                "SELECT read_at FROM readings WHERE id = '01READ'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(read_at.as_deref(), Some("2026-06-13T15:00:00Z"));
-
-        let unread_at: Option<String> = conn
-            .query_row(
-                "SELECT read_at FROM readings WHERE id = '01UNREAD'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(unread_at, None);
-
-        // The legacy `read` column is gone.
-        let has_read: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('readings') WHERE name = 'read'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(has_read, 0, "v5 drops the read column");
     }
 
     #[test]
