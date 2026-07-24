@@ -84,7 +84,7 @@ struct ContentView: View {
         @Bindable var appState = appState
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(focusedColumn: $focusedColumn)
-                .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220)
         } content: {
             ReadingListView(focusedColumn: $focusedColumn)
                 // Persist the width the user drags to, so it survives relaunches and
