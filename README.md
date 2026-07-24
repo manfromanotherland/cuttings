@@ -56,6 +56,21 @@ The extension will appear in your toolbar. Click it on any page to save it to yo
 After editing source, re-run `npm run build` (or `npm run build -- --watch`) and click the
 **reload ↻** icon on the extension card to pick up changes.
 
+### Load in Firefox
+
+The same `manifest.json` and bundles work in Firefox — the manifest declares both a Chrome
+service worker and a Firefox background script, and the bundle is self-contained, so one build
+runs in both browsers. To load it:
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…** and select this folder's `manifest.json`.
+
+Temporary add-ons are cleared when Firefox restarts; for a persistent install you need a signed
+build from [AMO](https://addons.mozilla.org). Unlike Chrome, Firefox does **not** derive the ID
+from the folder path — it uses the fixed `browser_specific_settings.gecko.id`
+(`read-control@readcontrol.app`) baked into the manifest, so the native host wires up
+automatically (see below) with no per-machine ID step.
+
 ## Wire the extension ID to the native host
 
 Saves travel over Chrome **native messaging**, which only connects extensions whose ID is listed
@@ -78,6 +93,20 @@ don't move the folder, but unique per machine). To wire it up:
 
 Re-run that command whenever the ID changes (e.g. you moved the folder) or you rebuilt the host
 binary at a new path.
+
+### Firefox: no ID wiring needed
+
+Firefox matches the native host by the fixed Gecko add-on ID, not a path-derived one, so there's
+no per-machine step. The host's default Firefox manifest already lists
+`read-control@readcontrol.app` — the same value as `browser_specific_settings.gecko.id` — so a
+plain install wires Firefox up:
+
+```bash
+./target/release/native-host --install-manifest
+```
+
+If you change the Gecko ID in `manifest.json`, update `FIREFOX_DEFAULT_EXTENSION_ID` in the host's
+`install.rs` to match, or Firefox will reject the host.
 
 ### Optional: pin a stable extension ID
 

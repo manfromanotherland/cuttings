@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "NODE_PATH=node_modules esbuild src/background.ts src/content.ts src/options.ts --bundle --outdir=dist --target=chrome120",
+    "build": "NODE_PATH=node_modules esbuild src/background.ts src/content.ts src/options.ts --bundle --outdir=dist --target=chrome120,firefox115",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit && eslint src --max-warnings 0 && prettier --check src",
     "lint:fix": "eslint src --fix && prettier --write src",

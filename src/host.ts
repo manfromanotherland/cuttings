@@ -4,12 +4,17 @@ import { PROTOCOL_VERSION } from "./protocol.js";
 
 export const HOST_ID = "app.readcontrol.host";
 
-// Chrome embeds one of these phrases in lastError when the native host
-// binary is absent or its manifest isn't registered.
+// Chrome and Firefox embed one of these phrases in lastError when the native
+// host binary is absent, its manifest isn't registered, or the extension isn't
+// listed as allowed. The wording differs per browser, so we match both.
 export const HOST_MISSING_ERRORS = [
+  // Chrome / Chromium
   "Specified native messaging host not found",
   "Access to the specified native messaging host is forbidden",
   "Native host has exited",
+  // Firefox
+  "No such native application",
+  "This extension does not have permission to use native application",
 ];
 
 export function isHostMissing(err: Error): boolean {
