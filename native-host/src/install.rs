@@ -12,7 +12,7 @@ const HOST_NAME: &str = "app.readcontrol.host";
 /// Extension ID pinned by the `key` field in the extension's manifest.json.
 /// Keep this in sync with readcontrol-extension/manifest.json — the ID is
 /// derived from that public key, so both must change together.
-const DEFAULT_EXTENSION_ID: &str = "alanikmfkpbfompcnmmjngdeedmgdlpk";
+const DEFAULT_EXTENSION_ID: &str = "hkcidjlecfgjmnafcadkolmglefhjgbk";
 
 /// Firefox identifies extensions by add-on ID, not the Chrome extension ID.
 /// This is the `browser_specific_settings.gecko.id` in the extension's
