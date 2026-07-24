@@ -9,7 +9,7 @@ CORE_DIR := ../readcontrol-core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
 
-.PHONY: all xcframework bindings xcodegen test clean
+.PHONY: all xcframework bindings xcodegen test dmg clean
 
 all: xcframework bindings xcodegen
 
@@ -37,5 +37,10 @@ xcodegen:
 test:
 	xcodebuild test -scheme ReadControl
 
+## Build a Release .app and wrap it in a distributable .dmg (dist/ReadControl.dmg).
+## Ad-hoc signed only — see scripts/package-dmg.sh. Assumes `make all` has run.
+dmg: all
+	./scripts/package-dmg.sh
+
 clean:
-	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadControl.xcodeproj
+	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadControl.xcodeproj build dist
