@@ -60,7 +60,7 @@ extension AppState {
             // UI testing so runs don't touch the real machine's config.
             if !TestHooks.isUITesting {
                 writeLibraryPathConfig(url.path)
-                NativeHostInstaller.installIfNeeded()
+                NativeHostInstaller.install()
             }
             startWatcher(libraryPath: url.path)
             await refresh()

@@ -146,8 +146,7 @@ private struct NativeHostSettingsTab: View {
 
             Button(reinstalling ? "Installing…" : "Reinstall Manifest") {
                 reinstalling = true
-                UserDefaults.standard.removeObject(forKey: "nativeHostInstalledPath")
-                installed = NativeHostInstaller.installIfNeeded()
+                installed = NativeHostInstaller.install()
                 reinstalling = false
             }
             .disabled(hostPath == nil || reinstalling)

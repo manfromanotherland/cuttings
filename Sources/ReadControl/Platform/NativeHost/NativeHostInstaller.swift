@@ -2,30 +2,33 @@
 
 import Foundation
 
-/// Installs the bundled `native-host` binary's native-messaging manifest
-/// into all supported browsers on first launch (and whenever the app moves).
+/// Installs the bundled `native-host` binary's native-messaging manifest into
+/// every browser found on the machine.
+///
+/// Called on every launch (from `boot`). The Rust `native-host --install-manifest`
+/// it runs is a cheap, idempotent scan — directory reads plus a few small writes,
+/// no deletions — so re-running it each time costs almost nothing and is what lets
+/// a browser installed *after* first launch get wired up without an app update.
 enum NativeHostInstaller {
     private static let installedPathKey = "nativeHostInstalledPath"
 
     // ── Public API ────────────────────────────────────────────────────────
 
-    /// Returns true if the manifest was installed (or was already up to date).
+    /// Runs the manifest install and returns true on success. Idempotent, so
+    /// safe to call on every launch.
     @discardableResult
-    static func installIfNeeded() -> Bool {
+    static func install() -> Bool {
         guard let hostURL = bundledHostURL() else {
             print("NativeHostInstaller: native-host binary not found in bundle")
             return false
         }
-        let path = hostURL.path
-
-        // Re-install whenever the binary path changes (e.g. app moved).
-        let lastPath = UserDefaults.standard.string(forKey: installedPathKey)
-        guard needsReinstall(lastInstalledPath: lastPath, currentPath: path) else { return true }
 
         do {
             try run(hostURL: hostURL)
-            UserDefaults.standard.set(path, forKey: installedPathKey)
-            print("NativeHostInstaller: manifest installed from \(path)")
+            // Record the path so Settings can show the manifest as installed for
+            // this bundle.
+            UserDefaults.standard.set(hostURL.path, forKey: installedPathKey)
+            print("NativeHostInstaller: manifest installed from \(hostURL.path)")
             return true
         } catch {
             print("NativeHostInstaller: \(error.localizedDescription)")
@@ -40,13 +43,6 @@ enum NativeHostInstaller {
             .appendingPathComponent("Contents/MacOS/native-host")
             .resolvingSymlinksInPath()
             .existingFile()
-    }
-
-    /// Whether the manifest must be re-installed: true when the bundled host has
-    /// never been installed or its path changed since the last install (the app
-    /// moved). Pure, so it's unit-tested without touching `UserDefaults` or disk.
-    static func needsReinstall(lastInstalledPath: String?, currentPath: String) -> Bool {
-        lastInstalledPath != currentPath
     }
 
     private static func run(hostURL: URL) throws {
