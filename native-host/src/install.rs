@@ -15,7 +15,9 @@ const HOST_NAME: &str = "app.readcontrol.host";
 const DEFAULT_EXTENSION_ID: &str = "alanikmfkpbfompcnmmjngdeedmgdlpk";
 
 /// Firefox identifies extensions by add-on ID, not the Chrome extension ID.
-const FIREFOX_DEFAULT_EXTENSION_ID: &str = "readcontrol@localhost";
+/// This is the `browser_specific_settings.gecko.id` in the extension's
+/// manifest.json — keep the two in sync or Firefox rejects the native host.
+const FIREFOX_DEFAULT_EXTENSION_ID: &str = "read-control@readcontrol.app";
 
 /// Root under `$HOME` where macOS browsers keep their per-app data.
 const APP_SUPPORT: &str = "Library/Application Support";
@@ -33,10 +35,16 @@ enum Flavor {
     Firefox,
 }
 
-/// A browser we know about: its data directory relative to
-/// `Library/Application Support`, plus which manifest dialect it speaks.
+/// A browser we know about, relative to `Library/Application Support`.
 struct KnownBrowser {
-    data_subdir: &'static str,
+    /// Directory whose presence means the browser is installed.
+    detect_subdir: &'static str,
+    /// Directory whose `NativeMessagingHosts` child is where this browser reads
+    /// manifests. `None` means it's the same as `detect_subdir` (the common
+    /// case). Firefox is the exception: it stores its profile under `Firefox/`
+    /// but reads native-messaging manifests from `Mozilla/`, so the two differ.
+    manifest_subdir: Option<&'static str>,
+    /// Which manifest dialect it expects.
     flavor: Flavor,
 }
 
@@ -48,39 +56,49 @@ struct KnownBrowser {
 /// hasn't created its `NativeMessagingHosts` dir yet.
 const KNOWN_BROWSERS: &[KnownBrowser] = &[
     KnownBrowser {
-        data_subdir: "Google/Chrome",
+        detect_subdir: "Google/Chrome",
+        manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
     KnownBrowser {
-        data_subdir: "Microsoft Edge",
+        detect_subdir: "Microsoft Edge",
+        manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
     KnownBrowser {
-        data_subdir: "Chromium",
+        detect_subdir: "Chromium",
+        manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
     KnownBrowser {
-        data_subdir: "BraveSoftware/Brave-Browser",
+        detect_subdir: "BraveSoftware/Brave-Browser",
+        manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
     KnownBrowser {
-        data_subdir: "Vivaldi",
+        detect_subdir: "Vivaldi",
+        manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
     KnownBrowser {
-        data_subdir: "Arc",
+        detect_subdir: "Arc",
+        manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
+    // Firefox: installed under `Firefox/`, but reads manifests from `Mozilla/`.
     KnownBrowser {
-        data_subdir: "Mozilla",
+        detect_subdir: "Firefox",
+        manifest_subdir: Some("Mozilla"),
         flavor: Flavor::Firefox,
     },
     KnownBrowser {
-        data_subdir: "LibreWolf",
+        detect_subdir: "LibreWolf",
+        manifest_subdir: None,
         flavor: Flavor::Firefox,
     },
     KnownBrowser {
-        data_subdir: "Waterfox",
+        detect_subdir: "Waterfox",
+        manifest_subdir: None,
         flavor: Flavor::Firefox,
     },
 ];
@@ -122,9 +140,9 @@ fn install_manifest_in(home: &Path, binary_path: &str, extension_id: Option<&str
 
     // 1. Known browsers that are actually installed.
     for browser in KNOWN_BROWSERS {
-        let data_dir = app_support.join(browser.data_subdir);
-        if data_dir.is_dir() {
-            let nmh = data_dir.join(NMH_DIR);
+        if app_support.join(browser.detect_subdir).is_dir() {
+            let manifest_subdir = browser.manifest_subdir.unwrap_or(browser.detect_subdir);
+            let nmh = app_support.join(manifest_subdir).join(NMH_DIR);
             if seen.insert(nmh.clone()) {
                 targets.push((nmh, browser.flavor));
             }
@@ -277,9 +295,12 @@ mod tests {
     }
 
     #[test]
-    fn firefox_gets_firefox_dialect() {
+    fn firefox_detected_via_profile_writes_to_mozilla_dir() {
         let home = TempDir::new().unwrap();
-        fs::create_dir_all(app_support(home.path()).join("Mozilla")).unwrap();
+        // Firefox is installed — its profile lives under `Firefox/` — but the
+        // `Mozilla/` native-messaging dir doesn't exist yet. The installer must
+        // detect Firefox via the profile and create the manifest under Mozilla.
+        fs::create_dir_all(app_support(home.path()).join("Firefox")).unwrap();
 
         install_manifest_in(home.path(), "/bin/host", None).unwrap();
 
@@ -290,6 +311,19 @@ mod tests {
             FIREFOX_DEFAULT_EXTENSION_ID
         );
         assert!(manifest.get("allowed_origins").is_none());
+    }
+
+    #[test]
+    fn mozilla_dir_alone_does_not_trigger_firefox_install() {
+        let home = TempDir::new().unwrap();
+        // A bare `Mozilla/` dir (no Firefox profile, no existing NMH dir) is not
+        // proof Firefox is installed, so nothing should be written.
+        fs::create_dir_all(app_support(home.path()).join("Mozilla")).unwrap();
+
+        install_manifest_in(home.path(), "/bin/host", None).unwrap();
+
+        let nmh = app_support(home.path()).join("Mozilla").join(NMH_DIR);
+        assert!(!nmh.join(format!("{HOST_NAME}.json")).exists());
     }
 
     #[test]
