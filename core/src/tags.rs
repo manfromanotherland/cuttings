@@ -11,10 +11,16 @@ use crate::{
     write_reading, LibraryRoot,
 };
 
+/// The longest a tag name may be, counted in Unicode scalar values (`char`s),
+/// not bytes. Enforced by [`add_tag`]; the macOS client mirrors this limit to
+/// surface the error before it reaches the core.
+pub const MAX_TAG_LEN: usize = 20;
+
 /// Add `tag` to the reading identified by `id`.
 ///
-/// No-ops if the tag is already present. Updates the `.md` file first, then
-/// syncs the index row.
+/// No-ops if the tag is already present. Rejects a tag longer than
+/// [`MAX_TAG_LEN`] characters. Updates the `.md` file first, then syncs the
+/// index row.
 pub fn add_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str) -> Result<()> {
     let path = library.article_path(id);
     if !path.is_file() {
@@ -25,6 +31,10 @@ pub fn add_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str) ->
     let mut reading = parse_reading(&content)?;
 
     let tag = tag.trim().to_string();
+    let len = tag.chars().count();
+    if len > MAX_TAG_LEN {
+        bail!("tag is too long: {len} characters (max {MAX_TAG_LEN})");
+    }
     if reading.metadata.tags.contains(&tag) {
         return Ok(());
     }
@@ -212,6 +222,74 @@ mod tests {
         let tags = list_tags(&conn, &CountScope::default()).unwrap();
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].1, 1);
+    }
+
+    #[test]
+    fn add_tag_accepts_tag_at_max_length() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let id = new_id();
+
+        write_reading(&lib, meta(&id, "https://example.com"), "body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Exactly MAX_TAG_LEN characters is allowed (the boundary is inclusive).
+        let tag = "a".repeat(MAX_TAG_LEN);
+        add_tag(&lib, &conn, &id, &tag).unwrap();
+
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
+        assert_eq!(tags, vec![(tag, 1)]);
+    }
+
+    #[test]
+    fn add_tag_rejects_tag_over_max_length() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let id = new_id();
+
+        write_reading(&lib, meta(&id, "https://example.com"), "body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // One past the limit is rejected, and nothing is written to the index.
+        let tag = "a".repeat(MAX_TAG_LEN + 1);
+        assert!(add_tag(&lib, &conn, &id, &tag).is_err());
+        assert!(list_tags(&conn, &CountScope::default()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn add_tag_counts_length_in_characters_not_bytes() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let id = new_id();
+
+        write_reading(&lib, meta(&id, "https://example.com"), "body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // 25 multi-byte characters (é is 2 bytes) is 50 bytes but only 25 chars,
+        // so it must be accepted — the limit counts characters, not bytes.
+        let tag = "é".repeat(MAX_TAG_LEN);
+        add_tag(&lib, &conn, &id, &tag).unwrap();
+
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
+        assert_eq!(tags, vec![(tag, 1)]);
+    }
+
+    #[test]
+    fn add_tag_measures_length_after_trimming() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let id = new_id();
+
+        write_reading(&lib, meta(&id, "https://example.com"), "body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        // Surrounding whitespace is trimmed before the length check, so a
+        // MAX_TAG_LEN name padded with spaces still fits.
+        let padded = format!("   {}   ", "a".repeat(MAX_TAG_LEN));
+        add_tag(&lib, &conn, &id, &padded).unwrap();
+
+        let tags = list_tags(&conn, &CountScope::default()).unwrap();
+        assert_eq!(tags, vec![("a".repeat(MAX_TAG_LEN), 1)]);
     }
 
     #[test]

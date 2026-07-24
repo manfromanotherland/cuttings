@@ -37,7 +37,7 @@ pub use rating::{list_ratings, set_rating};
 pub use reconcile::{apply_diffs, rebuild};
 pub use scanner::{diff, scan_library, ScanDiff, ScannedReading};
 pub use status::{set_archived, set_favorite, set_read};
-pub use tags::{add_tag, list_tags, remove_tag};
+pub use tags::{add_tag, list_tags, remove_tag, MAX_TAG_LEN};
 pub use types::{LibraryRoot, Metadata, Reading};
 pub use url_norm::normalize_url;
 pub use writer::{find_duplicate, sha256_hex, write_reading};
