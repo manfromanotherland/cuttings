@@ -87,7 +87,9 @@ extension AppState {
         await refresh()
         // The row may have left the current filtered list (e.g. its rating no
         // longer matches), so fall back to fetching it straight from the index.
-        if let row = readings.first(where: { $0.id == id }) { return row }
+        if let row = readings.first(where: { $0.id == id }) {
+            return row
+        }
         guard let fetched = try? await core.getReadingRow(id: id) else { return nil }
         return ReadingRow(fetched)
     }
@@ -118,7 +120,9 @@ extension AppState {
         guard let core else { return }
         do {
             try await core.deleteReading(id: row.id)
-            if selectedId == row.id { selectedId = nil }
+            if selectedId == row.id {
+                selectedId = nil
+            }
             await refresh()
         } catch {
             self.error = error.localizedDescription

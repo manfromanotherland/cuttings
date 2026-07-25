@@ -73,7 +73,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: columnVisibility) { _, newValue in
-            if appState.isFocusMode && newValue != .doubleColumn {
+            if appState.isFocusMode, newValue != .doubleColumn {
                 appState.isFocusMode = false
             }
         }

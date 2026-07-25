@@ -38,14 +38,21 @@ struct TagPickerSheet: View {
         _order = State(initialValue: applied + allTags.filter { !appliedSet.contains($0) })
     }
 
-    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
-    private var appliedSet: Set<String> { Set(applied) }
+    private var trimmedQuery: String {
+        query.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var appliedSet: Set<String> {
+        Set(applied)
+    }
 
     /// The list contents, drawn from the frozen `order`: idle shows the first ten,
     /// searching shows every match. Applied tags already sit first in `order`.
     private var listed: [String] {
         let needle = trimmedQuery.lowercased()
-        if needle.isEmpty { return Array(order.prefix(10)) }
+        if needle.isEmpty {
+            return Array(order.prefix(10))
+        }
         return order.filter { $0.lowercased().contains(needle) }
     }
 
@@ -147,8 +154,8 @@ struct TagPickerSheet: View {
             }
             if listed.isEmpty, creatable == nil {
                 Text(allTags.isEmpty
-                     ? "No tags yet — type to create one."
-                     : "No matching tags.")
+                    ? "No tags yet — type to create one."
+                    : "No matching tags.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -162,7 +169,9 @@ struct TagPickerSheet: View {
     private func apply(_ tag: String) {
         // A freshly created tag isn't in the frozen order yet — surface it at the
         // top so it's visible (and within the idle first-ten).
-        if !order.contains(tag) { order.insert(tag, at: 0) }
+        if !order.contains(tag) {
+            order.insert(tag, at: 0)
+        }
         onToggle(tag, true)
         query = ""
     }
@@ -173,12 +182,16 @@ struct TagPickerSheet: View {
         let typed = trimmedQuery
         guard !typed.isEmpty else { return }
         if let existing = allTags.first(where: { $0.caseInsensitiveCompare(typed) == .orderedSame }) {
-            if !appliedSet.contains(existing) { onToggle(existing, true) }
+            if !appliedSet.contains(existing) {
+                onToggle(existing, true)
+            }
         } else {
             // Block creating an over-length tag; keep the text so the inline
             // error stays visible for the user to trim it down.
             guard TagRules.isWithinLength(typed) else { return }
-            if !order.contains(typed) { order.insert(typed, at: 0) }
+            if !order.contains(typed) {
+                order.insert(typed, at: 0)
+            }
             onToggle(typed, true)
         }
         query = ""

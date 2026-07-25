@@ -25,7 +25,7 @@ struct CursorSurface: NSViewRepresentable {
     var onClick: (() -> Void)?
     var onEscape: (() -> Void)?
 
-    func makeNSView(context: Context) -> SurfaceView {
+    func makeNSView(context _: Context) -> SurfaceView {
         let view = SurfaceView()
         view.configure(cursor: cursor, onClick: onClick, onEscape: onEscape)
         if onEscape != nil {
@@ -34,7 +34,7 @@ struct CursorSurface: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: SurfaceView, context: Context) {
+    func updateNSView(_ view: SurfaceView, context _: Context) {
         view.configure(cursor: cursor, onClick: onClick, onEscape: onEscape)
     }
 
@@ -50,12 +50,14 @@ struct CursorSurface: NSViewRepresentable {
             window?.invalidateCursorRects(for: self)
         }
 
-        // The surface wins *hit-testing* on purpose (to own the cursor and click),
-        // but it carries no content, so it must stay out of the accessibility tree:
-        // otherwise it occludes the figure/image beneath it in the accessibility
-        // hit test, leaving them "not hittable" for VoiceOver and XCUITest. Kept at
-        // the AppKit level too so it holds however SwiftUI bridges the representable.
-        override func isAccessibilityElement() -> Bool { false }
+        /// The surface wins *hit-testing* on purpose (to own the cursor and click),
+        /// but it carries no content, so it must stay out of the accessibility tree:
+        /// otherwise it occludes the figure/image beneath it in the accessibility
+        /// hit test, leaving them "not hittable" for VoiceOver and XCUITest. Kept at
+        /// the AppKit level too so it holds however SwiftUI bridges the representable.
+        override func isAccessibilityElement() -> Bool {
+            false
+        }
 
         // ── Cursor ────────────────────────────────────────────────────────────
         // Both a cursor rect and a `.cursorUpdate` tracking area, so the cursor is
@@ -67,22 +69,32 @@ struct CursorSurface: NSViewRepresentable {
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
-            for area in trackingAreas { removeTrackingArea(area) }
+            for area in trackingAreas {
+                removeTrackingArea(area)
+            }
             addTrackingArea(NSTrackingArea(
                 rect: bounds,
                 options: [.activeInActiveApp, .inVisibleRect, .cursorUpdate],
                 owner: self,
-                userInfo: nil))
+                userInfo: nil
+            ))
         }
 
-        override func cursorUpdate(with event: NSEvent) { cursor.set() }
+        override func cursorUpdate(with _: NSEvent) {
+            cursor.set()
+        }
 
         // ── Interaction ─────────────────────────────────────────────────────────
 
-        // Click even when the window isn't key, so one click both activates the
-        // window and triggers the action.
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-        override var acceptsFirstResponder: Bool { onEscape != nil }
+        /// Click even when the window isn't key, so one click both activates the
+        /// window and triggers the action.
+        override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
+            true
+        }
+
+        override var acceptsFirstResponder: Bool {
+            onEscape != nil
+        }
 
         override func mouseDown(with event: NSEvent) {
             if let onClick {
@@ -93,7 +105,9 @@ struct CursorSurface: NSViewRepresentable {
         }
 
         /// Escape (and ⌘.) arrive as `cancelOperation`.
-        override func cancelOperation(_ sender: Any?) { onEscape?() }
+        override func cancelOperation(_: Any?) {
+            onEscape?()
+        }
 
         override func keyDown(with event: NSEvent) {
             if event.keyCode == 53, let onEscape { // Escape

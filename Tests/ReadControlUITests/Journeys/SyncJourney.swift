@@ -12,9 +12,8 @@ import XCTest
 /// incremental reconcile, with a little headroom for the watcher to warm up right
 /// after launch.
 final class SyncJourney: UITestCase {
-    // A single sync walk exercising add / edit / read / delete; asserting every
-    // beat keeps it long.
-    // swiftlint:disable:next function_body_length
+    // swiftlint:disable function_body_length
+    /// A single sync walk exercising add / edit / read / delete.
     func testExternalFileChangesLandLive() throws {
         try launchApp(articles: Fixtures.standardCorpus)
         XCTAssertTrue(sidebar.waitForCount(.all, equals: Fixtures.Oracle.ViewCounts.all), "All starts at 8")
@@ -74,4 +73,5 @@ final class SyncJourney: UITestCase {
         XCTAssertTrue(sidebar.waitForCount(.unread, equals: 4, timeout: 10), "Unread 5→4")
         XCTAssertTrue(sidebar.waitForCount(.all, equals: 8, timeout: 10), "All 9→8")
     }
+    // swiftlint:enable function_body_length
 }

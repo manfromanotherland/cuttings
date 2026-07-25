@@ -15,37 +15,57 @@ import Foundation
 /// `item.id` / `mode.id` / a reading id at the call site; a test passes the same
 /// literal (e.g. `A11y.Sidebar.viewRow("unread")`).
 enum A11y {
-    // ── Onboarding ────────────────────────────────────────────────────────
+    /// ── Onboarding ────────────────────────────────────────────────────────
     enum Onboarding {
         static let title = "onboarding.title"
         static let chooseLibrary = "onboarding.chooseLibrary"
     }
 
-    // ── Sidebar ─────────────────────────────────────────────────────────────
+    /// ── Sidebar ─────────────────────────────────────────────────────────────
     enum Sidebar {
         /// A smart-view row (All/Unread/Read/Archive/Favorites), keyed by `SidebarItem.id`.
-        static func viewRow(_ item: String) -> String { "sidebar.view.\(item)" }
+        static func viewRow(_ item: String) -> String {
+            "sidebar.view.\(item)"
+        }
+
         /// The count badge on a smart-view row.
-        static func viewCount(_ item: String) -> String { "sidebar.view.\(item).count" }
+        static func viewCount(_ item: String) -> String {
+            "sidebar.view.\(item).count"
+        }
+
         /// A tag pill in the Tags section, keyed by tag name.
-        static func tagTile(_ tag: String) -> String { "sidebar.tag.\(tag)" }
+        static func tagTile(_ tag: String) -> String {
+            "sidebar.tag.\(tag)"
+        }
+
         /// The count badge on a tag pill.
-        static func tagCount(_ tag: String) -> String { "sidebar.tag.\(tag).count" }
+        static func tagCount(_ tag: String) -> String {
+            "sidebar.tag.\(tag).count"
+        }
+
         /// A rating row in the Ratings section (1–5); its label carries the count.
-        static func ratingRow(_ rating: UInt8) -> String { "sidebar.rating.\(rating)" }
+        static func ratingRow(_ rating: UInt8) -> String {
+            "sidebar.rating.\(rating)"
+        }
 
         static let settingsButton = "sidebar.settings"
         /// A theme button in the appearance popover, keyed by `AppearanceMode.id`.
-        static func themeButton(_ mode: String) -> String { "sidebar.appearance.theme.\(mode)" }
+        static func themeButton(_ mode: String) -> String {
+            "sidebar.appearance.theme.\(mode)"
+        }
+
         static let fontPicker = "sidebar.appearance.font"
         static let fontSizeSlider = "sidebar.appearance.fontSize"
     }
 
-    // ── Reading list ──────────────────────────────────────────────────────
+    /// ── Reading list ──────────────────────────────────────────────────────
     enum List {
         static let table = "list.table"
         /// A reading row, keyed by reading id.
-        static func row(_ id: String) -> String { "list.row.\(id)" }
+        static func row(_ id: String) -> String {
+            "list.row.\(id)"
+        }
+
         /// A hidden probe describing the loaded rows: its accessibility **label**
         /// is the row count and its **value** is the ordered row ids (comma-
         /// joined). The suite reads both from one `firstMatch` instead of
@@ -62,7 +82,7 @@ enum A11y {
         static let clearTagFilter = "list.clearTagFilter"
     }
 
-    // ── Reader / detail ─────────────────────────────────────────────────────
+    /// ── Reader / detail ─────────────────────────────────────────────────────
     enum Detail {
         static let title = "detail.title"
         static let tags = "detail.tags"
@@ -71,20 +91,20 @@ enum A11y {
         static let oversizeOpenInBrowser = "detail.oversize.openInBrowser"
     }
 
-    // ── Reader content ────────────────────────────────────────────────────────
+    /// ── Reader content ────────────────────────────────────────────────────────
     enum Reader {
         /// A tappable article image (figure). Shared by every figure in the
         /// reader, so tests match the first one.
         static let figure = "reader.figure"
     }
 
-    // ── Image zoom lightbox ───────────────────────────────────────────────────
+    /// ── Image zoom lightbox ───────────────────────────────────────────────────
     enum Lightbox {
         static let image = "lightbox.image"
         static let close = "lightbox.close"
     }
 
-    // ── Reader toolbar (7 actions; archive/unarchive share the slot) ──────────
+    /// ── Reader toolbar (7 actions; archive/unarchive share the slot) ──────────
     enum Toolbar {
         static let markRead = "toolbar.markRead"
         static let favorite = "toolbar.favorite"
@@ -96,38 +116,46 @@ enum A11y {
         static let delete = "toolbar.delete"
     }
 
-    // ── Rating footer ─────────────────────────────────────────────────────
+    /// ── Rating footer ─────────────────────────────────────────────────────
     enum RatingFooter {
         /// A star button (1–5).
-        static func star(_ index: Int) -> String { "rating.star.\(index)" }
+        static func star(_ index: Int) -> String {
+            "rating.star.\(index)"
+        }
     }
 
-    // ── Tag picker sheet ────────────────────────────────────────────────────
+    /// ── Tag picker sheet ────────────────────────────────────────────────────
     enum TagPicker {
         static let searchField = "tagPicker.search"
         static let addRow = "tagPicker.add"
         /// Inline message shown when the typed name exceeds the tag-length limit.
         static let lengthError = "tagPicker.lengthError"
         /// An existing-tag toggle row, keyed by tag name.
-        static func row(_ tag: String) -> String { "tagPicker.row.\(tag)" }
+        static func row(_ tag: String) -> String {
+            "tagPicker.row.\(tag)"
+        }
+
         static let done = "tagPicker.done"
     }
 
-    // ── Highlights inspector ────────────────────────────────────────────────
+    /// ── Highlights inspector ────────────────────────────────────────────────
     enum Highlights {
         static let list = "highlights.list"
         /// A highlight row, keyed by highlight id.
-        static func row(_ id: String) -> String { "highlights.row.\(id)" }
+        static func row(_ id: String) -> String {
+            "highlights.row.\(id)"
+        }
+
         static let emptyState = "highlights.empty"
     }
 
-    // ── Shortcuts sheet ─────────────────────────────────────────────────────
+    /// ── Shortcuts sheet ─────────────────────────────────────────────────────
     enum Shortcuts {
         static let sheet = "shortcuts.sheet"
         static let done = "shortcuts.done"
     }
 
-    // ── Settings window ─────────────────────────────────────────────────────
+    /// ── Settings window ─────────────────────────────────────────────────────
     enum Settings {
         static let appearanceTab = "settings.tab.appearance"
         static let typographyTab = "settings.tab.typography"

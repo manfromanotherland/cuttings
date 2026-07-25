@@ -6,10 +6,17 @@ import XCTest
 struct HighlightsPage {
     let app: XCUIApplication
 
-    var list: XCUIElement { app.byId(A11y.Highlights.list) }
-    var emptyState: XCUIElement { app.byId(A11y.Highlights.emptyState) }
+    var list: XCUIElement {
+        app.byId(A11y.Highlights.list)
+    }
 
-    func row(_ highlightId: String) -> XCUIElement { app.byId(A11y.Highlights.row(highlightId)) }
+    var emptyState: XCUIElement {
+        app.byId(A11y.Highlights.emptyState)
+    }
+
+    func row(_ highlightId: String) -> XCUIElement {
+        app.byId(A11y.Highlights.row(highlightId))
+    }
 
     /// Delete a highlight via its row's × button. That button carries the row's
     /// identifier (with label "Close") and is only visible on hover, so hover the

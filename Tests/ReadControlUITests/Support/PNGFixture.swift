@@ -20,7 +20,8 @@ enum PNGFixture {
     /// The image's raw bytes, read from the bundled `SampleImage.png`.
     static var data: Data {
         guard let url = Bundle(for: BundleToken.self).url(forResource: "SampleImage", withExtension: "png"),
-              let data = try? Data(contentsOf: url) else {
+              let data = try? Data(contentsOf: url)
+        else {
             fatalError("SampleImage.png is missing from the UITest bundle resources.")
         }
         return data

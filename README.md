@@ -20,6 +20,10 @@ Part of the **Read Control** project →
 - Xcode 15 or later
 - [Homebrew](https://brew.sh)
 - [xcodegen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
+- [SwiftFormat](https://github.com/nicklockwood/SwiftFormat) and
+  [SwiftLint](https://github.com/realm/SwiftLint) for formatting and linting. Both are pinned in
+  `.mise.toml`, so `mise install` fetches the same versions this repo expects; alternatively
+  `brew install swiftformat swiftlint`.
 - Rust targets for cross-compilation (needed to build the XCFramework):
 
 ```bash
@@ -130,6 +134,31 @@ defaults write -g ApplePressAndHoldEnabled -bool false
 The suite already routes search text through the pasteboard (`ReadingListPage.pasteSearch`) to
 sidestep this, so it isn't machine-dependent.
 
+## Formatting & linting
+
+Two tools keep the Swift sources consistent, and they're set up to cooperate rather than fight:
+
+- **SwiftFormat** (`.swiftformat`) rewrites code — indentation, spacing, redundant syntax.
+- **SwiftLint** (`.swiftlint.yml`) checks code — style and the size/complexity thresholds.
+
+SwiftFormat is configured to agree with SwiftLint's rules (most notably `--commas inline`, so it
+never adds the trailing commas that SwiftLint's `trailing_comma` rule flags), so running the
+formatter won't introduce lint violations. Run them in this order:
+
+```bash
+make format        # swiftformat . — rewrites sources in place
+make lint          # swiftlint lint — reports remaining violations
+```
+
+Other targets:
+
+```bash
+make format-check  # swiftformat --lint . — fail if anything is unformatted (CI / pre-commit)
+make lint-fix      # swiftlint --fix — auto-correct the safe SwiftLint violations
+```
+
+Both configs exclude the generated bindings, the vendored framework, and build output.
+
 ## Debugging: SQL tracing
 
 The app embeds `readcontrol-core`, which logs every SQL statement to stderr when the `SQL_TRACE`
@@ -164,5 +193,9 @@ The logs go to stderr only — not a file or Console.app. To keep them, redirect
 make xcframework   # rebuild the XCFramework from readcontrol-core
 make bindings      # copy generated Swift bindings (runs xcframework first)
 make xcodegen      # regenerate ReadControl.xcodeproj from project.yml
+make format        # reformat Swift sources with SwiftFormat
+make format-check  # check formatting without editing
+make lint          # lint Swift sources with SwiftLint
+make lint-fix      # auto-fix safe SwiftLint violations
 make clean         # remove Frameworks/, GeneratedBindings/, and ReadControl.xcodeproj
 ```

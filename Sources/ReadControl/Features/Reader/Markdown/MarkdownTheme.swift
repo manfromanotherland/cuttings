@@ -15,25 +15,41 @@ struct MarkdownTheme {
     let font: ReaderFont
     let fontSize: ReaderFontSize
 
-    var design: Font.Design { font.design }
-    var bodySize: CGFloat { fontSize.points }
+    var design: Font.Design {
+        font.design
+    }
+
+    var bodySize: CGFloat {
+        fontSize.points
+    }
 
     // ── Reading rhythm ──────────────────────────────────────────────────────
 
     /// SwiftUI `lineSpacing` is the gap *between* lines, added on top of the
     /// natural (~1.2×) line height. (1.75 − 1.2) ≈ 0.55 approximates a
     /// comfortable `line-height: 1.75` reading measure.
-    var lineSpacing: CGFloat { bodySize * 0.55 }
+    var lineSpacing: CGFloat {
+        bodySize * 0.55
+    }
 
     /// Vertical gap between top-level blocks (~1em). Headings add extra space
     /// *above* themselves on top of this (see `headingSpaceAbove`).
-    var blockSpacing: CGFloat { bodySize }
+    var blockSpacing: CGFloat {
+        bodySize
+    }
 
     /// Optimal line length for sustained reading (~60–75 characters).
-    var contentMaxWidth: CGFloat { 680 }
+    var contentMaxWidth: CGFloat {
+        680
+    }
 
-    var bodyFont: Font { .system(size: bodySize, design: design) }
-    var codeFont: Font { .system(size: bodySize * 0.9, design: .monospaced) }
+    var bodyFont: Font {
+        .system(size: bodySize, design: design)
+    }
+
+    var codeFont: Font {
+        .system(size: bodySize * 0.9, design: .monospaced)
+    }
 
     // ── Headings ────────────────────────────────────────────────────────────
     // A modular type scale. Every one of the six levels is visually distinct:
@@ -47,7 +63,7 @@ struct MarkdownTheme {
         case 3: bodySize * 1.20
         case 4: bodySize * 1.05
         case 5: bodySize * 0.95
-        default: bodySize * 0.85   // h6 — eyebrow/overline
+        default: bodySize * 0.85 // h6 — eyebrow/overline
         }
     }
 
@@ -74,7 +90,9 @@ struct MarkdownTheme {
     }
 
     /// Level 6 is rendered as a small uppercase eyebrow in secondary color.
-    func headingIsEyebrow(_ level: Int) -> Bool { level >= 6 }
+    func headingIsEyebrow(_ level: Int) -> Bool {
+        level >= 6
+    }
 
     /// Space *above* a heading. Larger for higher levels so major sections get a
     /// clear visual break; this is added on top of the inter-block `blockSpacing`.
@@ -91,12 +109,20 @@ struct MarkdownTheme {
     // ── Lists ───────────────────────────────────────────────────────────────
 
     /// Gap between sibling list items (tighter than `blockSpacing`).
-    var listItemSpacing: CGFloat { bodySize * 0.5 }
+    var listItemSpacing: CGFloat {
+        bodySize * 0.5
+    }
+
     /// Gap between the marker (bullet/number) and the item text.
-    var listMarkerGap: CGFloat { bodySize * 0.5 }
+    var listMarkerGap: CGFloat {
+        bodySize * 0.5
+    }
+
     /// Reserved width for the marker column, giving a clean hanging indent.
     /// Wide enough for a two-digit ordinal or a checkbox glyph without clipping.
-    func listMarkerWidth(ordered: Bool) -> CGFloat { bodySize * (ordered ? 1.5 : 1.1) }
+    func listMarkerWidth(ordered: Bool) -> CGFloat {
+        bodySize * (ordered ? 1.5 : 1.1)
+    }
 
     /// Bullet glyph for unordered lists, cycling by nesting depth.
     func bullet(depth: Int) -> String {
@@ -109,22 +135,49 @@ struct MarkdownTheme {
 
     // ── Block quote ─────────────────────────────────────────────────────────
 
-    var quoteBarWidth: CGFloat { 3 }
-    var quoteBarGap: CGFloat { bodySize * 0.85 }
-    var quoteInnerSpacing: CGFloat { blockSpacing * 0.6 }
+    var quoteBarWidth: CGFloat {
+        3
+    }
+
+    var quoteBarGap: CGFloat {
+        bodySize * 0.85
+    }
+
+    var quoteInnerSpacing: CGFloat {
+        blockSpacing * 0.6
+    }
 
     // ── Code ────────────────────────────────────────────────────────────────
 
-    var codePadding: CGFloat { 14 }
-    var codeCornerRadius: CGFloat { 8 }
+    var codePadding: CGFloat {
+        14
+    }
+
+    var codeCornerRadius: CGFloat {
+        8
+    }
 
     // ── Rules, images, captions ───────────────────────────────────────────────
 
-    var ruleSpacing: CGFloat { blockSpacing * 0.5 }
-    var imageCornerRadius: CGFloat { 6 }
-    var captionGap: CGFloat { bodySize * 0.4 }
-    var captionSize: CGFloat { bodySize * 0.85 }
-    var captionFont: Font { .system(size: captionSize, design: design) }
+    var ruleSpacing: CGFloat {
+        blockSpacing * 0.5
+    }
+
+    var imageCornerRadius: CGFloat {
+        6
+    }
+
+    var captionGap: CGFloat {
+        bodySize * 0.4
+    }
+
+    var captionSize: CGFloat {
+        bodySize * 0.85
+    }
+
+    var captionFont: Font {
+        .system(size: captionSize, design: design)
+    }
 
     // ── Article chrome (header title, metadata, rating) ───────────────────────
     // The reader's non-body pieces — the header title, the metadata line, and the
@@ -134,14 +187,23 @@ struct MarkdownTheme {
     /// The header title is the reading's sole h1 — the top of the heading scale —
     /// so it borrows the level-1 heading tokens (and, like the body, follows the
     /// chosen reader font).
-    var titleFont: Font { headingFont(1) }
-    var titleTracking: CGFloat { headingTracking(1) }
+    var titleFont: Font {
+        headingFont(1)
+    }
+
+    var titleTracking: CGFloat {
+        headingTracking(1)
+    }
 
     /// The metadata line (site · author · reading time · tags) and the rating
     /// prompt: a muted, secondary size that follows the reader font, sized from
     /// the body.
-    var metadataFont: Font { .system(size: bodySize * 0.85, design: design) }
+    var metadataFont: Font {
+        .system(size: bodySize * 0.85, design: design)
+    }
 
     /// Star glyphs in the end-of-article rating control.
-    var ratingStarFont: Font { .system(size: bodySize * 1.2, design: design) }
+    var ratingStarFont: Font {
+        .system(size: bodySize * 1.2, design: design)
+    }
 }

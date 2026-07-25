@@ -8,7 +8,9 @@ struct SettingsPage {
     let app: XCUIApplication
 
     /// Open the Settings window with ⌘,.
-    func open() { app.typeKey(",", modifierFlags: .command) }
+    func open() {
+        app.typeKey(",", modifierFlags: .command)
+    }
 
     /// Select a tab by its toolbar title ("Appearance", "Typography", "Library",
     /// "Extensions").
@@ -21,16 +23,40 @@ struct SettingsPage {
         }
     }
 
-    var appearanceTab: XCUIElement { app.byId(A11y.Settings.appearanceTab) }
-    var typographyTab: XCUIElement { app.byId(A11y.Settings.typographyTab) }
-    var libraryTab: XCUIElement { app.byId(A11y.Settings.libraryTab) }
-    var extensionsTab: XCUIElement { app.byId(A11y.Settings.extensionsTab) }
+    var appearanceTab: XCUIElement {
+        app.byId(A11y.Settings.appearanceTab)
+    }
 
-    // Segmented pickers expose each option as a button labelled with the option.
-    func setTheme(_ label: String) { app.byId(A11y.Settings.themePicker).buttons[label].clickWhenReady() }
-    func setFont(_ label: String) { app.byId(A11y.Settings.fontPicker).buttons[label].clickWhenReady() }
-    func setSize(_ label: String) { app.byId(A11y.Settings.sizePicker).buttons[label].clickWhenReady() }
+    var typographyTab: XCUIElement {
+        app.byId(A11y.Settings.typographyTab)
+    }
 
-    func changeLibrary() { app.byId(A11y.Settings.changeLibrary).clickWhenReady() }
-    func reinstallManifest() { app.byId(A11y.Settings.reinstallManifest).clickWhenReady() }
+    var libraryTab: XCUIElement {
+        app.byId(A11y.Settings.libraryTab)
+    }
+
+    var extensionsTab: XCUIElement {
+        app.byId(A11y.Settings.extensionsTab)
+    }
+
+    /// Segmented pickers expose each option as a button labelled with the option.
+    func setTheme(_ label: String) {
+        app.byId(A11y.Settings.themePicker).buttons[label].clickWhenReady()
+    }
+
+    func setFont(_ label: String) {
+        app.byId(A11y.Settings.fontPicker).buttons[label].clickWhenReady()
+    }
+
+    func setSize(_ label: String) {
+        app.byId(A11y.Settings.sizePicker).buttons[label].clickWhenReady()
+    }
+
+    func changeLibrary() {
+        app.byId(A11y.Settings.changeLibrary).clickWhenReady()
+    }
+
+    func reinstallManifest() {
+        app.byId(A11y.Settings.reinstallManifest).clickWhenReady()
+    }
 }

@@ -15,9 +15,9 @@ import Foundation
 /// the sort keys written from `AppState` go through it too, so there is a single
 /// redirection point.
 enum AppDefaults {
-    // `UserDefaults` is thread-safe but not `Sendable`, so the Swift 6 concurrency
-    // checker flags a shared `static let`; `nonisolated(unsafe)` opts out (the type
-    // is safe to touch from any thread).
+    /// `UserDefaults` is thread-safe but not `Sendable`, so the Swift 6 concurrency
+    /// checker flags a shared `static let`; `nonisolated(unsafe)` opts out (the type
+    /// is safe to touch from any thread).
     nonisolated(unsafe) static let store: UserDefaults = {
         if let suite = TestHooks.defaultsSuiteName, let store = UserDefaults(suiteName: suite) {
             return store

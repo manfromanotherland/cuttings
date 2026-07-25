@@ -18,24 +18,26 @@ import Foundation
 /// Every article's id is `TestULID.make(index)`, so ids sort in index order —
 /// which makes the `id DESC` tiebreak (and the whole default ordering) predictable.
 enum Fixtures {
-    // ── Ids ───────────────────────────────────────────────────────────────
-    // Stable ids for the articles journeys refer to by role.
+    /// ── Ids ───────────────────────────────────────────────────────────────
+    /// Stable ids for the articles journeys refer to by role.
     enum Ids {
-        static let rust = id(0)            // "ownership" — active, read
-        static let swift = id(1)           // "concurrency" — active, unread
-        static let kitchenSink = id(2)     // long, every markdown block + asset image
-        static let unicode = id(3)         // emoji/diacritic title
-        static let minimal = id(4)         // only required frontmatter fields
-        static let favoriteRead = id(5)    // active, read, favorite
-        static let ratedThree = id(6)      // active, read
-        static let swiftTips = id(7)       // active, unread, favorite
-        static let archived = id(8)        // archived, read ("voyage")
-        static let archivedFavorite = id(9)// archived AND favorite (crosses archive)
-        static let oversize = id(200)      // ~11 MB body; not in standardCorpus
+        static let rust = id(0) // "ownership" — active, read
+        static let swift = id(1) // "concurrency" — active, unread
+        static let kitchenSink = id(2) // long, every markdown block + asset image
+        static let unicode = id(3) // emoji/diacritic title
+        static let minimal = id(4) // only required frontmatter fields
+        static let favoriteRead = id(5) // active, read, favorite
+        static let ratedThree = id(6) // active, read
+        static let swiftTips = id(7) // active, unread, favorite
+        static let archived = id(8) // archived, read ("voyage")
+        static let archivedFavorite = id(9) // archived AND favorite (crosses archive)
+        static let oversize = id(200) // ~11 MB body; not in standardCorpus
     }
 
     /// A ULID for a corpus index (ids sort in index order).
-    static func id(_ index: Int) -> String { TestULID.make(index) }
+    static func id(_ index: Int) -> String {
+        TestULID.make(index)
+    }
 
     // ── Standard corpus ─────────────────────────────────────────────────────
 
@@ -175,12 +177,14 @@ enum Fixtures {
             static let wordCountAscending = ids([3, 6, 0, 5, 1, 7, 2, 4])
         }
 
-        private static func ids(_ indices: [Int]) -> [String] { indices.map(Fixtures.id) }
+        private static func ids(_ indices: [Int]) -> [String] {
+            indices.map(Fixtures.id)
+        }
     }
 
-    // ── Search terms ────────────────────────────────────────────────────────
-    // Distinctive REAL words with controlled occurrence, so search journeys read
-    // like real use. Each appears in exactly one article's title/body.
+    /// ── Search terms ────────────────────────────────────────────────────────
+    /// Distinctive REAL words with controlled occurrence, so search journeys read
+    /// like real use. Each appears in exactly one article's title/body.
     enum Search {
         /// Appears only in the active Rust article (index 0).
         static let activeTerm = "ownership"
@@ -194,8 +198,8 @@ enum Fixtures {
         static let diacriticQuery = "cafe"
     }
 
-    // ── Seeded highlights ─────────────────────────────────────────────────
-    // Highlight texts that appear verbatim in the kitchen-sink article's body.
+    /// ── Seeded highlights ─────────────────────────────────────────────────
+    /// Highlight texts that appear verbatim in the kitchen-sink article's body.
     enum Highlights {
         static let articleId = Ids.kitchenSink
         static let seeded: [TestHighlight] = [
@@ -208,7 +212,7 @@ enum Fixtures {
 
     /// A large corpus for pagination (default 120 > the 100-row first page).
     static func bulkCorpus(count: Int = 120) -> [ArticleFixture] {
-        (0..<count).map { index in
+        (0 ..< count).map { index in
             ArticleFixture(
                 id: id(index),
                 url: "https://example.com/bulk/\(index)",
@@ -244,12 +248,14 @@ enum Fixtures {
     /// `saved_at` for a corpus index: 2026-01-01 12:00 UTC plus `index` days, so
     /// a higher index is always more recently saved.
     private static func saved(_ index: Int) -> Date {
-        savedBase.addingTimeInterval(TimeInterval(index) * 86_400)
+        savedBase.addingTimeInterval(TimeInterval(index) * 86400)
     }
 
     private static let savedBase = parse("2026-01-01T12:00:00Z")
 
-    private static func readAt(_ iso: String) -> Date { parse(iso) }
+    private static func readAt(_ iso: String) -> Date {
+        parse(iso)
+    }
 
     private static func parse(_ iso: String) -> Date {
         let formatter = ISO8601DateFormatter()
@@ -260,8 +266,8 @@ enum Fixtures {
         return date
     }
 
-    // Every supported block for the deep-read journey, plus the two seeded
-    // highlight sentences (verbatim) and a local asset image.
+    /// Every supported block for the deep-read journey, plus the two seeded
+    /// highlight sentences (verbatim) and a local asset image.
     private static let kitchenSinkBody = """
     # The Complete Markdown Sample
 

@@ -80,9 +80,9 @@ private struct TypographySettingsTab: View {
 
     private var previewFontName: String {
         switch readerFont {
-        case .system: return "-apple-system"
-        case .serif: return "Georgia"
-        case .mono: return "Menlo"
+        case .system: "-apple-system"
+        case .serif: "Georgia"
+        case .mono: "Menlo"
         }
     }
 }

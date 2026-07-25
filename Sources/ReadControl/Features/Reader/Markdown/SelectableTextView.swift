@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 /// A read-only `NSTextView` bridged into SwiftUI. SwiftUI's `Text` +
 /// `.textSelection(.enabled)` can only select *within* a single `Text`, so the
@@ -23,7 +23,7 @@ struct SelectableTextView: NSViewRepresentable {
     /// context menu.
     var onHighlight: (String) -> Void = { _ in }
 
-    func makeNSView(context: Context) -> ReaderTextView {
+    func makeNSView(context _: Context) -> ReaderTextView {
         let textView = ReaderTextView.make()
         textView.onHighlight = onHighlight
         textView.highlights = highlights
@@ -51,7 +51,7 @@ struct SelectableTextView: NSViewRepresentable {
         return textView
     }
 
-    func updateNSView(_ textView: ReaderTextView, context: Context) {
+    func updateNSView(_ textView: ReaderTextView, context _: Context) {
         // Only re-set the storage when the *base* content actually changed (e.g.
         // the user changed the reader font/size). Re-setting on every SwiftUI
         // pass would clear the user's in-progress selection. We compare against
@@ -85,7 +85,9 @@ struct SelectableTextView: NSViewRepresentable {
             while searchStart < haystack.length {
                 let scope = NSRange(location: searchStart, length: haystack.length - searchStart)
                 let found = haystack.range(of: needle, options: [], range: scope)
-                if found.location == NSNotFound { break }
+                if found.location == NSNotFound {
+                    break
+                }
                 storage.addAttribute(.readerHighlight, value: true, range: found)
                 searchStart = found.location + max(found.length, 1)
             }
@@ -104,15 +106,20 @@ struct SelectableTextView: NSViewRepresentable {
 /// receives clicks the text views did not handle and never interferes with
 /// selecting, clicking links, or the context menu.
 struct SelectionClearingBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { ClickCatcher() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func makeNSView(context _: Context) -> NSView {
+        ClickCatcher()
+    }
+
+    func updateNSView(_: NSView, context _: Context) {}
 
     private final class ClickCatcher: NSView {
         /// Deselect even when the window is not key, so a single click both
         /// activates the window and clears the selection.
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
+            true
+        }
 
-        override func mouseDown(with event: NSEvent) {
+        override func mouseDown(with _: NSEvent) {
             guard let content = window?.contentView else { return }
             ReaderTextView.collapseSelections(in: content)
         }

@@ -20,5 +20,7 @@ struct TightIconLabelStyle: LabelStyle {
 }
 
 extension LabelStyle where Self == TightIconLabelStyle {
-    static var tightIcon: TightIconLabelStyle { TightIconLabelStyle() }
+    static var tightIcon: TightIconLabelStyle {
+        TightIconLabelStyle()
+    }
 }

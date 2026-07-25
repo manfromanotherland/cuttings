@@ -98,15 +98,41 @@ class UITestCase: XCTestCase {
     // Convenience accessors so a test reads as `sidebar.select(.unread)` etc.
     // All wrap the running `app`; use them only after a `launch*` call.
 
-    var onboarding: OnboardingPage { OnboardingPage(app: app) }
-    var sidebar: SidebarPage { SidebarPage(app: app) }
-    var list: ReadingListPage { ReadingListPage(app: app) }
-    var reader: ReaderPage { ReaderPage(app: app) }
-    var tagPicker: TagPickerPage { TagPickerPage(app: app) }
-    var highlightsInspector: HighlightsPage { HighlightsPage(app: app) }
-    var shortcutsSheet: ShortcutsSheetPage { ShortcutsSheetPage(app: app) }
-    var settings: SettingsPage { SettingsPage(app: app) }
-    var keyboard: Keyboard { Keyboard(app: app) }
+    var onboarding: OnboardingPage {
+        OnboardingPage(app: app)
+    }
+
+    var sidebar: SidebarPage {
+        SidebarPage(app: app)
+    }
+
+    var list: ReadingListPage {
+        ReadingListPage(app: app)
+    }
+
+    var reader: ReaderPage {
+        ReaderPage(app: app)
+    }
+
+    var tagPicker: TagPickerPage {
+        TagPickerPage(app: app)
+    }
+
+    var highlightsInspector: HighlightsPage {
+        HighlightsPage(app: app)
+    }
+
+    var shortcutsSheet: ShortcutsSheetPage {
+        ShortcutsSheetPage(app: app)
+    }
+
+    var settings: SettingsPage {
+        SettingsPage(app: app)
+    }
+
+    var keyboard: Keyboard {
+        Keyboard(app: app)
+    }
 
     // ── On-disk assertions ────────────────────────────────────────────────
 
@@ -135,10 +161,11 @@ class UITestCase: XCTestCase {
     func wait(timeout: TimeInterval = 8, until condition: () -> Bool) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if condition() { return true }
+            if condition() {
+                return true
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
     }
-
 }

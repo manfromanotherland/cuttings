@@ -40,19 +40,23 @@ extension AppState {
             // ⌘⌫ (Archive) fire instead of deleting to the start of the search
             // term. So while a text field is being edited, leave the selection
             // put to keep focus in the field; re-home only when not editing.
-            await self.loadReadings(resetSelectionIfMissing: !self.isEditingText)
+            await loadReadings(resetSelectionIfMissing: !isEditingText)
             // The sidebar badges are faceted by the search, so a query change has
             // to recount them alongside the list.
-            await self.loadSidebar()
+            await loadSidebar()
         }
     }
 
     /// The full-text query for the current search box, or nil when it's empty.
-    private var activeQuery: String? { searchQuery.isEmpty ? nil : searchQuery }
+    private var activeQuery: String? {
+        searchQuery.isEmpty ? nil : searchQuery
+    }
 
     /// The sort to apply: Relevance while searching, the persisted field
     /// otherwise (search is just another filter through the same list path).
-    private var activeSort: ReadingSort { activeQuery == nil ? sortField : searchSort }
+    private var activeSort: ReadingSort {
+        activeQuery == nil ? sortField : searchSort
+    }
 
     /// One page of readings for the current view/filter/sort/search at `offset`,
     /// as presentation rows. The view, tag, and rating compose with the search as
@@ -86,7 +90,8 @@ extension AppState {
             // the caller asked (direct reloads); a post-mutation refresh leaves a
             // deliberately off-list selection — the open reading — in place.
             if selectedId == nil
-                || (resetSelectionIfMissing && !readings.contains(where: { $0.id == selectedId })) {
+                || (resetSelectionIfMissing && !readings.contains(where: { $0.id == selectedId }))
+            {
                 selectedId = readings.first?.id
             }
         } catch {

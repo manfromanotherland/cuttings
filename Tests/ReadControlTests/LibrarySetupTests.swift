@@ -23,7 +23,8 @@ final class LibrarySetupTests: XCTestCase {
         for dir in ["articles", "assets"] {
             var isDirectory: ObjCBool = false
             let exists = FileManager.default.fileExists(
-                atPath: root.appendingPathComponent(dir).path, isDirectory: &isDirectory)
+                atPath: root.appendingPathComponent(dir).path, isDirectory: &isDirectory
+            )
             XCTAssertTrue(exists && isDirectory.boolValue, "expected \(dir)/ to be created")
         }
     }

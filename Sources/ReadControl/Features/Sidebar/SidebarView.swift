@@ -230,7 +230,7 @@ struct SidebarView: View {
                 // Height-match the badge so rows stay one height — the always-present
                 // stars (same `.caption2` size) set it, not the badge. See badgeVPadding.
                 HStack(spacing: 2) {
-                    ForEach(0..<5) { star in
+                    ForEach(0 ..< 5) { star in
                         Image(systemName: star < Int(ratingCount.rating) ? "star.fill" : "star")
                             .font(.caption2)
                             .foregroundStyle(isSelected ? Color.white : .secondary)
@@ -255,7 +255,7 @@ struct SidebarView: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityLabel(
             "\(ratingCount.rating) star\(ratingCount.rating == 1 ? "" : "s"), "
-            + "\(ratingCount.count) reading\(ratingCount.count == 1 ? "" : "s")"
+                + "\(ratingCount.count) reading\(ratingCount.count == 1 ? "" : "s")"
         )
     }
 }
@@ -326,9 +326,10 @@ private struct AppearancePopoverView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Slider(
-                    value: fontSizeBinding, in: 0...Double(ReaderFontSize.allCases.count - 1),
-                    step: 1)
-                    .accessibilityIdentifier(A11y.Sidebar.fontSizeSlider)
+                    value: fontSizeBinding, in: 0 ... Double(ReaderFontSize.allCases.count - 1),
+                    step: 1
+                )
+                .accessibilityIdentifier(A11y.Sidebar.fontSizeSlider)
                 Text("Aa")
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)

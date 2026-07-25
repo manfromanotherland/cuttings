@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Foundation
 import AppKit
+import Foundation
 
 // ── Library lifecycle ────────────────────────────────────────────────────────
 // Choosing/restoring the library folder, booting the core against it, and
@@ -77,10 +77,12 @@ extension AppState {
         let configDir = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".config/readcontrol", isDirectory: true)
         try? FileManager.default.createDirectory(
-            at: configDir, withIntermediateDirectories: true)
+            at: configDir, withIntermediateDirectories: true
+        )
         try? (path + "\n").write(
             to: configDir.appendingPathComponent("library"),
-            atomically: true, encoding: .utf8)
+            atomically: true, encoding: .utf8
+        )
     }
 
     // ── Incremental sync (FSEvents) ───────────────────────────────────────
@@ -89,7 +91,9 @@ extension AppState {
         guard let core else { return }
         do {
             let changed = try await core.sync()
-            if changed > 0 { await refresh() }
+            if changed > 0 {
+                await refresh()
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -119,7 +123,9 @@ extension AppState {
     static func dbPath() -> String {
         // UI-testing: use the pinned temp DB so the real per-device index is
         // never opened or mutated.
-        if let path = TestHooks.dbPath { return path }
+        if let path = TestHooks.dbPath {
+            return path
+        }
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ReadControl", isDirectory: true)

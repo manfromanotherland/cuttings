@@ -11,7 +11,9 @@ enum ReadingSort: String, CaseIterable, Identifiable {
     case rating
     case timeToRead
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     /// Label shown in the sort-field picker.
     var label: String {

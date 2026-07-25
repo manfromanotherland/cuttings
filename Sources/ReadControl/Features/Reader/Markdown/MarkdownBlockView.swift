@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import SwiftUI
 import Markdown
+import SwiftUI
 
 // Both SwiftUI and Markdown export `Text` and `Image`. These file-scope aliases
 // make the bare names resolve to SwiftUI; Markdown's nodes are used qualified

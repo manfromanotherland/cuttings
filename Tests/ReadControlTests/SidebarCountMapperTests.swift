@@ -5,7 +5,6 @@ import XCTest
 /// The sidebar count/highlight mappers are the single crossing from the FFI
 /// boundary DTOs to the presentation snapshots. These pin each field across.
 final class SidebarCountMapperTests: XCTestCase {
-
     func testTagCountMapsFieldsAndId() {
         let tagCount = TagCount(FfiTagCount(tag: "rust", count: 7))
         XCTAssertEqual(tagCount.tag, "rust")

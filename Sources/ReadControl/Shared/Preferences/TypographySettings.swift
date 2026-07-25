@@ -4,7 +4,9 @@ import SwiftUI
 
 enum ReaderFont: String, CaseIterable, Identifiable {
     case system, serif, mono
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var label: String {
         switch self {
@@ -26,7 +28,9 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
 enum ReaderFontSize: Int, CaseIterable, Identifiable {
     case small = 15, medium = 17, large = 19, xlarge = 21, huge = 23, giant = 25
-    var id: Int { rawValue }
+    var id: Int {
+        rawValue
+    }
 
     var label: String {
         switch self {
@@ -40,5 +44,7 @@ enum ReaderFontSize: Int, CaseIterable, Identifiable {
     }
 
     /// Base body point size for the native reader.
-    var points: CGFloat { CGFloat(rawValue) }
+    var points: CGFloat {
+        CGFloat(rawValue)
+    }
 }

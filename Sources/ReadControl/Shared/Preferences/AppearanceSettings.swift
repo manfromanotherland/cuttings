@@ -4,7 +4,9 @@ import SwiftUI
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case light, dark, system
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var label: String {
         switch self {

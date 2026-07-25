@@ -7,7 +7,6 @@ import XCTest
 /// or rename on either side is caught. The `switch`es are exhaustive, so a new
 /// enum case is a compile error until it is mapped.
 final class EnumBridgeMapperTests: XCTestCase {
-
     func testSidebarItemMapsEveryViewCase() {
         XCTAssertEqual(SidebarItem.all.ffiView, .all)
         XCTAssertEqual(SidebarItem.unread.ffiView, .unread)

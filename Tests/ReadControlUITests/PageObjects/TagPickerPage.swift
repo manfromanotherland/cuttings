@@ -6,13 +6,25 @@ import XCTest
 struct TagPickerPage {
     let app: XCUIApplication
 
-    var searchField: XCUIElement { app.byId(A11y.TagPicker.searchField) }
-    var addRow: XCUIElement { app.byId(A11y.TagPicker.addRow) }
-    var doneButton: XCUIElement { app.byId(A11y.TagPicker.done) }
+    var searchField: XCUIElement {
+        app.byId(A11y.TagPicker.searchField)
+    }
 
-    var isVisible: Bool { searchField.exists }
+    var addRow: XCUIElement {
+        app.byId(A11y.TagPicker.addRow)
+    }
 
-    func row(_ tag: String) -> XCUIElement { app.byId(A11y.TagPicker.row(tag)) }
+    var doneButton: XCUIElement {
+        app.byId(A11y.TagPicker.done)
+    }
+
+    var isVisible: Bool {
+        searchField.exists
+    }
+
+    func row(_ tag: String) -> XCUIElement {
+        app.byId(A11y.TagPicker.row(tag))
+    }
 
     /// The picker's tag rows, top-to-bottom. Each row is a Button carrying
     /// `tagPicker.row.<tag>`; the "Add …" and "Done" buttons use other ids, so a
@@ -24,7 +36,9 @@ struct TagPickerPage {
         var result: [String] = []
         for element in app.buttons.allElementsBoundByIndex where element.identifier.hasPrefix(prefix) {
             let tag = String(element.identifier.dropFirst(prefix.count))
-            if !tag.isEmpty, seen.insert(tag).inserted { result.append(tag) }
+            if !tag.isEmpty, seen.insert(tag).inserted {
+                result.append(tag)
+            }
         }
         return result
     }
@@ -45,5 +59,7 @@ struct TagPickerPage {
         row(tag).clickWhenReady()
     }
 
-    func done() { doneButton.clickWhenReady() }
+    func done() {
+        doneButton.clickWhenReady()
+    }
 }

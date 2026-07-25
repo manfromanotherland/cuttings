@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
-import SwiftUI
 import Markdown
+import SwiftUI
 
 /// Flattens swift-markdown inline nodes into an `NSAttributedString` with AppKit
 /// fonts and colors. This mirrors `InlineRenderer` (which targets SwiftUI's
@@ -11,7 +11,6 @@ import Markdown
 /// emphasis would silently fall back to the default system font. Used by the
 /// `NSTextView`-backed reader runs (see `SelectableTextView`).
 enum AppKitInline {
-
     struct Style {
         var bold = false
         var italic = false
@@ -19,12 +18,21 @@ enum AppKitInline {
         var link: URL?
 
         func with(bold: Bool? = nil, italic: Bool? = nil,
-                  strike: Bool? = nil, link: URL? = nil) -> Style {
+                  strike: Bool? = nil, link: URL? = nil) -> Style
+        {
             var copy = self
-            if let bold { copy.bold = bold }
-            if let italic { copy.italic = italic }
-            if let strike { copy.strike = strike }
-            if let link { copy.link = link }
+            if let bold {
+                copy.bold = bold
+            }
+            if let italic {
+                copy.italic = italic
+            }
+            if let strike {
+                copy.strike = strike
+            }
+            if let link {
+                copy.link = link
+            }
             return copy
         }
     }
@@ -42,7 +50,8 @@ enum AppKitInline {
     /// Build an attributed string from a block node's inline children. `weight`
     /// and `size` set the base run; emphasis (bold/italic/code) layers on top.
     static func attributed(_ markup: Markup, size: CGFloat, weight: Font.Weight,
-                           design: Font.Design, color: NSColor = .labelColor) -> NSAttributedString {
+                           design: Font.Design, color: NSColor = .labelColor) -> NSAttributedString
+    {
         let run = Run(size: size, weight: weight, design: design, color: color)
         let out = NSMutableAttributedString()
         for child in markup.children {
@@ -76,20 +85,18 @@ enum AppKitInline {
     /// Container nodes (emphasis, strong, strikethrough, links, and anything
     /// unrecognized): layer their styling onto `style`, then render children.
     private static func container(_ markup: Markup, style: Style, run: Run) -> NSAttributedString {
-        let restyled: Style
-        switch markup {
-        case is Emphasis: restyled = style.with(italic: true)
-        case is Strong: restyled = style.with(bold: true)
-        case is Strikethrough: restyled = style.with(strike: true)
+        let restyled: Style = switch markup {
+        case is Emphasis: style.with(italic: true)
+        case is Strong: style.with(bold: true)
+        case is Strikethrough: style.with(strike: true)
         case let link as Markdown.Link:
-            restyled = style.with(link: link.destination.flatMap(URL.init(string:)))
-        default: restyled = style
+            style.with(link: link.destination.flatMap(URL.init(string:)))
+        default: style
         }
         return concat(markup.children, style: restyled, run: run)
     }
 
-    private static func concat<S: Sequence>(_ children: S, style: Style, run: Run) -> NSAttributedString
-    where S.Element == Markup {
+    private static func concat(_ children: some Sequence<Markup>, style: Style, run: Run) -> NSAttributedString {
         let out = NSMutableAttributedString()
         for child in children {
             out.append(render(child, style: style, run: run))
@@ -103,8 +110,12 @@ enum AppKitInline {
                                 design: code ? .monospaced : run.design,
                                 bold: style.bold, italic: style.italic)
         attrs[.foregroundColor] = run.color
-        if style.strike { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-        if code { attrs[.backgroundColor] = NSColor.secondaryLabelColor.withAlphaComponent(0.15) }
+        if style.strike {
+            attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+        }
+        if code {
+            attrs[.backgroundColor] = NSColor.secondaryLabelColor.withAlphaComponent(0.15)
+        }
         if let link = style.link {
             attrs[.link] = link
             attrs[.foregroundColor] = NSColor.controlAccentColor
@@ -116,13 +127,20 @@ enum AppKitInline {
     /// Build a system font at `size`/`weight`/`design`, then layer bold/italic
     /// symbolic traits so nested emphasis composes (matching `InlineRenderer`).
     static func makeFont(size: CGFloat, weight: Font.Weight, design: Font.Design,
-                         bold: Bool, italic: Bool) -> NSFont {
+                         bold: Bool, italic: Bool) -> NSFont
+    {
         let fallback = NSFont.systemFont(ofSize: size, weight: weight.nsWeight)
         var descriptor = fallback.fontDescriptor
-        if let designed = descriptor.withDesign(design.systemDesign) { descriptor = designed }
+        if let designed = descriptor.withDesign(design.systemDesign) {
+            descriptor = designed
+        }
         var traits = descriptor.symbolicTraits
-        if bold { traits.insert(.bold) }
-        if italic { traits.insert(.italic) }
+        if bold {
+            traits.insert(.bold)
+        }
+        if italic {
+            traits.insert(.italic)
+        }
         descriptor = descriptor.withSymbolicTraits(traits)
         return NSFont(descriptor: descriptor, size: size) ?? fallback
     }
@@ -133,14 +151,30 @@ enum AppKitInline {
 extension Font.Weight {
     /// Map the SwiftUI weights the theme uses onto AppKit font weights.
     var nsWeight: NSFont.Weight {
-        if self == .ultraLight { return .ultraLight }
-        if self == .thin { return .thin }
-        if self == .light { return .light }
-        if self == .medium { return .medium }
-        if self == .semibold { return .semibold }
-        if self == .bold { return .bold }
-        if self == .heavy { return .heavy }
-        if self == .black { return .black }
+        if self == .ultraLight {
+            return .ultraLight
+        }
+        if self == .thin {
+            return .thin
+        }
+        if self == .light {
+            return .light
+        }
+        if self == .medium {
+            return .medium
+        }
+        if self == .semibold {
+            return .semibold
+        }
+        if self == .bold {
+            return .bold
+        }
+        if self == .heavy {
+            return .heavy
+        }
+        if self == .black {
+            return .black
+        }
         return .regular
     }
 }
@@ -148,10 +182,10 @@ extension Font.Weight {
 extension Font.Design {
     var systemDesign: NSFontDescriptor.SystemDesign {
         switch self {
-        case .serif: return .serif
-        case .rounded: return .rounded
-        case .monospaced: return .monospaced
-        default: return .default
+        case .serif: .serif
+        case .rounded: .rounded
+        case .monospaced: .monospaced
+        default: .default
         }
     }
 }

@@ -20,8 +20,8 @@ final class SmartViewPinsFacetsJourney: UITestCase {
         article(1, tags: ["beta"], rating: 3, read: true, favorite: false)
     ]
 
-    // One launch, two view-pinning phases: Favorites (no search), then Unread
-    // (with search).
+    /// One launch, two view-pinning phases: Favorites (no search), then Unread
+    /// (with search).
     func testSmartViewsKeepFacetTilesPinned() throws {
         try launchApp(articles: Self.corpus)
 
@@ -86,7 +86,7 @@ final class SmartViewPinsFacetsJourney: UITestCase {
             id: TestULID.make(index),
             url: "https://example.com/\(index)",
             title: "Reading \(index)",
-            savedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index) * 86_400),
+            savedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index) * 86400),
             favorite: favorite,
             tags: tags,
             readAt: read ? Date(timeIntervalSince1970: 1_710_000_000) : nil,

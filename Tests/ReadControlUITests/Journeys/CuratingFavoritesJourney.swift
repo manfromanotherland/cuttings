@@ -18,8 +18,8 @@ import XCTest
 final class CuratingFavoritesJourney: UITestCase {
     private static let ratingDescOrder = [
         Fixtures.Ids.archivedFavorite, // rating 5 (archived — favorites cross archive)
-        Fixtures.Ids.favoriteRead,     // rating 4
-        Fixtures.Ids.swiftTips         // rating 2
+        Fixtures.Ids.favoriteRead, // rating 4
+        Fixtures.Ids.swiftTips // rating 2
     ]
 
     func testCurateFavoritesByRating() throws {

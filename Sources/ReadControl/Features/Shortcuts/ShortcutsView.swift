@@ -57,7 +57,9 @@ struct ShortcutsView: View {
 private struct KeyCap: View {
     let symbols: String
 
-    init(_ symbols: String) { self.symbols = symbols }
+    init(_ symbols: String) {
+        self.symbols = symbols
+    }
 
     var body: some View {
         Text(symbols)

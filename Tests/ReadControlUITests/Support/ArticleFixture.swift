@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Foundation
 import CryptoKit
+import Foundation
 
 /// A single fake reading, rendered to the exact on-disk format the Rust core
 /// parses (`core/src/frontmatter.rs` + `types.rs`): YAML frontmatter followed by
@@ -19,7 +19,7 @@ struct ArticleFixture {
     var favorite: Bool
     var tags: [String]
 
-    // Optional frontmatter — emitted only when non-nil / non-zero.
+    /// Optional frontmatter — emitted only when non-nil / non-zero.
     /// Presence marks the reading read (there is no separate `read` boolean).
     var readAt: Date?
     /// 0 means unrated; only emitted when > 0 (the core defaults a missing key to 0).
@@ -72,30 +72,36 @@ struct ArticleFixture {
     /// `sha256:<hex>` over the body bytes. The scanner also keys on file mtime,
     /// so an exact match with the core isn't required for indexing — but this
     /// produces a spec-valid `source_hash`.
-    var sourceHash: String { "sha256:" + Self.sha256Hex(body) }
+    var sourceHash: String {
+        "sha256:" + Self.sha256Hex(body)
+    }
 
     /// The full file contents: frontmatter fence, fields, fence, blank line, body.
     func rendered() -> String {
-        var lines: [String] = []
-        lines.append("format_version: 1")
-        lines.append("id: \(quoted(id))")
-        lines.append("url: \(quoted(url))")
-        lines.append("canonical_url: \(quoted(canonicalURL))")
-        lines.append("title: \(quoted(title))")
-        if let author { lines.append("author: \(quoted(author))") }
-        if let site { lines.append("site: \(quoted(site))") }
-        lines.append("saved_at: \(quoted(Self.timestamp(savedAt)))")
-        if let readAt { lines.append("read_at: \(quoted(Self.timestamp(readAt)))") }
-        lines.append("archived: \(archived)")
-        lines.append("favorite: \(favorite)")
-        if rating > 0 { lines.append("rating: \(rating)") }
-        lines.append("tags: [\(tags.map(quoted).joined(separator: ", "))]")
-        if let excerpt { lines.append("excerpt: \(quoted(excerpt))") }
-        if let wordCount { lines.append("word_count: \(wordCount)") }
-        if let lang { lines.append("lang: \(quoted(lang))") }
-        lines.append("source_hash: \(quoted(sourceHash))")
-
-        let frontmatter = lines.map { $0 + "\n" }.joined()
+        // The core's documented field order; an optional field whose value is nil
+        // drops out (matching the core's `skip_serializing_if`).
+        let fields: [(String, String?)] = [
+            ("format_version", "1"),
+            ("id", quoted(id)),
+            ("url", quoted(url)),
+            ("canonical_url", quoted(canonicalURL)),
+            ("title", quoted(title)),
+            ("author", author.map(quoted)),
+            ("site", site.map(quoted)),
+            ("saved_at", quoted(Self.timestamp(savedAt))),
+            ("read_at", readAt.map { quoted(Self.timestamp($0)) }),
+            ("archived", "\(archived)"),
+            ("favorite", "\(favorite)"),
+            ("rating", rating > 0 ? "\(rating)" : nil),
+            ("tags", "[\(tags.map(quoted).joined(separator: ", "))]"),
+            ("excerpt", excerpt.map(quoted)),
+            ("word_count", wordCount.map { "\($0)" }),
+            ("lang", lang.map(quoted)),
+            ("source_hash", quoted(sourceHash))
+        ]
+        let frontmatter = fields
+            .compactMap { key, value in value.map { "\(key): \($0)\n" } }
+            .joined()
         let normalizedBody = body.hasSuffix("\n") ? body : body + "\n"
         return "---\n" + frontmatter + "---\n\n" + normalizedBody
     }
@@ -129,7 +135,9 @@ struct ArticleFixture {
 
     /// ISO-8601 UTC with millisecond precision — the format the core documents
     /// for `saved_at` / `read_at`, chosen so lexicographic order == chronological.
-    static func timestamp(_ date: Date) -> String { isoFormatter.string(from: date) }
+    static func timestamp(_ date: Date) -> String {
+        isoFormatter.string(from: date)
+    }
 
     static func sha256Hex(_ string: String) -> String {
         SHA256.hash(data: Data(string.utf8))

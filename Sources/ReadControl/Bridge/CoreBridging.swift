@@ -36,6 +36,6 @@ protocol CoreBridging: Sendable {
     func deleteHighlight(readingId: String, highlightId: String) async throws
 }
 
-// CoreBridge already implements every requirement; this just records the
-// conformance.
+/// CoreBridge already implements every requirement; this just records the
+/// conformance.
 extension CoreBridge: CoreBridging {}

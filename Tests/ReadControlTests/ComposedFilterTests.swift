@@ -8,9 +8,8 @@ import XCTest
 /// async optimistic apply/reconcile around these stays covered by the UI
 /// journeys.)
 final class ComposedFilterTests: XCTestCase {
-
-    // Re-tapping the active view falls back to All; All itself stays; a different
-    // view switches. This is the "one active view, deselects to the base" rule.
+    /// Re-tapping the active view falls back to All; All itself stays; a different
+    /// view switches. This is the "one active view, deselects to the base" rule.
     func testResolveViewFallsBackToAllOnReTap() {
         XCTAssertEqual(ComposedFilter.resolveView(active: .unread, tapped: .unread), .all)
         XCTAssertEqual(ComposedFilter.resolveView(active: .all, tapped: .all), .all)
@@ -18,8 +17,8 @@ final class ComposedFilterTests: XCTestCase {
         XCTAssertEqual(ComposedFilter.resolveView(active: .favorites, tapped: .archive), .archive)
     }
 
-    // A single-select facet clears when its active value is re-tapped, and
-    // replaces otherwise — for both tags (String) and ratings (UInt8).
+    /// A single-select facet clears when its active value is re-tapped, and
+    /// replaces otherwise — for both tags (String) and ratings (UInt8).
     func testToggleClearsOnReselectOtherwiseReplaces() {
         XCTAssertEqual(ComposedFilter.toggle(String?.none, "rust"), "rust")
         XCTAssertNil(ComposedFilter.toggle("rust", "rust"))
@@ -29,7 +28,7 @@ final class ComposedFilterTests: XCTestCase {
         XCTAssertEqual(ComposedFilter.toggle(UInt8(5), 4), 4)
     }
 
-    // Membership is the intersection of view, tag, and rating.
+    /// Membership is the intersection of view, tag, and rating.
     func testMatchesIntersectsViewTagAndRating() {
         var row = makeReadingRow(read: false, archived: false)
         row.tags = ["rust"]
@@ -40,7 +39,7 @@ final class ComposedFilterTests: XCTestCase {
         XCTAssertFalse(ComposedFilter.matches(row, view: .all, tag: nil, rating: 3))
     }
 
-    // A row excluded by the smart view fails regardless of tag/rating.
+    /// A row excluded by the smart view fails regardless of tag/rating.
     func testMatchesRejectsRowOutsideTheView() {
         var archived = makeReadingRow(archived: true)
         archived.tags = ["rust"]
@@ -48,7 +47,7 @@ final class ComposedFilterTests: XCTestCase {
         XCTAssertTrue(ComposedFilter.matches(archived, view: .archive, tag: "rust", rating: nil))
     }
 
-    // One-motion removal: advance to the next row, else the previous, else clear.
+    /// One-motion removal: advance to the next row, else the previous, else clear.
     func testSelectionAfterRemovingPrefersNextThenPreviousThenNil() {
         let rows = [rowWithId("a"), rowWithId("b"), rowWithId("c")]
         XCTAssertEqual(ComposedFilter.selectionAfterRemoving(at: 0, from: rows), "b")

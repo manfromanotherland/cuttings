@@ -16,8 +16,8 @@ import XCTest
 /// Pinning the sort keeps the filtered order deterministic (saved-at desc →
 /// minimal(4) before unicode(3)).
 final class TagOrganizingJourney: UITestCase {
-    // Deliberately avoids the letter "c": `typeText` drops a bare "c" on the test
-    // Mac, so a name containing it is mistyped ("focus" → "fous").
+    /// Deliberately avoids the letter "c": `typeText` drops a bare "c" on the test
+    /// Mac, so a name containing it is mistyped ("focus" → "fous").
     private static let newTag = "important"
 
     // One end-to-end tag-organizing walk; asserting every beat keeps it long.

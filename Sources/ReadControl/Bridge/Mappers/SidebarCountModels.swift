@@ -11,14 +11,18 @@ import Foundation
 struct TagCount: Identifiable, Equatable, Sendable {
     var tag: String
     var count: UInt64
-    var id: String { tag }
+    var id: String {
+        tag
+    }
 }
 
 /// One star bucket (1–5) with how many readings hold it under the active scope.
 struct RatingCount: Identifiable, Equatable, Sendable {
     var rating: UInt8
     var count: UInt64
-    var id: UInt8 { rating }
+    var id: UInt8 {
+        rating
+    }
 }
 
 /// The five smart-view totals returned by one sidebar recount.

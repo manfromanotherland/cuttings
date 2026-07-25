@@ -6,7 +6,6 @@ import XCTest
 /// string at 200 wpm. These tests pin the boundaries: the missing-count and
 /// one-minute-floor edges, and the minute/hour/hour-plus-minutes formatting.
 final class ReadingTimeLabelTests: XCTestCase {
-
     private func label(wordCount: UInt32?) -> String? {
         makeReadingRow(wordCount: wordCount).readingTimeLabel
     }
@@ -16,25 +15,25 @@ final class ReadingTimeLabelTests: XCTestCase {
         XCTAssertNil(label(wordCount: 0))
     }
 
-    // Any non-empty article rounds up to at least one minute (1 word ≈ 0 min).
+    /// Any non-empty article rounds up to at least one minute (1 word ≈ 0 min).
     func testRoundsUpToAOneMinuteFloor() {
         XCTAssertEqual(label(wordCount: 1), "1 min read")
     }
 
     func testTypicalArticleReadsInMinutes() {
-        XCTAssertEqual(label(wordCount: 1_000), "5 min read")
+        XCTAssertEqual(label(wordCount: 1000), "5 min read")
     }
 
-    // 59 min stays in minutes; 60 rolls to a whole hour with no trailing minutes.
+    /// 59 min stays in minutes; 60 rolls to a whole hour with no trailing minutes.
     func testMinutesJustUnderAnHour() {
-        XCTAssertEqual(label(wordCount: 11_800), "59 min read")
+        XCTAssertEqual(label(wordCount: 11800), "59 min read")
     }
 
     func testExactHourOmitsMinutes() {
-        XCTAssertEqual(label(wordCount: 12_000), "1 hr read")
+        XCTAssertEqual(label(wordCount: 12000), "1 hr read")
     }
 
     func testHoursAndMinutesTogether() {
-        XCTAssertEqual(label(wordCount: 16_000), "1 hr 20 min read")
+        XCTAssertEqual(label(wordCount: 16000), "1 hr 20 min read")
     }
 }

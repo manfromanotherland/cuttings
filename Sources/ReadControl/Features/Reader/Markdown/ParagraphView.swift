@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import SwiftUI
 import Markdown
+import SwiftUI
 
-// `Text` collides between SwiftUI and Markdown; alias the bare name to SwiftUI
-// so paragraph runs resolve. Markdown's node is used as `Markdown.Text`.
+/// `Text` collides between SwiftUI and Markdown; alias the bare name to SwiftUI
+/// so paragraph runs resolve. Markdown's node is used as `Markdown.Text`.
 private typealias Text = SwiftUI.Text
 
 /// A paragraph is split into runs of inline text and standalone images. The
@@ -22,12 +22,12 @@ struct ParagraphView: View {
         VStack(alignment: .leading, spacing: theme.blockSpacing * 0.6) {
             ForEach(segments) { identified in
                 switch identified.segment {
-                case .text(let attributed):
+                case let .text(attributed):
                     Text(attributed)
                         .lineSpacing(theme.lineSpacing)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                case .image(let source, let alt):
+                case let .image(source, alt):
                     AssetImageView(source: source, alt: alt, libraryURL: libraryURL, theme: theme,
                                    highlights: highlights, onHighlight: onHighlight)
                 }
@@ -65,10 +65,13 @@ struct ParagraphView: View {
                 flush()
                 result.append(IdentifiedSegment(
                     id: IdentifiedMarkup.stableID(for: child, fallbackIndex: offset),
-                    segment: .image(source: image.source ?? "", alt: InlineRenderer.plainText(image))))
+                    segment: .image(source: image.source ?? "", alt: InlineRenderer.plainText(image))
+                ))
             } else {
                 // The run inherits the id of the first child that feeds it.
-                if run.characters.isEmpty { runID = IdentifiedMarkup.stableID(for: child, fallbackIndex: offset) }
+                if run.characters.isEmpty {
+                    runID = IdentifiedMarkup.stableID(for: child, fallbackIndex: offset)
+                }
                 run.append(InlineRenderer.inline(child, theme: theme))
             }
         }
@@ -80,7 +83,9 @@ struct ParagraphView: View {
 
     /// An image either bare, or as the sole meaningful child of a link.
     private func standaloneImage(_ markup: Markup) -> Markdown.Image? {
-        if let image = markup as? Markdown.Image { return image }
+        if let image = markup as? Markdown.Image {
+            return image
+        }
         if let link = markup as? Markdown.Link {
             let children = Array(link.children)
             let images = children.compactMap { $0 as? Markdown.Image }
@@ -90,7 +95,9 @@ struct ParagraphView: View {
                 }
                 return true
             }
-            if images.count == 1, meaningful.count == 1 { return images.first }
+            if images.count == 1, meaningful.count == 1 {
+                return images.first
+            }
         }
         return nil
     }

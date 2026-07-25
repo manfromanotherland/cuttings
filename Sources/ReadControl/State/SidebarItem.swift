@@ -8,7 +8,9 @@ import Foundation
 
 enum SidebarItem: String, CaseIterable, Identifiable {
     case all, unread, read, archive, favorites
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var label: String {
         switch self {
@@ -36,10 +38,10 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     /// so the two can never drift apart.
     func contains(_ row: ReadingRow) -> Bool {
         switch self {
-        case .all:       !row.archived
-        case .unread:    !row.archived && !row.read
-        case .read:      !row.archived && row.read
-        case .archive:   row.archived
+        case .all: !row.archived
+        case .unread: !row.archived && !row.read
+        case .read: !row.archived && row.read
+        case .archive: row.archived
         case .favorites: row.favorite
         }
     }

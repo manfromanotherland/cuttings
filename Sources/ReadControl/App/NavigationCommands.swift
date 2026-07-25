@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 /// Menu bar commands for navigating the main window.
 struct NavigationCommands: Commands {
@@ -11,7 +11,8 @@ struct NavigationCommands: Commands {
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") {
                 NSApp.keyWindow?.firstResponder?.tryToPerform(
-                    #selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+                    #selector(NSSplitViewController.toggleSidebar(_:)), with: nil
+                )
             }
             .keyboardShortcut(ShortcutCatalog.toggleSidebar)
 

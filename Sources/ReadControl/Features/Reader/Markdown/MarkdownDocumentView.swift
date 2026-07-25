@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import SwiftUI
 import Markdown
+import SwiftUI
 
 /// The parsed block structure of an article, computed once from its Markdown.
 /// Parsing (`Document(parsing:)` + grouping) is the expensive step of rendering,
@@ -24,8 +24,8 @@ struct ArticleDocument {
 
         var id: String {
             switch self {
-            case .textRun(let id, _): id
-            case .other(let item): item.id
+            case let .textRun(id, _): id
+            case let .other(item): item.id
             }
         }
     }
@@ -34,7 +34,7 @@ struct ArticleDocument {
 
     init(markdown: String) {
         let document = Document(parsing: Self.unwrapLinkedImages(markdown))
-        self.groups = Self.makeGroups(Array(document.children))
+        groups = Self.makeGroups(Array(document.children))
     }
 
     /// Group the document's top-level blocks, merging maximal runs of foldable
@@ -55,12 +55,15 @@ struct ArticleDocument {
 
         for (offset, block) in blocks.enumerated() {
             if isFoldable(block) {
-                if run.isEmpty { runStart = offset }
+                if run.isEmpty {
+                    runStart = offset
+                }
                 run.append(block)
             } else {
                 flush()
                 groups.append(.other(IdentifiedMarkup(
-                    id: IdentifiedMarkup.stableID(for: block, fallbackIndex: offset), markup: block)))
+                    id: IdentifiedMarkup.stableID(for: block, fallbackIndex: offset), markup: block
+                )))
             }
         }
         flush()
@@ -79,7 +82,9 @@ struct ArticleDocument {
     /// via the SwiftUI block views instead, which lay the image out as a figure.
     /// Code blocks, tables, and thematic breaks are likewise never foldable.
     private static func isFoldable(_ block: Markup) -> Bool {
-        if block is Heading { return true }
+        if block is Heading {
+            return true
+        }
         if let paragraph = block as? Paragraph {
             return !paragraph.children.contains { standaloneImage($0) != nil }
         }
@@ -93,14 +98,18 @@ struct ArticleDocument {
     /// a text run only when image-free, since `MarkdownTextRun` would otherwise
     /// flatten the image to alt text.
     private static func containsImage(_ markup: Markup) -> Bool {
-        if markup is Markdown.Image { return true }
+        if markup is Markdown.Image {
+            return true
+        }
         return markup.children.contains { containsImage($0) }
     }
 
     /// Mirrors `ParagraphView.standaloneImage`: a bare image, or a link wrapping
     /// a single image. Such paragraphs render as figures, not text.
     private static func standaloneImage(_ markup: Markup) -> Markdown.Image? {
-        if let image = markup as? Markdown.Image { return image }
+        if let image = markup as? Markdown.Image {
+            return image
+        }
         if let link = markup as? Markdown.Link {
             let children = Array(link.children)
             let images = children.compactMap { $0 as? Markdown.Image }
@@ -110,7 +119,9 @@ struct ArticleDocument {
                 }
                 return true
             }
-            if images.count == 1, meaningful.count == 1 { return images.first }
+            if images.count == 1, meaningful.count == 1 {
+                return images.first
+            }
         }
         return nil
     }
@@ -124,7 +135,8 @@ struct ArticleDocument {
     private static func unwrapLinkedImages(_ markdown: String) -> String {
         let pattern = #"\[\s*(!\[[^\]]*\]\([^)]*\))\s*\]\([^)]*\)"#
         return markdown.replacingOccurrences(
-            of: pattern, with: "$1", options: .regularExpression)
+            of: pattern, with: "$1", options: .regularExpression
+        )
     }
 }
 
@@ -172,7 +184,8 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
          font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
          highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
          @ViewBuilder header: @escaping () -> Header = { EmptyView() },
-         @ViewBuilder footer: @escaping () -> Footer = { EmptyView() }) {
+         @ViewBuilder footer: @escaping () -> Footer = { EmptyView() })
+    {
         self.document = document
         self.libraryURL = libraryURL
         self.font = font
@@ -194,14 +207,14 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
                 LazyVStack(alignment: .leading, spacing: theme.blockSpacing) {
                     ForEach(document.groups) { group in
                         switch group {
-                        case .textRun(_, let blocks):
+                        case let .textRun(_, blocks):
                             SelectableTextView(
                                 attributed: MarkdownTextRun.attributed(blocks, theme: theme),
                                 highlights: highlights,
                                 onHighlight: onHighlight
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        case .other(let item):
+                        case let .other(item):
                             MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
                                               highlights: highlights, onHighlight: onHighlight)
                         }

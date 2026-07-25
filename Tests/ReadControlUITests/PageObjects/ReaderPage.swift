@@ -9,9 +9,17 @@ struct ReaderPage {
 
     // ── Header ────────────────────────────────────────────────────────────
 
-    var title: XCUIElement { app.byId(A11y.Detail.title) }
-    var tags: XCUIElement { app.byId(A11y.Detail.tags) }
-    var emptyState: XCUIElement { app.byId(A11y.Detail.empty) }
+    var title: XCUIElement {
+        app.byId(A11y.Detail.title)
+    }
+
+    var tags: XCUIElement {
+        app.byId(A11y.Detail.tags)
+    }
+
+    var emptyState: XCUIElement {
+        app.byId(A11y.Detail.empty)
+    }
 
     /// The header's tag-chips text ("#a #b …"), or "" when the article has no tags
     /// (the label is hidden). SwiftUI carries this Text's string in the element's
@@ -21,13 +29,21 @@ struct ReaderPage {
     /// two, then fall back to the any-type match.
     var tagsText: String {
         for element in app.staticTexts.matching(identifier: A11y.Detail.tags).allElementsBoundByIndex {
-            if !element.label.isEmpty { return element.label }
-            if let value = element.value as? String, !value.isEmpty { return value }
+            if !element.label.isEmpty {
+                return element.label
+            }
+            if let value = element.value as? String, !value.isEmpty {
+                return value
+            }
         }
         let any = tags
         if any.exists {
-            if !any.label.isEmpty { return any.label }
-            if let value = any.value as? String, !value.isEmpty { return value }
+            if !any.label.isEmpty {
+                return any.label
+            }
+            if let value = any.value as? String, !value.isEmpty {
+                return value
+            }
         }
         return ""
     }
@@ -48,7 +64,9 @@ struct ReaderPage {
     private func poll(timeout: TimeInterval, until condition: () -> Bool) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if condition() { return true }
+            if condition() {
+                return true
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
@@ -61,7 +79,9 @@ struct ReaderPage {
         let deadline = Date().addingTimeInterval(4)
         repeat {
             let text = app.staticTexts.matching(identifier: A11y.Detail.title).firstMatch
-            if text.exists, !text.label.isEmpty { return text.label }
+            if text.exists, !text.label.isEmpty {
+                return text.label
+            }
             // Every `any` read stays behind `exists`: while the reader loads a
             // freshly-opened article it shows a spinner with no title element, and
             // reading `.value` off an absent element throws a snapshot error rather
@@ -70,8 +90,12 @@ struct ReaderPage {
             // instead of simply polling again.
             let any = title
             if any.exists {
-                if !any.label.isEmpty { return any.label }
-                if let value = any.value as? String, !value.isEmpty { return value }
+                if !any.label.isEmpty {
+                    return any.label
+                }
+                if let value = any.value as? String, !value.isEmpty {
+                    return value
+                }
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
@@ -89,36 +113,52 @@ struct ReaderPage {
         let predicate = NSPredicate(format: "label CONTAINS[c] %@ OR value CONTAINS[c] %@", text, text)
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if app.staticTexts.matching(predicate).firstMatch.exists { return true }
-            if app.textViews.matching(predicate).firstMatch.exists { return true }
+            if app.staticTexts.matching(predicate).firstMatch.exists {
+                return true
+            }
+            if app.textViews.matching(predicate).firstMatch.exists {
+                return true
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         } while Date() < deadline
         return false
     }
 
     /// Whether any image is present in the reader (the kitchen-sink asset).
-    var hasImage: Bool { app.images.firstMatch.exists }
+    var hasImage: Bool {
+        app.images.firstMatch.exists
+    }
 
     // ── Image zoom lightbox ───────────────────────────────────────────────────
 
     /// The first tappable figure in the reader body.
-    var figure: XCUIElement { app.byId(A11y.Reader.figure) }
-    var lightboxImage: XCUIElement { app.byId(A11y.Lightbox.image) }
-    var lightboxClose: XCUIElement { app.byId(A11y.Lightbox.close) }
+    var figure: XCUIElement {
+        app.byId(A11y.Reader.figure)
+    }
+
+    var lightboxImage: XCUIElement {
+        app.byId(A11y.Lightbox.image)
+    }
+
+    var lightboxClose: XCUIElement {
+        app.byId(A11y.Lightbox.close)
+    }
 
     /// Scroll the reader until the figure renders (the body lazily builds blocks,
     /// so an image near the end isn't in the tree until scrolled toward).
     @discardableResult
     func revealFigure(timeout: TimeInterval = 10) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        while !figure.exists && Date() < deadline {
+        while !figure.exists, Date() < deadline {
             let scrollViews = app.scrollViews.allElementsBoundByIndex
             if scrollViews.isEmpty {
                 app.swipeUp()
             } else {
                 for scrollView in scrollViews where scrollView.exists {
                     scrollView.swipeUp()
-                    if figure.exists { break }
+                    if figure.exists {
+                        break
+                    }
                 }
             }
         }
@@ -126,27 +166,59 @@ struct ReaderPage {
     }
 
     /// Click the figure to open the zoom lightbox.
-    func openImageZoom() { figure.clickWhenReady() }
+    func openImageZoom() {
+        figure.clickWhenReady()
+    }
 
     // ── Oversize guard ──────────────────────────────────────────────────────
 
-    var oversizeNotice: XCUIElement { app.byId(A11y.Detail.oversize) }
-    var oversizeOpenInBrowserButton: XCUIElement { app.byId(A11y.Detail.oversizeOpenInBrowser) }
+    var oversizeNotice: XCUIElement {
+        app.byId(A11y.Detail.oversize)
+    }
+
+    var oversizeOpenInBrowserButton: XCUIElement {
+        app.byId(A11y.Detail.oversizeOpenInBrowser)
+    }
 
     // ── Toolbar actions ─────────────────────────────────────────────────────
 
-    func markReadToggle() { app.byId(A11y.Toolbar.markRead).clickWhenReady() }
-    func favoriteToggle() { app.byId(A11y.Toolbar.favorite).clickWhenReady() }
-    func archive() { app.byId(A11y.Toolbar.archive).clickWhenReady() }
-    func unarchive() { app.byId(A11y.Toolbar.unarchive).clickWhenReady() }
-    func openInBrowser() { app.byId(A11y.Toolbar.openInBrowser).clickWhenReady() }
-    func openTagPicker() { app.byId(A11y.Toolbar.tags).clickWhenReady() }
-    func toggleHighlights() { app.byId(A11y.Toolbar.highlights).clickWhenReady() }
-    func delete() { app.byId(A11y.Toolbar.delete).clickWhenReady() }
+    func markReadToggle() {
+        app.byId(A11y.Toolbar.markRead).clickWhenReady()
+    }
+
+    func favoriteToggle() {
+        app.byId(A11y.Toolbar.favorite).clickWhenReady()
+    }
+
+    func archive() {
+        app.byId(A11y.Toolbar.archive).clickWhenReady()
+    }
+
+    func unarchive() {
+        app.byId(A11y.Toolbar.unarchive).clickWhenReady()
+    }
+
+    func openInBrowser() {
+        app.byId(A11y.Toolbar.openInBrowser).clickWhenReady()
+    }
+
+    func openTagPicker() {
+        app.byId(A11y.Toolbar.tags).clickWhenReady()
+    }
+
+    func toggleHighlights() {
+        app.byId(A11y.Toolbar.highlights).clickWhenReady()
+    }
+
+    func delete() {
+        app.byId(A11y.Toolbar.delete).clickWhenReady()
+    }
 
     // ── Rating footer ─────────────────────────────────────────────────────
 
-    func star(_ index: Int) -> XCUIElement { app.byId(A11y.RatingFooter.star(index)) }
+    func star(_ index: Int) -> XCUIElement {
+        app.byId(A11y.RatingFooter.star(index))
+    }
 
     func rate(_ index: Int) {
         scrollToFooter()
@@ -160,14 +232,16 @@ struct ReaderPage {
     func scrollToFooter(timeout: TimeInterval = 10) -> Bool {
         let anchor = star(5)
         let deadline = Date().addingTimeInterval(timeout)
-        while !anchor.exists && Date() < deadline {
+        while !anchor.exists, Date() < deadline {
             let scrollViews = app.scrollViews.allElementsBoundByIndex
             if scrollViews.isEmpty {
                 app.swipeUp()
             } else {
                 for scrollView in scrollViews where scrollView.exists {
                     scrollView.swipeUp()
-                    if anchor.exists { break }
+                    if anchor.exists {
+                        break
+                    }
                 }
             }
         }

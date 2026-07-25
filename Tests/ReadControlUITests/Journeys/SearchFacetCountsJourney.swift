@@ -40,8 +40,8 @@ final class SearchFacetCountsJourney: UITestCase {
                 body: "More pasta, more bread.")
     ]
 
-    // One end-to-end faceting walk; asserting every badge keeps it long.
-    // swiftlint:disable:next function_body_length
+    // swiftlint:disable function_body_length
+    /// One end-to-end faceting walk.
     func testSearchAndFacetScopeSidebarCounts() throws {
         try launchApp(articles: Self.corpus)
 
@@ -105,6 +105,8 @@ final class SearchFacetCountsJourney: UITestCase {
         XCTAssertEqual(sidebar.tagCount("cooking"), 0, "#cooking badge shows 0")
     }
 
+    // swiftlint:enable function_body_length
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     /// A fixture whose id sequence == `index`, so ids (and the default saved-at
@@ -119,7 +121,7 @@ final class SearchFacetCountsJourney: UITestCase {
             id: TestULID.make(index),
             url: "https://example.com/\(index)",
             title: title,
-            savedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index) * 86_400),
+            savedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index) * 86400),
             archived: archived,
             favorite: favorite,
             tags: tags,

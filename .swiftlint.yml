@@ -6,6 +6,14 @@ excluded:
   - GeneratedBindings
   - Frameworks
 
+# SwiftFormat's wrapMultilineStatementBraces rule drops the opening brace onto
+# its own line when a function signature, type header, or statement condition
+# wraps across lines. Accept that placement so the two tools agree.
+opening_brace:
+  ignore_multiline_function_signatures: true
+  ignore_multiline_type_headers: true
+  ignore_multiline_statement_conditions: true
+
 function_body_length:
   warning: 30
   error: 50

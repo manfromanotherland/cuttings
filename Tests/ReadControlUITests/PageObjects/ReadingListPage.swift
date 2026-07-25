@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
 import AppKit
+import XCTest
 
 /// The middle column: the reading list, its rows, sort menu, search, and empty
 /// states.
@@ -26,15 +26,24 @@ struct ReadingListPage {
         static let shortestFirst = "Shortest first"
     }
 
-    var table: XCUIElement { app.byId(A11y.List.table) }
+    var table: XCUIElement {
+        app.byId(A11y.List.table)
+    }
 
     // ── Rows ────────────────────────────────────────────────────────────────
 
-    func row(_ id: String) -> XCUIElement { app.byId(A11y.List.row(id)) }
+    func row(_ id: String) -> XCUIElement {
+        app.byId(A11y.List.row(id))
+    }
 
     /// Selecting a row also opens it in the reader (selection drives the detail).
-    func select(_ id: String) { row(id).clickWhenReady() }
-    func open(_ id: String) { select(id) }
+    func select(_ id: String) {
+        row(id).clickWhenReady()
+    }
+
+    func open(_ id: String) {
+        select(id)
+    }
 
     /// The ids of the currently loaded rows, in list order — for sort-oracle and
     /// membership assertions.
@@ -60,7 +69,9 @@ struct ReadingListPage {
         let probe = app.byId(A11y.List.rows)
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if probe.exists, Int(probe.label) == expected { return true }
+            if probe.exists, Int(probe.label) == expected {
+                return true
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
@@ -77,7 +88,7 @@ struct ReadingListPage {
         // in the app is what makes these tests slow.
         app.staticTexts.matching(identifier: A11y.List.row(id))
             .allElementsBoundByIndex
-            .contains { ((($0.value as? String) ?? "").localizedCaseInsensitiveContains(text)) }
+            .contains { (($0.value as? String) ?? "").localizedCaseInsensitiveContains(text) }
     }
 
     /// Whether row `id` shows the indicator glyph named `label`. The glyphs carry
@@ -106,14 +117,18 @@ struct ReadingListPage {
     // ── Scrolling ───────────────────────────────────────────────────────────
 
     /// Scroll the list down (loads the next page for large corpora).
-    func scrollDown() { table.swipeUp() }
+    func scrollDown() {
+        table.swipeUp()
+    }
 
     /// Scroll until row `id` exists (or the timeout elapses).
     @discardableResult
     func scrollToRow(_ id: String, timeout: TimeInterval = 8) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while !row(id).exists {
-            if Date() >= deadline { return false }
+            if Date() >= deadline {
+                return false
+            }
             scrollDown()
         }
         return true
@@ -123,7 +138,9 @@ struct ReadingListPage {
     // The `.searchable` field is a system NSSearchField (no custom identifier),
     // so it's reached through the search-field element type.
 
-    var searchField: XCUIElement { app.searchFields.firstMatch }
+    var searchField: XCUIElement {
+        app.searchFields.firstMatch
+    }
 
     /// Clears the field and types `text`, verifying the field's value and retrying
     /// once. Search is debounced with a live list reload, so a keystroke can be
@@ -132,10 +149,12 @@ struct ReadingListPage {
     func search(_ text: String) {
         let field = searchField
         field.clickWhenReady()
-        for _ in 0..<2 {
+        for _ in 0 ..< 2 {
             clearField(field)
             field.typeText(text)
-            if (field.value as? String) == text { return }
+            if (field.value as? String) == text {
+                return
+            }
         }
     }
 
@@ -167,9 +186,13 @@ struct ReadingListPage {
 
     /// The sort menu button. Only present when the list has rows — it's hidden
     /// for every empty state (see `ReadingListView.toolbarItems`).
-    var sortMenu: XCUIElement { app.byId(A11y.List.sortMenu) }
+    var sortMenu: XCUIElement {
+        app.byId(A11y.List.sortMenu)
+    }
 
-    func openSortMenu() { sortMenu.clickWhenReady() }
+    func openSortMenu() {
+        sortMenu.clickWhenReady()
+    }
 
     /// Pick a sort field (see `Sort`). Opens the menu, clicks the field, and the
     /// menu closes.
@@ -186,9 +209,17 @@ struct ReadingListPage {
 
     // ── Empty states ────────────────────────────────────────────────────────
 
-    var emptyState: XCUIElement { app.byId(A11y.List.emptyState) }
-    var searchEmptyState: XCUIElement { app.byId(A11y.List.searchEmptyState) }
-    var tagEmptyState: XCUIElement { app.byId(A11y.List.tagEmptyState) }
+    var emptyState: XCUIElement {
+        app.byId(A11y.List.emptyState)
+    }
+
+    var searchEmptyState: XCUIElement {
+        app.byId(A11y.List.searchEmptyState)
+    }
+
+    var tagEmptyState: XCUIElement {
+        app.byId(A11y.List.tagEmptyState)
+    }
 
     /// The "Clear tag filter" action in the tag-empty state. `ContentUnavailableView`
     /// surfaces the outer view's `accessibilityIdentifier` but not its action
@@ -199,10 +230,17 @@ struct ReadingListPage {
         return identified.exists ? identified : app.buttons["Clear tag filter"]
     }
 
-    func clearTagFilter() { clearTagFilterButton.clickWhenReady() }
+    func clearTagFilter() {
+        clearTagFilterButton.clickWhenReady()
+    }
 
     // ── Delete confirmation ───────────────────────────────────────────────
 
-    func confirmDelete() { app.tapDialogButton("Delete") }
-    func cancelDelete() { app.tapDialogButton("Cancel") }
+    func confirmDelete() {
+        app.tapDialogButton("Delete")
+    }
+
+    func cancelDelete() {
+        app.tapDialogButton("Cancel")
+    }
 }

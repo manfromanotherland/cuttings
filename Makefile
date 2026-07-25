@@ -9,7 +9,7 @@ CORE_DIR := ../readcontrol-core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
 
-.PHONY: all xcframework bindings xcodegen test dmg clean
+.PHONY: all xcframework bindings xcodegen test dmg clean format format-check lint lint-fix
 
 all: xcframework bindings xcodegen
 
@@ -41,6 +41,24 @@ test:
 ## Ad-hoc signed only — see scripts/package-dmg.sh. Assumes `make all` has run.
 dmg: all
 	./scripts/package-dmg.sh
+
+## Reformat Swift sources in place (config: .swiftformat). Run this before `lint`;
+## SwiftFormat is configured to agree with SwiftLint, so it won't create new
+## SwiftLint violations.
+format:
+	swiftformat .
+
+## Verify formatting without editing — fails if anything is unformatted (CI/hooks).
+format-check:
+	swiftformat --lint .
+
+## Lint Swift sources with SwiftLint (config: .swiftlint.yml).
+lint:
+	swiftlint lint
+
+## Auto-fix the SwiftLint violations that are safe to correct in place.
+lint-fix:
+	swiftlint --fix
 
 clean:
 	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadControl.xcodeproj build dist

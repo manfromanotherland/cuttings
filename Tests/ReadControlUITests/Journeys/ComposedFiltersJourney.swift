@@ -31,8 +31,8 @@ final class ComposedFiltersJourney: UITestCase {
         article(4, "Echo", tags: ["swift"], rating: 0, read: false)
     ]
 
-    // One end-to-end cross-filter walk; asserting every beat keeps it long.
-    // swiftlint:disable:next function_body_length
+    // swiftlint:disable function_body_length
+    /// One end-to-end cross-filter walk.
     func testViewRatingAndTagCompose() throws {
         // Pin the sort so intersections list deterministically (not asserted here,
         // but keeps the run stable).
@@ -93,6 +93,8 @@ final class ComposedFiltersJourney: UITestCase {
         XCTAssertTrue(list.waitForRowCount(5), "All stays at 5")
     }
 
+    // swiftlint:enable function_body_length
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private static func article(
@@ -103,7 +105,7 @@ final class ComposedFiltersJourney: UITestCase {
             id: TestULID.make(index),
             url: "https://example.com/\(index)",
             title: title,
-            savedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index) * 86_400),
+            savedAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index) * 86400),
             tags: tags,
             readAt: read ? Date(timeIntervalSince1970: 1_710_000_000) : nil,
             rating: rating,

@@ -22,7 +22,7 @@ final class TextEditingMonitor {
     /// `nonisolated(unsafe)` so the `nonisolated deinit` can read them to tear
     /// down: they're only written on the main actor (in `init`) and read once at
     /// deinit, which has exclusive access — so there's no actual race to guard.
-    nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
+    private nonisolated(unsafe) var observers: [NSObjectProtocol] = []
 
     init(onChange: @escaping (Bool) -> Void) {
         self.onChange = onChange

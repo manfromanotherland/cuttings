@@ -21,19 +21,27 @@ enum TestHooks {
     }
 
     /// Library folder to boot against, replacing the persisted bookmark.
-    static var libraryPath: String? { env("READCONTROL_TEST_LIBRARY") }
+    static var libraryPath: String? {
+        env("READCONTROL_TEST_LIBRARY")
+    }
 
     /// Index-DB path, kept out of the real `Application Support` directory.
-    static var dbPath: String? { env("READCONTROL_TEST_DB") }
+    static var dbPath: String? {
+        env("READCONTROL_TEST_DB")
+    }
 
     /// Folder the onboarding "Choose Library…" flow should pick directly,
     /// instead of showing an `NSOpenPanel` (which XCUITest can't drive).
-    static var onboardingPickPath: String? { env("READCONTROL_TEST_ONBOARDING_PICK") }
+    static var onboardingPickPath: String? {
+        env("READCONTROL_TEST_ONBOARDING_PICK")
+    }
 
     /// Throwaway `UserDefaults` suite name for persisted preferences, so a test
     /// that changes theme/font/size/sort never touches the real defaults domain
     /// (see `AppDefaults`). `nil` in production. The harness destroys the suite.
-    static var defaultsSuiteName: String? { env("READCONTROL_TEST_DEFAULTS") }
+    static var defaultsSuiteName: String? {
+        env("READCONTROL_TEST_DEFAULTS")
+    }
 
     /// Reads an environment variable, but only in UI-testing mode, so a
     /// production build can never be redirected by a stray variable.

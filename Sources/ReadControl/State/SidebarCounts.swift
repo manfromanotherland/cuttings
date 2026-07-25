@@ -44,14 +44,22 @@ struct SidebarCounts {
         tag selectedTag: String?, rating selectedRating: UInt8?
     ) {
         func matchesCross(_ row: ReadingRow) -> Bool {
-            if let selectedTag, !row.tags.contains(selectedTag) { return false }
-            if let selectedRating, row.rating != selectedRating { return false }
+            if let selectedTag, !row.tags.contains(selectedTag) {
+                return false
+            }
+            if let selectedRating, row.rating != selectedRating {
+                return false
+            }
             return true
         }
         for item in SidebarItem.allCases {
-            func inView(_ row: ReadingRow) -> Bool { matchesCross(row) && item.contains(row) }
+            func inView(_ row: ReadingRow) -> Bool {
+                matchesCross(row) && item.contains(row)
+            }
             let delta = (inView(new) ? 1 : 0) - (inView(old) ? 1 : 0)
-            if delta != 0 { viewCounts[item] = max(0, (viewCounts[item] ?? 0) + delta) }
+            if delta != 0 {
+                viewCounts[item] = max(0, (viewCounts[item] ?? 0) + delta)
+            }
         }
     }
 }

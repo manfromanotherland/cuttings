@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 /// Shown instead of the reader when a reading's body is too large to parse (see
 /// `ArticleDetailView.maxParseBytes` / `maxParseWords`). The full text is still

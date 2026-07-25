@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Foundation
-import SwiftUI
 import AppKit
+import Foundation
 import Observation
+import SwiftUI
 
 // The behavior lives in sibling extension files in this folder, one per
 // concern: Library.swift (onboarding, boot, sync), Readings.swift (list
@@ -17,7 +17,8 @@ final class AppState {
         static let field = "sortField"
         static let ascending = "sortAscending"
     }
-    // ── Navigation state ──────────────────────────────────────────────────
+
+    /// ── Navigation state ──────────────────────────────────────────────────
     var libraryURL: URL?
 
     /// True from launch until the first boot from a persisted bookmark settles.
@@ -156,7 +157,8 @@ final class AppState {
     func focusSearchField() {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
         if let item = window.toolbar?.items
-            .compactMap({ $0 as? NSSearchToolbarItem }).first {
+            .compactMap({ $0 as? NSSearchToolbarItem }).first
+        {
             item.beginSearchInteraction()
             return
         }
@@ -166,9 +168,13 @@ final class AppState {
     }
 
     private static func firstSearchField(in view: NSView) -> NSSearchField? {
-        if let field = view as? NSSearchField { return field }
+        if let field = view as? NSSearchField {
+            return field
+        }
         for subview in view.subviews {
-            if let field = firstSearchField(in: subview) { return field }
+            if let field = firstSearchField(in: subview) {
+                return field
+            }
         }
         return nil
     }

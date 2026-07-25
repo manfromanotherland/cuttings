@@ -7,7 +7,6 @@ import XCTest
 /// sidebar counts. These tests pin each of the five views to its membership rule
 /// so the mirror can't silently drift from the core.
 final class SidebarItemContainsTests: XCTestCase {
-
     // All: every non-archived reading, regardless of read or favorite.
     func testAllHoldsNonArchivedAndExcludesArchived() {
         XCTAssertTrue(SidebarItem.all.contains(makeReadingRow(archived: false)))

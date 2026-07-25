@@ -61,10 +61,18 @@ enum AppLauncher {
         app.launchArguments = arguments
 
         var environment = options.environment
-        if let libraryPath = options.libraryPath { environment["READCONTROL_TEST_LIBRARY"] = libraryPath }
-        if let dbPath = options.dbPath { environment["READCONTROL_TEST_DB"] = dbPath }
-        if let pick = options.onboardingPickPath { environment["READCONTROL_TEST_ONBOARDING_PICK"] = pick }
-        if let suite = options.defaultsSuite { environment["READCONTROL_TEST_DEFAULTS"] = suite }
+        if let libraryPath = options.libraryPath {
+            environment["READCONTROL_TEST_LIBRARY"] = libraryPath
+        }
+        if let dbPath = options.dbPath {
+            environment["READCONTROL_TEST_DB"] = dbPath
+        }
+        if let pick = options.onboardingPickPath {
+            environment["READCONTROL_TEST_ONBOARDING_PICK"] = pick
+        }
+        if let suite = options.defaultsSuite {
+            environment["READCONTROL_TEST_DEFAULTS"] = suite
+        }
         app.launchEnvironment = environment
 
         app.launch()

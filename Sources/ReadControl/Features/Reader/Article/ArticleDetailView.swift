@@ -87,7 +87,11 @@ struct ArticleDetailView: View {
                     applied: row.tags,
                     allTags: appState.sidebar.tags.map(\.tag),
                     onToggle: { tag, shouldApply in
-                        if shouldApply { addTag(tag, to: row.id) } else { removeTag(tag, from: row.id) }
+                        if shouldApply {
+                            addTag(tag, to: row.id)
+                        } else {
+                            removeTag(tag, from: row.id)
+                        }
                     }
                 )
             }

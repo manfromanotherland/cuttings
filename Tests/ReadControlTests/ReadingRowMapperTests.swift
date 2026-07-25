@@ -6,7 +6,6 @@ import XCTest
 /// DTO to the presentation snapshot. These tests pin that every field carries
 /// across intact, that optionals preserve nil, and that equality tracks fields.
 final class ReadingRowMapperTests: XCTestCase {
-
     /// An FFI row with a distinct value in every field, so a miswired assignment
     /// (say `url` ← `canonicalUrl`) surfaces as a mismatch.
     private func sampleFfiRow() -> FfiReadingRow {

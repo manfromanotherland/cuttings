@@ -6,10 +6,19 @@ import XCTest
 struct ShortcutsSheetPage {
     let app: XCUIApplication
 
-    var sheet: XCUIElement { app.byId(A11y.Shortcuts.sheet) }
-    var doneButton: XCUIElement { app.byId(A11y.Shortcuts.done) }
+    var sheet: XCUIElement {
+        app.byId(A11y.Shortcuts.sheet)
+    }
 
-    var isVisible: Bool { sheet.exists }
+    var doneButton: XCUIElement {
+        app.byId(A11y.Shortcuts.done)
+    }
 
-    func done() { doneButton.clickWhenReady() }
+    var isVisible: Bool {
+        sheet.exists
+    }
+
+    func done() {
+        doneButton.clickWhenReady()
+    }
 }

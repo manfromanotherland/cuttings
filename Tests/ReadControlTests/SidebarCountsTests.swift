@@ -7,7 +7,6 @@ import XCTest
 /// into those badges between recounts, faceted by the active tag/rating. These
 /// tests pin both against the core's rules (`list.rs`).
 final class SidebarCountsTests: XCTestCase {
-
     func testSetViewCountsAdoptsAllFiveViews() {
         var counts = SidebarCounts()
         counts.setViewCounts(ViewCounts(all: 10, unread: 4, read: 6, archive: 3, favorites: 2))
@@ -18,8 +17,8 @@ final class SidebarCountsTests: XCTestCase {
         XCTAssertEqual(counts.viewCounts[.favorites], 2)
     }
 
-    // Marking a non-archived row read moves it from Unread to Read; All (still
-    // non-archived) and the others are untouched.
+    /// Marking a non-archived row read moves it from Unread to Read; All (still
+    /// non-archived) and the others are untouched.
     func testApplyDeltaMovesRowFromUnreadToRead() {
         var counts = SidebarCounts()
         counts.setViewCounts(ViewCounts(all: 5, unread: 3, read: 2, archive: 0, favorites: 1))
@@ -33,12 +32,12 @@ final class SidebarCountsTests: XCTestCase {
         XCTAssertEqual(counts.viewCounts[.favorites], 1)
     }
 
-    // Faceted rule: with a #rust filter active, a row that lacks the tag is
-    // outside the counted scope, so its read-toggle moves no badge.
+    /// Faceted rule: with a #rust filter active, a row that lacks the tag is
+    /// outside the counted scope, so its read-toggle moves no badge.
     func testApplyDeltaIsGatedBySelectedTag() {
         var counts = SidebarCounts()
         counts.setViewCounts(ViewCounts(all: 5, unread: 3, read: 2, archive: 0, favorites: 0))
-        let old = makeReadingRow(read: false, archived: false)  // no tags
+        let old = makeReadingRow(read: false, archived: false) // no tags
         var updated = old
         updated.read = true
         counts.applyDelta(from: old, to: updated, tag: "rust", rating: nil)
@@ -46,7 +45,7 @@ final class SidebarCountsTests: XCTestCase {
         XCTAssertEqual(counts.viewCounts[.read], 2)
     }
 
-    // The same edit on a row that *does* carry the selected tag folds normally.
+    /// The same edit on a row that *does* carry the selected tag folds normally.
     func testApplyDeltaAppliesWhenRowMatchesSelectedTag() {
         var counts = SidebarCounts()
         counts.setViewCounts(ViewCounts(all: 5, unread: 3, read: 2, archive: 0, favorites: 0))

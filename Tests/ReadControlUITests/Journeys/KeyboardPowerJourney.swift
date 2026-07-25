@@ -123,11 +123,13 @@ final class KeyboardPowerJourney: UITestCase {
         // Clear → type → verify, mirroring the proven `ReadingListPage.search`
         // retry: the first typed attempt into the just-focused field loses a
         // keystroke, the second (warmed-up) one lands whole.
-        for _ in 0..<3 {
+        for _ in 0 ..< 3 {
             field.typeKey("a", modifierFlags: .command)
             field.typeKey(.delete, modifierFlags: [])
             app.typeText(text)
-            if (field.value as? String) == text { return }
+            if (field.value as? String) == text {
+                return
+            }
         }
     }
 

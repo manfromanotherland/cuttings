@@ -26,7 +26,7 @@ struct RatingFooter: View {
 
     private var ratingControl: some View {
         HStack(spacing: 4) {
-            ForEach(1...5, id: \.self) { star in
+            ForEach(1 ... 5, id: \.self) { star in
                 Button {
                     // Clicking the current rating clears it back to unrated.
                     let target = UInt8(star)

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
-import SwiftUI
 import Markdown
+import SwiftUI
 
 /// Coalesces a run of contiguous *text* blocks — headings, text-only
 /// paragraphs, lists, and block quotes — into a single `NSAttributedString` so
@@ -13,7 +13,6 @@ import Markdown
 /// has no per-block SwiftUI modifiers. Quote bars are drawn by
 /// `ReaderLayoutManager` from the `.quoteBar` attribute this builder attaches.
 enum MarkdownTextRun {
-
     /// One laid-out paragraph: its text (without a trailing newline) and the
     /// paragraph style to apply over it. `spacingBefore` is the gap from the
     /// previous paragraph; the caller fixes the run's very first paragraph.
@@ -53,7 +52,9 @@ enum MarkdownTextRun {
             out.append(para.content)
             // Terminate every paragraph but the last; the newline belongs to the
             // current paragraph's range so its style covers the terminator.
-            if index < paras.count - 1 { out.append(NSAttributedString(string: "\n")) }
+            if index < paras.count - 1 {
+                out.append(NSAttributedString(string: "\n"))
+            }
             para.style.paragraphSpacingBefore = para.spacingBefore
             out.addAttribute(.paragraphStyle, value: para.style,
                              range: NSRange(location: start, length: out.length - start))
@@ -92,18 +93,22 @@ enum MarkdownTextRun {
     /// Emit a sequence of sibling blocks, setting the gap before each (the first
     /// keeps 0 so the parent decides its leading gap).
     private static func emitSequence(_ blocks: [Markup], theme: MarkdownTheme,
-                                     ctx: Ctx, innerGap: CGFloat) -> [Para] {
+                                     ctx: Ctx, innerGap: CGFloat) -> [Para]
+    {
         var result: [Para] = []
         for (index, block) in blocks.enumerated() {
             var paras = emit(block, theme: theme, ctx: ctx)
-            if index > 0, !paras.isEmpty { paras[0].spacingBefore = innerGap }
+            if index > 0, !paras.isEmpty {
+                paras[0].spacingBefore = innerGap
+            }
             result.append(contentsOf: paras)
         }
         return result
     }
 
     private static func emitList(_ items: [ListItem], ordered: Bool, start: Int,
-                                 theme: MarkdownTheme, ctx: Ctx) -> [Para] {
+                                 theme: MarkdownTheme, ctx: Ctx) -> [Para]
+    {
         let markerWidth = theme.listMarkerWidth(ordered: ordered)
         let bodyIndent = ctx.indent + markerWidth + theme.listMarkerGap
 
@@ -115,12 +120,12 @@ enum MarkdownTextRun {
         for (index, item) in items.enumerated() {
             var itemParas = emitSequence(item.blockChildren.map { $0 as Markup }, theme: theme,
                                          ctx: childCtx, innerGap: theme.blockSpacing * 0.5)
-            if itemParas.isEmpty { itemParas = [textPlaceholder(ctx: childCtx, theme: theme)] }
+            if itemParas.isEmpty {
+                itemParas = [textPlaceholder(ctx: childCtx, theme: theme)]
+            }
 
-            // Prepend the marker to the item's first paragraph and switch that
-            // paragraph to a hanging-indent style: a right tab right-aligns the
-            // marker in its column, a left tab starts the text at `bodyIndent`,
-            // and `headIndent` keeps wrapped lines under the text.
+            // Prepend the marker to the item's first paragraph, then give that
+            // paragraph a hanging-indent style.
             let marker = markerString(ordered: ordered, number: start + index,
                                       item: item, depth: ctx.listDepth, theme: theme)
             let line = NSMutableAttributedString(string: "\t")
@@ -130,19 +135,27 @@ enum MarkdownTextRun {
             applyBars(line, ctx.bars)
             itemParas[0].content = line
 
-            let style = itemParas[0].style
-            style.firstLineHeadIndent = ctx.indent
-            style.headIndent = bodyIndent
-            style.tabStops = [
-                NSTextTab(textAlignment: .right, location: ctx.indent + markerWidth, options: [:]),
-                NSTextTab(textAlignment: .left, location: bodyIndent, options: [:])
-            ]
-            style.defaultTabInterval = bodyIndent
+            applyHangingIndent(itemParas[0].style, ctx: ctx, markerWidth: markerWidth, bodyIndent: bodyIndent)
 
             itemParas[0].spacingBefore = index == 0 ? 0 : theme.listItemSpacing
             result.append(contentsOf: itemParas)
         }
         return result
+    }
+
+    /// Give a list item's first paragraph a hanging indent: a right tab
+    /// right-aligns the marker in its column, a left tab starts the text at
+    /// `bodyIndent`, and `headIndent` keeps wrapped lines under the text.
+    private static func applyHangingIndent(_ style: NSMutableParagraphStyle, ctx: Ctx,
+                                           markerWidth: CGFloat, bodyIndent: CGFloat)
+    {
+        style.firstLineHeadIndent = ctx.indent
+        style.headIndent = bodyIndent
+        style.tabStops = [
+            NSTextTab(textAlignment: .right, location: ctx.indent + markerWidth, options: [:]),
+            NSTextTab(textAlignment: .left, location: bodyIndent, options: [:])
+        ]
+        style.defaultTabInterval = bodyIndent
     }
 
     // ── Leaf paragraphs ────────────────────────────────────────────────────────
@@ -168,7 +181,8 @@ enum MarkdownTextRun {
                 string: InlineRenderer.plainText(heading).uppercased(),
                 attributes: [.font: font,
                              .foregroundColor: NSColor.secondaryLabelColor,
-                             .kern: theme.headingTracking(level)])
+                             .kern: theme.headingTracking(level)]
+            )
         } else {
             content = NSMutableAttributedString(attributedString:
                 AppKitInline.attributed(heading, size: theme.headingSize(level),
@@ -203,7 +217,8 @@ enum MarkdownTextRun {
     }
 
     private static func markerString(ordered: Bool, number: Int, item: ListItem,
-                                     depth: Int, theme: MarkdownTheme) -> NSAttributedString {
+                                     depth: Int, theme: MarkdownTheme) -> NSAttributedString
+    {
         if let checkbox = item.checkbox {
             let checked = checkbox == .checked
             let font = AppKitInline.makeFont(size: theme.bodySize, weight: .regular,

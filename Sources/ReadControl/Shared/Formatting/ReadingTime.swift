@@ -16,7 +16,9 @@ extension ReadingRow {
         guard minutes >= 60 else { return "\(minutes) min read" }
         let hours = minutes / 60
         let remaining = minutes % 60
-        if remaining == 0 { return "\(hours) hr read" }
+        if remaining == 0 {
+            return "\(hours) hr read"
+        }
         return "\(hours) hr \(remaining) min read"
     }
 }

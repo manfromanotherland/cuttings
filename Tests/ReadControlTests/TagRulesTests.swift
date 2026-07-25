@@ -7,7 +7,6 @@ import XCTest
 /// and its inclusive boundary, and confirm the length is counted in Unicode
 /// scalar values (matching the core) rather than UTF-8 bytes.
 final class TagRulesTests: XCTestCase {
-
     func testLimitMatchesTheCore() {
         XCTAssertEqual(TagRules.maxLength, 20)
     }
@@ -17,7 +16,7 @@ final class TagRulesTests: XCTestCase {
         XCTAssertTrue(TagRules.isWithinLength("rust"))
     }
 
-    // The boundary is inclusive: exactly maxLength fits, one past it does not.
+    /// The boundary is inclusive: exactly maxLength fits, one past it does not.
     func testBoundaryIsInclusive() {
         let atLimit = String(repeating: "a", count: TagRules.maxLength)
         let overLimit = String(repeating: "a", count: TagRules.maxLength + 1)
@@ -25,8 +24,8 @@ final class TagRulesTests: XCTestCase {
         XCTAssertFalse(TagRules.isWithinLength(overLimit))
     }
 
-    // "é" is one scalar but two UTF-8 bytes; 25 of them is 50 bytes yet still 25
-    // characters, so it must fit — the limit counts scalars, not bytes.
+    /// "é" is one scalar but two UTF-8 bytes; 25 of them is 50 bytes yet still 25
+    /// characters, so it must fit — the limit counts scalars, not bytes.
     func testCountsScalarsNotBytes() {
         let multibyte = String(repeating: "é", count: TagRules.maxLength)
         XCTAssertEqual(multibyte.utf8.count, TagRules.maxLength * 2)

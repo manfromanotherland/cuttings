@@ -27,7 +27,8 @@ enum AssetImageLoader {
     static func localURL(source: String, libraryURL: URL?) -> URL? {
         guard let libraryURL else { return nil }
         if let scheme = URL(string: source)?.scheme?.lowercased(),
-           scheme == "http" || scheme == "https" {
+           scheme == "http" || scheme == "https"
+        {
             return nil
         }
         var path = source
@@ -44,7 +45,7 @@ enum AssetImageLoader {
     /// device pixels, using ImageIO so the full-resolution bitmap is never
     /// materialized. Smaller source images are left as-is (no upscaling).
     /// Returns `nil` if the file can't be read or decoded.
-    static nonisolated func downsampledImage(at url: URL, maxPixel: CGFloat) -> Decoded? {
+    nonisolated static func downsampledImage(at url: URL, maxPixel: CGFloat) -> Decoded? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             return nil
         }

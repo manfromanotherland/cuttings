@@ -46,7 +46,9 @@ struct Frontmatter {
             parsed[key] = value
             // An empty value may head a block sequence (the core writes tags this
             // way after an edit); the inline `[...]` form keeps a non-empty value.
-            if value.isEmpty { currentListKey = key }
+            if value.isEmpty {
+                currentListKey = key
+            }
         }
         fields = parsed
         listFields = lists
@@ -55,16 +57,27 @@ struct Frontmatter {
     // ── Accessors ─────────────────────────────────────────────────────────
 
     /// The `read_at` timestamp, or nil when the field is absent (unread).
-    var readAt: String? { fields["read_at"].map(Self.unquote) }
+    var readAt: String? {
+        fields["read_at"].map(Self.unquote)
+    }
 
     /// Whether the reading is read (presence of `read_at`).
-    var isRead: Bool { fields["read_at"] != nil }
+    var isRead: Bool {
+        fields["read_at"] != nil
+    }
 
-    var archived: Bool { fields["archived"] == "true" }
-    var favorite: Bool { fields["favorite"] == "true" }
+    var archived: Bool {
+        fields["archived"] == "true"
+    }
+
+    var favorite: Bool {
+        fields["favorite"] == "true"
+    }
 
     /// Star rating; a missing field means 0 (unrated).
-    var rating: Int { Int(fields["rating"] ?? "0") ?? 0 }
+    var rating: Int {
+        Int(fields["rating"] ?? "0") ?? 0
+    }
 
     /// Tags, from either the block-sequence form the core writes on edit
     /// (`tags:` + `- a` / `- b` lines) or the inline flow form `ArticleFixture`
@@ -75,11 +88,15 @@ struct Frontmatter {
         }
         guard let raw = fields["tags"], !raw.isEmpty else { return [] }
         let inner = raw.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-        if inner.trimmingCharacters(in: .whitespaces).isEmpty { return [] }
+        if inner.trimmingCharacters(in: .whitespaces).isEmpty {
+            return []
+        }
         return inner.split(separator: ",").map { Self.unquote($0.trimmingCharacters(in: .whitespaces)) }
     }
 
-    var title: String? { fields["title"].map(Self.unquote) }
+    var title: String? {
+        fields["title"].map(Self.unquote)
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 

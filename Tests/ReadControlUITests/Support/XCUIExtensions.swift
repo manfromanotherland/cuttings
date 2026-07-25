@@ -58,7 +58,9 @@ extension XCUIElement {
     func waitDisappears(_ timeout: TimeInterval = 8) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while exists {
-            if Date() >= deadline { return false }
+            if Date() >= deadline {
+                return false
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
         return true
@@ -69,7 +71,7 @@ extension XCUIElement {
     func clickWhenReady(_ timeout: TimeInterval = 8) {
         XCTAssertTrue(waitForExistence(timeout: timeout), "Element '\(identifier)' never appeared to click.")
         let deadline = Date().addingTimeInterval(timeout)
-        while !isHittable && Date() < deadline {
+        while !isHittable, Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
         click()

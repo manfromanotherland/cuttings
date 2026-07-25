@@ -42,7 +42,9 @@ struct SidebarPage {
         app.byId(A11y.Sidebar.tagTile(tag)).clickWhenReady()
     }
 
-    func tagTile(_ tag: String) -> XCUIElement { app.byId(A11y.Sidebar.tagTile(tag)) }
+    func tagTile(_ tag: String) -> XCUIElement {
+        app.byId(A11y.Sidebar.tagTile(tag))
+    }
 
     func tagCount(_ tag: String) -> Int {
         Self.count(
@@ -62,7 +64,9 @@ struct SidebarPage {
         app.byId(A11y.Sidebar.ratingRow(rating)).clickWhenReady()
     }
 
-    func ratingRow(_ rating: UInt8) -> XCUIElement { app.byId(A11y.Sidebar.ratingRow(rating)) }
+    func ratingRow(_ rating: UInt8) -> XCUIElement {
+        app.byId(A11y.Sidebar.ratingRow(rating))
+    }
 
     /// Reading count in a rating row, parsed from its label ("N stars, M readings").
     func ratingCount(_ rating: UInt8) -> Int {
@@ -89,8 +93,13 @@ struct SidebarPage {
         app.byId(A11y.Sidebar.themeButton(mode)).clickWhenReady()
     }
 
-    var fontPicker: XCUIElement { app.byId(A11y.Sidebar.fontPicker) }
-    var fontSizeSlider: XCUIElement { app.byId(A11y.Sidebar.fontSizeSlider) }
+    var fontPicker: XCUIElement {
+        app.byId(A11y.Sidebar.fontPicker)
+    }
+
+    var fontSizeSlider: XCUIElement {
+        app.byId(A11y.Sidebar.fontSizeSlider)
+    }
 
     /// Set the reader font from the appearance popover's menu picker
     /// (`label` mirrors `ReaderFont.label`: "System" / "Serif" / "Monospace").
@@ -128,7 +137,9 @@ struct SidebarPage {
     /// Dismiss the appearance popover (Escape), e.g. before interacting with the
     /// list again.
     func dismissAppearancePopover() {
-        if fontPicker.exists { app.typeKey(XCUIKeyboardKey.escape, modifierFlags: []) }
+        if fontPicker.exists {
+            app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        }
     }
 
     /// Whether the given theme (`light`/`dark`/`system`) is the active one, read
@@ -139,14 +150,18 @@ struct SidebarPage {
 
     /// The reader-size slider's normalized position (0 = smallest). Requires the
     /// popover to be open; used to assert the size setting live and after relaunch.
-    var fontSizePosition: Double { Double(fontSizeSlider.normalizedSliderPosition) }
+    var fontSizePosition: Double {
+        Double(fontSizeSlider.normalizedSliderPosition)
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private func poll(timeout: TimeInterval, until condition: () -> Bool) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if condition() { return true }
+            if condition() {
+                return true
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         } while Date() < deadline
         return false
@@ -159,8 +174,12 @@ struct SidebarPage {
         guard row.exists else {
             return badge.exists ? (Int(badge.label) ?? 0) : 0
         }
-        if let value = row.value as? String, let number = lastNumber(in: value) { return number }
-        if let number = lastNumber(in: row.label) { return number }
+        if let value = row.value as? String, let number = lastNumber(in: value) {
+            return number
+        }
+        if let number = lastNumber(in: row.label) {
+            return number
+        }
         return badge.exists ? (Int(badge.label) ?? 0) : 0
     }
 
@@ -177,7 +196,9 @@ struct SidebarPage {
                 current = ""
             }
         }
-        if !current.isEmpty { last = Int(current) }
+        if !current.isEmpty {
+            last = Int(current)
+        }
         return last
     }
 }

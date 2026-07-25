@@ -11,7 +11,7 @@ actor CoreBridge {
 
     init(libraryPath: String, dbPath: String) throws {
         self.libraryPath = libraryPath
-        self.database = try Database.open(dbPath: dbPath)
+        database = try Database.open(dbPath: dbPath)
     }
 
     // ── Indexing ──────────────────────────────────────────────────────────

@@ -19,9 +19,17 @@ final class TestLibrary {
     /// in `destroy()`.
     let defaultsSuiteName: String
 
-    var articlesDir: URL { libraryURL.appendingPathComponent("articles", isDirectory: true) }
-    var assetsDir: URL { libraryURL.appendingPathComponent("assets", isDirectory: true) }
-    var highlightsDir: URL { libraryURL.appendingPathComponent("highlights", isDirectory: true) }
+    var articlesDir: URL {
+        libraryURL.appendingPathComponent("articles", isDirectory: true)
+    }
+
+    var assetsDir: URL {
+        libraryURL.appendingPathComponent("assets", isDirectory: true)
+    }
+
+    var highlightsDir: URL {
+        libraryURL.appendingPathComponent("highlights", isDirectory: true)
+    }
 
     init() throws {
         let id = UUID().uuidString
@@ -43,7 +51,9 @@ final class TestLibrary {
     }
 
     func write(_ articles: [ArticleFixture]) throws {
-        for article in articles { try write(article) }
+        for article in articles {
+            try write(article)
+        }
     }
 
     /// Writes arbitrary file contents for `id` — for external-edit and malformed-file tests.

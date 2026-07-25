@@ -27,8 +27,12 @@ enum ComposedFilter {
     /// the smart view and match the selected tag and rating (each optional).
     static func matches(_ row: ReadingRow, view: SidebarItem, tag: String?, rating: UInt8?) -> Bool {
         guard view.contains(row) else { return false }
-        if let tag, !row.tags.contains(tag) { return false }
-        if let rating, row.rating != rating { return false }
+        if let tag, !row.tags.contains(tag) {
+            return false
+        }
+        if let rating, row.rating != rating {
+            return false
+        }
         return true
     }
 
@@ -36,8 +40,12 @@ enum ComposedFilter {
     /// out of the filter): the next row, else the previous, else nothing. Computed
     /// against the list *before* the removal.
     static func selectionAfterRemoving(at index: Int, from readings: [ReadingRow]) -> String? {
-        if index + 1 < readings.count { return readings[index + 1].id }
-        if index > 0 { return readings[index - 1].id }
+        if index + 1 < readings.count {
+            return readings[index + 1].id
+        }
+        if index > 0 {
+            return readings[index - 1].id
+        }
         return nil
     }
 }

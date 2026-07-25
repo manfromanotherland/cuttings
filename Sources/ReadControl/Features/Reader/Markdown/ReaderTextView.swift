@@ -59,7 +59,9 @@ final class ReaderTextView: NSTextView {
     override func setFrameSize(_ newSize: NSSize) {
         let widthChanged = newSize.width != frame.width
         super.setFrameSize(newSize)
-        if widthChanged { invalidateIntrinsicContentSize() }
+        if widthChanged {
+            invalidateIntrinsicContentSize()
+        }
     }
 
     /// Starting an interaction here makes this run the active selection, so clear
@@ -79,7 +81,8 @@ final class ReaderTextView: NSTextView {
     /// "blue line" that lingered between line fragments during a drag and survived
     /// clearing the selection, because a partial invalidation never covered it.
     override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity,
-                                    stillSelecting stillSelectingFlag: Bool) {
+                                    stillSelecting stillSelectingFlag: Bool)
+    {
         super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelectingFlag)
         needsDisplay = true
     }
@@ -90,7 +93,8 @@ final class ReaderTextView: NSTextView {
     static func collapseSelections(in root: NSView, except keep: ReaderTextView? = nil) {
         for subview in root.subviews {
             if let textView = subview as? ReaderTextView,
-               textView !== keep, textView.selectedRange().length > 0 {
+               textView !== keep, textView.selectedRange().length > 0
+            {
                 textView.setSelectedRange(NSRange(location: 0, length: 0))
             }
             collapseSelections(in: subview, except: keep)
@@ -102,8 +106,9 @@ final class ReaderTextView: NSTextView {
     /// selection to a service; reporting no valid send/return types removes the
     /// entry. Copy and the reader's own Highlight / Look Up commands don't go
     /// through the Services architecture, so they are unaffected.
-    override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?,
-                                 returnType: NSPasteboard.PasteboardType?) -> Any? {
+    override func validRequestor(forSendType _: NSPasteboard.PasteboardType?,
+                                 returnType _: NSPasteboard.PasteboardType?) -> Any?
+    {
         nil
     }
 
@@ -113,7 +118,7 @@ final class ReaderTextView: NSTextView {
     /// nothing to act on, so no menu is shown. When the selection exactly matches
     /// an existing highlight the highlight command removes it; otherwise it adds
     /// one.
-    override func menu(for event: NSEvent) -> NSMenu? {
+    override func menu(for _: NSEvent) -> NSMenu? {
         let range = selectedRange()
         guard range.length > 0, let storage = textStorage else { return nil }
         let selected = (storage.string as NSString)
@@ -143,7 +148,7 @@ final class ReaderTextView: NSTextView {
         return menu
     }
 
-    @objc private func highlightSelection(_ sender: Any?) {
+    @objc private func highlightSelection(_: Any?) {
         let range = selectedRange()
         guard range.length > 0, let storage = textStorage else { return }
         let text = (storage.string as NSString).substring(with: range)
@@ -152,7 +157,7 @@ final class ReaderTextView: NSTextView {
 
     /// Show the system Look Up panel (Dictionary, Thesaurus, and Apple's
     /// knowledge sources) for the current selection, anchored at its baseline.
-    @objc private func lookUpSelection(_ sender: Any?) {
+    @objc private func lookUpSelection(_: Any?) {
         let range = selectedRange()
         guard range.length > 0,
               let storage = textStorage,
@@ -217,7 +222,8 @@ final class ReaderLayoutManager: NSLayoutManager {
     /// Fill a rounded tint behind every range carrying `.readerHighlight`. Drawn
     /// in `drawBackground` (before the glyphs) so text stays on top.
     private func drawHighlights(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint,
-                                textStorage: NSTextStorage) {
+                                textStorage: NSTextStorage)
+    {
         guard let container = textContainers.first else { return }
         let charRange = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         highlightColor.setFill()

@@ -31,7 +31,9 @@ final class FolderWatcher: @unchecked Sendable {
     /// so `deinit` never runs, so the stream never tears down, so the retain is
     /// never released. Calling `invalidate()` explicitly breaks that cycle.
     /// `deinit { stop() }` remains as a backstop; `stop()` is idempotent.
-    func invalidate() { stop() }
+    func invalidate() {
+        stop()
+    }
 
     // ── Private ───────────────────────────────────────────────────────────
 
@@ -61,7 +63,7 @@ final class FolderWatcher: @unchecked Sendable {
             nil, callback, &ctx,
             [path] as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            0.5,   // seconds of latency / coalescing
+            0.5, // seconds of latency / coalescing
             flags
         )
         guard let stream else {

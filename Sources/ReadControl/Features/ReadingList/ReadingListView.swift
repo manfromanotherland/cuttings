@@ -38,7 +38,11 @@ struct ReadingListView: View {
             "Delete this reading?",
             isPresented: Binding(
                 get: { appState.pendingDelete != nil },
-                set: { if !$0 { appState.pendingDelete = nil } }
+                set: {
+                    if !$0 {
+                        appState.pendingDelete = nil
+                    }
+                }
             ),
             presenting: appState.pendingDelete
         ) { row in
@@ -84,7 +88,9 @@ struct ReadingListView: View {
         Binding(
             get: { appState.selectedId },
             set: { newValue in
-                if newValue != nil { appState.selectedId = newValue }
+                if newValue != nil {
+                    appState.selectedId = newValue
+                }
             }
         )
     }
@@ -160,7 +166,7 @@ struct ReadingListView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         @Bindable var appState = appState
-        if !appState.readings.isEmpty && !appState.isFocusMode {
+        if !appState.readings.isEmpty, !appState.isFocusMode {
             let searching = !appState.searchQuery.isEmpty
             let effectiveSort = searching ? appState.searchSort : appState.sortField
             ToolbarItem(placement: .primaryAction) {
@@ -239,7 +245,9 @@ struct ReadingListView: View {
         // The view, tag, and rating filters compose, so the title joins whichever
         // are active — e.g. "Unread · #rust · ★★★★" — rather than showing only one.
         var parts = [appState.activeView.label]
-        if let tag = appState.selectedTag { parts.append("#\(tag)") }
+        if let tag = appState.selectedTag {
+            parts.append("#\(tag)")
+        }
         if let rating = appState.selectedRating {
             parts.append(String(repeating: "★", count: Int(rating)))
         }
