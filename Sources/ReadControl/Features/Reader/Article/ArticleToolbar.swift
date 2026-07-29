@@ -12,6 +12,10 @@ struct ArticleToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
+            // A `Spacer` in a macOS toolbar is an expanding flexible space; it
+            // pushes these actions to the trailing edge (far right).
+            Spacer()
+
             Button {
                 // Optimistic via the parent's `currentRow`; on a selection
                 // advance `onChange(selectedId)` reloads the detail — so no

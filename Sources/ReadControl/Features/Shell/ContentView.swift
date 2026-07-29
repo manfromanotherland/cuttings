@@ -27,8 +27,8 @@ struct ContentView: View {
 
     /// Drives the full-screen image-zoom lightbox. Owned here — rather than in
     /// `ArticleDetailView` — so the window toolbar can hide while the lightbox is
-    /// up: the search field, sidebar toggle, and article actions all live in the
-    /// unified title bar, which the lightbox's content-level backdrop can't reach.
+    /// up: the sidebar toggle and article actions live in the unified title bar,
+    /// which the lightbox's content-level backdrop can't reach.
     @State private var imageZoom = ImageZoomPresenter()
 
     var body: some View {
@@ -113,14 +113,10 @@ struct ContentView: View {
         } detail: {
             ArticleDetailView(imageZoom: imageZoom)
         }
-        .searchable(text: $appState.searchQuery, placement: .toolbar, prompt: "Search")
-        .onChange(of: appState.searchQuery) { _, _ in
-            appState.searchDidChange()
-        }
-        // While the lightbox is open, hide the whole window toolbar so the search
-        // field, sidebar toggle, and article actions don't float above its dark
-        // backdrop. That backdrop is a content overlay and can't cover the unified
-        // title bar, so hiding the bar is what keeps the full-screen zoom clean.
+        // While the lightbox is open, hide the whole window toolbar so the sidebar
+        // toggle and article actions don't float above its dark backdrop. That
+        // backdrop is a content overlay and can't cover the unified title bar, so
+        // hiding the bar is what keeps the full-screen zoom clean.
         .toolbar(imageZoom.target == nil ? .automatic : .hidden, for: .windowToolbar)
         .overlay {
             if let err = appState.error {

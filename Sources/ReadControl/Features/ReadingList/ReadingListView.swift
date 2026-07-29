@@ -23,6 +23,9 @@ struct ReadingListView: View {
         // still readable.
         .background { rowsProbe }
         .navigationTitle(appState.isFocusMode ? "" : navigationTitle)
+        .onChange(of: appState.searchQuery) { _, _ in
+            appState.searchDidChange()
+        }
         .task { await appState.loadReadings() }
         .onChange(of: appState.sortField) { _, _ in
             Task { await appState.loadReadings() }
@@ -166,7 +169,17 @@ struct ReadingListView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         @Bindable var appState = appState
-        if !appState.readings.isEmpty, !appState.isFocusMode {
+        // Search + sort take the list column's trailing edge; the reader's actions
+        // claim the far right via the spacer in `ArticleToolbar`.
+        if !appState.isFocusMode {
+            ToolbarItem(placement: .primaryAction) {
+                ListSearchField(text: $appState.searchQuery, prompt: "Search")
+                    .frame(width: 180)
+            }
+        }
+        // Stay visible on a no-results search (empty list, active query); hide only
+        // for a genuinely empty library.
+        if !appState.isFocusMode, !appState.readings.isEmpty || !appState.searchQuery.isEmpty {
             let searching = !appState.searchQuery.isEmpty
             let effectiveSort = searching ? appState.searchSort : appState.sortField
             ToolbarItem(placement: .primaryAction) {

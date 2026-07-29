@@ -135,8 +135,9 @@ struct ReadingListPage {
     }
 
     // ── Search ────────────────────────────────────────────────────────────
-    // The `.searchable` field is a system NSSearchField (no custom identifier),
-    // so it's reached through the search-field element type.
+    // The search box is a plain NSSearchField embedded at the top of the list
+    // column (no custom identifier), so it's reached through the search-field
+    // element type.
 
     var searchField: XCUIElement {
         app.searchFields.firstMatch

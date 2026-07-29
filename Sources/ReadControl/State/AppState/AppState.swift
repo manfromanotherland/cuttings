@@ -150,21 +150,15 @@ final class AppState {
 
     // ── Search focus ──────────────────────────────────────────────────────────
 
-    /// Move keyboard focus to the toolbar search field (the ⌘K command). SwiftUI's
-    /// `.searchable` exposes no focus binding we can drive from a menu command, so
-    /// we reach the field through AppKit: prefer the toolbar's search item, and
-    /// fall back to finding the `NSSearchField` in the window's view tree.
+    /// Focus the reading-list search field (⌘K). SwiftUI exposes no focus binding
+    /// for it, so we reach the `NSSearchField` through AppKit (see `ListSearchField`).
     func focusSearchField() {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
-        if let item = window.toolbar?.items
-            .compactMap({ $0 as? NSSearchToolbarItem }).first
-        {
-            item.beginSearchInteraction()
-            return
-        }
-        if let field = window.contentView.flatMap(Self.firstSearchField(in:)) {
-            window.makeFirstResponder(field)
-        }
+        // The toolbar is hosted alongside `contentView`, not within it, so search
+        // from the frame view (their shared ancestor) to reach the field.
+        let root = window.contentView?.superview ?? window.contentView
+        guard let root, let field = Self.firstSearchField(in: root) else { return }
+        window.makeFirstResponder(field)
     }
 
     private static func firstSearchField(in view: NSView) -> NSSearchField? {
