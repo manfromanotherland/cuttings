@@ -112,7 +112,9 @@ enum A11y {
         static let unarchive = "toolbar.unarchive"
         static let openInBrowser = "toolbar.openInBrowser"
         static let tags = "toolbar.tags"
-        static let highlights = "toolbar.highlights"
+        static let highlight = "toolbar.highlight"
+        /// The "select some text first" popover raised by `highlight`.
+        static let highlightHint = "toolbar.highlightHint"
         static let delete = "toolbar.delete"
     }
 

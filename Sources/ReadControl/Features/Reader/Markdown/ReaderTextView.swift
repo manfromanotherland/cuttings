@@ -101,6 +101,28 @@ final class ReaderTextView: NSTextView {
         }
     }
 
+    /// The text selected in whichever reader run under `root` holds a selection,
+    /// or nil when nothing is selected. Only one run can be selected at a time
+    /// (see `collapseSelections`), so the first hit is the answer.
+    ///
+    /// Lets the toolbar's Highlight button act on the reader from outside its view
+    /// hierarchy — the runs are `NSTextView`s SwiftUI can't reach into, so the
+    /// selection is found by walking the window, as `focusSearchField()` does.
+    static func selectedText(in root: NSView) -> String? {
+        for subview in root.subviews {
+            if let textView = subview as? ReaderTextView {
+                let range = textView.selectedRange()
+                if range.length > 0, let storage = textView.textStorage {
+                    return (storage.string as NSString).substring(with: range)
+                }
+            }
+            if let found = selectedText(in: subview) {
+                return found
+            }
+        }
+        return nil
+    }
+
     /// Keep the "Services" submenu out of the reader's context menu. AppKit adds
     /// it to a text view's menu because the view advertises that it can hand its
     /// selection to a service; reporting no valid send/return types removes the

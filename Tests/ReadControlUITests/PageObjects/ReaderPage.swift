@@ -206,8 +206,15 @@ struct ReaderPage {
         app.byId(A11y.Toolbar.tags).clickWhenReady()
     }
 
-    func toggleHighlights() {
-        app.byId(A11y.Toolbar.highlights).clickWhenReady()
+    /// Highlight the reader's current text selection. With nothing selected this
+    /// raises `highlightHint` instead (the inspector is opened with ⌘⇧H — see
+    /// `Keyboard.toggleHighlights`).
+    func highlightSelection() {
+        app.byId(A11y.Toolbar.highlight).clickWhenReady()
+    }
+
+    var highlightHint: XCUIElement {
+        app.byId(A11y.Toolbar.highlightHint)
     }
 
     func delete() {

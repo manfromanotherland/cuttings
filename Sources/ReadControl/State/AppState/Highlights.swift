@@ -1,10 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Foundation
+import AppKit
 
 // ── Highlights ───────────────────────────────────────────────────────────────
 
 extension AppState {
+    /// Toggle a highlight over the reader's current text selection — the toolbar
+    /// button's action, matching the reader context menu's Highlight command.
+    ///
+    /// Returns false when there's nothing to act on, so the caller can prompt the
+    /// user to select something. The selection lives in AppKit text views outside
+    /// SwiftUI's reach; `ReaderTextView.selectedText(in:)` finds it.
+    @discardableResult
+    func highlightSelection() -> Bool {
+        guard let id = selectedId,
+              let root = (NSApp.keyWindow ?? NSApp.mainWindow)?.contentView,
+              let text = ReaderTextView.selectedText(in: root)
+        else { return false }
+        Task { await toggleHighlight(id: id, text: text) }
+        return true
+    }
+
     /// Load the highlights for `id` into `highlights`. Pass `nil` to clear
     /// (e.g. when no reading is selected).
     func loadHighlights(id: String?) async {

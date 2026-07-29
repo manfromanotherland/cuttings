@@ -3,7 +3,7 @@
 import SwiftUI
 
 /// The reader's primary-action toolbar: read/favorite/archive, open in
-/// browser, tags, highlights, delete. The parent resolves which row to build
+/// browser, tags, highlight, delete. The parent resolves which row to build
 /// it for (see `ArticleDetailView.currentRow`); actions write through
 /// `appState`, whose refresh supplies the updated row on the next render.
 struct ArticleToolbar: ToolbarContent {
@@ -11,6 +11,9 @@ struct ArticleToolbar: ToolbarContent {
     let appState: AppState
 
     var body: some ToolbarContent {
+        // Local binding for the hint popover; `appState` is a plain stored
+        // reference here, not an `@Environment` value.
+        @Bindable var appState = appState
         ToolbarItemGroup(placement: .primaryAction) {
             // A `Spacer` in a macOS toolbar is an expanding flexible space; it
             // pushes these actions to the trailing edge (far right).
@@ -78,12 +81,23 @@ struct ArticleToolbar: ToolbarContent {
             .accessibilityIdentifier(A11y.Toolbar.tags)
 
             Button {
-                appState.showHighlights.toggle()
+                // Toggles, like the reader's context-menu command: pressing it
+                // over an already-highlighted passage clears it. The inspector is
+                // reached from the Article menu (⌘⇧H) instead.
+                if !appState.highlightSelection() {
+                    appState.showHighlightHint = true
+                }
             } label: {
-                Label("Highlights", systemImage: "highlighter")
+                Label("Highlight", systemImage: "highlighter")
             }
-            .help("Show highlights")
-            .accessibilityIdentifier(A11y.Toolbar.highlights)
+            .help("Highlight the selected text")
+            .accessibilityIdentifier(A11y.Toolbar.highlight)
+            .popover(isPresented: $appState.showHighlightHint, arrowEdge: .bottom) {
+                Text("Select some text in the article to highlight it.")
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .accessibilityIdentifier(A11y.Toolbar.highlightHint)
+            }
 
             Button(role: .destructive) {
                 appState.pendingDelete = row

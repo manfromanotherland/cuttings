@@ -80,9 +80,13 @@ final class AppState {
     /// open it.
     var showTagSheet: Bool = false
 
-    /// Drives the highlights inspector for the open reading. Held here so both the
-    /// toolbar button and the ⌘⇧H menu command can toggle it.
+    /// Drives the highlights inspector for the open reading. Opened from the
+    /// Article menu and its ⌘⇧H shortcut.
     var showHighlights: Bool = false
+
+    /// Drives the popover telling the user to select some text first, raised when
+    /// the toolbar's Highlight button is pressed with nothing selected.
+    var showHighlightHint: Bool = false
 
     /// Drives the keyboard-shortcuts cheat sheet (the ⌘/ command).
     var showShortcuts: Bool = false
