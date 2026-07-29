@@ -14,7 +14,14 @@ struct ReadingListView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if appState.readings.isEmpty {
-                emptyState
+                // Skip the empty state in focus mode: the column collapses to zero
+                // width there, and `ContentUnavailableView`'s centered layout can't
+                // resolve at ~0pt — it loops constraint updates until AppKit crashes
+                // the window ("Update Constraints in Window"). A `List` clips fine,
+                // so this guard is only needed for the empty state.
+                if !appState.isFocusMode {
+                    emptyState
+                }
             } else {
                 list
             }
