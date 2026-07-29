@@ -192,9 +192,7 @@ struct ReadingListView: View {
                     .frame(width: searchFieldWidth)
             }
         }
-        // Stay visible on a no-results search (empty list, active query); hide only
-        // for a genuinely empty library.
-        if !appState.isFocusMode, !appState.readings.isEmpty || !appState.searchQuery.isEmpty {
+        if !appState.isFocusMode, showsSortControl {
             let searching = !appState.searchQuery.isEmpty
             let effectiveSort = searching ? appState.searchSort : appState.sortField
             ToolbarItem(placement: .primaryAction) {
@@ -264,6 +262,18 @@ struct ReadingListView: View {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    /// Whether the sort control belongs in the toolbar. Hidden only for a
+    /// genuinely empty library — it stays put on a no-results search (empty list,
+    /// active query).
+    ///
+    /// `isSearchPending` covers the gap the debounce opens: clearing a no-results
+    /// query empties `searchQuery` at once while `readings` stays empty until the
+    /// reload lands ~150ms later, and without it both clauses read false for those
+    /// frames and the control blinks out.
+    private var showsSortControl: Bool {
+        !appState.readings.isEmpty || !appState.searchQuery.isEmpty || appState.isSearchPending
+    }
 
     /// Fills the column's toolbar section, less the sort menu and the bar's own
     /// insets. Overflowing the section would fold both controls behind the

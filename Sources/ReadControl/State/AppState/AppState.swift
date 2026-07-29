@@ -36,6 +36,12 @@ final class AppState {
     /// persisted sort. Not persisted — a fresh search starts on relevance.
     var searchSort: ReadingSort = .relevance
 
+    /// True between a search-field edit and its debounced reload landing. During
+    /// that window `readings` still describes the *previous* query, so UI keyed off
+    /// "does the list have rows" holds its shape rather than flickering on the
+    /// stale answer (see `ReadingListView.showsSortControl`).
+    var isSearchPending: Bool = false
+
     /// Pending debounced search reload. Each keystroke cancels the previous one
     /// so the core is queried once typing settles, not per character. Plumbing
     /// only — not part of the observable UI state.
