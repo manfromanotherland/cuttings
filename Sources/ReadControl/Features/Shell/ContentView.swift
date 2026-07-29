@@ -86,7 +86,7 @@ struct ContentView: View {
             SidebarView(focusedColumn: $focusedColumn)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220)
         } content: {
-            ReadingListView(focusedColumn: $focusedColumn)
+            ReadingListView(focusedColumn: $focusedColumn, columnWidth: listColumnWidth)
                 // Persist the width the user drags to, so it survives relaunches and
                 // can be forced back on reopen from focus mode. Guarded to ignore the
                 // transient zero width while the column is collapsed.

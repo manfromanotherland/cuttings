@@ -8,6 +8,11 @@ struct ReadingListView: View {
     /// Shared with the sidebar so ← can hand focus back across to it.
     @FocusState.Binding var focusedColumn: FocusColumn?
 
+    /// The column's current width, measured by `ContentView`. The toolbar's search
+    /// field is sized from it so it grows with the column instead of overflowing a
+    /// narrow one.
+    let columnWidth: Double
+
     var body: some View {
         Group {
             if appState.isLoading {
@@ -29,7 +34,9 @@ struct ReadingListView: View {
         // Present in every state (including the empty list) so a count of 0 is
         // still readable.
         .background { rowsProbe }
-        .navigationTitle(appState.isFocusMode ? "" : navigationTitle)
+        // No `.navigationTitle` here on purpose — the column shows no header. The
+        // titlebar draws no title at all either (see the window toolbar style in
+        // `ReadControlApp`), so nothing falls back to the app name.
         .onChange(of: appState.searchQuery) { _, _ in
             appState.searchDidChange()
         }
@@ -176,12 +183,13 @@ struct ReadingListView: View {
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
         @Bindable var appState = appState
-        // Search + sort take the list column's trailing edge; the reader's actions
-        // claim the far right via the spacer in `ArticleToolbar`.
+        // Search + sort own the list column's toolbar section — there's no column
+        // title competing for it; the reader's actions claim the far right via the
+        // spacer in `ArticleToolbar`.
         if !appState.isFocusMode {
             ToolbarItem(placement: .primaryAction) {
                 ListSearchField(text: $appState.searchQuery, prompt: "Search")
-                    .frame(width: 180)
+                    .frame(width: searchFieldWidth)
             }
         }
         // Stay visible on a no-results search (empty list, active query); hide only
@@ -257,21 +265,11 @@ struct ReadingListView: View {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private var navigationTitle: String {
-        if !appState.searchQuery.isEmpty {
-            let count = appState.readings.count
-            return "\(count) result\(count == 1 ? "" : "s")"
-        }
-        // The view, tag, and rating filters compose, so the title joins whichever
-        // are active — e.g. "Unread · #rust · ★★★★" — rather than showing only one.
-        var parts = [appState.activeView.label]
-        if let tag = appState.selectedTag {
-            parts.append("#\(tag)")
-        }
-        if let rating = appState.selectedRating {
-            parts.append(String(repeating: "★", count: Int(rating)))
-        }
-        return parts.joined(separator: " · ")
+    /// Fills the column's toolbar section, less the sort menu and the bar's own
+    /// insets. Overflowing the section would fold both controls behind the
+    /// toolbar's chevron, so the reserve is deliberately generous.
+    private var searchFieldWidth: CGFloat {
+        max(150, CGFloat(columnWidth) - 88)
     }
 }
 

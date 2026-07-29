@@ -24,7 +24,13 @@ struct ReadControlApp: App {
                 }
         }
         .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified)
+        // `showsTitle: false` drops the title from the titlebar entirely, so the
+        // reading list's toolbar section starts at the column's leading edge
+        // instead of behind a reserved (and empty) title region. Setting
+        // `NSWindow.titleVisibility` from AppKit doesn't hold: SwiftUI re-applies
+        // it every time `.navigationTitle` changes, which the reader does on each
+        // selection.
+        .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {}
             ArticleCommands(appState: appState)
