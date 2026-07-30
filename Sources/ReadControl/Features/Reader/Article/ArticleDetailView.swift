@@ -238,13 +238,14 @@ struct ArticleDetailView: View {
             await appState.loadHighlights(id: nil)
             return
         }
-        row = appState.readings.first(where: { $0.id == id })
+        let targetRow = appState.readings.first(where: { $0.id == id })
 
         // Short-circuit a pathological body straight to the oversize notice from the
         // cheap indexed word count — before fetching and parsing megabytes of text,
         // the very cost this guard exists to avoid. `present`'s exact byte check
         // still backstops a missing word count.
-        if let words = row?.wordCount, words > maxParseWords {
+        if let words = targetRow?.wordCount, words > maxParseWords {
+            row = targetRow
             articleDocument = nil
             bodyTooLarge = true
             isLoading = false
@@ -252,9 +253,11 @@ struct ArticleDetailView: View {
         }
 
         // Revisiting an already-opened reading: show its parsed body straight
-        // from the cache — no re-parse, no spinner — then revalidate just this
-        // reading below. Highlights are reloaded so toggles made elsewhere show.
+        // from the cache — no debounce, no re-parse, no spinner — then revalidate
+        // just this reading below. Highlights are reloaded so toggles made
+        // elsewhere show.
         if let cached = cache.lookup(id) {
+            row = targetRow
             articleDocument = cached.document
             bodyTooLarge = false
             isLoading = false
@@ -263,6 +266,21 @@ struct ArticleDetailView: View {
             return
         }
 
+        await loadUncached(id: id, row: targetRow)
+    }
+
+    /// The cache-miss path: fetch the body from the core, then parse it off-thread.
+    /// Debounced first so a fast run of ↑/↓ never pays for it — `.task(id:)` cancels
+    /// this task the moment the selection moves on, so the sleep throws and a skimmed
+    /// reading does no work: no fetch, no parse, no spinner. Only the settled one loads.
+    private func loadUncached(id: String, row targetRow: ReadingRow?) async {
+        do {
+            try await Task.sleep(for: .milliseconds(120))
+        } catch {
+            return
+        }
+
+        row = targetRow
         isLoading = true
         loadHighlightsInBackground(id: id)
         // The native reader parses Markdown directly (linked images like
