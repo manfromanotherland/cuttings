@@ -275,11 +275,11 @@ struct ReadingListView: View {
         !appState.readings.isEmpty || !appState.searchQuery.isEmpty || appState.isSearchPending
     }
 
-    /// Fills the column's toolbar section, less the sort menu and the bar's own
-    /// insets. Overflowing the section would fold both controls behind the
-    /// toolbar's chevron, so the reserve is deliberately generous.
+    /// Fills the column's toolbar section, less a reserve for the sort menu — sized
+    /// so the sort's trailing margin matches the search field's leading one, and the
+    /// pair never folds into the toolbar's overflow chevron.
     private var searchFieldWidth: CGFloat {
-        max(150, CGFloat(columnWidth) - 88)
+        max(150, CGFloat(columnWidth) - 76)
     }
 }
 
