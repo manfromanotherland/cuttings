@@ -2,6 +2,6 @@
 experimental = true
 
 [tools]
-swift = "6"
-swiftformat = "0.55"
-swiftlint = "0.57"
+swift = "6.3.2"
+swiftformat = "0.55.6"
+swiftlint = "0.57.1"
