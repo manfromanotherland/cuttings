@@ -44,6 +44,11 @@ class UITestCase: XCTestCase {
 
         var options = LaunchOptions(libraryPath: library.libraryURL.path, dbPath: library.dbURL.path)
         options.defaultsSuite = library.defaultsSuiteName
+        // The app now opens on Unread by default; pin All here so the many tests
+        // written against that original landing view keep starting there without an
+        // explicit `sidebar.select(.all)`. A test exercising the real default just
+        // drops this pin (`options.pinnedDefaults.removeValue(forKey: "activeView")`).
+        options.pinnedDefaults["activeView"] = SmartView.all.rawValue
         configure(&options)
         app = AppLauncher.launch(options)
         XCTAssertTrue(

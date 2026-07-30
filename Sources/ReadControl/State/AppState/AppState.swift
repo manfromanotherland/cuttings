@@ -18,6 +18,15 @@ final class AppState {
         static let ascending = "sortAscending"
     }
 
+    /// Keys the composed filter (smart view, tag, rating) and the search box
+    /// persist under, so closing the app and reopening it lands on the same view.
+    private enum FilterDefaultsKey {
+        static let view = "activeView"
+        static let tag = "selectedTag"
+        static let rating = "selectedRating"
+        static let search = "searchQuery"
+    }
+
     /// ── Navigation state ──────────────────────────────────────────────────
     var libraryURL: URL?
 
@@ -29,7 +38,14 @@ final class AppState {
     var isRestoringLibrary: Bool = false
     var readings: [ReadingRow] = []
     var selectedId: String?
-    var searchQuery: String = ""
+
+    /// The reading-list search text, persisted across launches so a search the
+    /// user left active is restored on reopen. `init` seeds it from the store.
+    var searchQuery: String = "" {
+        didSet {
+            AppDefaults.store.set(searchQuery, forKey: FilterDefaultsKey.search)
+        }
+    }
 
     /// Sort applied while a search is active. Kept separate from `sortField` so
     /// searching (which defaults to relevance) never clobbers the list's own
@@ -51,15 +67,31 @@ final class AppState {
     /// Independent from the tag and rating filters so all three compose (together
     /// with the search box): the reading list and the faceted counts are scoped by
     /// `activeView` ∩ `selectedTag` ∩ `selectedRating` ∩ `searchQuery`.
-    var activeView: SidebarItem = .all
+    ///
+    /// Persisted across launches; `init` restores it, defaulting to `.unread` on a
+    /// first run so the app opens on the pile to work through, not everything.
+    var activeView: SidebarItem = .unread {
+        didSet {
+            AppDefaults.store.set(activeView.rawValue, forKey: FilterDefaultsKey.view)
+        }
+    }
 
     /// The active tag filter, if any. Composes with the view, rating, and search;
-    /// `nil` means no tag filter. At most one tag at a time.
-    var selectedTag: String?
+    /// `nil` means no tag filter. At most one tag at a time. Persisted across launches.
+    var selectedTag: String? {
+        didSet {
+            AppDefaults.store.set(selectedTag, forKey: FilterDefaultsKey.tag)
+        }
+    }
 
     /// The active rating filter (1–5), if any. Composes with the view, tag, and
-    /// search; `nil` means no rating filter. At most one rating at a time.
-    var selectedRating: UInt8?
+    /// search; `nil` means no rating filter. At most one rating at a time. Persisted
+    /// across launches (stored as an `Int`; cleared when `nil`).
+    var selectedRating: UInt8? {
+        didSet {
+            AppDefaults.store.set(selectedRating.map { Int($0) }, forKey: FilterDefaultsKey.rating)
+        }
+    }
 
     /// Sort field for the reading list, persisted across launches. The default
     /// here only initializes the backing store; `init` immediately overwrites it
@@ -138,6 +170,18 @@ final class AppState {
         sortField = defaults.string(forKey: SortDefaultsKey.field)
             .flatMap(ReadingSort.init(rawValue:)) ?? .savedAt
         sortAscending = defaults.bool(forKey: SortDefaultsKey.ascending)
+
+        // Restore the view/tag/rating filters and the search box the user left last
+        // time. A first run has none of these, so the view falls back to `.unread`
+        // and the rest to empty — the app's default landing state. (Assigning in
+        // `init` doesn't fire the `didSet`s, so this reads the store without
+        // re-writing it.)
+        activeView = defaults.string(forKey: FilterDefaultsKey.view)
+            .flatMap(SidebarItem.init(rawValue:)) ?? .unread
+        selectedTag = defaults.string(forKey: FilterDefaultsKey.tag)
+        selectedRating = (defaults.object(forKey: FilterDefaultsKey.rating) as? Int)
+            .flatMap { UInt8(exactly: $0) }
+        searchQuery = defaults.string(forKey: FilterDefaultsKey.search) ?? ""
 
         if TestHooks.isUITesting {
             // UI-testing: never resolve the persisted bookmark (leave the dev's

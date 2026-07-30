@@ -36,6 +36,12 @@ struct SidebarPage {
         poll(timeout: timeout) { count(of: view) == expected }
     }
 
+    /// Whether `view` is the selected smart view — the row carries the
+    /// `.isSelected` trait (set by the app) when it's the active filter.
+    func isSelected(_ view: SmartView) -> Bool {
+        app.byId(A11y.Sidebar.viewRow(view.rawValue)).isSelected
+    }
+
     // ── Tags ────────────────────────────────────────────────────────────────
 
     func selectTag(_ tag: String) {
@@ -78,6 +84,12 @@ struct SidebarPage {
     @discardableResult
     func waitForRatingCount(_ rating: UInt8, equals expected: Int, timeout: TimeInterval = 8) -> Bool {
         poll(timeout: timeout) { ratingCount(rating) == expected }
+    }
+
+    /// Whether `rating` is the selected rating filter — the row carries the
+    /// `.isSelected` trait (set by the app) when it's active.
+    func isRatingSelected(_ rating: UInt8) -> Bool {
+        ratingRow(rating).isSelected
     }
 
     // ── Appearance popover ────────────────────────────────────────────────
