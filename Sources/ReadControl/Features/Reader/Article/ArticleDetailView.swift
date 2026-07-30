@@ -20,11 +20,11 @@ struct ArticleDetailView: View {
     /// each open, so toggles made elsewhere still show on return.
     @State private var cache = ArticleDocumentCache()
 
-    /// Drives the full-screen image-zoom overlay. Owned by `ContentView` (so the
-    /// window toolbar can hide while it's up) and passed in here; injected into the
-    /// reader's environment so a clicked figure can raise the lightbox, and
-    /// observed to present it over the whole detail pane (see `ImageLightbox`).
-    let imageZoom: ImageZoomPresenter
+    /// Drives the full-screen image-zoom overlay: injected into the reader's
+    /// environment so a clicked figure can raise the lightbox, and observed to
+    /// present it over the whole detail pane (see `ImageLightbox`) and to drop the
+    /// reader's own toolbar actions while it's up (see `toolbarItems`).
+    @State private var imageZoom = ImageZoomPresenter()
 
     /// Bodies larger than this are not parsed at all — swift-markdown would
     /// freeze the main thread and spike memory on a pathological file. The
@@ -75,6 +75,13 @@ struct ArticleDetailView: View {
             await load(id: appState.selectedId)
         }
         .toolbar { toolbarItems }
+        // The lightbox's backdrop is ordinary content, so the titlebar's own
+        // material sits above it and leaves a lit band across the top of the zoom.
+        // Dropping that material while a zoom is up lets the backdrop — which
+        // already ignores the safe area — run the window's full height. The bar
+        // itself stays put (search, sort and the sidebar toggle keep working); only
+        // its background steps aside, and it returns when the lightbox closes.
+        .toolbarBackground(imageZoom.target == nil ? .automatic : .hidden, for: .windowToolbar)
         .inspector(isPresented: $appState.showHighlights) {
             HighlightsInspector(readingId: appState.selectedId)
                 .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
@@ -210,7 +217,13 @@ struct ArticleDetailView: View {
 
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
-        if let row = currentRow {
+        // The lightbox's backdrop is a content overlay and can't cover the unified
+        // title bar, so the reader's own actions step aside while an image is
+        // zoomed — they'd float above the dark backdrop and act on an article the
+        // user can't see. Only these go: the search field, sort control and sidebar
+        // toggle belong to the other columns, which the zoom never covers, so
+        // hiding them was gratuitous.
+        if let row = currentRow, imageZoom.target == nil {
             ArticleToolbar(row: row, appState: appState)
         }
     }
