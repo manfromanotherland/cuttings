@@ -39,6 +39,12 @@ echo "==> Ad-hoc signing (no Developer ID)"
 # avoids ordering issues on some toolchains. Each step is guarded: the
 # native-host binary and a Frameworks dir may legitimately be absent (e.g. a
 # statically linked core), and an unguarded failure would abort under pipefail.
+#
+# Sparkle ships as Sparkle.framework in Contents/Frameworks (with nested XPC
+# services and helper apps); the framework loop below signs the bundle and the
+# final `--deep` pass re-signs its nested code. This is enough to *run* an
+# ad-hoc build locally. A public, auto-updating build needs a real Developer ID
+# signature + notarization instead — see README "Software updates (Sparkle)".
 if [ -f "$APP/Contents/MacOS/native-host" ]; then
   codesign --force --timestamp=none -s - "$APP/Contents/MacOS/native-host"
 fi

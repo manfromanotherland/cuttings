@@ -134,6 +134,51 @@ defaults write -g ApplePressAndHoldEnabled -bool false
 The suite already routes search text through the pasteboard (`ReadingListPage.pasteSearch`) to
 sidestep this, so it isn't machine-dependent.
 
+## Software updates (Sparkle)
+
+The app ships in-app updates via [Sparkle](https://sparkle-project.org). It's added as a Swift
+Package (`project.yml` → `packages.Sparkle`), so Xcode embeds and signs `Sparkle.framework`
+automatically — no manual embed phase. A **Check for Updates…** item sits in the app menu just
+below *About ReadControl*; the updater is created in `ReadControlApp.init` and left dormant under
+UI testing so the XCUITest suite stays offline. It's scoped to the update path only — it doesn't
+touch the core, the library format, or domain behavior.
+
+Sparkle reads two keys from `Sources/ReadControl/App/Info.plist`:
+
+- `SUFeedURL` — the public URL of your `appcast.xml` feed.
+- `SUPublicEDKey` — your Sparkle EdDSA (Ed25519) **public** key.
+
+Both currently hold placeholders, so a locally-built app checks nothing (Sparkle refuses to install
+an update it can't verify). To actually ship updates:
+
+1. **Generate a signing key once** (stored in your login Keychain — never commit the private key):
+
+   ```bash
+   ./bin/generate_keys        # from the Sparkle distribution / SwiftPM artifact
+   ```
+
+   Copy the printed public key into `SUPublicEDKey` and re-run `make xcodegen` if you changed the
+   plist path.
+
+2. **Host the appcast.** Point `SUFeedURL` at where you'll publish `appcast.xml`, and bump
+   `CFBundleShortVersionString` / `CFBundleVersion` in `Info.plist` for each release — Sparkle
+   compares them to decide when an update is available.
+
+3. **Sign & publish each build.** After building the `.dmg`, sign it and add the entry to the
+   appcast:
+
+   ```bash
+   make sparkle-sign      # signs dist/ReadControl.dmg; prints the appcast enclosure attributes
+   ```
+
+   This wraps Sparkle's `sign_update` (auto-found in the SPM artifact) using the private key in
+   your Keychain, and prints the `sparkle:edSignature` and `length` to paste into the
+   `<enclosure>` element of `appcast.xml`.
+
+Note: the ad-hoc-signed `.dmg` from `make dmg` is fine for local testing, but a public
+auto-updating build must be **Developer ID signed and notarized** — Sparkle's installer (and
+Gatekeeper) reject an ad-hoc signature on the downloaded update. See `scripts/package-dmg.sh`.
+
 ## Formatting & linting
 
 Two tools keep the Swift sources consistent, and they're set up to cooperate rather than fight:
@@ -193,6 +238,7 @@ The logs go to stderr only — not a file or Console.app. To keep them, redirect
 make xcframework   # rebuild the XCFramework from core
 make bindings      # copy generated Swift bindings (runs xcframework first)
 make xcodegen      # regenerate ReadControl.xcodeproj from project.yml
+make sparkle-sign  # sign the built .dmg with your Sparkle key (see Software updates)
 make format        # reformat Swift sources with SwiftFormat
 make format-check  # check formatting without editing
 make lint          # lint Swift sources with SwiftLint

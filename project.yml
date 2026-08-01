@@ -9,6 +9,13 @@ packages:
   Markdown:
     url: https://github.com/apple/swift-markdown.git
     exactVersion: "0.8.0"
+  # Sparkle drives in-app software updates (the "Check for Updates…" menu item and,
+  # once the user opts in, periodic background checks). Distributed as a binary
+  # XCFramework over SPM, so Xcode embeds and signs Sparkle.framework into the app
+  # automatically — no manual "Embed Frameworks" phase needed.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.9.4"
 
 targets:
   ReadControl:
@@ -23,6 +30,7 @@ targets:
         embed: false
       - sdk: SystemConfiguration.framework
       - package: Markdown
+      - package: Sparkle
     settings:
       base:
         SWIFT_VERSION: "6.0"

@@ -8,8 +8,14 @@
 CORE_DIR := ../core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
+DMG := dist/ReadControl.dmg
 
-.PHONY: all xcframework bindings xcodegen test dmg clean format format-check lint lint-fix
+# Path to Sparkle's `sign_update` tool. Left empty so it's auto-discovered from
+# the SPM artifact at run time; override on the command line if it lives
+# elsewhere: `make sparkle-sign SIGN_UPDATE=/path/to/sign_update`.
+SIGN_UPDATE ?=
+
+.PHONY: all xcframework bindings xcodegen test dmg sparkle-sign clean format format-check lint lint-fix
 
 all: xcframework bindings xcodegen
 
@@ -41,6 +47,25 @@ test:
 ## Ad-hoc signed only — see scripts/package-dmg.sh. Assumes `make all` has run.
 dmg: all
 	./scripts/package-dmg.sh
+
+## Sign the built .dmg with your Sparkle EdDSA key (read from your login Keychain)
+## and print the `sparkle:edSignature` + `length` attributes to paste into the
+## appcast <enclosure>. Run `make dmg` first, and generate a key once — see the
+## README "Software updates (Sparkle)". Auto-finds sign_update in the SPM
+## artifact; override with `SIGN_UPDATE=/path/to/sign_update` if needed.
+sparkle-sign:
+	@test -f "$(DMG)" || { echo "error: $(DMG) not found — run 'make dmg' first" >&2; exit 1; }
+	@tool="$(SIGN_UPDATE)"; \
+	if [ -z "$$tool" ]; then \
+	  tool=$$(find "$$HOME/Library/Developer/Xcode/DerivedData" -name sign_update -path '*Sparkle*' 2>/dev/null | head -1); \
+	fi; \
+	if [ -z "$$tool" ] || [ ! -x "$$tool" ]; then \
+	  echo "error: sign_update not found. Build once so SPM fetches Sparkle, or pass" >&2; \
+	  echo "       SIGN_UPDATE=/path/to/sign_update (see README)." >&2; \
+	  exit 1; \
+	fi; \
+	echo "==> Signing $(DMG) with your Sparkle key"; \
+	"$$tool" "$(DMG)"
 
 ## Reformat Swift sources in place (config: .swiftformat). Run this before `lint`;
 ## SwiftFormat is configured to agree with SwiftLint, so it won't create new
