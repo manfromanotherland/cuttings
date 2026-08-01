@@ -14,7 +14,7 @@ struct SettingsView: View {
             LibrarySettingsTab()
                 .tabItem { Label("Library", systemImage: "folder") }
 
-            NativeHostSettingsTab()
+            ExtensionsSettingsTab()
                 .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension") }
         }
         .frame(width: 440)
@@ -118,46 +118,88 @@ private struct LibrarySettingsTab: View {
     }
 }
 
-// ── Native Host ───────────────────────────────────────────────────────────────
+// ── Extensions ────────────────────────────────────────────────────────────────
 
-private struct NativeHostSettingsTab: View {
-    @State private var hostPath: String? = NativeHostInstaller.bundledHostURL()?.path
-    @State private var installed: Bool = false
-    @State private var reinstalling: Bool = false
+/// Public store listings for the browser extension. These are placeholders until
+/// the extensions are published — swap in the real Chrome Web Store and Firefox
+/// Add-ons URLs and the links go live.
+private enum ExtensionStore {
+    static let chrome = URL(string: "https://chromewebstore.google.com/")!
+    static let firefox = URL(string: "https://addons.mozilla.org/firefox/")!
+}
 
+/// Links out to the browser extension listings. The native-messaging manifest is
+/// installed automatically when the library boots (see `AppState.boot`), so this
+/// tab no longer surfaces the installer UI.
+private struct ExtensionsSettingsTab: View {
     var body: some View {
         Form {
-            LabeledContent("Binary") {
-                Text(hostPath ?? "Not found in bundle")
-                    .font(.caption)
-                    .foregroundStyle(hostPath != nil ? Color.secondary : Color.red)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
+            Section {
+                ExtensionLink(
+                    name: "Chrome",
+                    detail: "Also Edge, Brave, and other Chromium browsers",
+                    logo: "chrome-logo",
+                    url: ExtensionStore.chrome,
+                    accessibilityID: A11y.Settings.chromeExtensionLink
+                )
+                ExtensionLink(
+                    name: "Firefox",
+                    detail: "Firefox 115 or newer",
+                    logo: "firefox-logo",
+                    url: ExtensionStore.firefox,
+                    accessibilityID: A11y.Settings.firefoxExtensionLink
+                )
+            } header: {
+                Text("Get the browser extension")
+            } footer: {
+                Text("Install the extension in your browser to save pages to your library.")
             }
-
-            LabeledContent("Manifest") {
-                HStack {
-                    Image(systemName: installed ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(installed ? .green : .orange)
-                    Text(installed ? "Installed" : "Not installed")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Button(reinstalling ? "Installing…" : "Reinstall Manifest") {
-                reinstalling = true
-                installed = NativeHostInstaller.install()
-                reinstalling = false
-            }
-            .disabled(hostPath == nil || reinstalling)
-            .accessibilityIdentifier(A11y.Settings.reinstallManifest)
         }
         .formStyle(.grouped)
         .frame(minHeight: 140)
         .accessibilityIdentifier(A11y.Settings.extensionsTab)
-        .onAppear {
-            let lastPath = UserDefaults.standard.string(forKey: "nativeHostInstalledPath")
-            installed = lastPath != nil && lastPath == hostPath
+    }
+}
+
+/// One store row: browser logo, name, a short note, and an open-in-browser hint.
+/// Tapping opens the listing in the user's default browser. Uses a plain-styled
+/// button rather than `Link` so the row keeps the standard label/gray text colors
+/// instead of the blue accent tint.
+private struct ExtensionLink: View {
+    let name: String
+    let detail: String
+    let logo: String
+    let url: URL
+    let accessibilityID: String
+
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button {
+            openURL(url)
+        } label: {
+            HStack(spacing: 12) {
+                Image(logo)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 28, height: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .foregroundStyle(.primary)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "arrow.up.forward.square")
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityID)
     }
 }

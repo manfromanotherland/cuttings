@@ -56,7 +56,11 @@ struct SettingsPage {
         app.byId(A11y.Settings.changeLibrary).clickWhenReady()
     }
 
-    func reinstallManifest() {
-        app.byId(A11y.Settings.reinstallManifest).clickWhenReady()
+    var chromeExtensionLink: XCUIElement {
+        app.byId(A11y.Settings.chromeExtensionLink)
+    }
+
+    var firefoxExtensionLink: XCUIElement {
+        app.byId(A11y.Settings.firefoxExtensionLink)
     }
 }

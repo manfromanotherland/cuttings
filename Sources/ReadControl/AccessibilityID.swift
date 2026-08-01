@@ -167,6 +167,7 @@ enum A11y {
         static let fontPicker = "settings.font"
         static let sizePicker = "settings.size"
         static let changeLibrary = "settings.changeLibrary"
-        static let reinstallManifest = "settings.reinstallManifest"
+        static let chromeExtensionLink = "settings.extension.chrome"
+        static let firefoxExtensionLink = "settings.extension.firefox"
     }
 }
