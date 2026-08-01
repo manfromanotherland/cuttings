@@ -159,88 +159,9 @@
 
       /* Form fields */
 
-      label {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .label-text {
-        font-weight: 600;
-        font-size: 13px;
-      }
-
       .label-hint {
         font-size: 12px;
         color: var(--text-muted);
-      }
-
-      input[type="text"] {
-        width: 100%;
-        padding: 8px 10px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--bg);
-        color: var(--text);
-        font-size: 14px;
-        font-family: inherit;
-        outline: none;
-        transition: border-color 0.15s;
-      }
-
-      input[type="text"]:focus {
-        border-color: var(--blue);
-      }
-
-      .checkbox-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-      }
-
-      .checkbox-row input[type="checkbox"] {
-        margin-top: 2px;
-        accent-color: var(--blue);
-        width: 15px;
-        height: 15px;
-        flex-shrink: 0;
-      }
-
-      .checkbox-body {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-
-      /* Footer row */
-
-      .footer-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .btn-primary {
-        padding: 8px 18px;
-        background: var(--blue);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: inherit;
-        transition: opacity 0.15s;
-      }
-
-      .btn-primary:hover {
-        opacity: 0.9;
-      }
-
-      .saved-msg {
-        font-size: 13px;
-        color: var(--green);
-        font-weight: 500;
       }
 
       /* Diagnostics log */
@@ -319,35 +240,6 @@
         </div>
       </div>
 
-      <!-- Defaults -->
-      <div class="section">
-        <div class="section-header">Save Defaults</div>
-        <div class="section-body">
-          <label>
-            <span class="label-text">Default tags</span>
-            <span class="label-hint">Comma-separated tags added to every saved page.</span>
-            <input
-              type="text"
-              id="default-tags"
-              placeholder="e.g. reading, tech, later"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </label>
-
-          <div class="checkbox-row">
-            <input type="checkbox" id="keep-original-html" />
-            <div class="checkbox-body">
-              <span class="label-text">Keep original HTML</span>
-              <span class="label-hint"
-                >Save a copy of the raw HTML in <code>originals/</code> alongside the Markdown.
-                Requires a compatible version of the native host.</span
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Diagnostics -->
       <div class="section">
         <div class="section-header">Diagnostics</div>
@@ -363,12 +255,6 @@
             <button id="log-clear" class="btn-ghost">Clear</button>
           </div>
         </div>
-      </div>
-
-      <!-- Save button -->
-      <div class="footer-row">
-        <button id="save-btn" class="btn-primary">Save</button>
-        <span id="saved-msg" class="saved-msg" hidden>Saved!</span>
       </div>
     </div>
 

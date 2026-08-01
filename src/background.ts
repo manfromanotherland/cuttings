@@ -161,12 +161,10 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     requested: capture.images.length + capture.unresolved.length,
   });
 
-  const { defaultTags } = await chrome.storage.sync.get({ defaultTags: [] as string[] });
-
   const request: SaveRequest = {
     protocol_version: PROTOCOL_VERSION,
     action: "save",
-    metadata: { ...capture.metadata, tags: defaultTags.length ? defaultTags : undefined },
+    metadata: capture.metadata,
     markdown: capture.markdown,
     images,
   };

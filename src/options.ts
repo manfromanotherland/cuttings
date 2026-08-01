@@ -3,22 +3,6 @@
 import { pingHost, type HostStatus } from "./host.js";
 import { clearLog, LOG_STORAGE_KEY, readLog, type LogEntry } from "./log.js";
 
-interface Options {
-  defaultTags: string[];
-  keepOriginalHtml: boolean;
-}
-
-const DEFAULTS: Options = { defaultTags: [], keepOriginalHtml: false };
-
-async function loadOptions(): Promise<Options> {
-  const stored = await chrome.storage.sync.get(DEFAULTS);
-  return stored as Options;
-}
-
-async function saveOptions(opts: Options): Promise<void> {
-  await chrome.storage.sync.set(opts);
-}
-
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 
 function el<T extends HTMLElement>(id: string): T {
@@ -103,17 +87,7 @@ function logToText(entries: LogEntry[]): string {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Load saved options into the form
-  const opts = await loadOptions();
-
-  const tagsInput = el<HTMLInputElement>("default-tags");
-  const keepHtmlInput = el<HTMLInputElement>("keep-original-html");
   const checkBtn = el<HTMLButtonElement>("check-btn");
-  const saveBtn = el<HTMLButtonElement>("save-btn");
-  const savedMsg = el("saved-msg");
-
-  tagsInput.value = opts.defaultTags.join(", ");
-  keepHtmlInput.checked = opts.keepOriginalHtml;
 
   // Initial status check
   setStatus(await pingHost());
@@ -125,19 +99,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     setStatus(await pingHost());
     checkBtn.disabled = false;
     checkBtn.textContent = "Check again";
-  });
-
-  // Save button
-  saveBtn.addEventListener("click", async () => {
-    const raw = tagsInput.value
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    await saveOptions({ defaultTags: raw, keepOriginalHtml: keepHtmlInput.checked });
-
-    savedMsg.hidden = false;
-    setTimeout(() => (savedMsg.hidden = true), 2000);
   });
 
   // Diagnostics log
