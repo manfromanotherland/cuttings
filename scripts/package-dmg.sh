@@ -6,7 +6,7 @@
 # will quarantine it — the recipient must right-click the app → Open once, or run
 #   xattr -dr com.apple.quarantine /Applications/ReadControl.app
 #
-# Run this on macOS from the readcontrol-macos/ directory (or via `make dmg`).
+# Run this on macOS from the macos/ directory (or via `make dmg`).
 # Prereqs: `make all` has generated the xcframework, bindings, and xcodeproj.
 set -euo pipefail
 

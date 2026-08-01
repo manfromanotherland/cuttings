@@ -1,11 +1,11 @@
 # Build helpers for the readcontrol macOS app.
-# Run these on macOS from the readcontrol-macos/ directory.
+# Run these on macOS from the macos/ directory.
 #
 # Prerequisites:
 #   brew install xcodegen
 #   rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-CORE_DIR := ../readcontrol-core
+CORE_DIR := ../core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
 

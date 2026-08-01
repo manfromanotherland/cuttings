@@ -44,14 +44,14 @@ targets:
           # Xcode runs build phases with a sanitized PATH that omits ~/.cargo/bin,
           # so make cargo discoverable before invoking it.
           source "$HOME/.cargo/env" 2>/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
-          CORE="${SRCROOT}/../readcontrol-core"
+          CORE="${SRCROOT}/../core"
           cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin native-host
           SRC="${CORE}/target/release/native-host"
           DST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/native-host"
           cp "${SRC}" "${DST}"
           chmod +x "${DST}"
         inputFiles:
-          - $(SRCROOT)/../readcontrol-core/native-host/src/main.rs
+          - $(SRCROOT)/../core/native-host/src/main.rs
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/native-host
 

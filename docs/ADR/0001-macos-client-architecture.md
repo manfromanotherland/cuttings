@@ -6,8 +6,8 @@ Accepted.
 
 ## Context
 
-`readcontrol-macos` is the native SwiftUI client for **Read Control**, a
-local-first read-later app. It embeds `readcontrol-core` through UniFFI.
+`macos` is the native SwiftUI client for **Read Control**, a
+local-first read-later app. It embeds `core` through UniFFI.
 
 The Rust core is the owner of the product domain:
 
@@ -34,7 +34,7 @@ Use a feature-oriented SwiftUI architecture with a central app store.
 
 The macOS app will be organized around these responsibilities:
 
-- `readcontrol-core` owns durable domain entities and business rules.
+- `core` owns durable domain entities and business rules.
 - `CoreBridge` owns the async Swift boundary to Rust.
 - `AppState` owns UI orchestration: selected reading, active filters, search,
   pagination, optimistic mutations, sidebar counts, refreshes, sheets, and
@@ -56,7 +56,7 @@ the shared glossary (`UBIQUITOUS_LANGUAGE.md`).
 
 ## Target Folder Organization
 
-The target shape for `readcontrol-macos/Sources/ReadControl/` is:
+The target shape for `macos/Sources/ReadControl/` is:
 
 ```text
 Sources/ReadControl/
@@ -119,7 +119,7 @@ Examples:
 
 ### Bridge
 
-Swift boundary to `readcontrol-core`.
+Swift boundary to `core`.
 
 Examples:
 
@@ -338,7 +338,7 @@ Use reading identity and core-backed snapshots.
 Preferred flow:
 
 ```text
-readcontrol-core
+core
   owns persisted Reading and business rules
 
 CoreBridge
@@ -427,8 +427,8 @@ sufficient and lower ceremony.
 ## Guidance For AI Agents
 
 - Read this ADR and the meta repo's `UBIQUITOUS_LANGUAGE.md` before proposing
-  large `readcontrol-macos` architecture changes.
-- Keep domain behavior in `readcontrol-core`.
+  large `macos` architecture changes.
+- Keep domain behavior in `core`.
 - Keep Swift feature code thin and presentation-focused.
 - Prefer app-facing names such as `ReadingRow` over generated FFI names in
   views; `Ffi*` types must not appear outside `Bridge/`.

@@ -1,8 +1,8 @@
-# readcontrol-macos
+# macos
 
 The macOS client (Swift / SwiftUI) for **Read Control**, a local-first read-it-later system.
 Browse, read, search, and tag your saved readings, organized by smart views
-(All / Unread / Archive / Favorites). It embeds the Rust engine (`readcontrol-core`) via UniFFI
+(All / Unread / Archive / Favorites). It embeds the Rust engine (`core`) via UniFFI
 and watches the library folder for changes that arrive via the user's own sync.
 
 **License:** GPL-3.0-or-later — see [LICENSE](./LICENSE). This is the copyleft application of the
@@ -10,9 +10,9 @@ project; the engine and plugin are MIT. Redistributing a modified build requires
 source under the GPL.
 
 Part of the **Read Control** project →
-[github.com/boniattirodrigo/readcontrol-main](https://github.com/boniattirodrigo/readcontrol-main)
+[github.com/readcontrol/root](https://github.com/readcontrol/root)
 (architecture, UI design, library-format contract, and backlog). The Rust engine lives in
-[readcontrol-core](https://github.com/boniattirodrigo/readcontrol-core).
+[core](https://github.com/readcontrol/core).
 
 ## Prerequisites
 
@@ -30,19 +30,19 @@ Part of the **Read Control** project →
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
 ```
 
-The [readcontrol-core](https://github.com/boniattirodrigo/readcontrol-core) repo must be cloned as
-a sibling of this repo (i.e. `../readcontrol-core`) — the `Makefile` references it there.
+The [core](https://github.com/readcontrol/core) repo must be cloned as
+a sibling of this repo (i.e. `../core`) — the `Makefile` references it there.
 
 ## Setup
 
-Run this once after cloning (and again after updating `readcontrol-core`):
+Run this once after cloning (and again after updating `core`):
 
 ```bash
 make all
 ```
 
 This will:
-1. Build the `readcontrol-core` Rust library as a universal XCFramework (`make xcframework`)
+1. Build the `core` Rust library as a universal XCFramework (`make xcframework`)
 2. Copy the generated Swift bindings into `GeneratedBindings/` (`make bindings`)
 3. Generate `ReadControl.xcodeproj` from `project.yml` (`make xcodegen`)
 
@@ -161,9 +161,9 @@ Both configs exclude the generated bindings, the vendored framework, and build o
 
 ## Debugging: SQL tracing
 
-The app embeds `readcontrol-core`, which logs every SQL statement to stderr when the `SQL_TRACE`
+The app embeds `core`, which logs every SQL statement to stderr when the `SQL_TRACE`
 environment variable is set — handy for checking whether the UI is issuing too many queries. See
-the [core README](../readcontrol-core/README.md#debugging-sql-tracing) for the output format and a
+the [core README](../core/README.md#debugging-sql-tracing) for the output format and a
 one-liner that ranks statements by frequency.
 
 First rebuild the framework so the app links the traced core:
@@ -190,7 +190,7 @@ The logs go to stderr only — not a file or Console.app. To keep them, redirect
 ## Other make targets
 
 ```bash
-make xcframework   # rebuild the XCFramework from readcontrol-core
+make xcframework   # rebuild the XCFramework from core
 make bindings      # copy generated Swift bindings (runs xcframework first)
 make xcodegen      # regenerate ReadControl.xcodeproj from project.yml
 make format        # reformat Swift sources with SwiftFormat
