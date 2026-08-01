@@ -1,4 +1,4 @@
-# readcontrol-core
+# core
 
 The Rust engine for **Read Control**, a local-first read-it-later system. This repo is a Cargo
 workspace containing two crates:
@@ -13,7 +13,7 @@ workspace containing two crates:
 **License:** MIT — see [LICENSE](./LICENSE).
 
 Part of the **Read Control** project →
-[github.com/boniattirodrigo/readcontrol-main](https://github.com/boniattirodrigo/readcontrol-main)
+[github.com/readcontrol/root](https://github.com/readcontrol/root)
 (architecture, library-format contract, design, and backlog).
 
 ## Prerequisites
@@ -64,7 +64,7 @@ grep '^\[sql' /tmp/sql.log \
 ```
 
 The macOS app embeds this crate, so the same variable works there — see the
-[app's README](../readcontrol-macos/README.md#debugging-sql-tracing) for how to launch it with
+[app's README](../macos/README.md#debugging-sql-tracing) for how to launch it with
 `SQL_TRACE` set.
 
 ## Native messaging host
@@ -87,7 +87,7 @@ for Chrome, Edge, Chromium, and Firefox on macOS.
 **Wiring the extension ID:** the `--extension-id` value gates which extension may connect — it
 becomes `chrome-extension://<id>/` in the manifest's `allowed_origins` (Chrome/Edge) and the
 `allowed_extensions` entry (Firefox). Get the ID from `chrome://extensions` after loading the
-unpacked extension (see [readcontrol-extension](https://github.com/boniattirodrigo/readcontrol-extension)).
+unpacked extension (see [extension](https://github.com/readcontrol/extension)).
 
 If you omit `--extension-id`, the manifest is written with a placeholder origin
 (`chrome-extension://PLACEHOLDER_EXTENSION_ID/`) and the browser will refuse to connect — useful
@@ -96,7 +96,7 @@ at a new path (the manifest records the absolute path to the host binary).
 
 ## XCFramework (for the macOS app)
 
-The macOS SwiftUI client embeds `readcontrol-core` as an XCFramework via UniFFI bindings.
+The macOS SwiftUI client embeds `core` as an XCFramework via UniFFI bindings.
 
 ```bash
 ./scripts/build-xcframework.sh --release

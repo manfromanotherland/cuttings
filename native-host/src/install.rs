@@ -10,7 +10,7 @@ use serde_json::json;
 const HOST_NAME: &str = "app.readcontrol.host";
 
 /// Extension ID pinned by the `key` field in the extension's manifest.json.
-/// Keep this in sync with readcontrol-extension/manifest.json — the ID is
+/// Keep this in sync with extension/manifest.json — the ID is
 /// derived from that public key, so both must change together.
 const DEFAULT_EXTENSION_ID: &str = "hkcidjlecfgjmnafcadkolmglefhjgbk";
 

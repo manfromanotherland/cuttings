@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build readcontrol-core as an XCFramework for use in the macOS SwiftUI app.
+# Build core as an XCFramework for use in the macOS SwiftUI app.
 #
 # Prerequisites (macOS only):
 #   rustup target add aarch64-apple-darwin x86_64-apple-darwin
