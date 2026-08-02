@@ -172,21 +172,31 @@ actually ship updates:
    Bump `CFBundleShortVersionString` / `CFBundleVersion` in `Info.plist` for each release — Sparkle
    compares them to decide when an update is available.
 
-3. **Sign & publish each build.** After building the `.dmg`, sign it and add the entry to the
-   appcast:
+3. **Build, sign & publish each release.** A shippable build must be **Developer ID signed,
+   notarized, and stapled** — Gatekeeper and Sparkle both reject an ad-hoc signature on a
+   downloaded update. `make release` runs the whole chain on one artifact: Developer ID sign →
+   notarize → staple → Sparkle EdDSA sign.
 
    ```bash
-   make sparkle-sign      # signs dist/ReadControl.dmg; prints the appcast enclosure attributes
+   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+   NOTARY_PROFILE=readcontrol-notary \
+   make release
    ```
 
-   This wraps Sparkle's `sign_update` (auto-found in the SPM artifact) using the private key in
-   your Keychain, and prints the `sparkle:edSignature` and `length` to paste into the
-   `<enclosure>` element of `appcast.xml`. Set that element's `url` to the DMG's GitHub Releases
-   download link, then commit the updated `appcast.xml` to the `website` repo to publish it.
+   It prints the `sparkle:edSignature` and `length` for the appcast `<enclosure>`. Set that
+   element's `url` to the DMG's GitHub Releases download link, then commit the updated
+   `appcast.xml` to the `website` repo to publish it.
 
-Note: the ad-hoc-signed `.dmg` from `make dmg` is fine for local testing, but a public
-auto-updating build must be **Developer ID signed and notarized** — Sparkle's installer (and
-Gatekeeper) reject an ad-hoc signature on the downloaded update. See `scripts/package-dmg.sh`.
+   One-time setup for `make release`:
+   - a **Developer ID Application** certificate in your keychain — check with
+     `security find-identity -v -p codesigning` (create it in Xcode → Settings → Accounts →
+     Manage Certificates if missing);
+   - a notarytool credential profile:
+     `xcrun notarytool store-credentials readcontrol-notary --apple-id <email> --team-id <TEAMID> --password <app-specific-pw>`.
+
+Note: `make dmg` (+ `make sparkle-sign`) is the **ad-hoc, local-testing** path only — not
+notarized, so recipients must bypass Gatekeeper manually. Use `make release` for anything you
+publish. See `scripts/release-dmg.sh` (signed) and `scripts/package-dmg.sh` (ad-hoc).
 
 ## Formatting & linting
 
@@ -247,6 +257,8 @@ The logs go to stderr only — not a file or Console.app. To keep them, redirect
 make xcframework   # rebuild the XCFramework from core
 make bindings      # copy generated Swift bindings (runs xcframework first)
 make xcodegen      # regenerate ReadControl.xcodeproj from project.yml
+make dmg           # ad-hoc-signed .dmg for local testing (not notarized)
+make release       # Developer ID signed + notarized + stapled + Sparkle-signed .dmg
 make sparkle-sign  # sign the built .dmg with your Sparkle key (see Software updates)
 make format        # reformat Swift sources with SwiftFormat
 make format-check  # check formatting without editing

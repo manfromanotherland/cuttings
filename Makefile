@@ -15,7 +15,7 @@ DMG := dist/ReadControl.dmg
 # elsewhere: `make sparkle-sign SIGN_UPDATE=/path/to/sign_update`.
 SIGN_UPDATE ?=
 
-.PHONY: all xcframework bindings xcodegen test dmg sparkle-sign clean format format-check lint lint-fix
+.PHONY: all xcframework bindings xcodegen test dmg release sparkle-sign clean format format-check lint lint-fix
 
 all: xcframework bindings xcodegen
 
@@ -44,9 +44,20 @@ test:
 	xcodebuild test -scheme ReadControl
 
 ## Build a Release .app and wrap it in a distributable .dmg (dist/ReadControl.dmg).
-## Ad-hoc signed only — see scripts/package-dmg.sh. Assumes `make all` has run.
+## Ad-hoc signed only (local testing) — for a shippable build use `make release`.
 dmg: all
 	./scripts/package-dmg.sh
+
+## Build a SHIPPABLE .dmg: Developer ID signed -> notarized -> stapled, then
+## Sparkle-signed. Requires a Developer ID cert and a notarytool profile, passed
+## via env (nothing sensitive is stored in the repo):
+##   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+##   NOTARY_PROFILE=readcontrol-notary make release
+## sparkle-sign runs last, on the final stapled .dmg (stapling rewrites the .dmg,
+## so the EdDSA signature must be taken after it). See README "Software updates".
+release: all
+	./scripts/release-dmg.sh
+	$(MAKE) sparkle-sign
 
 ## Sign the built .dmg with your Sparkle EdDSA key (read from your login Keychain)
 ## and print the `sparkle:edSignature` + `length` attributes to paste into the
