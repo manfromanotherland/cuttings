@@ -145,11 +145,13 @@ touch the core, the library format, or domain behavior.
 
 Sparkle reads two keys from `Sources/ReadControl/App/Info.plist`:
 
-- `SUFeedURL` — the public URL of your `appcast.xml` feed.
+- `SUFeedURL` — the public URL of the `appcast.xml` feed. **Set** to
+  `https://www.readcontrol.app/appcast.xml`.
 - `SUPublicEDKey` — your Sparkle EdDSA (Ed25519) **public** key.
 
-Both currently hold placeholders, so a locally-built app checks nothing (Sparkle refuses to install
-an update it can't verify). To actually ship updates:
+`SUFeedURL` already points at the production feed; `SUPublicEDKey` still holds a placeholder, so a
+locally-built app checks nothing yet (Sparkle refuses to install an update it can't verify). To
+actually ship updates:
 
 1. **Generate a signing key once** (stored in your login Keychain — never commit the private key):
 
@@ -160,8 +162,14 @@ an update it can't verify). To actually ship updates:
    Copy the printed public key into `SUPublicEDKey` and re-run `make xcodegen` if you changed the
    plist path.
 
-2. **Host the appcast.** Point `SUFeedURL` at where you'll publish `appcast.xml`, and bump
-   `CFBundleShortVersionString` / `CFBundleVersion` in `Info.plist` for each release — Sparkle
+2. **Publish the appcast and the build.** Hosting is split in two, and the two are decoupled:
+   - The **feed** lives on the website at `https://www.readcontrol.app/appcast.xml` (served from
+     the `website` repo) — this is what `SUFeedURL` points at.
+   - The **`.dmg` builds** are attached to **GitHub Releases** at
+     `https://github.com/readcontrol/macos/releases`, and each `<enclosure url>` in `appcast.xml`
+     points at its release asset.
+
+   Bump `CFBundleShortVersionString` / `CFBundleVersion` in `Info.plist` for each release — Sparkle
    compares them to decide when an update is available.
 
 3. **Sign & publish each build.** After building the `.dmg`, sign it and add the entry to the
@@ -173,7 +181,8 @@ an update it can't verify). To actually ship updates:
 
    This wraps Sparkle's `sign_update` (auto-found in the SPM artifact) using the private key in
    your Keychain, and prints the `sparkle:edSignature` and `length` to paste into the
-   `<enclosure>` element of `appcast.xml`.
+   `<enclosure>` element of `appcast.xml`. Set that element's `url` to the DMG's GitHub Releases
+   download link, then commit the updated `appcast.xml` to the `website` repo to publish it.
 
 Note: the ad-hoc-signed `.dmg` from `make dmg` is fine for local testing, but a public
 auto-updating build must be **Developer ID signed and notarized** — Sparkle's installer (and
