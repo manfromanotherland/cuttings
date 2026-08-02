@@ -2,267 +2,107 @@
 
 The macOS client (Swift / SwiftUI) for **ReadControl**, a local-first read-it-later system.
 Browse, read, search, and tag your saved readings, organized by smart views
-(All / Unread / Archive / Favorites). It embeds the Rust engine (`core`) via UniFFI
-and watches the library folder for changes that arrive via the user's own sync.
+(All / Unread / Archive / Favorites). It embeds the Rust engine (`core`) via UniFFI and watches
+the library folder for changes that arrive via the user's own sync.
 
 **License:** GPL-3.0-or-later — see [LICENSE](./LICENSE). This is the copyleft application of the
-project; the engine and plugin are MIT. Redistributing a modified build requires sharing your
-source under the GPL.
+project; the engine and plugin are MIT.
 
-Part of the **ReadControl** project →
-[github.com/readcontrol/root](https://github.com/readcontrol/root)
-(architecture, UI design, library-format contract, and backlog). The Rust engine lives in
-[core](https://github.com/readcontrol/core).
+Part of the **ReadControl** project → [github.com/readcontrol/root](https://github.com/readcontrol/root).
+The Rust engine lives in [core](https://github.com/readcontrol/core).
 
 ## Prerequisites
 
-- macOS 14 or later
-- Xcode 15 or later
-- [Homebrew](https://brew.sh)
+- macOS 14+ and Xcode 16+
 - [xcodegen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
-- [SwiftFormat](https://github.com/nicklockwood/SwiftFormat) and
-  [SwiftLint](https://github.com/realm/SwiftLint) for formatting and linting. Both are pinned in
-  `.mise.toml`, so `mise install` fetches the same versions this repo expects; alternatively
-  `brew install swiftformat swiftlint`.
-- Rust targets for cross-compilation (needed to build the XCFramework):
+- [SwiftFormat](https://github.com/nicklockwood/SwiftFormat) + [SwiftLint](https://github.com/realm/SwiftLint)
+  (`brew install swiftformat swiftlint`, or `mise install` to match the pinned versions)
+- Rust targets for the XCFramework build: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 
-```bash
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
-```
-
-The [core](https://github.com/readcontrol/core) repo must be cloned as
-a sibling of this repo (i.e. `../core`) — the `Makefile` references it there.
+The [core](https://github.com/readcontrol/core) repo must sit as a sibling (`../core`) — the
+`Makefile` references it there.
 
 ## Setup
 
-Run this once after cloning (and again after updating `core`):
+Run once after cloning (and again after updating `core`):
 
 ```bash
-make all
+make all        # build the core XCFramework, copy bindings, generate ReadControl.xcodeproj
 ```
-
-This will:
-1. Build the `core` Rust library as a universal XCFramework (`make xcframework`)
-2. Copy the generated Swift bindings into `GeneratedBindings/` (`make bindings`)
-3. Generate `ReadControl.xcodeproj` from `project.yml` (`make xcodegen`)
 
 ## Run
 
-Open the generated project in Xcode and press **Run**:
-
 ```bash
-open ReadControl.xcodeproj
+open ReadControl.xcodeproj                                    # then press Run in Xcode
+xcodebuild build -project ReadControl.xcodeproj -scheme ReadControl   # or from the CLI
 ```
 
-Or build from the command line:
+## Test
 
 ```bash
-xcodebuild build -project ReadControl.xcodeproj -scheme ReadControl
+make test       # runs the unit suite (ReadControlTests) then the UI suite (ReadControlUITests)
 ```
 
-## Running the tests
+- `ReadControlTests` — fast, hostless unit tests for pure app logic.
+- `ReadControlUITests` — end-to-end XCUITest against a throwaway temp library.
 
-There are two suites, and the scheme runs them in this order:
-
-- **`ReadControlTests`** — fast, hostless unit tests for pure app logic (smart-view membership,
-  reading-time formatting). They compile the files under test directly instead of hosting in the
-  app, so they never launch a window or touch your real library or defaults.
-- **`ReadControlUITests`** — the end-to-end XCUITest suite. It launches the real app against a
-  throwaway temp library and drives it through the UI.
-
-Both are dependency-free: only Xcode and the macOS SDK, no third-party test libraries.
-
-Run everything (unit tests first, then UI):
-
-```bash
-make test        # xcodebuild test -scheme ReadControl
-```
-
-Regenerate the project after adding or removing test files:
-
-```bash
-make xcodegen
-```
-
-Compile the test bundles without running — the fastest way to surface Swift compile errors:
-
-```bash
-xcodebuild build-for-testing -scheme ReadControl
-```
-
-Run just the fast unit suite, or a single test class or test, while iterating:
+Both are dependency-free (Xcode + the macOS SDK only). Run one suite or test while iterating:
 
 ```bash
 xcodebuild test -scheme ReadControl -only-testing:ReadControlTests
-xcodebuild test -scheme ReadControl -only-testing:ReadControlUITests/SmokeTest
-xcodebuild test -scheme ReadControl -only-testing:ReadControlUITests/SmokeTest/testLaunchCountsOpenAndSearch
 ```
 
-Run the whole suite, capturing results (screenshots-on-failure and logs land in the bundle):
+## Format & lint
+
+SwiftFormat rewrites code; SwiftLint checks it. SwiftFormat is configured to agree with
+SwiftLint, so formatting won't introduce lint violations. Run in this order:
 
 ```bash
-xcodebuild test -scheme ReadControl -resultBundlePath Results.xcresult
+make format     # swiftformat . — rewrites sources in place
+make lint       # swiftlint lint — reports remaining violations
 ```
-
-Pipe any of these through `xcbeautify` (`brew install xcbeautify`) for readable logs, and open
-`Results.xcresult` in Xcode — or extract attachments with `xcparse` — to inspect failures.
-
-### First run: permissions & signing
-
-- **Accessibility + Automation.** XCUITest synthesizes keyboard/mouse events and controls the app,
-  so the process running the tests needs permission. Grant the terminal app (or Xcode) both
-  **Accessibility** and **Automation** under System Settings → Privacy & Security; the first run
-  also prompts to allow controlling `ReadControl` — accept it.
-- **Signing.** If CLI signing fails for the new `ReadControlUITests` bundle, set a development team
-  (`DEVELOPMENT_TEAM`) or enable automatic signing in Xcode once.
-- **Hardened runtime.** If the app fails to launch under test, set `ENABLE_HARDENED_RUNTIME: NO`
-  for the **Debug** config only (in `project.yml`, then `make xcodegen`).
-- **Keyboard focus.** A running test steals keyboard focus and the suite runs serially
-  (`parallelizable: false`) — don't type on the machine while it runs.
-
-### Known host quirk: dropped keystrokes
-
-On some Macs, XCUITest's `typeText` drops the letter **"c"** and the **first keystroke** into a
-freshly focused field (`"coffee"` → `"offee"`), while paste (`⌘V`) inserts text correctly. If
-search/tag tests fail with mangled input, disable press-and-hold and restart, or check the active
-keyboard layout:
-
-```bash
-defaults write -g ApplePressAndHoldEnabled -bool false
-```
-
-The suite already routes search text through the pasteboard (`ReadingListPage.pasteSearch`) to
-sidestep this, so it isn't machine-dependent.
 
 ## Software updates (Sparkle)
 
-The app ships in-app updates via [Sparkle](https://sparkle-project.org). It's added as a Swift
-Package (`project.yml` → `packages.Sparkle`), so Xcode embeds and signs `Sparkle.framework`
-automatically — no manual embed phase. A **Check for Updates…** item sits in the app menu just
-below *About ReadControl*; the updater is created in `ReadControlApp.init` and left dormant under
-UI testing so the XCUITest suite stays offline. It's scoped to the update path only — it doesn't
-touch the core, the library format, or domain behavior.
+The app ships in-app updates via [Sparkle](https://sparkle-project.org), added as a Swift Package.
+A **Check for Updates…** item sits in the app menu below *About ReadControl*. Sparkle reads two
+keys from `Sources/ReadControl/App/Info.plist`:
 
-Sparkle reads two keys from `Sources/ReadControl/App/Info.plist`:
+- `SUFeedURL` — the appcast feed, set to `https://www.readcontrol.app/appcast.xml`.
+- `SUPublicEDKey` — your Sparkle EdDSA public key (currently a placeholder; set it before your
+  first public release, as it's baked into every shipped build).
 
-- `SUFeedURL` — the public URL of the `appcast.xml` feed. **Set** to
-  `https://www.readcontrol.app/appcast.xml`.
-- `SUPublicEDKey` — your Sparkle EdDSA (Ed25519) **public** key.
+### Shipping a release
 
-`SUFeedURL` already points at the production feed; `SUPublicEDKey` still holds a placeholder, so a
-locally-built app checks nothing yet (Sparkle refuses to install an update it can't verify). To
-actually ship updates:
-
-1. **Generate a signing key once** (stored in your login Keychain — never commit the private key):
-
-   ```bash
-   ./bin/generate_keys        # from the Sparkle distribution / SwiftPM artifact
-   ```
-
-   Copy the printed public key into `SUPublicEDKey` and re-run `make xcodegen` if you changed the
-   plist path.
-
-2. **Publish the appcast and the build.** Hosting is split in two, and the two are decoupled:
-   - The **feed** lives on the website at `https://www.readcontrol.app/appcast.xml` (served from
-     the `website` repo) — this is what `SUFeedURL` points at.
-   - The **`.dmg` builds** are attached to **GitHub Releases** at
-     `https://github.com/readcontrol/macos/releases`, and each `<enclosure url>` in `appcast.xml`
-     points at its release asset.
-
-   Bump `CFBundleShortVersionString` / `CFBundleVersion` in `Info.plist` for each release — Sparkle
-   compares them to decide when an update is available.
-
-3. **Build, sign & publish each release.** A shippable build must be **Developer ID signed,
-   notarized, and stapled** — Gatekeeper and Sparkle both reject an ad-hoc signature on a
-   downloaded update. `make release` runs the whole chain on one artifact: Developer ID sign →
-   notarize → staple → Sparkle EdDSA sign.
-
-   ```bash
-   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-   NOTARY_PROFILE=readcontrol-notary \
-   make release
-   ```
-
-   It prints the `sparkle:edSignature` and `length` for the appcast `<enclosure>`. Set that
-   element's `url` to the DMG's GitHub Releases download link, then commit the updated
-   `appcast.xml` to the `website` repo to publish it.
-
-   One-time setup for `make release`:
-   - a **Developer ID Application** certificate in your keychain — check with
-     `security find-identity -v -p codesigning` (create it in Xcode → Settings → Accounts →
-     Manage Certificates if missing);
-   - a notarytool credential profile:
-     `xcrun notarytool store-credentials readcontrol-notary --apple-id <email> --team-id <TEAMID> --password <app-specific-pw>`.
-
-Note: `make dmg` (+ `make sparkle-sign`) is the **ad-hoc, local-testing** path only — not
-notarized, so recipients must bypass Gatekeeper manually. Use `make release` for anything you
-publish. See `scripts/release-dmg.sh` (signed) and `scripts/package-dmg.sh` (ad-hoc).
-
-## Formatting & linting
-
-Two tools keep the Swift sources consistent, and they're set up to cooperate rather than fight:
-
-- **SwiftFormat** (`.swiftformat`) rewrites code — indentation, spacing, redundant syntax.
-- **SwiftLint** (`.swiftlint.yml`) checks code — style and the size/complexity thresholds.
-
-SwiftFormat is configured to agree with SwiftLint's rules (most notably `--commas inline`, so it
-never adds the trailing commas that SwiftLint's `trailing_comma` rule flags), so running the
-formatter won't introduce lint violations. Run them in this order:
+A public build must be **Developer ID signed, notarized, and stapled** — Gatekeeper and Sparkle
+both reject an ad-hoc signature on a downloaded update. `make release` does the whole chain
+(sign → notarize → staple → Sparkle-sign) and prints the appcast `edSignature` + `length`:
 
 ```bash
-make format        # swiftformat . — rewrites sources in place
-make lint          # swiftlint lint — reports remaining violations
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_PROFILE=readcontrol-notary \
+make release
 ```
 
-Other targets:
+It needs a Developer ID Application certificate and a notarytool profile (created once with
+`xcrun notarytool store-credentials`). Then upload the `.dmg` to GitHub Releases and add an
+`<item>` to `appcast.xml` in the `website` repo.
+
+`make dmg` is the ad-hoc, local-testing path only (not notarized).
+
+## Make targets
 
 ```bash
-make format-check  # swiftformat --lint . — fail if anything is unformatted (CI / pre-commit)
-make lint-fix      # swiftlint --fix — auto-correct the safe SwiftLint violations
-```
-
-Both configs exclude the generated bindings, the vendored framework, and build output.
-
-## Debugging: SQL tracing
-
-The app embeds `core`, which logs every SQL statement to stderr when the `SQL_TRACE`
-environment variable is set — handy for checking whether the UI is issuing too many queries. See
-the [core README](../core/README.md#debugging-sql-tracing) for the output format and a
-one-liner that ranks statements by frequency.
-
-First rebuild the framework so the app links the traced core:
-
-```bash
-make xcframework
-```
-
-Then launch the app with the variable set:
-
-- **From Xcode** — Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables, add
-  `SQL_TRACE = 1`, then Run. The `[sql …]` lines print to the debug console.
-- **From the terminal** — run the built binary directly so stderr streams to your terminal
-  (launching from Finder or `open` hides it):
-
-```bash
-APP=$(ls -dt ~/Library/Developer/Xcode/DerivedData/ReadControl-*/Build/Products/Debug/ReadControl.app | head -1)
-SQL_TRACE=1 "$APP/Contents/MacOS/ReadControl"
-```
-
-The logs go to stderr only — not a file or Console.app. To keep them, redirect:
-`SQL_TRACE=1 "$APP/Contents/MacOS/ReadControl" 2>&1 | tee ~/readcontrol-sql.log`.
-
-## Other make targets
-
-```bash
-make xcframework   # rebuild the XCFramework from core
-make bindings      # copy generated Swift bindings (runs xcframework first)
-make xcodegen      # regenerate ReadControl.xcodeproj from project.yml
+make all           # build XCFramework + bindings + generate the Xcode project
+make test          # run the test suites
 make dmg           # ad-hoc-signed .dmg for local testing (not notarized)
 make release       # Developer ID signed + notarized + stapled + Sparkle-signed .dmg
-make sparkle-sign  # sign the built .dmg with your Sparkle key (see Software updates)
-make format        # reformat Swift sources with SwiftFormat
-make format-check  # check formatting without editing
-make lint          # lint Swift sources with SwiftLint
-make lint-fix      # auto-fix safe SwiftLint violations
-make clean         # remove Frameworks/, GeneratedBindings/, and ReadControl.xcodeproj
+make format        # reformat with SwiftFormat
+make lint          # lint with SwiftLint
+make clean         # remove generated framework, bindings, and project
 ```
+
+## Debugging
+
+The embedded `core` logs every SQL statement to stderr when `SQL_TRACE=1` is set — see the
+[core README](../core/README.md#debugging-sql-tracing).
