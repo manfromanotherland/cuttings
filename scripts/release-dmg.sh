@@ -95,7 +95,24 @@ ln -s /Applications "$STAGING/Applications"   # drag-to-install target
 
 echo "==> Creating $DMG_PATH"
 mkdir -p "$DIST"
-hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG_PATH"
+# A stale volume of the same name — left mounted by a previous run or opened in
+# Finder — makes hdiutil fail with "Resource busy"; detach it first.
+if [ -d "/Volumes/$APP_NAME" ]; then
+  hdiutil detach "/Volumes/$APP_NAME" -force >/dev/null 2>&1 || true
+fi
+# Spotlight/antivirus can transiently lock the staging dir mid-create, so retry.
+attempt=1
+until hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG_PATH"; do
+  if [ "$attempt" -ge 3 ]; then
+    echo "error: hdiutil create kept failing (Resource busy) after $attempt tries." >&2
+    echo "       Close any Finder window on the ReadControl volume, then check:" >&2
+    echo "         hdiutil info   # detach any stale ReadControl image" >&2
+    exit 1
+  fi
+  echo "    hdiutil busy — retrying ($attempt)…" >&2
+  attempt=$((attempt + 1))
+  sleep 3
+done
 rm -rf "$STAGING"
 
 echo "==> Notarizing (uploads to Apple and waits — can take a few minutes)"
