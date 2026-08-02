@@ -1,48 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Combine
 import Sparkle
 import SwiftUI
 
 /// The "Check for Updates…" item, placed in the app menu just below "About
-/// ReadControl". Sparkle enables it only while a check can actually start — not
-/// while one is already running, and not before the updater has finished
-/// launching — which is exactly what `canCheckForUpdates` tracks.
+/// ReadControl".
+///
+/// It is always enabled. Sparkle's `SPUUpdater.canCheckForUpdates` — which would
+/// let us grey the item out while a check is in flight — is `@MainActor`-isolated,
+/// so it can't be observed through a Combine key-path publisher under Swift 6
+/// (the `KeyPath` would escape the isolation). Sparkle already ignores a check
+/// requested while one is running, so gating the button added no real protection.
 struct UpdateCommands: Commands {
     let updater: SPUUpdater
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
-            CheckForUpdatesButton(updater: updater)
+            Button("Check for Updates…") {
+                updater.checkForUpdates()
+            }
         }
-    }
-}
-
-/// Republishes the updater's `canCheckForUpdates` (a KVO-observable property on
-/// Sparkle's `SPUUpdater`) as an `@Published` value SwiftUI can bind to, so the
-/// menu item greys out while a check is in flight.
-private final class CheckForUpdatesViewModel: ObservableObject {
-    @Published var canCheckForUpdates = false
-
-    init(updater: SPUUpdater) {
-        updater.publisher(for: \.canCheckForUpdates)
-            .assign(to: &$canCheckForUpdates)
-    }
-}
-
-private struct CheckForUpdatesButton: View {
-    @StateObject private var viewModel: CheckForUpdatesViewModel
-    private let updater: SPUUpdater
-
-    init(updater: SPUUpdater) {
-        self.updater = updater
-        _viewModel = StateObject(wrappedValue: CheckForUpdatesViewModel(updater: updater))
-    }
-
-    var body: some View {
-        Button("Check for Updates…") {
-            updater.checkForUpdates()
-        }
-        .disabled(!viewModel.canCheckForUpdates)
     }
 }
