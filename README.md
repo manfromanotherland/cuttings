@@ -1,12 +1,12 @@
 # extension
 
-The browser plugin (Manifest V3, TypeScript) for **Read Control**, a local-first read-it-later
+The browser plugin (Manifest V3, TypeScript) for **ReadControl**, a local-first read-it-later
 system. It extracts and cleans the current page (Readability-style extraction + HTML→Markdown)
 and hands the result to the native messaging host, which saves it into your library folder.
 
 **License:** MIT — see [LICENSE](./LICENSE).
 
-Part of the **Read Control** project →
+Part of the **ReadControl** project →
 [github.com/readcontrol/root](https://github.com/readcontrol/root)
 (architecture, library-format contract, design, and backlog). The native messaging host lives in
 [core](https://github.com/readcontrol/core).

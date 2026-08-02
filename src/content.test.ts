@@ -15,14 +15,14 @@ describe("showToast", () => {
     showToast({
       action: "toast",
       status: "ok",
-      title: "Saved to Read Control",
+      title: "Saved to ReadControl",
       detail: "My Article",
     });
 
     const host = document.getElementById(HOST_ID);
     expect(host).not.toBeNull();
     expect(host!.shadowRoot).not.toBeNull();
-    expect(host!.shadowRoot!.textContent).toContain("Saved to Read Control");
+    expect(host!.shadowRoot!.textContent).toContain("Saved to ReadControl");
     expect(host!.shadowRoot!.textContent).toContain("My Article");
   });
 
@@ -73,7 +73,7 @@ describe("showToast", () => {
     showToast({
       action: "toast",
       status: "ok",
-      title: "Saved to Read Control",
+      title: "Saved to ReadControl",
       detail: "My Article",
     });
 
@@ -82,7 +82,7 @@ describe("showToast", () => {
     const root = host.shadowRoot!;
     expect(root.querySelector(".badge")).not.toBeNull();
     expect(root.querySelector(".spinner")).toBeNull();
-    expect(root.querySelector(".title")!.textContent).toBe("Saved to Read Control");
+    expect(root.querySelector(".title")!.textContent).toBe("Saved to ReadControl");
     expect(root.querySelector(".detail")!.textContent).toBe("My Article");
     expect(host.dataset.status).toBe("ok");
   });
@@ -108,7 +108,7 @@ describe("showToast", () => {
     showToast({
       action: "toast",
       status: "ok",
-      title: "Saved to Read Control",
+      title: "Saved to ReadControl",
       detail: "My Article",
     });
 
@@ -117,6 +117,6 @@ describe("showToast", () => {
     expect(host!.dataset.status).toBe("ok");
     expect(host!.shadowRoot!.querySelector(".badge")).not.toBeNull();
     expect(host!.shadowRoot!.querySelector(".spinner")).toBeNull();
-    expect(host!.shadowRoot!.querySelector(".title")!.textContent).toBe("Saved to Read Control");
+    expect(host!.shadowRoot!.querySelector(".title")!.textContent).toBe("Saved to ReadControl");
   });
 });

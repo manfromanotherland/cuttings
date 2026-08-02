@@ -74,7 +74,7 @@ chrome.runtime.onInstalled.addListener(() => {
   void setIcon();
   chrome.contextMenus.create({
     id: CONTEXT_MENU_ID,
-    title: "Save to Read Control",
+    title: "Save to ReadControl",
     contexts: ["page"],
   });
 });
@@ -186,7 +186,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
 
   if (response.ok) {
     await showBadge(tabId, "ok");
-    await showToast(tabId, "ok", "Saved to Read Control", capture.metadata.title);
+    await showToast(tabId, "ok", "Saved to ReadControl", capture.metadata.title);
     markSaved(tabId, tab.url, capture.metadata.canonical_url);
     await log("info", "Saved", { url: tab.url, title: capture.metadata.title });
   } else if (response.error === "duplicate") {
@@ -242,7 +242,7 @@ async function notifyHostMissing(tabId: number): Promise<void> {
     await chrome.notifications.create(NOTIF_HOST_MISSING, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
-      title: "Read Control — Native Host Not Found",
+      title: "ReadControl — Native Host Not Found",
       message:
         "The native helper isn't installed yet. Click this notification to see how to install it.",
       requireInteraction: true,
