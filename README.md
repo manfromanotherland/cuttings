@@ -1,29 +1,22 @@
 # core
 
 The Rust engine for **ReadControl**, a local-first read-it-later system. This repo is a Cargo
-workspace containing two crates:
+workspace containing:
 
 - **`core`** (`readcontrol-core`) — the engine: library scanning/indexing, full-text search
   (SQLite + FTS5), tags, item state, and reading read/write. Embedded by the macOS client via
   UniFFI.
 - **`native-host`** — the browser **native messaging host**: receives cleaned Markdown + image
-  URLs from the extension and writes them into the library folder (it writes files only, never
-  the index).
+  URLs from the extension and writes them into the library folder (files only, never the index).
 
 **License:** MIT — see [LICENSE](./LICENSE).
 
-Part of the **ReadControl** project →
-[github.com/readcontrol/root](https://github.com/readcontrol/root)
-(architecture, library-format contract, design, and backlog).
+Part of the **ReadControl** project → [github.com/readcontrol/root](https://github.com/readcontrol/root).
 
 ## Prerequisites
 
 - [Rust](https://rustup.rs) (stable toolchain via `rustup`)
-- For building the XCFramework (macOS app only): Apple silicon + Intel targets
-
-```bash
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
-```
+- For the macOS XCFramework build: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 
 ## Build & test
 
@@ -34,76 +27,38 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --check
 ```
 
+## Native messaging host
+
+The native host is what the browser extension talks to when saving a page.
+
+```bash
+cargo build -p native-host --release
+
+# install browser manifests so Chrome/Edge/Firefox can find the host:
+./target/release/native-host --install-manifest --extension-id <your-32-char-id>
+```
+
+The `--extension-id` gates which extension may connect (get it from `chrome://extensions` after
+loading the unpacked [extension](https://github.com/readcontrol/extension)). Re-run it whenever the
+ID changes or you rebuild the binary at a new path.
+
+## XCFramework (for the macOS app)
+
+The macOS client embeds `core` as an XCFramework via UniFFI bindings:
+
+```bash
+./scripts/build-xcframework.sh --release   # outputs dist/ReadControlCore.xcframework + dist/swift/
+```
+
+The macOS app's `Makefile` (`make xcframework`) runs this automatically.
+
 ## Debugging: SQL tracing
 
-Set the `SQL_TRACE` environment variable to log every executed SQL statement — with its
-wall-clock duration and a running counter — to **stderr**. It's a no-op unless the variable is
-set, so normal builds pay nothing. Useful for spotting chatty callers and N+1 patterns: a query
-that repeats dozens of times per action shows up as an obvious run of identical lines.
+Set `SQL_TRACE=1` to log every executed SQL statement (with duration) to **stderr** — useful for
+spotting chatty callers and N+1 patterns. It's a no-op when unset.
 
 ```bash
 SQL_TRACE=1 cargo test -p readcontrol-core -- --nocapture
 ```
 
-Each line is one statement SQLite ran (including the FTS-sync triggers). Durations under 1ms are
-printed in microseconds for granularity, otherwise in milliseconds:
-
-```
-[sql #1  38.00µs] SELECT ... FROM readings WHERE id = ?
-[sql #2   1.20ms] SELECT id, title FROM readings ORDER BY saved_at DESC
-```
-
-To find the worst offenders, capture stderr to a file and collapse duplicates so the most
-frequent statements float to the top:
-
-```bash
-SQL_TRACE=1 cargo test -p readcontrol-core -- --nocapture 2> /tmp/sql.log
-grep '^\[sql' /tmp/sql.log \
-  | sed -E 's/^\[sql #[0-9]+ +[^]]*\] //' \
-  | sort | uniq -c | sort -rn | head -20
-```
-
-The macOS app embeds this crate, so the same variable works there — see the
-[app's README](../macos/README.md#debugging-sql-tracing) for how to launch it with
-`SQL_TRACE` set.
-
-## Native messaging host
-
-The native host is what the browser extension talks to when saving a page.
-
-**Build:**
-```bash
-cargo build -p native-host --release
-```
-
-**Install** (writes browser manifest files so Chrome/Edge/Firefox can find the host):
-```bash
-./target/release/native-host --install-manifest --extension-id <your-32-char-id>
-```
-
-This creates `app.readcontrol.host.json` in the appropriate native messaging manifest directories
-for Chrome, Edge, Chromium, and Firefox on macOS.
-
-**Wiring the extension ID:** the `--extension-id` value gates which extension may connect — it
-becomes `chrome-extension://<id>/` in the manifest's `allowed_origins` (Chrome/Edge) and the
-`allowed_extensions` entry (Firefox). Get the ID from `chrome://extensions` after loading the
-unpacked extension (see [extension](https://github.com/readcontrol/extension)).
-
-If you omit `--extension-id`, the manifest is written with a placeholder origin
-(`chrome-extension://PLACEHOLDER_EXTENSION_ID/`) and the browser will refuse to connect — useful
-only as a dry run. Re-run the command whenever the extension ID changes or you rebuild the binary
-at a new path (the manifest records the absolute path to the host binary).
-
-## XCFramework (for the macOS app)
-
-The macOS SwiftUI client embeds `core` as an XCFramework via UniFFI bindings.
-
-```bash
-./scripts/build-xcframework.sh --release
-```
-
-Outputs:
-- `dist/ReadControlCore.xcframework` — linkable XCFramework
-- `dist/swift/` — generated Swift bindings
-
-The macOS app's `Makefile` (`make xcframework`) runs this automatically.
+The macOS app embeds this crate, so the same variable works there too.
