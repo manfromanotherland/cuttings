@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build ReadControl.app in Release, sign it with your Apple Developer ID, wrap it
-# in a .dmg, notarize it with Apple, and staple the ticket — a real, shippable,
-# Gatekeeper-passing build (unlike the ad-hoc `make dmg`).
+# Build ReadControl.app in Release, sign it with your Apple Developer ID, then
+# notarize and staple BOTH the app and the .dmg that wraps it — a real, shippable,
+# build that opens on any Mac (unlike the ad-hoc `make dmg`).
 #
 # This does NOT create the Sparkle EdDSA signature. Run `make sparkle-sign`
 # afterwards (or just use `make release`, which runs it for you on the final,
@@ -87,6 +87,23 @@ sign --entitlements "$ENTITLEMENTS" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 echo "    signature OK (Developer ID, hardened runtime)"
 
+# Notarize and staple the APP itself. If only the .dmg is stapled (below), the
+# copy a user drags to /Applications has no offline-verifiable ticket, so its
+# first launch depends on an ONLINE notarization check and is blocked when that
+# can't complete (offline machine, flaky network) — the "can't be opened / remove
+# the quarantine" symptom. Stapling the app makes its notarization travel with it.
+echo "==> Notarizing the app (uploads to Apple and waits — a few minutes)"
+APP_ZIP="$DIST/${APP_NAME}-app.zip"
+mkdir -p "$DIST"
+rm -f "$APP_ZIP"
+ditto -c -k --keepParent "$APP" "$APP_ZIP"
+xcrun notarytool submit "$APP_ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+rm -f "$APP_ZIP"
+
+echo "==> Stapling the ticket to the app"
+xcrun stapler staple "$APP"
+xcrun stapler validate "$APP"
+
 echo "==> Staging .dmg contents"
 rm -rf "$STAGING" "$DMG_PATH"
 mkdir -p "$STAGING"
@@ -130,12 +147,15 @@ echo "==> Stapling the notarization ticket to the .dmg"
 xcrun stapler staple "$DMG_PATH"
 
 echo "==> Verifying"
-# stapler validate is the authoritative check that the .dmg carries a valid
-# notarization ticket. spctl's Gatekeeper assessment of disk images varies by
-# macOS version (and is being deprecated), so treat it as informational only.
+# stapler validate is the authoritative check that a ticket is attached. For the
+# APP, `spctl -a -t exec` is Gatekeeper's real verdict; for the .dmg, spctl's
+# image assessment varies by macOS version, so keep both spctl checks advisory.
+xcrun stapler validate "$APP"
 xcrun stapler validate "$DMG_PATH"
+spctl -a -t exec -vv "$APP" \
+  || echo "    note: spctl app assessment inconclusive — 'stapler validate' passed, which is what matters"
 spctl --assess --type open --context context:primary-signature -vv "$DMG_PATH" \
-  || echo "    note: spctl assessment inconclusive — 'stapler validate' passed, which is what matters"
+  || echo "    note: spctl dmg assessment inconclusive — 'stapler validate' passed, which is what matters"
 
 echo "==> Done: $DMG_PATH  (Developer ID signed + notarized + stapled)"
 echo "    Next: 'make sparkle-sign' for the appcast EdDSA signature (or use 'make release')."
