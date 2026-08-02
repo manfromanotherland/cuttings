@@ -28,7 +28,7 @@ final class FirstRunJourney: UITestCase {
         XCTAssertTrue(sidebar.waitForCount(.unread, equals: 1), "Unread should be 1")
 
         // 4. The Welcome article is auto-selected and rendered as native text.
-        XCTAssertEqual(reader.titleText, "Welcome to Read Control")
+        XCTAssertEqual(reader.titleText, "Welcome to ReadControl")
         XCTAssertTrue(
             reader.bodyContains("distraction-free reading app"),
             "Reader should render the welcome body as text"

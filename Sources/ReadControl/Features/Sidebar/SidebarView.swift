@@ -77,7 +77,7 @@ struct SidebarView: View {
             }
             .background(.background)
         }
-        .navigationTitle("Read Control")
+        .navigationTitle("ReadControl")
     }
 
     // ── Settings button ───────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-Read Control is a distraction-free reading app that keeps your saved articles in a folder you control — on iCloud Drive, Dropbox, or any directory you like. No accounts, no servers, just files.
+ReadControl is a distraction-free reading app that keeps your saved articles in a folder you control — on iCloud Drive, Dropbox, or any directory you like. No accounts, no servers, just files.
 
 ## Saving Articles
 
@@ -26,7 +26,7 @@ Select any passage of text in the reader and right-click to choose **Highlight**
 
 The sentence below has been highlighted so you can see what it looks like:
 
-Read Control keeps your articles where you can always find them.
+ReadControl keeps your articles where you can always find them.
 
 ## Search
 
@@ -46,10 +46,10 @@ Open **Preferences → Typography** to choose your font family, size, and line w
 
 ## Keyboard Shortcuts
 
-Press **⌘/** to open the keyboard-shortcuts cheat sheet. Every action in Read Control has a shortcut so you can move through your library without lifting your hands from the keyboard.
+Press **⌘/** to open the keyboard-shortcuts cheat sheet. Every action in ReadControl has a shortcut so you can move through your library without lifting your hands from the keyboard.
 
 ---
 
-*Welcome. I hope Read Control becomes your favourite place to read.*
+*Welcome. I hope ReadControl becomes your favourite place to read.*
 
 — Rodrigo Boniatti

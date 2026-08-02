@@ -1,4 +1,4 @@
-# SwiftFormat configuration for the Read Control macOS app.
+# SwiftFormat configuration for the ReadControl macOS app.
 #
 # SwiftFormat rewrites code; SwiftLint (.swiftlint.yml) checks it. These options
 # keep the two tools from fighting over the same source:

@@ -23,7 +23,7 @@
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>NSHumanReadableDescription</key>
-    <string>Local-first Read Control app.</string>
+    <string>Local-first ReadControl app.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

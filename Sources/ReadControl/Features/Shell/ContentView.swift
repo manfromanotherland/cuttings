@@ -155,7 +155,7 @@ private struct OnboardingView: View {
             Image(systemName: "tray.and.arrow.down")
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
-            Text("Welcome to Read Control")
+            Text("Welcome to ReadControl")
                 .font(.title)
                 .accessibilityIdentifier(A11y.Onboarding.title)
             Text("Choose an existing library folder or create a new one.")

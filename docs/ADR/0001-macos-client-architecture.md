@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-`macos` is the native SwiftUI client for **Read Control**, a
+`macos` is the native SwiftUI client for **ReadControl**, a
 local-first read-later app. It embeds `core` through UniFFI.
 
 The Rust core is the owner of the product domain:
