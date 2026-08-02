@@ -223,7 +223,7 @@ fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json:
     );
     json!({
         "name": HOST_NAME,
-        "description": "Read Control native messaging host",
+        "description": "ReadControl native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_origins": [origin]
@@ -233,7 +233,7 @@ fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json:
 fn firefox_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json::Value {
     json!({
         "name": HOST_NAME,
-        "description": "Read Control native messaging host",
+        "description": "ReadControl native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_extensions": [extension_id.unwrap_or(FIREFOX_DEFAULT_EXTENSION_ID)]

@@ -1,6 +1,6 @@
 # core
 
-The Rust engine for **Read Control**, a local-first read-it-later system. This repo is a Cargo
+The Rust engine for **ReadControl**, a local-first read-it-later system. This repo is a Cargo
 workspace containing two crates:
 
 - **`core`** (`readcontrol-core`) — the engine: library scanning/indexing, full-text search
@@ -12,7 +12,7 @@ workspace containing two crates:
 
 **License:** MIT — see [LICENSE](./LICENSE).
 
-Part of the **Read Control** project →
+Part of the **ReadControl** project →
 [github.com/readcontrol/root](https://github.com/readcontrol/root)
 (architecture, library-format contract, design, and backlog).
 

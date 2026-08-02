@@ -29,7 +29,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         Err(_) => {
             return Ok(SaveResponse::error(
                 "library_not_configured",
-                "No library folder has been set. Open the Read Control app to configure one.",
+                "No library folder has been set. Open the ReadControl app to configure one.",
             ))
         }
     };
