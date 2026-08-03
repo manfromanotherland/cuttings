@@ -1,23 +1,32 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/readcontrol/root/main/assets/icon.png" alt="ReadControl" width="128">
+</p>
+<h1 align="center">ReadControl</h1>
+<p align="center">
+  The native macOS reading manager
+  <br />
+  <a href="https://github.com/readcontrol/macos">macOS</a>
+  ·
+  <a href="https://github.com/readcontrol/core">core</a>
+  ·
+  <a href="https://github.com/readcontrol/extension">extension</a>
+  ·
+  <a href="https://github.com/readcontrol/root">root</a>
+</p>
+
+---
+
 # extension
 
 The browser plugin (Manifest V3, TypeScript) for **ReadControl**, a local-first read-it-later
 system. It extracts and cleans the current page (Readability-style extraction + HTML→Markdown)
 and hands the result to the native messaging host, which saves it into your library folder.
 
-**License:** MIT — see [LICENSE](./LICENSE).
-
-Part of the **ReadControl** project → [github.com/readcontrol/root](https://github.com/readcontrol/root).
-The native messaging host lives in [core](https://github.com/readcontrol/core).
-
-## Prerequisites
-
-- [Node.js](https://nodejs.org) 18+ and npm
-
 ## Build
 
 ```bash
 npm install
-npm run build      # bundles the extension into dist/
+npm run build
 ```
 
 ## Load in the browser
@@ -66,7 +75,7 @@ content, and Turndown to convert it to Markdown.
 ## Test & lint
 
 ```bash
-npm test           # Vitest unit tests
-npm run lint       # tsc --noEmit + ESLint + Prettier
-npm run lint:fix   # auto-fix lint and formatting
+npm test
+npm run lint
+npm run lint:fix
 ```
