@@ -41,6 +41,10 @@ Web Store, Edge Add-ons, or [AMO](https://addons.mozilla.org). Bump the
 `version` in `manifest.json` before packaging; the stores reject a re-upload of
 an existing version. Requires `zip` (preinstalled on macOS).
 
+The packaged manifest drops the `key` field — it pins a stable extension ID for
+local unpacked development, but the Chrome Web Store manages signing itself and
+rejects any upload that carries `key`. `manifest.json` on disk keeps it.
+
 ## Load in the browser
 
 **Chrome / Edge**
