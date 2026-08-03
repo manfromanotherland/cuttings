@@ -20,7 +20,7 @@ type IconState = "default" | "saved";
 
 /** The saved state is the same artwork carrying a green check badge. */
 function iconPaths(state: IconState): Record<number, string> {
-  const stem = state === "saved" ? "icons/icon-saved" : "icons/icon";
+  const stem = state === "saved" ? "/icons/icon-saved" : "/icons/icon";
   return { 16: `${stem}-16.png`, 32: `${stem}-32.png`, 48: `${stem}-48.png` };
 }
 
