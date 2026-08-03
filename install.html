@@ -5,27 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Get the ReadControl app</title>
     <style>
+      /* ReadControl "paper" palette — shared with the website. See DESIGN.md. */
       :root {
-        --blue: #3b82f6;
-        --blue-dark: #1d4ed8;
-        --red: #ef4444;
-        --text: #111827;
-        --text-muted: #6b7280;
-        --bg: #ffffff;
-        --bg-muted: #f9fafb;
-        --border: #e5e7eb;
+        --accent: #17181a; /* dark ink; the primary action, never blue */
+        --accent-hover: #35363a;
+        --accent-fg: #f7f6f4; /* text on the ink action */
+        --red: #ff5f57;
+        --text: #17181a;
+        --text-muted: #55565a;
+        --bg: #fdfcfb;
+        --bg-muted: #f6f5f4;
+        --border: rgb(23 24 26 / 0.12);
         --radius: 8px;
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
 
+      /* ReadControl "charcoal" palette — the website's dark theme; ink inverts. */
       @media (prefers-color-scheme: dark) {
         :root {
-          --text: #f9fafb;
-          --text-muted: #9ca3af;
-          --bg: #111827;
-          --bg-muted: #1f2937;
-          --border: #374151;
+          --accent: #e8e9eb;
+          --accent-hover: #f1f2f4;
+          --accent-fg: #17181a;
+          --text: #f1f0ee;
+          --text-muted: #9a9a9e;
+          --bg: #0d0d0f;
+          --bg-muted: #161618;
+          --border: rgb(255 255 255 / 0.1);
         }
       }
 
@@ -100,8 +106,8 @@
         min-width: 26px;
         height: 26px;
         border-radius: 50%;
-        background: var(--blue);
-        color: white;
+        background: var(--accent);
+        color: var(--accent-fg);
         font-size: 13px;
         font-weight: 700;
         display: flex;
@@ -141,27 +147,6 @@
         margin: 28px 0;
       }
 
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 13px;
-        font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 20px;
-        background: #fef9c3;
-        color: #92400e;
-        border: 1px solid #fde68a;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        .badge {
-          background: #292524;
-          color: #fbbf24;
-          border-color: #44403c;
-        }
-      }
-
       .note {
         font-size: 13px;
         color: var(--text-muted);
@@ -178,8 +163,8 @@
         gap: 8px;
         margin-bottom: 36px;
         padding: 11px 20px;
-        background: var(--blue);
-        color: white;
+        background: var(--accent);
+        color: var(--accent-fg);
         font-size: 15px;
         font-weight: 600;
         text-decoration: none;
@@ -187,7 +172,7 @@
       }
 
       .download:hover {
-        background: var(--blue-dark);
+        background: var(--accent-hover);
       }
     </style>
   </head>

@@ -80,7 +80,8 @@ export function showToast({ status, title, detail, cta }: ToastMessage): void {
   existingHost?.remove();
 
   const isLoading = status === "loading";
-  const accent = status === "ok" ? "#22C55E" : isLoading ? "#3B82F6" : "#EF4444";
+  // ReadControl paper/ink palette (shared with the website); heart red for errors.
+  const accent = status === "ok" ? "#22C55E" : isLoading ? "#17181A" : "#FF5F57";
   const icon = status === "ok" ? "✓" : "✕";
 
   const host = document.createElement("div");
@@ -100,9 +101,9 @@ export function showToast({ status, title, detail, cta }: ToastMessage): void {
         box-sizing: border-box; max-width: 340px;
         padding: 12px 14px;
         font: 500 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-        color: #0F172A; background: #FFFFFF;
-        border: 1px solid #E2E8F0; border-left: 4px solid ${accent};
-        border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+        color: #17181A; background: #FDFCFB;
+        border: 1px solid rgba(23, 24, 26, 0.12); border-left: 4px solid ${accent};
+        border-radius: 8px; box-shadow: 0 8px 24px rgba(23, 24, 26, 0.18);
         animation: rl-in 180ms ease-out;
         transition: border-left-color 250ms ease;
       }
@@ -120,23 +121,23 @@ export function showToast({ status, title, detail, cta }: ToastMessage): void {
       .text { min-width: 0; flex: 1; }
       .title { font-weight: 600; }
       .detail {
-        margin-top: 2px; color: #64748B; font-weight: 400;
+        margin-top: 2px; color: #55565A; font-weight: 400;
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
       .close {
         cursor: pointer; background: none; border: none; padding: 0; font-family: inherit;
         flex: 0 0 auto; width: 20px; height: 20px; border-radius: 4px;
         display: grid; place-items: center;
-        color: #94A3B8; font-size: 16px; line-height: 1;
+        color: #85868B; font-size: 16px; line-height: 1;
       }
-      .close:hover { color: #0F172A; background: #F1F5F9; }
+      .close:hover { color: #17181A; background: #EEEDEC; }
       .cta {
         margin-top: 8px; cursor: pointer;
-        background: #0F172A; color: #FFFFFF; border: none;
+        background: #17181A; color: #F7F6F4; border: none;
         border-radius: 6px; padding: 6px 12px;
         font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       }
-      .cta:hover { background: #1E293B; }
+      .cta:hover { background: #35363A; }
     </style>
     <div class="toast">
       ${
@@ -192,7 +193,7 @@ function updateToast(
   cta?: ToastCta,
 ): void {
   const root = host.shadowRoot!;
-  const accent = status === "ok" ? "#22C55E" : "#EF4444";
+  const accent = status === "ok" ? "#22C55E" : "#FF5F57";
   const icon = status === "ok" ? "✓" : "✕";
 
   const toastEl = root.querySelector<HTMLElement>(".toast")!;
