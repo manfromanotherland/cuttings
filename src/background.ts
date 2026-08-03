@@ -174,12 +174,17 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     response = await sendNativeMessage<SaveRequest, SaveResponse>(request);
   } catch (err) {
     if (err instanceof Error && isHostMissing(err)) {
-      await log("warn", "Native host not found", { error: err });
+      await log("warn", "ReadControl app not installed", { error: err });
       await notifyHostMissing(tabId);
     } else {
       await showBadge(tabId, "error");
-      await showToast(tabId, "error", "Couldn't save page", "The native helper returned an error.");
-      await log("error", "Native host error", { url: tab.url, error: err });
+      await showToast(
+        tabId,
+        "error",
+        "Couldn't save page",
+        "The ReadControl app returned an error.",
+      );
+      await log("error", "ReadControl app error", { url: tab.url, error: err });
     }
     return;
   }
@@ -235,9 +240,9 @@ async function notifyHostMissing(tabId: number): Promise<void> {
   await showToast(
     tabId,
     "error",
-    "Native helper not installed",
-    "ReadControl needs a small native helper to save pages.",
-    { label: "How to install", command: "open-install" },
+    "ReadControl isn't installed",
+    "You need the ReadControl app to save pages to your library.",
+    { label: "Download ReadControl", command: "open-install" },
   );
   // A desktop notification is a fallback for pages where no toast can render
   // (chrome:// pages, the web store, PDFs — the content script can't run there).
@@ -245,9 +250,8 @@ async function notifyHostMissing(tabId: number): Promise<void> {
     await chrome.notifications.create(NOTIF_HOST_MISSING, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
-      title: "ReadControl — Native Host Not Found",
-      message:
-        "The native helper isn't installed yet. Click this notification to see how to install it.",
+      title: "ReadControl isn't installed",
+      message: "You need the ReadControl app to save pages. Click here to download it.",
       requireInteraction: true,
     });
   } catch (err) {

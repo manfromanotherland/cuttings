@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ReadControl — Install Native Host</title>
+    <title>Get the ReadControl app</title>
     <style>
       :root {
         --blue: #3b82f6;
@@ -171,6 +171,24 @@
         padding: 12px 16px;
         line-height: 1.6;
       }
+
+      .download {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 36px;
+        padding: 11px 20px;
+        background: var(--blue);
+        color: white;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: var(--radius);
+      }
+
+      .download:hover {
+        background: var(--blue-dark);
+      }
     </style>
   </head>
   <body>
@@ -179,22 +197,25 @@
         <img src="icons/icon-128.png" alt="ReadControl" />
       </div>
 
-      <h1>Install the Native Host</h1>
+      <h1>Get the ReadControl app</h1>
       <p class="subtitle">
-        The ReadControl extension needs a small helper app installed on your Mac to save pages to
-        your library. Here's how to set it up.
+        To save pages to your library, you need the free ReadControl app on your Mac. The extension
+        hands each page to the app, which saves it as a file you own.
       </p>
 
-      <div class="section">
-        <h2>Option A — Using the macOS app (recommended)</h2>
+      <a class="download" href="https://readcontrol.app" target="_blank" rel="noopener">
+        Download ReadControl →
+      </a>
 
+      <div class="section">
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-body">
-            <div class="step-title">Open the ReadControl app</div>
+            <div class="step-title">Download and install the app</div>
             <div class="step-desc">
-              Launch <strong>ReadControl</strong> from your Applications folder. The app installs the
-              native host automatically on first launch.
+              Get ReadControl from
+              <a href="https://readcontrol.app" target="_blank" rel="noopener">readcontrol.app</a>
+              and move it to your Applications folder.
             </div>
           </div>
         </div>
@@ -202,9 +223,10 @@
         <div class="step">
           <div class="step-num">2</div>
           <div class="step-body">
-            <div class="step-title">Choose your library folder</div>
+            <div class="step-title">Open it once</div>
             <div class="step-desc">
-              If prompted, pick or create a folder where your saved articles will live.
+              Launch <strong>ReadControl</strong> and choose the folder where your saved pages will
+              live. It connects to this extension automatically.
             </div>
           </div>
         </div>
@@ -212,56 +234,21 @@
         <div class="step">
           <div class="step-num">3</div>
           <div class="step-body">
-            <div class="step-title">Try saving a page again</div>
+            <div class="step-title">Save any page</div>
             <div class="step-desc">
-              Click the ReadControl toolbar button (or press
-              <code>⌃⇧S</code>) on any page.
+              Click the ReadControl toolbar button (or press <code>⌃⇧S</code>) on any page you want
+              to keep.
             </div>
           </div>
-        </div>
-      </div>
-
-      <hr class="divider" />
-
-      <div class="section">
-        <h2>Option B — Manual install via Terminal</h2>
-
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-body">
-            <div class="step-title">Open Terminal</div>
-            <div class="step-desc">
-              Find it in <strong>Applications → Utilities → Terminal</strong>, or press
-              <code>⌘Space</code> and type "Terminal".
-            </div>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-body">
-            <div class="step-title">Run the install command</div>
-            <div class="step-desc">
-              Navigate to the ReadControl app bundle and run the native host binary with the install
-              flag:
-            </div>
-          </div>
-        </div>
-
-        <div class="note">
-          Open the ReadControl app, then go to
-          <strong>Settings → Extensions</strong> and click
-          <strong>Reinstall Manifest</strong>. This runs the install for you.
         </div>
       </div>
 
       <hr class="divider" />
 
       <p class="note">
-        <strong>Still not working?</strong> Make sure the ReadControl app has been opened at least
-        once after installation. The host manifest must point to the exact location of the app on
-        disk — if you moved the app, reinstall the manifest from
-        <strong>Settings → Extensions</strong>.
+        <strong>Already installed it?</strong> Make sure you've opened the ReadControl app at least
+        once, then try saving again. If you moved the app after opening it, open it once more so it
+        can reconnect.
       </p>
     </div>
   </body>
