@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use rusqlite::OptionalExtension;
+use readcontrol_core::{find_saved, LibraryRoot};
 
 use crate::protocol::{CheckRequest, SaveResponse, PROTOCOL_VERSION};
 use crate::save::find_library_path;
@@ -18,18 +18,13 @@ pub fn handle(req: CheckRequest) -> anyhow::Result<SaveResponse> {
         Err(_) => return Ok(SaveResponse::check(false, None)),
     };
 
-    let db_path = library_path.join("index.db");
-    if !db_path.exists() {
-        return Ok(SaveResponse::check(false, None));
-    }
-
-    let conn = readcontrol_core::open_index(&db_path)?;
-    let id: Option<String> = conn
-        .query_row(
-            "SELECT id FROM readings WHERE canonical_url = ?1",
-            rusqlite::params![req.url],
-            |r| r.get(0),
-        )
-        .optional()?;
+    // Scan the article files directly rather than querying an index. The host
+    // never builds an index, and the app's index is a per-device cache the host
+    // can't reliably reach — the `articles/` directory is the only source of
+    // truth. `find_saved` matches either the visible `url` or the `canonical_url`,
+    // because the toolbar only knows the tab URL — it can't run extraction to
+    // discover the page's canonical link.
+    let library = LibraryRoot::new(&library_path)?;
+    let id = find_saved(&library, &req.url)?;
     Ok(SaveResponse::check(id.is_some(), id))
 }

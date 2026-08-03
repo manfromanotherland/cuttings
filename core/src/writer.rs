@@ -42,6 +42,28 @@ pub fn write_reading(
 /// Scan the library's articles directory for an article with the given canonical URL.
 /// Returns the existing article's id if found.
 pub fn find_duplicate(library: &LibraryRoot, canonical_url: &str) -> Result<Option<String>> {
+    scan_articles(library, |m| m.canonical_url == canonical_url)
+}
+
+/// Scan for an article that was saved from `url`, matching either the visible
+/// `url` it was saved from or its `canonical_url`.
+///
+/// This is what the "is this page already saved?" check needs: the toolbar only
+/// knows the visible tab URL — it can't run extraction to discover the page's
+/// `<link rel=canonical>`. Matching the stored `url` lets a revisit of the same
+/// address register as saved even when the canonical differs (query params
+/// stripped, trailing slash enforced, etc.), which `find_duplicate`'s
+/// canonical-only match would miss.
+pub fn find_saved(library: &LibraryRoot, url: &str) -> Result<Option<String>> {
+    scan_articles(library, |m| m.url == url || m.canonical_url == url)
+}
+
+/// Scan `articles/*.md`, returning the id of the first article whose metadata
+/// satisfies `matches`.
+fn scan_articles(
+    library: &LibraryRoot,
+    matches: impl Fn(&Metadata) -> bool,
+) -> Result<Option<String>> {
     let articles_dir = library.articles_dir();
     if !articles_dir.is_dir() {
         return Ok(None);
@@ -51,7 +73,7 @@ pub fn find_duplicate(library: &LibraryRoot, canonical_url: &str) -> Result<Opti
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(reading) = parse_reading(&content) {
-                    if reading.metadata.canonical_url == canonical_url {
+                    if matches(&reading.metadata) {
                         return Ok(Some(reading.metadata.id));
                     }
                 }
@@ -140,5 +162,36 @@ mod tests {
         let (_dir, lib) = tmp_library();
         let dup = find_duplicate(&lib, "https://example.com/new").unwrap();
         assert!(dup.is_none());
+    }
+
+    #[test]
+    fn find_saved_matches_visible_url_when_canonical_differs() {
+        // The page was viewed at a URL with tracking params but declared a clean
+        // canonical. The toolbar only knows the visible URL, so matching the
+        // stored `url` is what makes the "already saved?" check work.
+        let (_dir, lib) = tmp_library();
+        let mut meta = sample_metadata();
+        meta.url = "https://example.com/post?utm_source=news".to_string();
+        meta.canonical_url = "https://example.com/post".to_string();
+        write_reading(&lib, meta, "# Test\n".to_string()).unwrap();
+
+        assert!(
+            find_saved(&lib, "https://example.com/post?utm_source=news")
+                .unwrap()
+                .is_some(),
+            "matches the visible url it was saved from"
+        );
+        assert!(
+            find_saved(&lib, "https://example.com/post")
+                .unwrap()
+                .is_some(),
+            "also matches the canonical url"
+        );
+        // find_duplicate stays canonical-only: the visible url must not match.
+        assert!(
+            find_duplicate(&lib, "https://example.com/post?utm_source=news")
+                .unwrap()
+                .is_none()
+        );
     }
 }

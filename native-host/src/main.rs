@@ -351,8 +351,9 @@ mod integration_tests {
     }
 
     #[test]
-    fn check_returns_not_saved_when_no_index_exists() {
-        // Without an index.db the check action returns saved: false immediately.
+    fn check_returns_not_saved_for_empty_library() {
+        // No articles saved yet: check scans an empty (or absent) articles/ dir
+        // and reports saved: false.
         with_library(|_dir| {
             let msg = serde_json::to_vec(&serde_json::json!({
                 "protocol_version": 1,
@@ -367,13 +368,10 @@ mod integration_tests {
     }
 
     #[test]
-    fn check_returns_not_saved_for_unknown_url_in_index() {
-        with_library(|dir| {
-            // Build an empty index — URL not in it.
-            let db_path = dir.path().join("index.db");
-            let conn = readcontrol_core::open_index(&db_path).unwrap();
-            let library = readcontrol_core::LibraryRoot::new(dir.path()).unwrap();
-            readcontrol_core::rebuild(&conn, &library).unwrap();
+    fn check_returns_not_saved_for_unknown_url() {
+        with_library(|_dir| {
+            // Save one article, then check a different URL.
+            dispatch(&save_message("https://example.com/saved"));
 
             let msg = serde_json::to_vec(&serde_json::json!({
                 "protocol_version": 1,
@@ -388,16 +386,11 @@ mod integration_tests {
     }
 
     #[test]
-    fn check_returns_saved_after_save_and_index_sync() {
-        with_library(|dir| {
-            // Save the article to disk.
+    fn check_returns_saved_after_save() {
+        with_library(|_dir| {
+            // Saving writes the article file; check scans articles/ directly, so
+            // it sees the save with no index or app involvement.
             dispatch(&save_message("https://example.com/for-check"));
-
-            // Simulate the Mac app syncing the index.
-            let db_path = dir.path().join("index.db");
-            let conn = readcontrol_core::open_index(&db_path).unwrap();
-            let library = readcontrol_core::LibraryRoot::new(dir.path()).unwrap();
-            readcontrol_core::rebuild(&conn, &library).unwrap();
 
             let msg = serde_json::to_vec(&serde_json::json!({
                 "protocol_version": 1,
