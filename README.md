@@ -18,8 +18,7 @@
 
 # extension
 
-The browser plugin (Manifest V3, TypeScript) for **ReadControl**, a local-first read-it-later
-system. It extracts and cleans the current page (Readability-style extraction + HTML→Markdown)
+The browser plugin (Manifest V3, TypeScript) for **ReadControl**, the native macOS reading manager. It extracts and cleans the current page (Readability-style extraction + HTML→Markdown)
 and hands the result to the native messaging host, which saves it into your library folder.
 
 ## Build
