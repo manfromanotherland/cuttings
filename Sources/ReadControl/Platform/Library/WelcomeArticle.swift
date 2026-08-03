@@ -11,7 +11,7 @@ import Foundation
 enum WelcomeArticle {
     private static let articleId = "01JZWC0M0000000000000001"
     private static let highlightId = "01JZWC0M0000000000000002"
-    private static let highlightedText = "ReadControl keeps your articles where you can always find them."
+    private static let highlightedText = "ReadControl keeps your readings where you can always find them."
 
     /// Write the welcome article into `libraryURL/articles/` only if that
     /// folder contains no `.md` files — i.e. the user picked an empty folder.

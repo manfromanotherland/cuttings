@@ -30,7 +30,7 @@ final class FirstRunJourney: UITestCase {
         // 4. The Welcome article is auto-selected and rendered as native text.
         XCTAssertEqual(reader.titleText, "Welcome to ReadControl")
         XCTAssertTrue(
-            reader.bodyContains("distraction-free reading app"),
+            reader.bodyContains("manage your readings"),
             "Reader should render the welcome body as text"
         )
 
