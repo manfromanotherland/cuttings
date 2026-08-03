@@ -18,7 +18,7 @@
 
 # core
 
-The Rust engine for **ReadControl**, a local-first read-it-later system. This repo is a Cargo
+The Rust engine for **ReadControl**, the native macOS reading manager. This repo is a Cargo
 workspace containing:
 
 - **`core`** (`readcontrol-core`) — the engine: library scanning/indexing, full-text search
