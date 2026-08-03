@@ -28,6 +28,19 @@ npm install
 npm run build
 ```
 
+## Package for the stores
+
+```bash
+npm run package
+```
+
+Builds a fresh bundle, then zips only the files the manifest ships
+(`manifest.json`, `dist/`, `icons/`, `options.html`, `install.html`) into
+`artifacts/readcontrol-extension-<version>.zip` — ready to upload to the Chrome
+Web Store, Edge Add-ons, or [AMO](https://addons.mozilla.org). Bump the
+`version` in `manifest.json` before packaging; the stores reject a re-upload of
+an existing version. Requires `zip` (preinstalled on macOS).
+
 ## Load in the browser
 
 **Chrome / Edge**
