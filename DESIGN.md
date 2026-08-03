@@ -1,8 +1,9 @@
 # DESIGN.md — ReadControl
 
-> UI/UX design for the macOS client. This captures the visual language, layout, navigation, and
-> screen states the app should implement. Architecture and data principles live in
-> [AGENTS.md](./AGENTS.md).
+> UI/UX design for the whole **ReadControl ecosystem** — the macOS app, the browser extension, and
+> the website ([readcontrol.app](https://readcontrol.app)). The shared identity (product name, logo,
+> and **color palette** below) applies to every surface; sections explicitly marked *Apple / macOS*
+> are specific to the Mac client. Architecture and data principles live in [AGENTS.md](./AGENTS.md).
 
 ## Source
 
@@ -29,6 +30,40 @@ the app's empty state ("Your reading list is empty").
 - **To finalize:** export the full macOS icon set (`.icns` / `AppIcon.appiconset`, 16–1024 px)
   and the extension icon sizes (16 / 32 / 48 / 128 px); confirm the glyph stays legible at 16 px.
 
+## Color palette (shared across the whole ecosystem)
+
+ReadControl uses **one palette on every surface** — the website, the browser extension (its
+options and install pages and the in-page save toast), and the macOS app. There are two themes,
+**"paper"** (light) and **"charcoal"** (dark). The canonical source of truth is the website's
+[`website/app/globals.css`](./website/app/globals.css); the extension mirrors these exact values,
+and the macOS tokens further down should resolve to them too.
+
+The identity is **paper + ink** — warm off-white and near-black. **The primary action is dark ink,
+never blue.** The only two non-gray brand accents anywhere are a marker **yellow** and a heart
+**red**; status colors (green / amber) are functional signals that sit *outside* the brand neutrals.
+
+| Token | Role | Paper (light) | Charcoal (dark) |
+|-------|------|---------------|-----------------|
+| `bg` | base background | `#fdfcfb` | `#0d0d0f` |
+| `surface` | raised surface / muted bg | `#f6f5f4` | `#161618` |
+| `surface-2` | hover fill / inset | `#eeedec` | `#1c1c1f` |
+| `fg` | primary text | `#17181a` | `#f1f0ee` |
+| `fg-muted` | secondary text | `#55565a` | `#9a9a9e` |
+| `fg-subtle` | tertiary text, eyebrows | `#85868b` | `#6c6c70` |
+| `line` | borders / dividers | `rgb(23 24 26 / 0.12)` | `rgb(255 255 255 / 0.1)` |
+| `line-strong` | stronger borders | `rgb(23 24 26 / 0.18)` | `rgb(255 255 255 / 0.15)` |
+| `accent` | primary action ("ink pill") | bg `#17181a` / text `#f7f6f4` | bg `#e8e9eb` / text `#17181a` |
+| `highlight` | marker yellow (brand accent) | `#ffe066` | `#ffe066` |
+| `heart` | favourite red (brand accent) | `#ff5f57` | `#ff5f57` |
+
+- **The accent inverts between themes** — a dark pill on paper, a light pill on charcoal — and its
+  text color inverts with it. It is never a colored (blue) accent.
+- **`highlight` and `heart` are fixed across both themes:** the marker is yellow and the heart is
+  red on paper as much as on charcoal.
+- The extension keeps a functional **green** (connected) and **amber** (warning) for status dots
+  and log lines. These are signals, not brand colors, and are deliberately the only hues outside
+  the neutrals + the two accents.
+
 ## Design language
 
 - **Theme:** dark by default, with **Light / Dark / System** options (the mockup shows Dark).
@@ -42,8 +77,9 @@ the app's empty state ("Your reading list is empty").
 
 ### Design tokens (approximate — finalize before implementation)
 
-> Values are approximate and should be confirmed/replaced with exact tokens
-> (ideally a shared token file) before implementation.
+> The **canonical values are the shared palette above** ([Color palette](#color-palette-shared-across-the-whole-ecosystem)).
+> The charcoal approximations in this table predate it and should be replaced by those exact tokens
+> during implementation.
 
 | Token | Role | Approx. (dark) |
 |-------|------|----------------|
@@ -53,7 +89,7 @@ the app's empty state ("Your reading list is empty").
 | `text/primary` | headings, body | near-white (~`#ECECEC`) |
 | `text/secondary` | metadata, hints, empty-state subtext | muted gray (~`#8A8A8E`) |
 | `border/subtle` | dividers, control outlines | low-contrast gray |
-| `accent` | primary actions, selection accent | **TBD** — define a brand accent |
+| `accent` | primary actions, selection accent | **dark ink pill**, never blue (see shared palette) |
 | `radius/panel`, `radius/control` | corner radii | medium / small |
 
 ### Icon–label spacing
@@ -401,7 +437,8 @@ first load — pick a default row).
 
 ## Open questions / to finalize
 
-- Exact color tokens and the brand **accent** color (the mockup palette is near-monochrome).
+- ~~Exact color tokens and the brand accent color~~ — **resolved:** see the shared
+  [Color palette](#color-palette-shared-across-the-whole-ecosystem); the accent is a dark ink pill.
 - **Archive vs All** semantics (does "All" include archived?) — the assumption above pending
   confirmation.
 - List-row density and exactly which indicators/metadata appear inline.

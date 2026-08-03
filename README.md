@@ -16,7 +16,7 @@
 
 ---
 
-The native macOS reading manager. Save any webpage on your computer, read it anytime. No account needed. It's totally free.
+The native macOS reading manager. Save any webpage to your computer, read anytime. No account needed. It's totally free.
 
 ## Principles
 
