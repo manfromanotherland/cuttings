@@ -1,15 +1,27 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/readcontrol/root/main/assets/icon.png" alt="ReadControl" width="128">
+</p>
+<h1 align="center">ReadControl</h1>
+<p align="center">
+  The native macOS reading manager
+  <br />
+  <a href="https://github.com/readcontrol/macos">macOS</a>
+  ·
+  <a href="https://github.com/readcontrol/core">core</a>
+  ·
+  <a href="https://github.com/readcontrol/extension">extension</a>
+  ·
+  <a href="https://github.com/readcontrol/root">root</a>
+</p>
+
+---
+
 # macos
 
 The macOS client (Swift / SwiftUI) for **ReadControl**, a local-first read-it-later system.
 Browse, read, search, and tag your saved readings, organized by smart views
 (All / Unread / Archive / Favorites). It embeds the Rust engine (`core`) via UniFFI and watches
 the library folder for changes that arrive via the user's own sync.
-
-**License:** GPL-3.0-or-later — see [LICENSE](./LICENSE). This is the copyleft application of the
-project; the engine and plugin are MIT.
-
-Part of the **ReadControl** project → [github.com/readcontrol/root](https://github.com/readcontrol/root).
-The Rust engine lives in [core](https://github.com/readcontrol/core).
 
 ## Prerequisites
 
