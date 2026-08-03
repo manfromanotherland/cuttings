@@ -1,0 +1,6 @@
+{
+  "protocol_version": 1,
+  "ok": false,
+  "error": "library_not_configured",
+  "message": "No library folder has been set. Open the ReadControl app to configure one."
+}

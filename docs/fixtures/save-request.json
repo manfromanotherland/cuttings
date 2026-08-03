@@ -1,0 +1,23 @@
+{
+  "protocol_version": 1,
+  "action": "save",
+  "metadata": {
+    "url": "https://blog.example.com/posts/local-first?utm_source=hn",
+    "canonical_url": "https://blog.example.com/posts/local-first",
+    "title": "Local-First Software",
+    "author": "Martin Kleppmann",
+    "site": "blog.example.com",
+    "lang": "en",
+    "excerpt": "An argument for software that works offline and gives users ownership of their data.",
+    "word_count": 3812,
+    "saved_at": "2026-06-13T15:00:00Z"
+  },
+  "markdown": "## Local-First Software\n\nAn argument for software that works offline and gives users ownership of their data.\n\n![Diagram](https://blog.example.com/img/diagram.jpg)\n\nMore content here.\n",
+  "images": [
+    {
+      "url": "https://blog.example.com/img/diagram.jpg",
+      "content_type": "image/jpeg",
+      "data_base64": "/9j/4AAQSkZJRgABAQAAAQABAAD..."
+    }
+  ]
+}

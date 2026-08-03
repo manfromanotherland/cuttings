@@ -1,0 +1,14 @@
+.DS_Store
+
+# Extension signing key — kept here (outside the loaded extension folder) so
+# Chrome doesn't warn about a key in the unpacked dir. Never commit it.
+*.pem
+
+# App repos nested here for convenience — each is its own independent git repo,
+# not tracked by this meta repo (and not a submodule).
+/core/
+/extension/
+/macos/
+/website/
+sandbox-build.log
+sandbox-build-*.log
