@@ -4,12 +4,20 @@ import { extractPage } from "./extraction.js";
 import { fetchImages } from "./images.js";
 import type { ImageData, SaveRequestMetadata } from "./protocol.js";
 
+/** An optional action button on a toast. Clicking it messages the background
+ *  worker (which alone can open extension pages) and dismisses the toast. */
+export interface ToastCta {
+  label: string;
+  command: "open-install";
+}
+
 /** In-page toast request sent by the background worker after a save attempt. */
 export interface ToastMessage {
   action: "toast";
   status: "ok" | "error" | "loading";
   title: string;
   detail?: string;
+  cta?: ToastCta;
 }
 
 /**
@@ -60,12 +68,12 @@ const TOAST_HOST_ID = "readcontrol-toast-host";
  * replaced. If the loading toast was already dismissed by the user, a fresh
  * toast is created with the result status.
  */
-export function showToast({ status, title, detail }: ToastMessage): void {
+export function showToast({ status, title, detail, cta }: ToastMessage): void {
   const existingHost = document.getElementById(TOAST_HOST_ID) as HTMLElement | null;
 
   if (status !== "loading" && existingHost?.dataset.status === "loading") {
     existingHost.dataset.status = status;
-    updateToast(existingHost, status, title, detail);
+    updateToast(existingHost, status, title, detail, cta);
     return;
   }
 
@@ -122,6 +130,13 @@ export function showToast({ status, title, detail }: ToastMessage): void {
         color: #94A3B8; font-size: 16px; line-height: 1;
       }
       .close:hover { color: #0F172A; background: #F1F5F9; }
+      .cta {
+        margin-top: 8px; cursor: pointer;
+        background: #0F172A; color: #FFFFFF; border: none;
+        border-radius: 6px; padding: 6px 12px;
+        font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      .cta:hover { background: #1E293B; }
     </style>
     <div class="toast">
       ${
@@ -141,12 +156,32 @@ export function showToast({ status, title, detail }: ToastMessage): void {
   root.querySelector(".title")!.textContent = title;
   if (detail) root.querySelector(".detail")!.textContent = detail;
   root.querySelector(".close")!.addEventListener("click", () => host.remove());
+  renderCta(root, host, cta);
 
   (document.body ?? document.documentElement).appendChild(host);
 
-  if (!isLoading) {
+  // A toast with an action stays until the user acts on or dismisses it, the
+  // way a "needs your attention" prompt should.
+  if (!isLoading && !cta) {
     scheduleDismiss(host);
   }
+}
+
+/** Add (or clear) the action button and wire its click to the background. */
+function renderCta(root: ShadowRoot, host: HTMLElement, cta?: ToastCta): void {
+  root.querySelector(".cta")?.remove();
+  if (!cta) return;
+
+  const button = document.createElement("button");
+  button.className = "cta";
+  button.type = "button";
+  button.textContent = cta.label;
+  button.addEventListener("click", () => {
+    // The content script can't open an extension page; the worker does it.
+    void chrome.runtime.sendMessage({ action: "toast-cta", command: cta.command });
+    host.remove();
+  });
+  root.querySelector(".text")!.appendChild(button);
 }
 
 function updateToast(
@@ -154,6 +189,7 @@ function updateToast(
   status: "ok" | "error",
   title: string,
   detail?: string,
+  cta?: ToastCta,
 ): void {
   const root = host.shadowRoot!;
   const accent = status === "ok" ? "#22C55E" : "#EF4444";
@@ -186,7 +222,10 @@ function updateToast(
     detailEl?.remove();
   }
 
-  scheduleDismiss(host);
+  renderCta(root, host, cta);
+
+  // Keep an actionable toast on screen until the user responds to it.
+  if (!cta) scheduleDismiss(host);
 }
 
 function scheduleDismiss(host: HTMLElement): void {

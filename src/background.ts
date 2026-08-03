@@ -236,8 +236,11 @@ async function notifyHostMissing(tabId: number): Promise<void> {
     tabId,
     "error",
     "Native helper not installed",
-    "Click the notification to see how to install it.",
+    "ReadControl needs a small native helper to save pages.",
+    { label: "How to install", command: "open-install" },
   );
+  // A desktop notification is a fallback for pages where no toast can render
+  // (chrome:// pages, the web store, PDFs — the content script can't run there).
   try {
     await chrome.notifications.create(NOTIF_HOST_MISSING, {
       type: "basic",
@@ -254,10 +257,22 @@ async function notifyHostMissing(tabId: number): Promise<void> {
   }
 }
 
+function openInstallGuide(): void {
+  void chrome.tabs.create({ url: chrome.runtime.getURL("install.html") });
+}
+
 chrome.notifications.onClicked.addListener((id) => {
   if (id === NOTIF_HOST_MISSING) {
-    void chrome.tabs.create({ url: chrome.runtime.getURL("install.html") });
+    openInstallGuide();
     void chrome.notifications.clear(id);
+  }
+});
+
+// The "How to install" button on the in-page host-missing toast; the content
+// script can't open an extension page, so it asks the worker to.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.action === "toast-cta" && msg.command === "open-install") {
+    openInstallGuide();
   }
 });
 
@@ -280,8 +295,9 @@ async function showToast(
   status: ToastMessage["status"],
   title: string,
   detail?: string,
+  cta?: ToastMessage["cta"],
 ): Promise<void> {
-  const message: ToastMessage = { action: "toast", status, title, detail };
+  const message: ToastMessage = { action: "toast", status, title, detail, cta };
   try {
     await chrome.tabs.sendMessage(tabId, message);
   } catch {
