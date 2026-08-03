@@ -1,7 +1,7 @@
 {
   "name": "readcontrol-extension",
   "version": "0.1.0",
-  "description": "Browser plugin for the ReadControl system.",
+  "description": "Browser extension for the ReadControl app.",
   "private": true,
   "type": "module",
   "scripts": {

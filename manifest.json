@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ReadControl",
   "version": "0.1.0",
-  "description": "Save any webpage to your computer and read it anytime.",
+  "description": "Save any webpage to your computer, read anytime.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv2ciLiMC9URlOs7X5T2Zt/ylHIMWYXLGZUg8hFyDDqltTrSQOEcaJ0w+IulUosQ4WMaxwXZCbEiwFmGM8nBLg7TSlkbbUgC5FhAs725SvhYEcxlcv52ifAp6kKpGyIdUve3oNVwqw9ko9nDu0HmxP+144FKyLAShxqbGTzJyKgfXB559RrvgeZrPpkK09p7eEabfuFyqQflNMHRVi6oO6ytDlQes0hNvV2AR8kx2Gnei57Qfspc9rikDEWUBaT+XdFyI3o/UQ5YpGL05pxkBcmZsJUrHus91FK/nZ97TDPrOhbkIIlW+VHgNA3g86G6VC7Rtqg7jZNZ2bwGvhmTW7QIDAQAB",
   "browser_specific_settings": {
     "gecko": {
