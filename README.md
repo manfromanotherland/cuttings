@@ -1,3 +1,21 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/readcontrol/root/main/assets/icon.png" alt="ReadControl" width="128">
+</p>
+<h1 align="center">ReadControl</h1>
+<p align="center">
+  The native macOS reading manager
+  <br />
+  <a href="https://github.com/readcontrol/macos">macOS</a>
+  ·
+  <a href="https://github.com/readcontrol/core">core</a>
+  ·
+  <a href="https://github.com/readcontrol/extension">extension</a>
+  ·
+  <a href="https://github.com/readcontrol/root">root</a>
+</p>
+
+---
+
 # core
 
 The Rust engine for **ReadControl**, a local-first read-it-later system. This repo is a Cargo
@@ -8,10 +26,6 @@ workspace containing:
   UniFFI.
 - **`native-host`** — the browser **native messaging host**: receives cleaned Markdown + image
   URLs from the extension and writes them into the library folder (files only, never the index).
-
-**License:** MIT — see [LICENSE](./LICENSE).
-
-Part of the **ReadControl** project → [github.com/readcontrol/root](https://github.com/readcontrol/root).
 
 ## Prerequisites
 
