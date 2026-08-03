@@ -104,8 +104,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
  * injected by the manifest, but only into tabs that navigate *after* the
  * extension loads — a tab that was already open when the extension was
  * installed or reloaded has no content script and won't answer. When the first
- * message fails, inject the script programmatically (allowed on the active tab
- * via the `activeTab` grant from the user's click) and retry once.
+ * message fails, inject the script programmatically (allowed by the `<all_urls>`
+ * host permission) and retry once.
  */
 async function requestExtraction(tabId: number): Promise<PageCapture | { error: string }> {
   try {
