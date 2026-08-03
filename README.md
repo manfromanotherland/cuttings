@@ -18,9 +18,8 @@
 
 # macos
 
-The macOS client (Swift / SwiftUI) for **ReadControl**, a local-first read-it-later system.
-Browse, read, search, and tag your saved readings, organized by smart views
-(All / Unread / Archive / Favorites). It embeds the Rust engine (`core`) via UniFFI and watches
+The macOS client (Swift / SwiftUI) for **ReadControl**, the native macOS reading manager.
+Browse, read, search, and tag your saved readings. It embeds the Rust engine (`core`) via UniFFI and watches
 the library folder for changes that arrive via the user's own sync.
 
 ## Prerequisites
