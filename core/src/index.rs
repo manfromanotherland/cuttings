@@ -78,7 +78,6 @@ fn migrate_v1(conn: &Connection) -> Result<()> {
             lang          TEXT,
             tags_json     TEXT    NOT NULL DEFAULT '[]',
             body_text     TEXT    NOT NULL DEFAULT ''
-            -- embedding BLOB reserved for future vector search (CORE-16)
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS readings_fts USING fts5(
