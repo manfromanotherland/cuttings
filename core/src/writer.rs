@@ -41,8 +41,13 @@ pub fn write_reading(
 
 /// Scan the library's articles directory for an article with the given canonical URL.
 /// Returns the existing article's id if found.
+///
+/// URLs are compared after normalization (tracking params, fragment, trailing
+/// slash, host case), so a page and its `?utm_source=…`-tagged variant dedupe
+/// to the same reading.
 pub fn find_duplicate(library: &LibraryRoot, canonical_url: &str) -> Result<Option<String>> {
-    scan_articles(library, |m| m.canonical_url == canonical_url)
+    let target = norm_key(canonical_url);
+    scan_articles(library, |m| norm_key(&m.canonical_url) == target)
 }
 
 /// Scan for an article that was saved from `url`, matching either the visible
@@ -54,8 +59,20 @@ pub fn find_duplicate(library: &LibraryRoot, canonical_url: &str) -> Result<Opti
 /// address register as saved even when the canonical differs (query params
 /// stripped, trailing slash enforced, etc.), which `find_duplicate`'s
 /// canonical-only match would miss.
+///
+/// Both sides are normalized before comparison, so tracking params (`utm_*`,
+/// `fbclid`, …) on the visited URL don't defeat the match.
 pub fn find_saved(library: &LibraryRoot, url: &str) -> Result<Option<String>> {
-    scan_articles(library, |m| m.url == url || m.canonical_url == url)
+    let target = norm_key(url);
+    scan_articles(library, |m| {
+        norm_key(&m.url) == target || norm_key(&m.canonical_url) == target
+    })
+}
+
+/// Normalize a URL for matching, falling back to the raw string when it can't be
+/// parsed (e.g. a non-http scheme) so exact-equality matching still works.
+fn norm_key(url: &str) -> String {
+    crate::normalize_url(url).unwrap_or_else(|_| url.to_string())
 }
 
 /// Scan `articles/*.md`, returning the id of the first article whose metadata
@@ -166,17 +183,17 @@ mod tests {
 
     #[test]
     fn find_saved_matches_visible_url_when_canonical_differs() {
-        // The page was viewed at a URL with tracking params but declared a clean
-        // canonical. The toolbar only knows the visible URL, so matching the
-        // stored `url` is what makes the "already saved?" check work.
+        // The page was saved from a feed URL but declared a different canonical.
+        // The toolbar only knows the visible URL, so matching the stored `url` is
+        // what makes the "already saved?" check work.
         let (_dir, lib) = tmp_library();
         let mut meta = sample_metadata();
-        meta.url = "https://example.com/post?utm_source=news".to_string();
+        meta.url = "https://example.com/from-feed".to_string();
         meta.canonical_url = "https://example.com/post".to_string();
         write_reading(&lib, meta, "# Test\n".to_string()).unwrap();
 
         assert!(
-            find_saved(&lib, "https://example.com/post?utm_source=news")
+            find_saved(&lib, "https://example.com/from-feed")
                 .unwrap()
                 .is_some(),
             "matches the visible url it was saved from"
@@ -187,11 +204,51 @@ mod tests {
                 .is_some(),
             "also matches the canonical url"
         );
-        // find_duplicate stays canonical-only: the visible url must not match.
+        // find_duplicate stays canonical-only: a URL that matches only the
+        // stored `url` (not the canonical) must not count as a duplicate.
+        assert!(find_duplicate(&lib, "https://example.com/from-feed")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn find_saved_ignores_tracking_params() {
+        // Regression: visiting a saved page with a utm tag must still show saved.
+        let (_dir, lib) = tmp_library();
+        let mut meta = sample_metadata();
+        meta.url = "https://paulgraham.com/taste.html".to_string();
+        meta.canonical_url = "https://paulgraham.com/taste.html".to_string();
+        write_reading(&lib, meta, "# Taste\n".to_string()).unwrap();
+
         assert!(
-            find_duplicate(&lib, "https://example.com/post?utm_source=news")
+            find_saved(
+                &lib,
+                "https://paulgraham.com/taste.html?utm_source=readcontrol.app"
+            )
+            .unwrap()
+            .is_some(),
+            "utm-tagged visit still matches the saved page"
+        );
+        assert!(
+            find_saved(&lib, "https://paulgraham.com/articles.html?id=2")
                 .unwrap()
-                .is_none()
+                .is_none(),
+            "a genuinely different page (meaningful query) must not match"
+        );
+    }
+
+    #[test]
+    fn find_duplicate_ignores_tracking_params() {
+        // Saving the utm-tagged variant of an already-saved page is a duplicate.
+        let (_dir, lib) = tmp_library();
+        let mut meta = sample_metadata();
+        meta.canonical_url = "https://example.com/post".to_string();
+        write_reading(&lib, meta, "# Test\n".to_string()).unwrap();
+
+        assert!(
+            find_duplicate(&lib, "https://example.com/post?utm_source=x")
+                .unwrap()
+                .is_some()
         );
     }
 }
