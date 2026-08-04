@@ -48,8 +48,7 @@ pub fn write_images(
         let filename = format!("{hash}.{ext}");
         if fs::write(assets_dir.join(&filename), &image.bytes).is_ok() {
             // The article file (article.md) and its assets/ folder are siblings
-            // inside the reading's folder, so the link is just `assets/<file>` —
-            // no climbing out of the fan-out bucket.
+            // inside the reading's folder, so the link is just `assets/<file>`.
             let rel = format!("assets/{filename}");
             result = result.replace(image.url.as_str(), &rel);
         }
@@ -157,7 +156,7 @@ mod tests {
         assert!(out.contains("assets/"), "got: {out}");
         assert!(
             !out.contains("../"),
-            "link is relative to the article file, no climbing: {out}"
+            "link is relative to the article file (no ../): {out}"
         );
 
         // The written file's name is the sha256 of the bytes plus the extension.
