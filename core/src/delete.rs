@@ -69,14 +69,21 @@ pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Res
     }
 
     // Containment guard (resolves symlinks): the reading folder must not itself
-    // be a symlink, and its real path must sit beneath the real articles/ dir, so
-    // a symlinked bucket/ancestor can't send remove_dir_all outside the library.
+    // be a symlink, its real path must sit beneath the real articles/ dir, and
+    // real articles/ must in turn sit beneath the real library root. Anchoring
+    // all the way up to the root means a symlinked bucket *or* a symlinked
+    // articles/ itself can't send remove_dir_all outside the selected library.
     if std::fs::symlink_metadata(&dir)?.file_type().is_symlink() {
         bail!("refusing to delete: {} is a symlink", dir.display());
     }
+    let real_root = std::fs::canonicalize(library.path())?;
     let real_articles = std::fs::canonicalize(&articles)?;
     let real_dir = std::fs::canonicalize(&dir)?;
-    if real_dir == real_articles || !real_dir.starts_with(&real_articles) {
+    let contained = real_articles.starts_with(&real_root)
+        && real_articles != real_root
+        && real_dir.starts_with(&real_articles)
+        && real_dir != real_articles;
+    if !contained {
         bail!(
             "refusing to delete: {} resolves outside the library",
             dir.display()
@@ -261,6 +268,46 @@ mod tests {
         assert!(lib.article_path(&id).is_file(), "resolves via the symlink");
 
         // Delete must refuse: the folder's real path is outside the library.
+        assert!(delete_reading(&lib, &conn, &id).is_err());
+        assert!(
+            outside_reading.join("article.md").is_file(),
+            "content outside the library must be left untouched"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_refuses_when_articles_is_symlinked_outside_the_library() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        // A library root whose `articles/` does not exist yet — we replace it
+        // with a symlink, so the whole articles tree resolves outside the root.
+        let lib_root = dir.path().join("library");
+        fs::create_dir_all(&lib_root).unwrap();
+        let lib = LibraryRoot::new(&lib_root).unwrap();
+        let conn = open(&dir.path().join("index.db")).unwrap();
+
+        // A well-formed reading in a fake articles tree OUTSIDE the library.
+        let outside = TempDir::new().unwrap();
+        let id = new_id();
+        let outside_reading = outside.path().join(&id[..2]).join(&id);
+        fs::create_dir_all(&outside_reading).unwrap();
+        let content = crate::render_reading(&crate::Reading {
+            metadata: meta(&id),
+            body: "body".into(),
+        })
+        .unwrap();
+        fs::write(outside_reading.join("article.md"), content).unwrap();
+
+        // Point <library>/articles at that outside tree.
+        symlink(outside.path(), lib.articles_dir()).unwrap();
+        assert!(
+            lib.article_path(&id).is_file(),
+            "resolves via the articles symlink"
+        );
+
+        // Delete must refuse: articles/ resolves outside the selected library.
         assert!(delete_reading(&lib, &conn, &id).is_err());
         assert!(
             outside_reading.join("article.md").is_file(),
