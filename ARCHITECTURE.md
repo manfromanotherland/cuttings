@@ -74,16 +74,27 @@ format and one Rust core.
 
 ## Data model — the library
 
-Each reading is a Markdown file with YAML frontmatter, under a **library folder** the user chooses
-and syncs:
+Each reading is a **self-contained folder** under a **library folder** the user chooses and syncs.
+The folder is named by the reading's **content-addressed id** — `SHA256(normalize(url))` — under a
+two-character fan-out bucket so no directory grows unbounded, and it holds everything for that
+reading:
 
 ```
 <library-root>/
-  articles/<id>.md          # one reading per file (Markdown + YAML frontmatter)
-  assets/<id>/<hash>.<ext>  # captured images, relative-linked from the .md
-  highlights/<id>.md        # optional — the reading's saved highlights
-  originals/<id>.html       # optional — raw HTML snapshot for re-processing
+  articles/
+    <prefix>/                 # first 2 chars of the id (fan-out bucket)
+      <id>/                   # one folder per reading
+        article.md            # Markdown body + YAML frontmatter (source of truth)
+        assets/<hash>.<ext>   # captured images, linked as assets/<file> from article.md
+        highlights.md         # optional — the reading's saved highlights
+        original.html         # optional — raw HTML snapshot for re-processing
 ```
+
+Keeping a reading in one folder makes image links trivially relative (`assets/<file>`, no `../`),
+makes a reading one movable unit, and makes deletion a single guarded folder removal. The id is
+content-addressed, so hashing a URL locates its folder in O(1) — dedup and the extension's "already
+saved?" check are a hash plus a single `stat`, no directory scan. Identity is the normalized
+*visited* URL (the `canonical_url` is stored as metadata but not used as the key).
 
 - **Frontmatter is the source of truth** for metadata (title, tags, read/archive/favorite/rating
   state, …). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the
