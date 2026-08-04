@@ -67,8 +67,9 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 - HTML cleanup runs in the plugin (it has the live DOM).
 - All logic in a Rust core crate; native UIs are thin and share it.
 - The index is SQLite + FTS5, rebuildable, per-device, never synced.
-- Use a stable sortable id (ULID-style) as filename + frontmatter id; store a normalized
-  `canonical_url` for dedup (strip `utm_*`, `fbclid`, etc.).
+- Use a **content-addressed id** — `SHA256(normalize(url))` — as the reading-folder name and
+  frontmatter id; it doubles as the O(1) dedup key (hash the URL, stat the folder). Normalize URLs
+  (strip `utm_*`, `fbclid`, etc.); `canonical_url` is stored as metadata, not the identity key.
 - Start native clients with macOS / Swift (SwiftUI) via UniFFI.
 - **Search (v1) is full-text over readings** (title, content, tags) using SQLite FTS5. Design
   the schema so word-occurrence lookup and a vector column can be added later without migration

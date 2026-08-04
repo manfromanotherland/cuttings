@@ -82,8 +82,8 @@ and the reader shows a labelled placeholder.
 {
   "protocol_version": 1,
   "ok": true,
-  "id": "01J9Z8X7Q2VBKN3P4HXYZ01AB",
-  "path": "articles/01/01J9Z8X7Q2VBKN3P4HXYZ01AB/article.md"
+  "id": "1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199",
+  "path": "articles/11/1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199/article.md"
 }
 ```
 
@@ -104,7 +104,7 @@ and the reader shows a labelled placeholder.
 |-------|------|-------|
 | `protocol_version` | integer | Always `1` |
 | `ok` | boolean | `true` on success |
-| `id` | string | The ULID assigned to the reading (success only) |
+| `id` | string | The content-addressed id assigned to the reading (success only) |
 | `path` | string | Relative path from library root (success only) |
 | `error` | string | Machine-readable error code (failure only) |
 | `message` | string | Human-readable description (failure only) |
@@ -115,7 +115,7 @@ and the reader shows a labelled placeholder.
 | Code | Meaning |
 |------|---------|
 | `library_not_configured` | No library folder set; user must open the app |
-| `duplicate` | A reading with the same `canonical_url` already exists |
+| `duplicate` | A reading with the same content-addressed id (normalized URL) already exists |
 | `io_error` | Failed to write to the library folder |
 | `invalid_request` | Malformed or missing required fields |
 
@@ -133,18 +133,18 @@ Asks whether a URL is already in the library — used to reflect saved state in 
 }
 ```
 
-The host looks the URL up (by `canonical_url`) and replies:
+The host looks the URL up (by its content-addressed id — the hash of the normalized URL) and replies:
 
 ```json
 {
   "protocol_version": 1,
   "ok": true,
   "saved": true,
-  "id": "01J9Z8X7Q2VBKN3P4HXYZ01AB"
+  "id": "1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199"
 }
 ```
 
-`saved` is `true` when a reading with that URL exists (`id` is then its ULID), and `false`
+`saved` is `true` when a reading with that URL exists (`id` is then its content-addressed id), and `false`
 otherwise — including when no library is configured (a `check` never errors on that).
 
 ---

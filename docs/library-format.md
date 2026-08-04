@@ -14,35 +14,38 @@ announce them in all three repos.
 ```
 <library-root>/
   articles/
-    <id>.md               # one reading per file (Markdown + YAML frontmatter)
-  assets/
-    <id>/
-      <sha256>.<ext>      # captured image for that reading
-  highlights/
-    <id>.md               # optional — the reading's saved highlights (§ Highlights)
-  originals/              # optional — raw HTML snapshot for future re-processing
-    <id>.html
+    <prefix>/                 # first 2 chars of the id — a fan-out bucket
+      <id>/                   # one self-contained folder per reading
+        article.md            # the reading (Markdown + YAML frontmatter)
+        assets/
+          <sha256>.<ext>      # captured image, linked as assets/<file>
+        highlights.md         # optional — the reading's saved highlights (§ Highlights)
+        original.html         # optional — raw HTML snapshot for future re-processing
 ```
 
 - `<library-root>` is the folder the user chooses (Dropbox, iCloud Drive, Google Drive, etc.).
+- Each reading is one folder named by its id (see § ID scheme), under a two-character fan-out
+  bucket so no directory grows unbounded. Everything for the reading lives inside it, so moving or
+  deleting a reading is a single folder operation.
 - The per-device SQLite index lives **outside** this folder (e.g.
   `~/Library/Application Support/ReadControl/`) and is **never synced**.
 - Paths stored in the database must be **relative to the library root** — never absolute.
 
 ---
 
-## Article file (`articles/<id>.md`)
+## Article file (`articles/<prefix>/<id>/article.md`)
 
-Each saved reading is a single UTF-8 Markdown file with YAML frontmatter.
+Each saved reading is a single UTF-8 Markdown file named `article.md` inside the reading's folder,
+with YAML frontmatter.
 
 ### Frontmatter schema
 
 ```yaml
 ---
 format_version: 1                          # integer — bumped on breaking schema changes
-id: 01J9Z8X7Q2VBKN3P4HXYZ01AB             # ULID (see § ID scheme) — also the filename stem
+id: 1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199  # content-addressed (see § ID scheme) — also the reading-folder name
 url: https://example.com/post/slug         # original URL as visited
-canonical_url: https://example.com/post/slug  # normalized URL (see § URL normalization)
+canonical_url: https://example.com/post/slug  # the page's own canonical URL when known (see § URL normalization)
 title: The Title of the Article            # required; extracted from page or og:title
 author: Jane Doe                           # optional; extracted byline
 site: example.com                          # eTLD+1 of canonical_url
@@ -82,8 +85,8 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
 - The body carries **no top-level `#` heading**: the frontmatter `title` is the reading's single
   title, which the reader renders as the sole h1. The extension demotes any `#` the source used to
   `##`, so body headings start at `##`.
-- Image references use **relative paths** pointing into `../assets/<id>/`: e.g.
-  `![alt](../assets/01J9Z8X7Q2VBKN3P4HXYZ01AB/3f4a1b.jpg)`.
+- Image references use **relative paths** into the reading's own `assets/` folder: `assets/<file>`
+  (the article file and its `assets/` folder are siblings), e.g. `![alt](assets/3f4a1b.jpg)`.
 - Do not embed images as base64.
 
 ---
@@ -91,13 +94,13 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
 ## Complete example
 
 ```
-articles/01J9Z8X7Q2VBKN3P4HXYZ01AB.md
+articles/11/1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199/article.md
 ```
 
 ```markdown
 ---
 format_version: 1
-id: 01J9Z8X7Q2VBKN3P4HXYZ01AB
+id: 1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199
 url: https://blog.example.com/posts/local-first?utm_source=hn
 canonical_url: https://blog.example.com/posts/local-first
 title: Local-First Software
@@ -120,67 +123,81 @@ An argument for software that works offline and gives users ownership of their d
 
 Paragraph text…
 
-![Diagram](../assets/01J9Z8X7Q2VBKN3P4HXYZ01AB/3f4a1b.jpg)
+![Diagram](assets/3f4a1b.jpg)
 
 More content…
 ```
 
 ---
 
-## Asset files (`assets/<id>/<sha256>.<ext>`)
+## Asset files (`articles/<prefix>/<id>/assets/<sha256>.<ext>`)
 
-- One sub-folder per reading, named with the reading's `id`.
+- Each reading's images live in an `assets/` sub-folder inside the reading's own folder, beside
+  `article.md`, and are linked from the body as `assets/<file>`.
 - Filename is the **lowercase hex SHA-256** of the file's raw bytes, with an extension chosen from
   the image's `Content-Type` (falling back to the URL): e.g. `3f4a1b8e....jpg`.
 - Images are **captured by the browser extension** (from the page's cache where possible) and sent
   to the host, which only writes them — the host performs no network requests. An image the
   extension couldn't capture is left as a remote URL in the Markdown and is never re-fetched; the
   reader shows a labelled placeholder for it.
-- The `originals/` folder is optional. If kept, `originals/<id>.html` holds the raw HTML
-  snapshot at save time for future re-processing.
+- The original HTML snapshot is optional. If kept, it lives as `original.html` inside the reading's
+  folder for future re-processing.
 
 ---
 
-## Highlights (`highlights/<id>.md`)
+## Highlights (`articles/<prefix>/<id>/highlights.md`)
 
-A reading's saved highlights live in `highlights/<id>.md` — one file per reading, absent when the
-reading has none. Each highlight is the verbatim selected text as a Markdown block quote, ended by
-an HTML comment carrying a stable id:
+A reading's saved highlights live in `highlights.md` inside the reading's folder — one file per
+reading, absent when the reading has none. Each highlight is the verbatim selected text as a
+Markdown block quote, ended by an HTML comment carrying a stable id:
 
 ```markdown
 > The exact text the user highlighted.
 <!-- hl 01J9Z8X7Q2VBKN3P4HXYZ01AB -->
 ```
 
-The library scanner only walks `articles/`, so highlight files are never mistaken for readings.
+The scanner keys on the fixed `article.md` name, so a reading's `highlights.md` (and its `assets/`)
+are never mistaken for readings.
 
 ---
 
 ## ID scheme
 
-IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers):
+A **reading id** is **content-addressed**: the lowercase-hex SHA-256 of the reading's normalized
+source URL (see § URL normalization & identity).
 
-- 26 characters, Crockford Base32, e.g. `01J9Z8X7Q2VBKN3P4HXYZ01AB`.
-- Monotonically sortable by creation time — the file list sorted by filename is automatically
-  sorted by save date.
-- The ULID is the **filename stem** (`<id>.md`) and the frontmatter `id` field. They must match.
+- 64 hex characters, e.g. `1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199`.
+- **Deterministic** — the same URL always yields the same id, so the id doubles as the dedup key: to
+  check whether a page is already saved, hash its URL and stat the folder it would live in
+  (`articles/<prefix>/<id>/`), with no scan and no index.
+- The id is the **reading-folder name** (under its `<prefix>` bucket) and the frontmatter `id`
+  field. They must match — a folder whose name disagrees with its `article.md`'s `id` is ignored.
+- Not time-sortable: the reading list orders by `saved_at` via the index, not by id.
+
+Highlight ids (the `<!-- hl ... -->` markers) are **ULIDs** — 26-character Crockford Base32,
+sortable by creation time — because a highlight is identified by when it was made, not by content.
 
 ---
 
-## URL normalization (`canonical_url`)
+## URL normalization & identity
 
-The `canonical_url` is used for deduplication. Apply these rules in order to produce it from the
-`url`:
+A reading's identity is the **normalized visited URL**: the host normalizes the `url` and the
+reading id is its SHA-256 (§ ID scheme). Apply these rules in order:
 
-1. Prefer `<link rel="canonical">` or `og:url` from the page; fall back to the browser URL.
-2. Lowercase the scheme and host.
-3. Strip tracking query parameters: `utm_*`, `fbclid`, `gclid`, `mc_cid`, `mc_eid`, `ref`,
-   `source`, `campaign` (exact match).
+1. Lowercase the scheme and host.
+2. Strip a leading `www.` from the host.
+3. Remove the default port (`:80` for http, `:443` for https).
 4. Strip the fragment (`#...`).
-5. Remove a trailing `/` from the path **unless** the path is just `/`.
-6. Do not strip other query parameters — they may be meaningful (pagination, article IDs).
+5. Strip tracking query parameters: `utm_*` (prefix), `fbclid`, `gclid`, `mc_cid`, `mc_eid`, `ref`,
+   `source`, `campaign` (exact match).
+6. Sort the remaining query parameters — they may be meaningful (pagination, article ids), so keep
+   them, but sort so their order can't produce two ids for one page.
+7. Remove a trailing `/` from the path **unless** the path is just `/`.
 
-The original `url` (pre-normalization) is always preserved separately.
+The original `url` (pre-normalization) is always preserved. `canonical_url` stores the page's own
+`<link rel="canonical">`/`og:url` when known, for reference — it is **not** the identity key. (So
+two different normalized URLs for the same content can produce two readings — an accepted trade-off
+of address-bar-only capture.)
 
 ---
 
@@ -214,7 +231,7 @@ The macOS app's sidebar views are defined by frontmatter field values:
 
 | Belongs in library (synced) | Belongs outside library (per-device, never synced) |
 |-----------------------------|----------------------------------------------------|
-| `articles/*.md` | SQLite index (`~/Library/Application Support/ReadControl/`) |
-| `assets/<id>/*` | App preferences (theme, font, library path) |
-| `highlights/<id>.md` | Native messaging host manifest |
-| `originals/<id>.html` (optional) | |
+| `articles/<prefix>/<id>/article.md` | SQLite index (`~/Library/Application Support/ReadControl/`) |
+| `articles/<prefix>/<id>/assets/*` | App preferences (theme, font, library path) |
+| `articles/<prefix>/<id>/highlights.md` | Native messaging host manifest |
+| `articles/<prefix>/<id>/original.html` (optional) | |
