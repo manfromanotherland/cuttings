@@ -75,6 +75,21 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                 }
             };
 
+            // The folder's location must match the reading's own identity:
+            // `articles/<prefix>/<id>/`. If an external edit or sync drops an
+            // article whose frontmatter id disagrees with its folder (or bucket),
+            // skip it rather than index it — otherwise the index would point a
+            // reading at a folder that `delete_reading` and asset resolution
+            // (both keyed on the id) would not agree with.
+            if reading_dir.path() != library.reading_dir(&reading.metadata.id) {
+                eprintln!(
+                    "scanner: skipping {}: folder does not match frontmatter id {}",
+                    path.display(),
+                    reading.metadata.id
+                );
+                continue;
+            }
+
             results.push(ScannedReading {
                 id: reading.metadata.id.clone(),
                 source_hash: reading.metadata.source_hash.clone(),
@@ -187,6 +202,27 @@ mod tests {
 
         let results = scan_library(&lib).unwrap();
         assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn scan_skips_reading_whose_folder_mismatches_its_id() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+
+        // An article whose frontmatter id is B, written into A's folder.
+        let a = new_id();
+        let b = new_id();
+        let folder_a = lib.reading_dir(&a);
+        fs::create_dir_all(&folder_a).unwrap();
+        let content = crate::render_reading(&crate::Reading {
+            metadata: sample_metadata(&b, "https://b.com"),
+            body: "body".into(),
+        })
+        .unwrap();
+        fs::write(folder_a.join("article.md"), content).unwrap();
+
+        // The folder (A) disagrees with the frontmatter id (B), so it is skipped.
+        assert!(scan_library(&lib).unwrap().is_empty());
     }
 
     #[test]

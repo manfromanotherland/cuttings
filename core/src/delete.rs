@@ -16,42 +16,74 @@ use crate::{reconcile::apply_diffs, scanner::ScanDiff, LibraryRoot};
 /// Errors if the reading does not exist.
 ///
 /// Deleting a folder is far blunter than deleting a single file, so this is
-/// deliberately conservative about *what* it will remove. The guardrails ensure
-/// the target is a single reading's folder and never a shared ancestor:
+/// deliberately conservative about *what* it will remove. Because the library is
+/// synced and externally writable, the on-disk tree is untrusted; the guardrails
+/// ensure the target is exactly one reading's own folder:
 ///
 /// - the id must look like a real reading id (non-empty, ASCII-alphanumeric), so
 ///   a crafted value can't smuggle `/` or `..` into the path and escape the
 ///   reading folder;
-/// - the resolved folder must still contain an `article.md` — i.e. it really is
-///   a reading folder, not an empty or unrelated directory; and
+/// - the folder must contain an `article.md` whose frontmatter id **equals** the
+///   requested id — so a divergent file (from an edit/sync that put a different
+///   id in this folder) can never cause a delete of `id` to wipe another reading;
 /// - the folder must sit *below* a fan-out bucket, never at `articles/` or a
-///   bucket itself, so one delete can never wipe many readings at once.
+///   bucket itself, so one delete can never wipe many readings at once; and
+/// - the folder must not be a symlink, and its *canonical* path must resolve
+///   beneath the canonical `articles/` — so a symlinked bucket or ancestor can't
+///   redirect `remove_dir_all` outside the library.
 pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> {
     if !is_valid_reading_id(id) {
         bail!("refusing to delete: invalid reading id {id:?}");
     }
 
     let dir = library.reading_dir(id);
+    let article = library.article_path(id);
 
-    if !library.article_path(id).is_file() {
+    if !article.is_file() {
         bail!("reading not found: {id}");
     }
 
-    // Defensive: `dir` must be nested two levels under articles/ (bucket → id),
-    // so it can never be the articles/ root or a bucket directory even if the
-    // path helpers change. `parent()` of a real reading folder is its bucket.
+    // The file on disk must really be this reading: its frontmatter id has to
+    // match the folder we are about to remove.
+    match crate::read_metadata(&article) {
+        Ok(meta) if meta.id == id => {}
+        Ok(meta) => bail!(
+            "refusing to delete {id}: frontmatter id {:?} in {} does not match",
+            meta.id,
+            article.display()
+        ),
+        Err(e) => bail!("refusing to delete {id}: cannot read frontmatter: {e}"),
+    }
+
+    // Structural (lexical) guard: `dir` must be nested two levels under articles/
+    // (bucket → id), never the articles/ root or a bucket directory.
     let articles = library.articles_dir();
-    let is_reading_folder = dir.starts_with(&articles)
+    let nested_two_levels = dir.starts_with(&articles)
         && dir != articles
         && dir.parent().is_some_and(|bucket| bucket != articles);
-    if !is_reading_folder {
+    if !nested_two_levels {
         bail!(
             "refusing to delete: {} is not a reading folder",
             dir.display()
         );
     }
 
-    std::fs::remove_dir_all(&dir)?;
+    // Containment guard (resolves symlinks): the reading folder must not itself
+    // be a symlink, and its real path must sit beneath the real articles/ dir, so
+    // a symlinked bucket/ancestor can't send remove_dir_all outside the library.
+    if std::fs::symlink_metadata(&dir)?.file_type().is_symlink() {
+        bail!("refusing to delete: {} is a symlink", dir.display());
+    }
+    let real_articles = std::fs::canonicalize(&articles)?;
+    let real_dir = std::fs::canonicalize(&dir)?;
+    if real_dir == real_articles || !real_dir.starts_with(&real_articles) {
+        bail!(
+            "refusing to delete: {} resolves outside the library",
+            dir.display()
+        );
+    }
+
+    std::fs::remove_dir_all(&real_dir)?;
 
     apply_diffs(conn, &[ScanDiff::Removed(id.to_string())])
 }
@@ -175,6 +207,65 @@ mod tests {
         let conn = open(&dir.path().join("index.db")).unwrap();
         // A well-formed id that simply isn't present hits the not-found guard.
         assert!(delete_reading(&lib, &conn, &new_id()).is_err());
+    }
+
+    #[test]
+    fn delete_refuses_when_frontmatter_id_diverges_from_folder() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let conn = open(&dir.path().join("index.db")).unwrap();
+
+        // Put an article whose frontmatter says B inside A's folder — the kind of
+        // divergence an external edit or sync could create.
+        let a = new_id();
+        let b = new_id();
+        let folder_a = lib.reading_dir(&a);
+        fs::create_dir_all(&folder_a).unwrap();
+        let content = crate::render_reading(&crate::Reading {
+            metadata: meta(&b),
+            body: "body".into(),
+        })
+        .unwrap();
+        fs::write(folder_a.join("article.md"), content).unwrap();
+
+        // Deleting A must refuse: the file in A's folder is really B.
+        assert!(delete_reading(&lib, &conn, &a).is_err());
+        assert!(lib.article_path(&a).is_file(), "A's folder must survive");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_refuses_symlinked_bucket_escaping_the_library() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let conn = open(&dir.path().join("index.db")).unwrap();
+
+        // A real, well-formed reading folder that lives OUTSIDE the library.
+        let outside = TempDir::new().unwrap();
+        let id = new_id();
+        let outside_reading = outside.path().join(&id);
+        fs::create_dir_all(&outside_reading).unwrap();
+        let content = crate::render_reading(&crate::Reading {
+            metadata: meta(&id),
+            body: "body".into(),
+        })
+        .unwrap();
+        fs::write(outside_reading.join("article.md"), content).unwrap();
+
+        // Point the in-library fan-out bucket at that outside directory, so the
+        // reading resolves through the symlink (frontmatter id matches, too).
+        let bucket = lib.articles_dir().join(&id[..2]);
+        symlink(outside.path(), &bucket).unwrap();
+        assert!(lib.article_path(&id).is_file(), "resolves via the symlink");
+
+        // Delete must refuse: the folder's real path is outside the library.
+        assert!(delete_reading(&lib, &conn, &id).is_err());
+        assert!(
+            outside_reading.join("article.md").is_file(),
+            "content outside the library must be left untouched"
+        );
     }
 
     #[test]
