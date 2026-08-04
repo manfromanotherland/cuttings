@@ -12,16 +12,21 @@ import Foundation
 /// same URL dedupes against it. A pre-set highlight (`highlights.md`) is written
 /// alongside the article to demonstrate the highlights feature.
 enum WelcomeArticle {
-    /// The address the welcome reading is "saved" from. It is already in the
-    /// normalized form core's `url_norm` produces (lowercase host; no `www.`,
-    /// port, query, fragment, or trailing slash), so hashing it directly yields
-    /// the same content-addressed id core's `url_id` would. Keep it normalized:
-    /// the reading folder and frontmatter `id` derive from this string.
-    private static let sourceURL = "https://readcontrol.app/welcome"
+    /// The address the welcome reading points at — stored as `url` and
+    /// `canonical_url`.
+    private static let sourceURL = "https://www.readcontrol.app"
 
-    /// Content-addressed id: SHA-256 (hex) of `sourceURL`, matching core's
-    /// `url_id`. The filename stem and folder name for the seed.
-    private static let articleId = sha256Hex(sourceURL)
+    /// `sourceURL` in the form core's `url_norm` produces: the leading `www.` is
+    /// dropped and the empty path is normalized to a root `/`, giving
+    /// `https://readcontrol.app/`. The reading id is the SHA-256 of this, so it
+    /// must equal `normalize_url(sourceURL)` exactly — keeping the id equal to
+    /// core's `url_id(sourceURL)` so a real save of the same page dedupes against
+    /// the seed. Keep it in sync with core's `normalize_url`.
+    private static let normalizedSourceURL = "https://readcontrol.app/"
+
+    /// Content-addressed id: SHA-256 (hex) of the normalized source URL, matching
+    /// core's `url_id`. The reading-folder name and frontmatter `id`.
+    private static let articleId = sha256Hex(normalizedSourceURL)
 
     private static let highlightId = "01JZWC0M0000000000000002"
     private static let highlightedText = "ReadControl keeps your readings where you can always find them."
