@@ -190,12 +190,10 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
   }
 
   if (response.ok) {
-    await showBadge(tabId, "ok");
     await showToast(tabId, "ok", "Saved to ReadControl", capture.metadata.title);
     markSaved(tabId, tab.url, capture.metadata.canonical_url);
     await log("info", "Saved", { url: tab.url, title: capture.metadata.title });
   } else if (response.error === "duplicate") {
-    await showBadge(tabId, "ok");
     await showToast(tabId, "ok", "Already in Reading List", capture.metadata.title);
     markSaved(tabId, tab.url, capture.metadata.canonical_url);
     await log("info", "Already saved (duplicate)", { url: tab.url });
