@@ -3,8 +3,9 @@
 import XCTest
 
 /// `LibrarySetup` scaffolds the library's on-disk layout: it creates the
-/// `articles` and `assets` subdirectories under the chosen root and is safe to
-/// re-run. Exercised against a throwaway temp directory, never a real library.
+/// `articles` subdirectory under the chosen root (and no top-level `assets/`,
+/// which now lives inside each reading's folder) and is safe to re-run.
+/// Exercised against a throwaway temp directory, never a real library.
 final class LibrarySetupTests: XCTestCase {
     private var root: URL!
 
@@ -18,15 +19,24 @@ final class LibrarySetupTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
-    func testScaffoldCreatesArticlesAndAssets() throws {
+    func testScaffoldCreatesArticles() throws {
         try LibrarySetup.scaffold(at: root)
-        for dir in ["articles", "assets"] {
-            var isDirectory: ObjCBool = false
-            let exists = FileManager.default.fileExists(
-                atPath: root.appendingPathComponent(dir).path, isDirectory: &isDirectory
-            )
-            XCTAssertTrue(exists && isDirectory.boolValue, "expected \(dir)/ to be created")
-        }
+
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(
+            atPath: root.appendingPathComponent("articles").path, isDirectory: &isDirectory
+        )
+        XCTAssertTrue(exists && isDirectory.boolValue, "expected articles/ to be created")
+    }
+
+    func testScaffoldDoesNotCreateTopLevelAssets() throws {
+        try LibrarySetup.scaffold(at: root)
+
+        // Assets live inside each reading's folder, so no top-level assets/ dir.
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: root.appendingPathComponent("assets").path),
+            "there should be no top-level assets/ directory"
+        )
     }
 
     func testScaffoldIsIdempotent() throws {
