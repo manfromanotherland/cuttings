@@ -2,10 +2,12 @@
 
 import Foundation
 
-/// An isolated, on-disk library for one test: `<tmp>/<uuid>/library/{articles,
-/// assets,highlights}` with a sibling `<tmp>/<uuid>/index.db`. Fixtures written
-/// here are indexed by the real app — before launch (the boot rebuild picks them
-/// up) or after (exercising the FSEvents watcher). Destroyed in teardown.
+/// An isolated, on-disk library for one test: `<tmp>/<uuid>/library/` with a
+/// sibling `<tmp>/<uuid>/index.db`. Each reading is its own folder,
+/// `articles/<prefix>/<id>/` holding `article.md`, an `assets/` sub-folder, and
+/// `highlights.md` — the layout the real scanner indexes. Fixtures written here
+/// are indexed by the real app — before launch (the boot rebuild picks them up)
+/// or after (exercising the FSEvents watcher). Destroyed in teardown.
 final class TestLibrary {
     /// `<tmp>/<uuid>` — the per-test root holding both the library and the DB.
     let root: URL
@@ -23,12 +25,12 @@ final class TestLibrary {
         libraryURL.appendingPathComponent("articles", isDirectory: true)
     }
 
-    var assetsDir: URL {
-        libraryURL.appendingPathComponent("assets", isDirectory: true)
-    }
-
-    var highlightsDir: URL {
-        libraryURL.appendingPathComponent("highlights", isDirectory: true)
+    /// A reading's own folder, `articles/<prefix>/<id>/`, where `<prefix>` is the
+    /// first two characters of the id — the fan-out layout the scanner walks.
+    func readingDir(id: String) -> URL {
+        articlesDir
+            .appendingPathComponent(String(id.prefix(2)), isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
     }
 
     init() throws {
@@ -39,14 +41,15 @@ final class TestLibrary {
         libraryURL = root.appendingPathComponent("library", isDirectory: true)
         dbURL = root.appendingPathComponent("index.db")
         defaultsSuiteName = "app.readcontrol.app.uitest.\(id)"
-        for dir in [articlesDir, assetsDir, highlightsDir] {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
+        try FileManager.default.createDirectory(at: articlesDir, withIntermediateDirectories: true)
     }
 
     // ── Articles ────────────────────────────────────────────────────────────
 
     func write(_ article: ArticleFixture) throws {
+        try FileManager.default.createDirectory(
+            at: readingDir(id: article.id), withIntermediateDirectories: true
+        )
         try article.rendered().write(to: articleFileURL(id: article.id), atomically: true, encoding: .utf8)
     }
 
@@ -58,9 +61,14 @@ final class TestLibrary {
 
     /// Writes arbitrary file contents for `id` — for external-edit and malformed-file tests.
     func writeRaw(id: String, contents: String) throws {
+        try FileManager.default.createDirectory(
+            at: readingDir(id: id), withIntermediateDirectories: true
+        )
         try contents.write(to: articleFileURL(id: id), atomically: true, encoding: .utf8)
     }
 
+    /// Removes the reading's `article.md`, leaving any assets/highlights — the
+    /// scanner then treats the folder (now without an article) as a removal.
     func deleteArticle(id: String) throws {
         try FileManager.default.removeItem(at: articleFileURL(id: id))
     }
@@ -82,13 +90,15 @@ final class TestLibrary {
     // ── Assets & highlights ───────────────────────────────────────────────
 
     func writeAsset(articleId: String, fileName: String, data: Data) throws {
-        let dir = assetsDir.appendingPathComponent(articleId, isDirectory: true)
+        let dir = readingDir(id: articleId).appendingPathComponent("assets", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try data.write(to: dir.appendingPathComponent(fileName))
     }
 
     func writeHighlights(articleId: String, _ highlights: [TestHighlight]) throws {
-        try FileManager.default.createDirectory(at: highlightsDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: readingDir(id: articleId), withIntermediateDirectories: true
+        )
         try HighlightsFile.render(highlights)
             .write(to: highlightsFileURL(id: articleId), atomically: true, encoding: .utf8)
     }
@@ -105,11 +115,11 @@ final class TestLibrary {
     // ── URL accessors ─────────────────────────────────────────────────────
 
     func articleFileURL(id: String) -> URL {
-        articlesDir.appendingPathComponent("\(id).md")
+        readingDir(id: id).appendingPathComponent("article.md")
     }
 
     func highlightsFileURL(id: String) -> URL {
-        highlightsDir.appendingPathComponent("\(id).md")
+        readingDir(id: id).appendingPathComponent("highlights.md")
     }
 
     // ── Teardown ────────────────────────────────────────────────────────────

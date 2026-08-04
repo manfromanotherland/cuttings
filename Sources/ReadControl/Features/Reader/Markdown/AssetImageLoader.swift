@@ -33,27 +33,34 @@ enum AssetImageLoader {
             .appendingPathComponent(readingID)
     }
 
-    /// Resolve a relative asset path to an on-disk URL. Each reading is a
-    /// self-contained folder holding `article.md` beside its `assets/`, so the
-    /// stored Markdown references assets as `assets/<file>` — resolved directly
-    /// under `assetBaseURL` (the reading's folder, from `readingFolderURL`). An
-    /// image the extension couldn't capture at save time is still an absolute
-    /// `http(s)` URL — not a local asset — so this returns `nil` for it and the
-    /// reader shows a placeholder instead of fetching it over the network.
+    /// Resolve a local asset reference to an on-disk URL under the reading's
+    /// folder (`assetBaseURL`, from `readingFolderURL`).
+    ///
+    /// Only the exact shape core emits is accepted — `assets/<filename>`, one
+    /// file inside the reading's own `assets/` folder. Because the library is
+    /// synced and externally writable, a crafted link must not be able to read
+    /// arbitrary files: absolute paths, `..` traversal, nested or extra path
+    /// segments, and any non-`assets/` reference all return `nil`. An image the
+    /// extension couldn't capture is still an `http(s)` URL — also not a local
+    /// asset — so it returns `nil` too and the reader shows a placeholder rather
+    /// than fetching over the network.
     static func localURL(source: String, assetBaseURL: URL?) -> URL? {
         guard let assetBaseURL else { return nil }
-        if let scheme = URL(string: source)?.scheme?.lowercased(),
-           scheme == "http" || scheme == "https"
-        {
-            return nil
-        }
-        // Links are relative to the article file (`assets/<file>`); drop a
-        // leading `./` if present, then resolve under the reading's folder.
-        var path = source
-        if path.hasPrefix("./") {
-            path = String(path.dropFirst(2))
-        }
-        return assetBaseURL.appendingPathComponent(path)
+        let prefix = "assets/"
+        guard source.hasPrefix(prefix) else { return nil }
+        let filename = String(source.dropFirst(prefix.count))
+        guard isSafeAssetFilename(filename) else { return nil }
+        return assetBaseURL
+            .appendingPathComponent("assets")
+            .appendingPathComponent(filename)
+    }
+
+    /// A safe asset filename is a single path component: non-empty, no `/`
+    /// (rules out absolute and nested paths), and not `.`/`..` (rules out
+    /// traversal). Core writes `<sha256>.<ext>`, so this never rejects a real
+    /// asset while refusing anything that could escape the `assets/` folder.
+    private static func isSafeAssetFilename(_ name: String) -> Bool {
+        !name.isEmpty && !name.contains("/") && name != "." && name != ".."
     }
 
     /// Decode `url` into an image whose largest dimension is at most `maxPixel`

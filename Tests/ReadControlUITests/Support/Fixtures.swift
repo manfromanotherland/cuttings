@@ -308,7 +308,7 @@ enum Fixtures {
 
     A sentence with a footnote.[^1]
 
-    ![Sample image](../assets/\(Ids.kitchenSink)/\(PNGFixture.fileName))
+    ![Sample image](assets/\(PNGFixture.fileName))
 
     [^1]: The footnote text.
     """

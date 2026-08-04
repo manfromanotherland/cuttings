@@ -9,12 +9,12 @@ import Foundation
 ///
 /// `SampleImage.png` is a real image file (the Markdown mark, fitting the
 /// "The Complete Markdown Sample" fixture article) shipped in the UITest bundle.
-/// The test copies it onto disk in the library's `assets/` and the app reads it
-/// back on render — exactly how a normal article's image is stored and loaded.
+/// The test copies it into the reading's own `assets/` folder and the app reads
+/// it back on render — exactly how a normal article's image is stored and loaded.
 enum PNGFixture {
-    /// The asset filename inside `assets/<id>/`. The reader resolves the body's
-    /// image path literally, so any stable name works; it just has to match on
-    /// both sides.
+    /// The asset filename inside the reading's `assets/` folder. The body links
+    /// it as `assets/<fileName>`, which the reader resolves under the reading
+    /// folder, so any stable name works as long as it matches on both sides.
     static let fileName = "SampleImage.png"
 
     /// The image's raw bytes, read from the bundled `SampleImage.png`.
