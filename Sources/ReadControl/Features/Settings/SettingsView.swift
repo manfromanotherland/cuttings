@@ -138,14 +138,12 @@ private struct ExtensionsSettingsTab: View {
                 ExtensionLink(
                     name: "Chrome",
                     detail: "Also Edge, Brave, and other Chromium browsers",
-                    logo: "chrome-logo",
                     url: ExtensionStore.chrome,
                     accessibilityID: A11y.Settings.chromeExtensionLink
                 )
                 ExtensionLink(
                     name: "Firefox",
                     detail: "Firefox 115 or newer",
-                    logo: "firefox-logo",
                     url: ExtensionStore.firefox,
                     accessibilityID: A11y.Settings.firefoxExtensionLink
                 )
@@ -161,14 +159,13 @@ private struct ExtensionsSettingsTab: View {
     }
 }
 
-/// One store row: browser logo, name, a short note, and an open-in-browser hint.
+/// One store row: browser name, a short note, and an open-in-browser hint.
 /// Tapping opens the listing in the user's default browser. Uses a plain-styled
 /// button rather than `Link` so the row keeps the standard label/gray text colors
 /// instead of the blue accent tint.
 private struct ExtensionLink: View {
     let name: String
     let detail: String
-    let logo: String
     let url: URL
     let accessibilityID: String
 
@@ -179,11 +176,6 @@ private struct ExtensionLink: View {
             openURL(url)
         } label: {
             HStack(spacing: 12) {
-                Image(logo)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 28, height: 28)
-
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .foregroundStyle(.primary)
