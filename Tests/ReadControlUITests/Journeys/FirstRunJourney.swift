@@ -7,8 +7,10 @@ import XCTest
 /// Unread 1, the Welcome article auto-selected and rendered → it carries a
 /// pre-set 5-star rating → mark it read → Unread 0 (it stays in All).
 final class FirstRunJourney: UITestCase {
-    /// The Welcome article's fixed id, seeded by the app into a fresh library.
-    private let welcomeId = "01JZWC0M0000000000000001"
+    /// The Welcome article's content-addressed id, seeded by the app into a fresh
+    /// library — `SHA256(normalize("https://www.readcontrol.app"))`, matching
+    /// `WelcomeArticle`.
+    private let welcomeId = "d9b68f436a63429191a157ea8ad8286bad858b867aaf18c540af99d22565d21f"
 
     func testOnboardThenReadWelcome() throws {
         // 1. Fresh launch with no library → the onboarding screen, and no
