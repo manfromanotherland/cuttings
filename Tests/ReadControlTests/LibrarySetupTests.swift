@@ -3,8 +3,8 @@
 import XCTest
 
 /// `LibrarySetup` scaffolds the library's on-disk layout: it creates the
-/// `articles` subdirectory under the chosen root (and no top-level `assets/`,
-/// which now lives inside each reading's folder) and is safe to re-run.
+/// `articles` subdirectory under the chosen root (assets live inside each
+/// reading's folder, so there is no top-level `assets/`) and is safe to re-run.
 /// Exercised against a throwaway temp directory, never a real library.
 final class LibrarySetupTests: XCTestCase {
     private var root: URL!
