@@ -12,7 +12,8 @@ use crate::types::{LibraryRoot, Metadata, Reading};
 /// Write a reading to the library atomically (temp-file + rename).
 ///
 /// Computes and sets `source_hash` from the body before writing.
-/// Creates the fan-out dirs `articles/<prefix>/` and `assets/<prefix>/<id>/`.
+/// Creates the reading's self-contained folder `articles/<prefix>/<id>/` and its
+/// `assets/` sub-directory.
 pub fn write_reading(
     library: &LibraryRoot,
     mut metadata: Metadata,
@@ -24,14 +25,11 @@ pub fn write_reading(
     let content = render_reading(&reading)?;
 
     let article_path = library.article_path(&reading.metadata.id);
-    // Create the article's fan-out sub-directory (e.g. articles/8f/) and its
-    // assets dir. `parent()` is the fan-out bucket, not just `articles/`.
-    if let Some(parent) = article_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    // Create the reading's folder (articles/<prefix>/<id>/) — the article file's
+    // parent — plus its assets dir, so both exist before the write.
     fs::create_dir_all(library.assets_dir(&reading.metadata.id))?;
 
-    let tmp_path = article_path.with_extension("md.tmp");
+    let tmp_path = article_path.with_file_name("article.md.tmp");
 
     {
         let mut f = fs::File::create(&tmp_path)?;

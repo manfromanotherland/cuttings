@@ -2,13 +2,13 @@
 
 //! Per-reading text highlights, stored as a Markdown document.
 //!
-//! Each reading's highlights live in `highlights/{reading_id}.md`, separate
-//! from the article itself (`articles/{reading_id}.md`) and from the SQLite
-//! index — they are a pure on-disk feature, so the scanner (which only walks
-//! `articles/`) never mistakes them for readings. A highlight is the verbatim
-//! text the user selected in the reader; the file renders each as a Markdown
-//! block quote followed by an HTML comment carrying a stable id, so highlights
-//! can be listed and deleted individually while the file stays human-readable.
+//! Each reading's highlights live in `highlights.md` inside the reading's own
+//! folder, beside its `article.md`. They stay out of the SQLite index, and the
+//! scanner keys on the fixed `article.md` filename, so it never mistakes the
+//! highlights file for a reading. A highlight is the verbatim text the user
+//! selected in the reader; the file renders each as a Markdown block quote
+//! followed by an HTML comment carrying a stable id, so highlights can be listed
+//! and deleted individually while the file stays human-readable.
 
 use anyhow::{bail, Result};
 
@@ -113,7 +113,9 @@ pub fn delete_all_highlights(library: &LibraryRoot, reading_id: &str) -> Result<
 /// Render highlights as a Markdown document. Each highlight is a block quote
 /// (one `> ` line per text line) terminated by `<!-- hl {id} -->`.
 fn write(library: &LibraryRoot, reading_id: &str, highlights: &[Highlight]) -> Result<()> {
-    std::fs::create_dir_all(library.highlights_dir())?;
+    // The highlights file lives inside the reading's folder; create it in case a
+    // highlight is somehow saved before the article file exists.
+    std::fs::create_dir_all(library.reading_dir(reading_id))?;
     let mut out = String::new();
     for h in highlights {
         if h.text.is_empty() {

@@ -97,8 +97,8 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
 
     write_reading(&library, metadata, markdown)?;
 
-    // Report the article's path relative to the library root (fan-out layout,
-    // e.g. articles/8f/<id>.md).
+    // Report the article's path relative to the library root (per-reading
+    // folder, e.g. articles/8f/<id>/article.md).
     let article_path = library.article_path(&id);
     let path = article_path
         .strip_prefix(library.path())

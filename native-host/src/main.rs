@@ -246,8 +246,8 @@ mod integration_tests {
                 .path
                 .as_deref()
                 .expect("path missing from success response");
-            // Fan-out layout: articles/<first 2 hex chars>/<id>.md
-            assert_eq!(path, format!("articles/{}/{id}.md", &id[..2]));
+            // Per-reading folder: articles/<first 2 hex chars>/<id>/article.md
+            assert_eq!(path, format!("articles/{}/{id}/article.md", &id[..2]));
         });
     }
 
@@ -327,21 +327,23 @@ mod integration_tests {
             let content =
                 std::fs::read_to_string(dir.path().join(resp.path.as_deref().unwrap())).unwrap();
             let id = resp.id.as_deref().unwrap();
-            // The supplied image is rewritten to a local asset...
+            // The supplied image is rewritten to a local asset, linked relative
+            // to the article file that sits beside its assets/ folder.
             assert!(
-                content.contains(&format!("../../assets/{}/{id}/", &id[..2])),
+                content.contains("![Got](assets/"),
                 "supplied image should be rewritten to a local path:\n{content}"
             );
             assert!(
                 !content.contains("cdn.example.com/got.png"),
                 "supplied image's remote URL should be gone"
             );
-            // ...and its bytes are on disk (fan-out: assets/<prefix>/<id>/).
+            // ...and its bytes are on disk under the reading's own assets/ folder.
             let asset = dir
                 .path()
-                .join("assets")
+                .join("articles")
                 .join(&id[..2])
                 .join(id)
+                .join("assets")
                 .join(format!("{}.png", readcontrol_core::sha256_hex(bytes)));
             assert_eq!(std::fs::read(&asset).unwrap(), bytes);
             // The unsupplied image keeps its remote URL as a placeholder.

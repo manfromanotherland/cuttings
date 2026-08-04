@@ -38,21 +38,28 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
     }
 
     let mut results = Vec::new();
-    // Fan-out layout: articles/<2-char prefix>/<id>.md. Walk one level of
-    // sub-directories and collect the `.md` files inside each bucket.
+    // Fan-out layout: articles/<2-char prefix>/<id>/article.md. Each reading is a
+    // self-contained folder, so walk two levels of sub-directories (bucket → the
+    // reading folder) and read the `article.md` inside each reading folder. The
+    // sibling `assets/` folder and `highlights.md` are not readings, so keying on
+    // the fixed `article.md` filename skips them without extra checks.
     for bucket in std::fs::read_dir(&articles_dir)? {
         let bucket = bucket?;
         if !bucket.file_type()?.is_dir() {
             continue; // ignore stray files sitting directly in articles/
         }
-        for entry in std::fs::read_dir(bucket.path())? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                continue;
+        for reading_dir in std::fs::read_dir(bucket.path())? {
+            let reading_dir = reading_dir?;
+            if !reading_dir.file_type()?.is_dir() {
+                continue; // ignore stray files sitting directly in a bucket
             }
+            let path = reading_dir.path().join("article.md");
+            let file_meta = match std::fs::metadata(&path) {
+                Ok(m) => m,
+                Err(_) => continue, // a folder without an article.md is not a reading
+            };
 
-            let modified_at = entry.metadata()?.modified()?;
+            let modified_at = file_meta.modified()?;
             let content = match std::fs::read_to_string(&path) {
                 Ok(c) => c,
                 Err(e) => {

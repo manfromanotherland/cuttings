@@ -19,8 +19,9 @@ pub struct ImageBytes {
     pub bytes: Vec<u8>,
 }
 
-/// Write each supplied image into `assets/<prefix>/<id>/` and rewrite its URL in
-/// the Markdown to the local relative path. Returns the updated Markdown.
+/// Write each supplied image into the reading's `assets/` sub-folder and rewrite
+/// its URL in the Markdown to the local relative path. Returns the updated
+/// Markdown.
 ///
 /// This performs no downloads: an image the extension could not capture is
 /// simply absent from `images`, so its URL stays in the Markdown and the reader
@@ -46,11 +47,10 @@ pub fn write_images(
         let ext = ext_for(&image.content_type, &image.url);
         let filename = format!("{hash}.{ext}");
         if fs::write(assets_dir.join(&filename), &image.bytes).is_ok() {
-            // The article lives at articles/<prefix>/<id>.md and the asset at
-            // assets/<prefix>/<id>/<file>, so the link climbs two levels (out of
-            // the fan-out bucket and out of articles/) back to the library root.
-            let prefix = id.get(..2).unwrap_or(id);
-            let rel = format!("../../assets/{prefix}/{id}/{filename}");
+            // The article file (article.md) and its assets/ folder are siblings
+            // inside the reading's folder, so the link is just `assets/<file>` —
+            // no climbing out of the fan-out bucket.
+            let rel = format!("assets/{filename}");
             result = result.replace(image.url.as_str(), &rel);
         }
     }
@@ -154,10 +154,10 @@ mod tests {
         let out = write_images(&library, id, &markdown, &[img(url, "image/png", bytes)]).unwrap();
 
         assert!(!out.contains(url), "remote URL should be replaced: {out}");
-        let prefix = &id[..2];
+        assert!(out.contains("assets/"), "got: {out}");
         assert!(
-            out.contains(&format!("../../assets/{prefix}/{id}/")),
-            "got: {out}"
+            !out.contains("../"),
+            "link is relative to the article file, no climbing: {out}"
         );
 
         // The written file's name is the sha256 of the bytes plus the extension.

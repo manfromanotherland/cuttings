@@ -67,29 +67,30 @@ impl LibraryRoot {
         self.0.join("articles")
     }
 
+    /// The self-contained folder that holds everything for one reading:
+    /// `articles/<prefix>/<id>/`. The article file, its assets, and its
+    /// highlights all live inside it, so a reading is one movable/deletable unit.
+    pub fn reading_dir(&self, id: &str) -> PathBuf {
+        self.articles_dir().join(fanout_prefix(id)).join(id)
+    }
+
     pub fn assets_dir(&self, id: &str) -> PathBuf {
-        self.0.join("assets").join(fanout_prefix(id)).join(id)
+        self.reading_dir(id).join("assets")
     }
 
     pub fn article_path(&self, id: &str) -> PathBuf {
-        self.articles_dir()
-            .join(fanout_prefix(id))
-            .join(format!("{id}.md"))
-    }
-
-    pub fn highlights_dir(&self) -> PathBuf {
-        self.0.join("highlights")
+        self.reading_dir(id).join("article.md")
     }
 
     pub fn highlights_path(&self, id: &str) -> PathBuf {
-        self.highlights_dir().join(format!("{id}.md"))
+        self.reading_dir(id).join("highlights.md")
     }
 }
 
 /// The fan-out sub-directory for a content-addressed id: its first two hex
-/// characters. Article ids are 64-char SHA-256 hex, so this spreads files evenly
-/// across 256 buckets. Falls back to the whole id for ids shorter than two chars
-/// so callers never panic (highlights, which use ULIDs, don't route through here).
+/// characters. Article ids are 64-char SHA-256 hex, so this spreads reading
+/// folders evenly across 256 buckets. Falls back to the whole id for ids shorter
+/// than two chars so callers never panic.
 fn fanout_prefix(id: &str) -> &str {
     id.get(..2).unwrap_or(id)
 }
