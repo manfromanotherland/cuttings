@@ -15,8 +15,10 @@ host, macOS app, and landing page (`website`).
   captures.
 - Use **reading** for the saved domain object the user browses, searches, reads,
   tags, rates, archives, or deletes.
-- Use **article file** only when talking about the on-disk Markdown file under
-  `articles/`.
+- Use **article file** only when talking about the on-disk `article.md` inside a
+  reading's folder.
+- Use **reading folder** for the per-reading folder `articles/<prefix>/<id>/`
+  that holds a reading's article file, its assets, and its highlights.
 - Use **library** or **library folder** for the user-selected folder that holds
   readings and assets.
 - Use **index** for the local SQLite database. Do not call it the source of
@@ -43,18 +45,20 @@ host, macOS app, and landing page (`website`).
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |
 | Save | The user action that adds the current page to the library as a new reading. Time-neutral: it covers both "read this later" and "keep this now that I've read it". |
 | Capture | The extension's extraction step that turns the live page into cleaned Markdown, metadata, and image bytes before the save is written. Internal/technical term; users just "save". |
-| Reading | One saved item in the user's library. A reading is backed by an article file, optional assets, and optional highlights. |
-| Article file | The Markdown file at `articles/<id>.md` that stores one reading's frontmatter and body. |
+| Reading | One saved item in the user's library. A reading is backed by an article file, optional assets, and optional highlights — all inside its reading folder. |
+| Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its `assets/`, and its `highlights.md`. Moving or deleting a reading operates on this one folder. |
+| Article file | The `article.md` file inside a reading folder (`articles/<prefix>/<id>/article.md`) that stores one reading's frontmatter and body. |
 | Frontmatter | YAML metadata at the top of an article file. It is the source of truth for reading metadata and state. |
 | Body | The cleaned Markdown content after frontmatter in an article file. |
-| Asset | A local file, usually an image, stored under `assets/<id>/` and linked from a reading body with a relative path. |
-| Original HTML | Optional raw HTML snapshot stored under `originals/<id>.html` for future reprocessing. |
-| Highlight | A saved selected text passage for one reading. Highlights are stored separately from article files. |
-| Highlight file | A Markdown file under `highlights/<reading-id>.md` that stores a reading's saved highlights. |
-| Reading id | Stable sortable identifier for a reading. It is the article filename stem and the frontmatter `id`. |
-| ULID | The sortable id scheme used for reading ids. |
-| Source URL | The original URL as visited by the user. Stored as `url`. |
-| Canonical URL | Normalized URL used for duplicate detection. Stored as `canonical_url`. |
+| Asset | A local file, usually an image, stored in the reading's own `assets/` folder (`articles/<prefix>/<id>/assets/`) and linked from the body with a relative `assets/<file>` path. |
+| Original HTML | Optional raw HTML snapshot stored as `original.html` inside the reading folder for future reprocessing. |
+| Highlight | A saved selected text passage for one reading. Highlights are stored in the reading folder, separate from the article file. |
+| Highlight file | The `highlights.md` file inside a reading folder (`articles/<prefix>/<id>/highlights.md`) that stores that reading's saved highlights. |
+| Reading id | Content-addressed identifier for a reading: the lowercase-hex SHA-256 of its normalized source URL. It names the reading folder and is the frontmatter `id`. Deterministic, so the same URL always yields the same id (the dedup key). Not time-sortable — the reading list orders by `saved_at` via the index. |
+| Content-addressed id | See Reading id: an id derived from content (here, `SHA256(normalize(url))`) rather than assigned, so identical input yields an identical id with no coordinator. |
+| ULID | Sortable id scheme (Crockford Base32). Used for highlight ids; reading ids are content-addressed (see Reading id), not ULIDs. |
+| Source URL | The original URL as visited by the user, stored as `url`. Its normalized form is hashed to produce the reading id. |
+| Canonical URL | The page's own canonical URL when known, stored as `canonical_url` for reference. Dedup keys on the reading id (from the normalized *visited* URL), not this field. |
 | Source hash | Hash of cleaned content used to detect stale index rows and content changes. |
 | Format version | Integer frontmatter version for the library file contract. |
 
