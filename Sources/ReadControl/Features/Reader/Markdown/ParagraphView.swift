@@ -14,7 +14,7 @@ private typealias Text = SwiftUI.Text
 struct ParagraphView: View {
     let paragraph: Paragraph
     let theme: MarkdownTheme
-    let libraryURL: URL?
+    let assetBaseURL: URL?
     var highlights: [String] = []
     var onHighlight: (String) -> Void = { _ in }
 
@@ -28,7 +28,7 @@ struct ParagraphView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 case let .image(source, alt):
-                    AssetImageView(source: source, alt: alt, libraryURL: libraryURL, theme: theme,
+                    AssetImageView(source: source, alt: alt, assetBaseURL: assetBaseURL, theme: theme,
                                    highlights: highlights, onHighlight: onHighlight)
                 }
             }

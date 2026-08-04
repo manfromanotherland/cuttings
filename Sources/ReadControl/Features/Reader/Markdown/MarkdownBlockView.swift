@@ -14,7 +14,7 @@ private typealias Image = SwiftUI.Image
 struct MarkdownBlockView: View {
     let block: Markup
     let theme: MarkdownTheme
-    let libraryURL: URL?
+    let assetBaseURL: URL?
     /// Verbatim highlight strings and the highlight callback, threaded to the
     /// `SelectableTextView`s that back lists, block quotes, and image captions so
     /// those blocks get the same highlight tint and Highlight/Look Up menu as
@@ -28,7 +28,7 @@ struct MarkdownBlockView: View {
             HeadingView(heading: heading, theme: theme)
 
         case let paragraph as Paragraph:
-            ParagraphView(paragraph: paragraph, theme: theme, libraryURL: libraryURL,
+            ParagraphView(paragraph: paragraph, theme: theme, assetBaseURL: assetBaseURL,
                           highlights: highlights, onHighlight: onHighlight)
 
         case let quote as BlockQuote:
@@ -42,7 +42,7 @@ struct MarkdownBlockView: View {
                     .frame(width: theme.quoteBarWidth)
                 VStack(alignment: .leading, spacing: theme.quoteInnerSpacing) {
                     ForEach(childArray(quote)) { item in
-                        MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
+                        MarkdownBlockView(block: item.markup, theme: theme, assetBaseURL: assetBaseURL,
                                           highlights: highlights, onHighlight: onHighlight)
                     }
                 }
@@ -55,16 +55,16 @@ struct MarkdownBlockView: View {
             // shared text run (see `ArticleDocument.isFoldable`). SwiftUI keeps the
             // embedded figures.
             ListView(items: childArray(list), ordered: false, startIndex: 1,
-                     depth: 0, theme: theme, libraryURL: libraryURL)
+                     depth: 0, theme: theme, assetBaseURL: assetBaseURL)
 
         case let list as OrderedList:
             ListView(items: childArray(list), ordered: true, startIndex: Int(list.startIndex),
-                     depth: 0, theme: theme, libraryURL: libraryURL)
+                     depth: 0, theme: theme, assetBaseURL: assetBaseURL)
 
         case let item as ListItem:
             // Reached only if a ListItem is rendered outside a ListView; lists
             // normally route item content through `ListItemContent`.
-            ListItemContent(item: item, depth: 0, theme: theme, libraryURL: libraryURL)
+            ListItemContent(item: item, depth: 0, theme: theme, assetBaseURL: assetBaseURL)
 
         case let code as CodeBlock:
             CodeBlockView(code: code.code, language: code.language, theme: theme)
@@ -86,7 +86,7 @@ struct MarkdownBlockView: View {
             // Unknown container: recurse into children so nothing is dropped.
             VStack(alignment: .leading, spacing: theme.blockSpacing * 0.6) {
                 ForEach(childArray(block)) { child in
-                    MarkdownBlockView(block: child.markup, theme: theme, libraryURL: libraryURL,
+                    MarkdownBlockView(block: child.markup, theme: theme, assetBaseURL: assetBaseURL,
                                       highlights: highlights, onHighlight: onHighlight)
                 }
             }
@@ -138,7 +138,7 @@ private struct ListView: View {
     let startIndex: Int
     var depth: Int = 0
     let theme: MarkdownTheme
-    let libraryURL: URL?
+    let assetBaseURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.listItemSpacing) {
@@ -149,7 +149,7 @@ private struct ListView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: theme.listMarkerWidth(ordered: ordered), alignment: .trailing)
                     ListItemContent(item: item.markup, depth: depth,
-                                    theme: theme, libraryURL: libraryURL)
+                                    theme: theme, assetBaseURL: assetBaseURL)
                 }
             }
         }
@@ -175,7 +175,7 @@ private struct ListItemContent: View {
     let item: Markup
     let depth: Int
     let theme: MarkdownTheme
-    let libraryURL: URL?
+    let assetBaseURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.blockSpacing * 0.5) {
@@ -183,13 +183,13 @@ private struct ListItemContent: View {
                 switch child.markup {
                 case let list as UnorderedList:
                     ListView(items: childArray(list), ordered: false, startIndex: 1,
-                             depth: depth + 1, theme: theme, libraryURL: libraryURL)
+                             depth: depth + 1, theme: theme, assetBaseURL: assetBaseURL)
                 case let list as OrderedList:
                     ListView(items: childArray(list), ordered: true,
                              startIndex: Int(list.startIndex), depth: depth + 1,
-                             theme: theme, libraryURL: libraryURL)
+                             theme: theme, assetBaseURL: assetBaseURL)
                 default:
-                    MarkdownBlockView(block: child.markup, theme: theme, libraryURL: libraryURL)
+                    MarkdownBlockView(block: child.markup, theme: theme, assetBaseURL: assetBaseURL)
                 }
             }
         }

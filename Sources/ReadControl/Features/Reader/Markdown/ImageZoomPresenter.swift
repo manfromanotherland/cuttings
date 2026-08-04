@@ -27,8 +27,8 @@ final class ImageZoomPresenter {
     /// open; a source the extension couldn't capture is still a remote `http(s)`
     /// URL — `localURL` returns nil for it — so this no-ops and the reader keeps
     /// showing its placeholder rather than fetching the image over the network.
-    func present(source: String, alt: String, libraryURL: URL?) {
-        guard let local = AssetImageLoader.localURL(source: source, libraryURL: libraryURL) else { return }
+    func present(source: String, alt: String, assetBaseURL: URL?) {
+        guard let local = AssetImageLoader.localURL(source: source, assetBaseURL: assetBaseURL) else { return }
         target = Target(alt: alt, localURL: local)
     }
 

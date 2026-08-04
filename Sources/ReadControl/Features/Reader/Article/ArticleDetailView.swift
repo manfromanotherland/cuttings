@@ -128,7 +128,9 @@ struct ArticleDetailView: View {
         } else if let articleDocument {
             MarkdownDocumentView(
                 document: articleDocument,
-                libraryURL: appState.libraryURL,
+                assetBaseURL: AssetImageLoader.readingFolderURL(
+                    libraryURL: appState.libraryURL, readingID: row.id
+                ),
                 font: readerFont,
                 fontSize: readerFontSize,
                 highlights: appState.highlights.map(\.text),

@@ -18,27 +18,42 @@ enum AssetImageLoader {
         let image: NSImage
     }
 
-    /// Resolve a relative library asset path to an on-disk URL. The stored
-    /// Markdown references assets as `../assets/<id>/<file>`; strip the known
-    /// prefixes and resolve under `libraryURL/assets/`. An image the extension
-    /// couldn't capture at save time is still an absolute `http(s)` URL — not a
-    /// local asset — so this returns `nil` for it and the reader shows a
-    /// placeholder instead of fetching it over the network.
-    static func localURL(source: String, libraryURL: URL?) -> URL? {
-        guard let libraryURL else { return nil }
+    /// The on-disk folder that one reading's relative asset links resolve
+    /// against: `libraryURL/articles/<prefix>/<id>/`, where `<prefix>` is the
+    /// first two characters of the id. This mirrors the library-format fan-out
+    /// layout (see `docs/library-format.md`); keeping it in one place means the
+    /// reader encodes that layout knowledge exactly once. Returns `nil` when
+    /// there is no library or no id.
+    static func readingFolderURL(libraryURL: URL?, readingID: String) -> URL? {
+        guard let libraryURL, !readingID.isEmpty else { return nil }
+        let prefix = String(readingID.prefix(2))
+        return libraryURL
+            .appendingPathComponent("articles")
+            .appendingPathComponent(prefix)
+            .appendingPathComponent(readingID)
+    }
+
+    /// Resolve a relative asset path to an on-disk URL. Each reading is a
+    /// self-contained folder holding `article.md` beside its `assets/`, so the
+    /// stored Markdown references assets as `assets/<file>` — resolved directly
+    /// under `assetBaseURL` (the reading's folder, from `readingFolderURL`). An
+    /// image the extension couldn't capture at save time is still an absolute
+    /// `http(s)` URL — not a local asset — so this returns `nil` for it and the
+    /// reader shows a placeholder instead of fetching it over the network.
+    static func localURL(source: String, assetBaseURL: URL?) -> URL? {
+        guard let assetBaseURL else { return nil }
         if let scheme = URL(string: source)?.scheme?.lowercased(),
            scheme == "http" || scheme == "https"
         {
             return nil
         }
+        // Links are relative to the article file (`assets/<file>`); drop a
+        // leading `./` if present, then resolve under the reading's folder.
         var path = source
-        for prefix in ["../assets/", "./assets/", "assets/"] where path.hasPrefix(prefix) {
-            path = String(path.dropFirst(prefix.count))
-            break
+        if path.hasPrefix("./") {
+            path = String(path.dropFirst(2))
         }
-        return libraryURL
-            .appendingPathComponent("assets")
-            .appendingPathComponent(path)
+        return assetBaseURL.appendingPathComponent(path)
     }
 
     /// Decode `url` into an image whose largest dimension is at most `maxPixel`

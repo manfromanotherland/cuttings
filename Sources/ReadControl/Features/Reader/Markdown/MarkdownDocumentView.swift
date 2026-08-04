@@ -167,7 +167,9 @@ extension ArticleDocument {
 /// `ReadControlApp`), and links open in the system browser.
 struct MarkdownDocumentView<Header: View, Footer: View>: View {
     let document: ArticleDocument
-    let libraryURL: URL?
+    /// The reading's own folder URL, against which its relative asset links
+    /// (`assets/<file>`) resolve. See `AssetImageLoader.readingFolderURL`.
+    let assetBaseURL: URL?
     var font: ReaderFont = .system
     var fontSize: ReaderFontSize = .medium
     /// Verbatim text of the reading's highlights; each occurrence is tinted.
@@ -180,14 +182,14 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
     /// it comes into view only when the reader reaches the end of the article.
     @ViewBuilder var footer: () -> Footer
 
-    init(document: ArticleDocument, libraryURL: URL?,
+    init(document: ArticleDocument, assetBaseURL: URL?,
          font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
          highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
          @ViewBuilder header: @escaping () -> Header = { EmptyView() },
          @ViewBuilder footer: @escaping () -> Footer = { EmptyView() })
     {
         self.document = document
-        self.libraryURL = libraryURL
+        self.assetBaseURL = assetBaseURL
         self.font = font
         self.fontSize = fontSize
         self.highlights = highlights
@@ -215,7 +217,7 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
                         case let .other(item):
-                            MarkdownBlockView(block: item.markup, theme: theme, libraryURL: libraryURL,
+                            MarkdownBlockView(block: item.markup, theme: theme, assetBaseURL: assetBaseURL,
                                               highlights: highlights, onHighlight: onHighlight)
                         }
                     }

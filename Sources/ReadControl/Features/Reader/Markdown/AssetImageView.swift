@@ -4,8 +4,9 @@ import AppKit
 import SwiftUI
 
 /// Renders a single Markdown image natively, with an optional caption drawn from
-/// the image's alt text (a "figure"). Local library assets
-/// (`../assets/<id>/<file>`) load from disk under `libraryURL/assets/`. An image
+/// the image's alt text (a "figure"). Local library assets (`assets/<file>`,
+/// relative to the reading's `article.md`) load from disk under `assetBaseURL`
+/// (the reading's folder). An image
 /// the extension couldn't capture at save time is left as a remote `http(s)` URL;
 /// the reader shows a labelled placeholder for it and never fetches it over the
 /// network. Path resolution and downsampled decoding live in `AssetImageLoader`,
@@ -18,7 +19,7 @@ import SwiftUI
 struct AssetImageView: View {
     let source: String
     let alt: String
-    let libraryURL: URL?
+    let assetBaseURL: URL?
     let theme: MarkdownTheme
     var highlights: [String] = []
     var onHighlight: (String) -> Void = { _ in }
@@ -93,7 +94,7 @@ struct AssetImageView: View {
             image
                 .overlay {
                     CursorSurface(cursor: .pointingHand, onClick: {
-                        zoomPresenter.present(source: source, alt: alt, libraryURL: libraryURL)
+                        zoomPresenter.present(source: source, alt: alt, assetBaseURL: assetBaseURL)
                     })
                     // The surface must win *hit-testing* to own the cursor and
                     // carry the click, which also makes it occlude the figure in
@@ -125,7 +126,7 @@ struct AssetImageView: View {
     // ── Resolution ──────────────────────────────────────────────────────────
 
     private func loadLocal() async {
-        guard let url = AssetImageLoader.localURL(source: source, libraryURL: libraryURL) else {
+        guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: assetBaseURL) else {
             failed = true
             return
         }
