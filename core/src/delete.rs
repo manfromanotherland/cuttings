@@ -92,6 +92,15 @@ pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Res
 
     std::fs::remove_dir_all(&real_dir)?;
 
+    // If that was the last reading in its fan-out bucket, remove the now-empty
+    // bucket directory too, so buckets don't linger as empty shells. `remove_dir`
+    // only succeeds on an empty directory, so a bucket that still holds sibling
+    // readings (or anything else) is left untouched — and a race that repopulates
+    // it just makes this a no-op.
+    if let Some(bucket) = real_dir.parent() {
+        let _ = std::fs::remove_dir(bucket);
+    }
+
     apply_diffs(conn, &[ScanDiff::Removed(id.to_string())])
 }
 
@@ -220,8 +229,9 @@ mod tests {
         write_reading(&lib, meta(a), "reading a".into()).unwrap();
         write_reading(&lib, meta(b), "reading b".into()).unwrap();
         rebuild(&conn, &lib).unwrap();
+        let bucket = lib.reading_dir(a).parent().unwrap().to_path_buf();
         assert_eq!(
-            lib.reading_dir(a).parent().unwrap(),
+            bucket,
             lib.reading_dir(b).parent().unwrap(),
             "the two readings must share one bucket directory"
         );
@@ -231,12 +241,36 @@ mod tests {
         delete_reading(&lib, &conn, a).unwrap();
 
         // A's folder and row are gone; its bucket sibling B is fully intact —
-        // deleting one reading in a bucket never touches the other.
+        // deleting one reading in a bucket never touches the other, and the
+        // shared bucket directory is kept because it still holds B.
         assert!(!lib.reading_dir(a).exists());
         assert_eq!(row_count(&conn, a), 0);
+        assert!(bucket.is_dir(), "the shared bucket must survive");
         assert!(lib.article_path(b).is_file(), "B's article must survive");
         assert!(lib.reading_dir(b).is_dir(), "B's folder must survive");
         assert_eq!(row_count(&conn, b), 1);
+    }
+
+    #[test]
+    fn deleting_the_last_reading_removes_the_empty_bucket() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let conn = open(&dir.path().join("index.db")).unwrap();
+
+        // The only reading in its bucket.
+        let id = "cd00000000000000000000000000000000000000000000000000000000000001";
+        write_reading(&lib, meta(id), "only reading".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+        let bucket = lib.reading_dir(id).parent().unwrap().to_path_buf();
+        assert!(bucket.is_dir());
+
+        delete_reading(&lib, &conn, id).unwrap();
+
+        // The reading and its now-empty bucket are both gone, but articles/ stays.
+        assert!(!lib.reading_dir(id).exists());
+        assert!(!bucket.exists(), "the emptied bucket is cleaned up");
+        assert!(lib.articles_dir().is_dir(), "articles/ itself is kept");
+        assert_eq!(row_count(&conn, id), 0);
     }
 
     #[test]

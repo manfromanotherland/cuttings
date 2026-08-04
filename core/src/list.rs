@@ -654,6 +654,47 @@ mod tests {
     }
 
     #[test]
+    fn search_finds_a_reading_sharing_a_bucket_with_others() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        // Two readings whose ids share one fan-out bucket, with distinct content.
+        let a = "ab00000000000000000000000000000000000000000000000000000000000001";
+        let b = "ab00000000000000000000000000000000000000000000000000000000000002";
+        write_reading(
+            &lib,
+            meta(a, "https://a.com", "Rust async"),
+            "learning rust async".into(),
+        )
+        .unwrap();
+        write_reading(
+            &lib,
+            meta(b, "https://b.com", "Cooking"),
+            "a pasta recipe".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            lib.reading_dir(a).parent().unwrap(),
+            lib.reading_dir(b).parent().unwrap(),
+            "the two readings must share one bucket"
+        );
+        rebuild(&conn, &lib).unwrap();
+
+        // Search resolves to exactly the matching bucket sibling.
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("pasta".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1, "only one reading matches");
+        assert_eq!(rows[0].id, b);
+        assert_eq!(rows[0].title, "Cooking");
+    }
+
+    #[test]
     fn list_blank_query_matches_nothing() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);

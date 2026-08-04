@@ -134,6 +134,36 @@ mod tests {
     }
 
     #[test]
+    fn same_prefix_readings_share_one_bucket() {
+        let (_dir, lib) = tmp_library();
+
+        // Two readings whose ids share the same first two characters, so they
+        // fan out into the same bucket directory.
+        let mut a = metadata_for("https://a.example.com");
+        a.id = "ab00000000000000000000000000000000000000000000000000000000000001".to_string();
+        let mut b = metadata_for("https://b.example.com");
+        b.id = "ab00000000000000000000000000000000000000000000000000000000000002".to_string();
+
+        write_reading(&lib, a.clone(), "reading a".into()).unwrap();
+        let bucket = lib.reading_dir(&a.id).parent().unwrap().to_path_buf();
+        assert!(bucket.is_dir(), "the first save creates the fan-out bucket");
+        assert!(lib.article_path(&a.id).is_file());
+
+        write_reading(&lib, b.clone(), "reading b".into()).unwrap();
+        assert_eq!(
+            lib.reading_dir(&b.id).parent().unwrap(),
+            bucket,
+            "the second reading joins the existing bucket"
+        );
+        // The second save leaves the first reading in place.
+        assert!(
+            lib.article_path(&a.id).is_file(),
+            "the first reading survives the second save"
+        );
+        assert!(lib.article_path(&b.id).is_file());
+    }
+
+    #[test]
     fn source_hash_is_set() {
         let (_dir, lib) = tmp_library();
         let meta = sample_metadata();
