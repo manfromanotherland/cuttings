@@ -6,20 +6,32 @@ import Foundation
 /// Seeds a welcome article into a freshly chosen library folder.
 ///
 /// The article body lives in `Resources/WelcomeArticle.md` so the copy can be
-/// updated without touching Swift code. A pre-set highlight is written
+/// updated without touching Swift code. The seed is written into the standard
+/// per-reading folder (`articles/<prefix>/<id>/`) with a content-addressed id,
+/// exactly like a real save — so the scanner indexes it and a later save of the
+/// same URL dedupes against it. A pre-set highlight (`highlights.md`) is written
 /// alongside the article to demonstrate the highlights feature.
 enum WelcomeArticle {
-    private static let articleId = "01JZWC0M0000000000000001"
+    /// The address the welcome reading is "saved" from. It is already in the
+    /// normalized form core's `url_norm` produces (lowercase host; no `www.`,
+    /// port, query, fragment, or trailing slash), so hashing it directly yields
+    /// the same content-addressed id core's `url_id` would. Keep it normalized:
+    /// the reading folder and frontmatter `id` derive from this string.
+    private static let sourceURL = "https://readcontrol.app/welcome"
+
+    /// Content-addressed id: SHA-256 (hex) of `sourceURL`, matching core's
+    /// `url_id`. The filename stem and folder name for the seed.
+    private static let articleId = sha256Hex(sourceURL)
+
     private static let highlightId = "01JZWC0M0000000000000002"
     private static let highlightedText = "ReadControl keeps your readings where you can always find them."
 
-    /// Write the welcome article into `libraryURL/articles/` only if that
-    /// folder contains no `.md` files — i.e. the user picked an empty folder.
-    /// Failures are silently ignored so a missing resource never blocks launch.
+    /// Write the welcome article only if the library holds no readings yet —
+    /// i.e. the user picked an empty folder. Failures are silently ignored so a
+    /// missing resource never blocks launch.
     static func seedIfEmpty(in libraryURL: URL) {
         let articlesURL = libraryURL.appendingPathComponent("articles", isDirectory: true)
-        let existing = (try? FileManager.default.contentsOfDirectory(atPath: articlesURL.path)) ?? []
-        guard !existing.contains(where: { $0.hasSuffix(".md") }) else { return }
+        guard !libraryHasReading(articlesURL: articlesURL) else { return }
 
         guard
             let resourceURL = Bundle.main.url(forResource: "WelcomeArticle", withExtension: "md"),
@@ -27,17 +39,50 @@ enum WelcomeArticle {
         else { return }
 
         let body = rawBody.trimmingCharacters(in: .newlines) + "\n"
-        let articleURL = articlesURL.appendingPathComponent("\(articleId).md")
+        let folder = readingFolder(in: libraryURL)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let articleURL = folder.appendingPathComponent("article.md")
         try? articleContent(body: body).write(to: articleURL, atomically: true, encoding: .utf8)
 
-        seedHighlight(in: libraryURL)
+        seedHighlight(in: folder)
+    }
+
+    /// The reading's own folder: `articles/<first two chars of id>/<id>/`, the
+    /// fan-out layout from the library-format spec.
+    private static func readingFolder(in libraryURL: URL) -> URL {
+        libraryURL
+            .appendingPathComponent("articles", isDirectory: true)
+            .appendingPathComponent(String(articleId.prefix(2)), isDirectory: true)
+            .appendingPathComponent(articleId, isDirectory: true)
+    }
+
+    /// Whether the library already contains at least one reading: an `article.md`
+    /// under any `articles/<prefix>/<id>/` folder. Walks only the two shallow
+    /// fan-out levels, so choosing a populated library never re-seeds — and since
+    /// the welcome article's own folder counts, it is never seeded twice.
+    private static func libraryHasReading(articlesURL: URL) -> Bool {
+        let fileManager = FileManager.default
+        guard let buckets = try? fileManager.contentsOfDirectory(
+            at: articlesURL, includingPropertiesForKeys: [.isDirectoryKey]
+        ) else {
+            return false
+        }
+        return buckets.contains { bucket in
+            let isDir = (try? bucket.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            guard isDir else { return false }
+            let readings = (try? fileManager.contentsOfDirectory(
+                at: bucket, includingPropertiesForKeys: nil
+            )) ?? []
+            return readings.contains { reading in
+                fileManager.fileExists(atPath: reading.appendingPathComponent("article.md").path)
+            }
+        }
     }
 
     /// The complete article file for `body`: YAML front matter (with the hash,
     /// word count, and timestamp derived from it) followed by the body itself.
     private static func articleContent(body: String) -> String {
-        let sourceHash = "sha256:" + SHA256.hash(data: Data(body.utf8))
-            .map { String(format: "%02x", $0) }.joined()
+        let sourceHash = "sha256:" + sha256Hex(body)
         let wordCount = body.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }.count
         let savedAt = ISO8601DateFormatter().string(from: Date())
@@ -45,8 +90,8 @@ enum WelcomeArticle {
         var content = "---\n"
         content += "format_version: 1\n"
         content += "id: \(articleId)\n"
-        content += "url: https://readcontrol.app/welcome\n"
-        content += "canonical_url: https://readcontrol.app/welcome\n"
+        content += "url: \(sourceURL)\n"
+        content += "canonical_url: \(sourceURL)\n"
         content += "title: Welcome to ReadControl\n"
         content += "author: Rodrigo Boniatti\n"
         content += "site: readcontrol.app\n"
@@ -64,11 +109,15 @@ enum WelcomeArticle {
         return content
     }
 
-    private static func seedHighlight(in libraryURL: URL) {
-        let highlightsDir = libraryURL.appendingPathComponent("highlights", isDirectory: true)
-        try? FileManager.default.createDirectory(at: highlightsDir, withIntermediateDirectories: true)
+    private static func seedHighlight(in folder: URL) {
         let highlightContent = "> \(highlightedText)\n<!-- hl \(highlightId) -->\n\n"
-        let highlightURL = highlightsDir.appendingPathComponent("\(articleId).md")
+        let highlightURL = folder.appendingPathComponent("highlights.md")
         try? highlightContent.write(to: highlightURL, atomically: true, encoding: .utf8)
+    }
+
+    /// SHA-256 of a string's UTF-8 bytes as lowercase hex.
+    private static func sha256Hex(_ string: String) -> String {
+        SHA256.hash(data: Data(string.utf8))
+            .map { String(format: "%02x", $0) }.joined()
     }
 }

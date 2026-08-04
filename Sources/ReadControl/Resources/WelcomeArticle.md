@@ -52,7 +52,7 @@ Press **⌘/** for the shortcuts cheat sheet. Every action in ReadControl has a 
 
 ---
 
-Every page you save lives on your machine as a plain `reading.md` file. You own them, and you can move them whenever you want. I would keep them in a folder that syncs to the cloud too — Dropbox, iCloud, Google Drive, whichever you already pay for.
+Every page you save lives on your machine as a plain `article.md` file. You own them, and you can move them whenever you want. I would keep them in a folder that syncs to the cloud too — Dropbox, iCloud, Google Drive, whichever you already pay for.
 
 Enjoy your readings!
 
