@@ -83,7 +83,7 @@ and the reader shows a labelled placeholder.
   "protocol_version": 1,
   "ok": true,
   "id": "01J9Z8X7Q2VBKN3P4HXYZ01AB",
-  "path": "articles/01J9Z8X7Q2VBKN3P4HXYZ01AB.md"
+  "path": "articles/01/01J9Z8X7Q2VBKN3P4HXYZ01AB/article.md"
 }
 ```
 

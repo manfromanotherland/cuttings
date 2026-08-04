@@ -274,7 +274,8 @@ the section it introduces* (a core HIG/typography principle) and major sections 
 - Scaled to fit the content width, **corner radius 6**; centered.
 - **Alt text becomes a caption** rendered below the image (centered, `0.85em`, secondary) — i.e. a
   proper *figure*. Images with empty alt show no caption.
-- Local library assets load from `…/assets/<id>/<file>`. An image the extension couldn't capture at
+- Local library assets load from the reading's own `assets/` folder
+  (`articles/<prefix>/<id>/assets/<file>`), linked from the body as `assets/<file>`. An image the extension couldn't capture at
   save time stays a remote `http(s)` URL; the reader shows a labelled placeholder for it and never
   fetches it over the network.
 - The common `[![alt](img)](url)` pattern (a link wrapping a single image) is unwrapped and rendered

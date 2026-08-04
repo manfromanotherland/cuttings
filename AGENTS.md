@@ -75,8 +75,9 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   pain — but they are not v1 scope.
 - **The plugin saves via a native messaging host** (thin wrapper over `core`), not
   the Downloads API.
-- **Images are captured by the extension and written into the library** under `assets/<id>/` with
-  relative links, so saved readings stay readable offline and survive the source going away. The
+- **Images are captured by the extension and written into the library** in each reading's own
+  `assets/` folder (`articles/<prefix>/<id>/assets/`) with relative `assets/<file>` links, so saved
+  readings stay readable offline and survive the source going away. The
   extension fetches each image (reusing the browser's cache) and sends the bytes; the host writes
   them and never makes network requests of its own.
 - **The organizing model is Tags** (labels in frontmatter), not manual Lists. Smart views
