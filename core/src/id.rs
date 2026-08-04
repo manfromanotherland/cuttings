@@ -22,6 +22,17 @@ pub fn new_id() -> String {
     guard.generate().unwrap_or_else(|_| Ulid::new()).to_string()
 }
 
+/// Content-addressed id for a page: the SHA-256 (hex) of its normalized URL.
+///
+/// Deterministic — the same page always yields the same id, so it doubles as the
+/// dedup key and the article's filename stem. Errors only if the URL can't be
+/// parsed (e.g. a non-http scheme), in which case the caller decides what to do.
+pub fn url_id(url: &str) -> anyhow::Result<String> {
+    Ok(crate::writer::sha256_hex(
+        crate::normalize_url(url)?.as_bytes(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,5 +61,41 @@ mod tests {
         let a = new_id();
         let b = new_id();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn url_id_is_deterministic() {
+        let u = "https://example.com/post";
+        assert_eq!(url_id(u).unwrap(), url_id(u).unwrap());
+    }
+
+    #[test]
+    fn url_id_is_64_char_lowercase_hex() {
+        let id = url_id("https://example.com/post").unwrap();
+        assert_eq!(id.len(), 64);
+        assert!(id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn url_id_ignores_tracking_params() {
+        assert_eq!(
+            url_id("https://example.com/post").unwrap(),
+            url_id("https://example.com/post?utm_source=x").unwrap(),
+        );
+    }
+
+    #[test]
+    fn url_id_differs_for_distinct_pages() {
+        assert_ne!(
+            url_id("https://example.com/a").unwrap(),
+            url_id("https://example.com/b").unwrap(),
+        );
+    }
+
+    #[test]
+    fn url_id_errors_on_unparseable_url() {
+        assert!(url_id("not a url").is_err());
     }
 }

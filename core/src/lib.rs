@@ -26,7 +26,7 @@ pub use frontmatter::{parse_reading, read_metadata, render_reading};
 pub use highlights::{
     add_highlight, delete_highlight, list_highlights, toggle_highlight, Highlight,
 };
-pub use id::new_id;
+pub use id::{new_id, url_id};
 pub use images::{write_images, ImageBytes};
 pub use index::open as open_index;
 pub use list::{
