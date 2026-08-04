@@ -208,6 +208,38 @@ mod tests {
     }
 
     #[test]
+    fn delete_leaves_a_bucket_sibling_untouched() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let conn = open(&dir.path().join("index.db")).unwrap();
+
+        // Two distinct readings whose ids share the same first two characters, so
+        // they land in the *same* fan-out bucket (articles/ab/) as sibling folders.
+        let a = "ab00000000000000000000000000000000000000000000000000000000000001";
+        let b = "ab00000000000000000000000000000000000000000000000000000000000002";
+        write_reading(&lib, meta(a), "reading a".into()).unwrap();
+        write_reading(&lib, meta(b), "reading b".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+        assert_eq!(
+            lib.reading_dir(a).parent().unwrap(),
+            lib.reading_dir(b).parent().unwrap(),
+            "the two readings must share one bucket directory"
+        );
+        assert_eq!(row_count(&conn, a), 1);
+        assert_eq!(row_count(&conn, b), 1);
+
+        delete_reading(&lib, &conn, a).unwrap();
+
+        // A's folder and row are gone; its bucket sibling B is fully intact —
+        // deleting one reading in a bucket never touches the other.
+        assert!(!lib.reading_dir(a).exists());
+        assert_eq!(row_count(&conn, a), 0);
+        assert!(lib.article_path(b).is_file(), "B's article must survive");
+        assert!(lib.reading_dir(b).is_dir(), "B's folder must survive");
+        assert_eq!(row_count(&conn, b), 1);
+    }
+
+    #[test]
     fn delete_unknown_id_errors() {
         let dir = TempDir::new().unwrap();
         let lib = make_library(&dir);
