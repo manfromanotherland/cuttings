@@ -68,11 +68,13 @@ impl LibraryRoot {
     }
 
     pub fn assets_dir(&self, id: &str) -> PathBuf {
-        self.0.join("assets").join(id)
+        self.0.join("assets").join(fanout_prefix(id)).join(id)
     }
 
     pub fn article_path(&self, id: &str) -> PathBuf {
-        self.articles_dir().join(format!("{id}.md"))
+        self.articles_dir()
+            .join(fanout_prefix(id))
+            .join(format!("{id}.md"))
     }
 
     pub fn highlights_dir(&self) -> PathBuf {
@@ -82,4 +84,12 @@ impl LibraryRoot {
     pub fn highlights_path(&self, id: &str) -> PathBuf {
         self.highlights_dir().join(format!("{id}.md"))
     }
+}
+
+/// The fan-out sub-directory for a content-addressed id: its first two hex
+/// characters. Article ids are 64-char SHA-256 hex, so this spreads files evenly
+/// across 256 buckets. Falls back to the whole id for ids shorter than two chars
+/// so callers never panic (highlights, which use ULIDs, don't route through here).
+fn fanout_prefix(id: &str) -> &str {
+    id.get(..2).unwrap_or(id)
 }

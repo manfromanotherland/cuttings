@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use base64::Engine;
 use readcontrol_core::{
-    find_duplicate, new_id, write_images, write_reading, ImageBytes, LibraryRoot, Metadata,
+    find_by_url, url_id, write_images, write_reading, ImageBytes, LibraryRoot, Metadata,
 };
 
 use crate::protocol::{SaveRequest, SaveResponse, PROTOCOL_VERSION};
@@ -35,15 +35,25 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
     };
     let library = LibraryRoot::new(&library_path)?;
 
-    // Duplicate check
-    if let Some(existing_id) = find_duplicate(&library, &req.metadata.canonical_url)? {
+    // The id is content-addressed: SHA256 of the normalized *visited* URL. This
+    // is both the dedup key and the filename stem.
+    let id = match url_id(&req.metadata.url) {
+        Ok(id) => id,
+        Err(_) => {
+            return Ok(SaveResponse::error(
+                "invalid_request",
+                &format!("could not parse url: {}", req.metadata.url),
+            ))
+        }
+    };
+
+    // Duplicate check — a single stat on the content-addressed path.
+    if let Some(existing_id) = find_by_url(&library, &req.metadata.url)? {
         return Ok(SaveResponse::error(
             "duplicate",
             &format!("A reading with this URL already exists (id: {existing_id})"),
         ));
     }
-
-    let id = new_id();
 
     // Decode the image bytes the extension captured. An image whose base64 won't
     // decode is skipped, so its URL stays in the Markdown as a placeholder.
@@ -87,7 +97,14 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
 
     write_reading(&library, metadata, markdown)?;
 
-    let path = format!("articles/{id}.md");
+    // Report the article's path relative to the library root (fan-out layout,
+    // e.g. articles/8f/<id>.md).
+    let article_path = library.article_path(&id);
+    let path = article_path
+        .strip_prefix(library.path())
+        .unwrap_or(&article_path)
+        .to_string_lossy()
+        .into_owned();
     Ok(SaveResponse::success(id, path))
 }
 

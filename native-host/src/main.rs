@@ -209,8 +209,9 @@ mod integration_tests {
             let resp = dispatch(&save_message("https://example.com/article-1"));
             assert!(resp.ok, "expected ok, got error: {:?}", resp.error);
 
-            let id = resp.id.as_deref().unwrap();
-            let article_path = dir.path().join("articles").join(format!("{id}.md"));
+            // Locate the file via the fan-out path the response reports.
+            let rel = resp.path.as_deref().unwrap();
+            let article_path = dir.path().join(rel);
             assert!(
                 article_path.exists(),
                 "article file was not written to disk"
@@ -239,13 +240,14 @@ mod integration_tests {
                 .id
                 .as_deref()
                 .expect("id missing from success response");
-            assert_eq!(id.len(), 26, "ULID must be 26 chars");
+            assert_eq!(id.len(), 64, "content-addressed id is 64-char SHA-256 hex");
 
             let path = resp
                 .path
                 .as_deref()
                 .expect("path missing from success response");
-            assert_eq!(path, format!("articles/{id}.md"));
+            // Fan-out layout: articles/<first 2 hex chars>/<id>.md
+            assert_eq!(path, format!("articles/{}/{id}.md", &id[..2]));
         });
     }
 
@@ -322,23 +324,23 @@ mod integration_tests {
             let resp = dispatch(&msg);
             assert!(resp.ok, "save should succeed: {:?}", resp.error);
 
-            let id = resp.id.as_deref().unwrap();
             let content =
-                std::fs::read_to_string(dir.path().join("articles").join(format!("{id}.md")))
-                    .unwrap();
+                std::fs::read_to_string(dir.path().join(resp.path.as_deref().unwrap())).unwrap();
+            let id = resp.id.as_deref().unwrap();
             // The supplied image is rewritten to a local asset...
             assert!(
-                content.contains(&format!("../assets/{id}/")),
+                content.contains(&format!("../../assets/{}/{id}/", &id[..2])),
                 "supplied image should be rewritten to a local path:\n{content}"
             );
             assert!(
                 !content.contains("cdn.example.com/got.png"),
                 "supplied image's remote URL should be gone"
             );
-            // ...and its bytes are on disk.
+            // ...and its bytes are on disk (fan-out: assets/<prefix>/<id>/).
             let asset = dir
                 .path()
                 .join("assets")
+                .join(&id[..2])
                 .join(id)
                 .join(format!("{}.png", readcontrol_core::sha256_hex(bytes)));
             assert_eq!(std::fs::read(&asset).unwrap(), bytes);

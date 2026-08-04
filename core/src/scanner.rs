@@ -38,37 +38,45 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
     }
 
     let mut results = Vec::new();
-    for entry in std::fs::read_dir(&articles_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
+    // Fan-out layout: articles/<2-char prefix>/<id>.md. Walk one level of
+    // sub-directories and collect the `.md` files inside each bucket.
+    for bucket in std::fs::read_dir(&articles_dir)? {
+        let bucket = bucket?;
+        if !bucket.file_type()?.is_dir() {
+            continue; // ignore stray files sitting directly in articles/
         }
-
-        let modified_at = entry.metadata()?.modified()?;
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("scanner: skipping {}: {e}", path.display());
+        for entry in std::fs::read_dir(bucket.path())? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
                 continue;
             }
-        };
-        let reading = match parse_reading(&content) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("scanner: skipping {}: {e}", path.display());
-                continue;
-            }
-        };
 
-        results.push(ScannedReading {
-            id: reading.metadata.id.clone(),
-            source_hash: reading.metadata.source_hash.clone(),
-            modified_at,
-            path,
-            metadata: reading.metadata,
-            body: reading.body,
-        });
+            let modified_at = entry.metadata()?.modified()?;
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("scanner: skipping {}: {e}", path.display());
+                    continue;
+                }
+            };
+            let reading = match parse_reading(&content) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("scanner: skipping {}: {e}", path.display());
+                    continue;
+                }
+            };
+
+            results.push(ScannedReading {
+                id: reading.metadata.id.clone(),
+                source_hash: reading.metadata.source_hash.clone(),
+                modified_at,
+                path,
+                metadata: reading.metadata,
+                body: reading.body,
+            });
+        }
     }
 
     Ok(results)

@@ -12,7 +12,7 @@ use crate::types::{LibraryRoot, Metadata, Reading};
 /// Write a reading to the library atomically (temp-file + rename).
 ///
 /// Computes and sets `source_hash` from the body before writing.
-/// Creates `articles/` and `assets/<id>/` if they don't exist.
+/// Creates the fan-out dirs `articles/<prefix>/` and `assets/<prefix>/<id>/`.
 pub fn write_reading(
     library: &LibraryRoot,
     mut metadata: Metadata,
@@ -23,10 +23,14 @@ pub fn write_reading(
     let reading = Reading { metadata, body };
     let content = render_reading(&reading)?;
 
-    fs::create_dir_all(library.articles_dir())?;
+    let article_path = library.article_path(&reading.metadata.id);
+    // Create the article's fan-out sub-directory (e.g. articles/8f/) and its
+    // assets dir. `parent()` is the fan-out bucket, not just `articles/`.
+    if let Some(parent) = article_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::create_dir_all(library.assets_dir(&reading.metadata.id))?;
 
-    let article_path = library.article_path(&reading.metadata.id);
     let tmp_path = article_path.with_extension("md.tmp");
 
     {
@@ -39,65 +43,40 @@ pub fn write_reading(
     Ok(reading)
 }
 
-/// Scan the library's articles directory for an article with the given canonical URL.
-/// Returns the existing article's id if found.
+/// Content-addressed lookup: is a page with this URL already saved? Returns its id.
 ///
-/// URLs are compared after normalization (tracking params, fragment, trailing
-/// slash, host case), so a page and its `?utm_source=…`-tagged variant dedupe
-/// to the same reading.
-pub fn find_duplicate(library: &LibraryRoot, canonical_url: &str) -> Result<Option<String>> {
-    let target = norm_key(canonical_url);
-    scan_articles(library, |m| norm_key(&m.canonical_url) == target)
-}
-
-/// Scan for an article that was saved from `url`, matching either the visible
-/// `url` it was saved from or its `canonical_url`.
+/// The id *is* `SHA256(normalize(url))`, so this hashes the URL to the id and
+/// stats the single file it would live at — no directory scan. This is what both
+/// the save-time duplicate check and the toolbar's "already saved?" check use.
 ///
-/// This is what the "is this page already saved?" check needs: the toolbar only
-/// knows the visible tab URL — it can't run extraction to discover the page's
-/// `<link rel=canonical>`. Matching the stored `url` lets a revisit of the same
-/// address register as saved even when the canonical differs (query params
-/// stripped, trailing slash enforced, etc.), which `find_duplicate`'s
-/// canonical-only match would miss.
-///
-/// Both sides are normalized before comparison, so tracking params (`utm_*`,
-/// `fbclid`, …) on the visited URL don't defeat the match.
-pub fn find_saved(library: &LibraryRoot, url: &str) -> Result<Option<String>> {
-    let target = norm_key(url);
-    scan_articles(library, |m| {
-        norm_key(&m.url) == target || norm_key(&m.canonical_url) == target
-    })
+/// Identity is the normalized *visited* URL, not the page's `<link rel=canonical>`
+/// — the toolbar only knows the tab URL and can't run extraction to discover a
+/// canonical link. As a cheap safety net against the (astronomically unlikely)
+/// hash collision, the stored `url` is read from the frontmatter and confirmed to
+/// normalize to the same key before reporting a match.
+pub fn find_by_url(library: &LibraryRoot, url: &str) -> Result<Option<String>> {
+    let id = match crate::url_id(url) {
+        Ok(id) => id,
+        Err(_) => return Ok(None), // unparseable URL → can't be content-addressed
+    };
+    let path = library.article_path(&id);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    // Collision guard: confirm the file really is this URL. Reading only the
+    // frontmatter keeps this cheap. An unreadable header falls back to trusting
+    // the hash rather than hiding a genuine match behind a parse error.
+    match read_metadata(&path) {
+        Ok(m) if norm_key(&m.url) == norm_key(url) => Ok(Some(id)),
+        Ok(_) => Ok(None),
+        Err(_) => Ok(Some(id)),
+    }
 }
 
 /// Normalize a URL for matching, falling back to the raw string when it can't be
 /// parsed (e.g. a non-http scheme) so exact-equality matching still works.
 fn norm_key(url: &str) -> String {
     crate::normalize_url(url).unwrap_or_else(|_| url.to_string())
-}
-
-/// Scan `articles/*.md`, returning the id of the first article whose metadata
-/// satisfies `matches`.
-fn scan_articles(
-    library: &LibraryRoot,
-    matches: impl Fn(&Metadata) -> bool,
-) -> Result<Option<String>> {
-    let articles_dir = library.articles_dir();
-    if !articles_dir.is_dir() {
-        return Ok(None);
-    }
-    for entry in fs::read_dir(&articles_dir)? {
-        let path = entry?.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            // Read only the frontmatter — the check compares URL fields and never
-            // needs the article body, which is the bulk of each file.
-            if let Ok(metadata) = read_metadata(&path) {
-                if matches(&metadata) {
-                    return Ok(Some(metadata.id));
-                }
-            }
-        }
-    }
-    Ok(None)
 }
 
 pub fn sha256_hex(data: &[u8]) -> String {
@@ -116,12 +95,14 @@ mod tests {
         (dir, lib)
     }
 
-    fn sample_metadata() -> Metadata {
+    /// Metadata for a page saved from `url`, with the content-addressed id the
+    /// save path would assign (id == url_id(url)) so on-disk lookups resolve.
+    fn metadata_for(url: &str) -> Metadata {
         Metadata {
             format_version: 1,
-            id: crate::new_id(),
-            url: "https://example.com/post".to_string(),
-            canonical_url: "https://example.com/post".to_string(),
+            id: crate::url_id(url).unwrap(),
+            url: url.to_string(),
+            canonical_url: url.to_string(),
             title: "Test".to_string(),
             author: None,
             site: Some("example.com".to_string()),
@@ -136,6 +117,10 @@ mod tests {
             lang: None,
             source_hash: String::new(), // set by write_reading
         }
+    }
+
+    fn sample_metadata() -> Metadata {
+        metadata_for("https://example.com/post")
     }
 
     #[test]
@@ -163,65 +148,36 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_detects_existing_canonical_url() {
+    fn find_by_url_detects_saved_page() {
         let (_dir, lib) = tmp_library();
-        let meta = sample_metadata();
-        let canonical = meta.canonical_url.clone();
-
+        let url = "https://example.com/post";
+        let meta = metadata_for(url);
+        let id = meta.id.clone();
         write_reading(&lib, meta, "# Test\n".to_string()).unwrap();
 
-        let dup = find_duplicate(&lib, &canonical).unwrap();
-        assert!(dup.is_some());
+        let found = find_by_url(&lib, url).unwrap();
+        assert_eq!(found.as_deref(), Some(id.as_str()));
+        // The id really is the content address of the URL.
+        assert_eq!(id, crate::url_id(url).unwrap());
     }
 
     #[test]
-    fn find_duplicate_returns_none_for_new_url() {
+    fn find_by_url_returns_none_for_new_url() {
         let (_dir, lib) = tmp_library();
-        let dup = find_duplicate(&lib, "https://example.com/new").unwrap();
-        assert!(dup.is_none());
-    }
-
-    #[test]
-    fn find_saved_matches_visible_url_when_canonical_differs() {
-        // The page was saved from a feed URL but declared a different canonical.
-        // The toolbar only knows the visible URL, so matching the stored `url` is
-        // what makes the "already saved?" check work.
-        let (_dir, lib) = tmp_library();
-        let mut meta = sample_metadata();
-        meta.url = "https://example.com/from-feed".to_string();
-        meta.canonical_url = "https://example.com/post".to_string();
-        write_reading(&lib, meta, "# Test\n".to_string()).unwrap();
-
-        assert!(
-            find_saved(&lib, "https://example.com/from-feed")
-                .unwrap()
-                .is_some(),
-            "matches the visible url it was saved from"
-        );
-        assert!(
-            find_saved(&lib, "https://example.com/post")
-                .unwrap()
-                .is_some(),
-            "also matches the canonical url"
-        );
-        // find_duplicate stays canonical-only: a URL that matches only the
-        // stored `url` (not the canonical) must not count as a duplicate.
-        assert!(find_duplicate(&lib, "https://example.com/from-feed")
+        assert!(find_by_url(&lib, "https://example.com/new")
             .unwrap()
             .is_none());
     }
 
     #[test]
-    fn find_saved_ignores_tracking_params() {
-        // Regression: visiting a saved page with a utm tag must still show saved.
+    fn find_by_url_ignores_tracking_params() {
+        // Visiting a saved page with a utm tag must still resolve to it.
         let (_dir, lib) = tmp_library();
-        let mut meta = sample_metadata();
-        meta.url = "https://paulgraham.com/taste.html".to_string();
-        meta.canonical_url = "https://paulgraham.com/taste.html".to_string();
-        write_reading(&lib, meta, "# Taste\n".to_string()).unwrap();
+        let url = "https://paulgraham.com/taste.html";
+        write_reading(&lib, metadata_for(url), "# Taste\n".to_string()).unwrap();
 
         assert!(
-            find_saved(
+            find_by_url(
                 &lib,
                 "https://paulgraham.com/taste.html?utm_source=readcontrol.app"
             )
@@ -230,7 +186,7 @@ mod tests {
             "utm-tagged visit still matches the saved page"
         );
         assert!(
-            find_saved(&lib, "https://paulgraham.com/articles.html?id=2")
+            find_by_url(&lib, "https://paulgraham.com/articles.html?id=2")
                 .unwrap()
                 .is_none(),
             "a genuinely different page (meaningful query) must not match"
@@ -238,17 +194,27 @@ mod tests {
     }
 
     #[test]
-    fn find_duplicate_ignores_tracking_params() {
-        // Saving the utm-tagged variant of an already-saved page is a duplicate.
+    fn find_by_url_keys_on_visited_url_not_canonical() {
+        // Identity is the normalized *visited* URL. A page saved from one address
+        // that declares a different rel=canonical is found by the visited URL it
+        // was saved from — not by its canonical. This is the accepted trade-off
+        // of content-addressing (worst case: the same content saved twice).
         let (_dir, lib) = tmp_library();
-        let mut meta = sample_metadata();
+        let mut meta = metadata_for("https://example.com/from-feed");
         meta.canonical_url = "https://example.com/post".to_string();
         write_reading(&lib, meta, "# Test\n".to_string()).unwrap();
 
         assert!(
-            find_duplicate(&lib, "https://example.com/post?utm_source=x")
+            find_by_url(&lib, "https://example.com/from-feed")
                 .unwrap()
-                .is_some()
+                .is_some(),
+            "found by the visited url it was saved from"
+        );
+        assert!(
+            find_by_url(&lib, "https://example.com/post")
+                .unwrap()
+                .is_none(),
+            "the declared canonical is not the key"
         );
     }
 }

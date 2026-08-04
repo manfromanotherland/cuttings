@@ -19,8 +19,8 @@ pub struct ImageBytes {
     pub bytes: Vec<u8>,
 }
 
-/// Write each supplied image into `assets/<id>/` and rewrite its URL in the
-/// Markdown to the local relative path. Returns the updated Markdown.
+/// Write each supplied image into `assets/<prefix>/<id>/` and rewrite its URL in
+/// the Markdown to the local relative path. Returns the updated Markdown.
 ///
 /// This performs no downloads: an image the extension could not capture is
 /// simply absent from `images`, so its URL stays in the Markdown and the reader
@@ -46,7 +46,11 @@ pub fn write_images(
         let ext = ext_for(&image.content_type, &image.url);
         let filename = format!("{hash}.{ext}");
         if fs::write(assets_dir.join(&filename), &image.bytes).is_ok() {
-            let rel = format!("../assets/{id}/{filename}");
+            // The article lives at articles/<prefix>/<id>.md and the asset at
+            // assets/<prefix>/<id>/<file>, so the link climbs two levels (out of
+            // the fan-out bucket and out of articles/) back to the library root.
+            let prefix = id.get(..2).unwrap_or(id);
+            let rel = format!("../../assets/{prefix}/{id}/{filename}");
             result = result.replace(image.url.as_str(), &rel);
         }
     }
@@ -150,7 +154,11 @@ mod tests {
         let out = write_images(&library, id, &markdown, &[img(url, "image/png", bytes)]).unwrap();
 
         assert!(!out.contains(url), "remote URL should be replaced: {out}");
-        assert!(out.contains(&format!("../assets/{id}/")), "got: {out}");
+        let prefix = &id[..2];
+        assert!(
+            out.contains(&format!("../../assets/{prefix}/{id}/")),
+            "got: {out}"
+        );
 
         // The written file's name is the sha256 of the bytes plus the extension.
         let expected = format!("{}.png", sha256_hex(bytes));

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use readcontrol_core::{find_saved, LibraryRoot};
+use readcontrol_core::{find_by_url, LibraryRoot};
 
 use crate::protocol::{CheckRequest, SaveResponse, PROTOCOL_VERSION};
 use crate::save::find_library_path;
@@ -18,13 +18,11 @@ pub fn handle(req: CheckRequest) -> anyhow::Result<SaveResponse> {
         Err(_) => return Ok(SaveResponse::check(false, None)),
     };
 
-    // Scan the article files directly rather than querying an index. The host
-    // never builds an index, and the app's index is a per-device cache the host
-    // can't reliably reach — the `articles/` directory is the only source of
-    // truth. `find_saved` matches either the visible `url` or the `canonical_url`,
-    // because the toolbar only knows the tab URL — it can't run extraction to
-    // discover the page's canonical link.
+    // Content-addressed lookup: hash the normalized URL to its id and stat the
+    // single file it would live at — no directory scan, no index. The app's index
+    // is a per-device cache the host can't reliably reach; the `articles/` tree is
+    // the only source of truth.
     let library = LibraryRoot::new(&library_path)?;
-    let id = find_saved(&library, &req.url)?;
+    let id = find_by_url(&library, &req.url)?;
     Ok(SaveResponse::check(id.is_some(), id))
 }
