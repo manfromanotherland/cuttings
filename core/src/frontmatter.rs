@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT
 
+use std::fs;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+
 use anyhow::{anyhow, Result};
 
 use crate::types::{Metadata, Reading};
@@ -44,6 +48,42 @@ pub fn parse_reading(content: &str) -> Result<Reading> {
     }
 
     Ok(Reading { metadata, body })
+}
+
+/// Read only a reading file's frontmatter, without loading the body.
+///
+/// Reads line by line and stops at the closing `---` fence, so a
+/// multi-thousand-word article costs only its ~20 header lines instead of the
+/// whole file. Used by scans that only need metadata (dedup and the "already
+/// saved?" toolbar check), where slurping every body would read hundreds of MB
+/// across a large library just to compare a couple of URL fields.
+///
+/// Parsing is delegated to [`parse_reading`] on the captured header, so the
+/// frontmatter semantics (including the legacy `read` migration) stay identical
+/// to a full read.
+pub fn read_metadata(path: &Path) -> Result<Metadata> {
+    let mut reader = BufReader::new(fs::File::open(path)?);
+    let mut header = String::new();
+    let mut line = String::new();
+    let mut fences = 0;
+
+    loop {
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            // EOF before the second fence — hand the partial header to
+            // parse_reading, which reports the missing-fence error.
+            break;
+        }
+        header.push_str(&line);
+        if line.trim_end() == "---" {
+            fences += 1;
+            if fences == 2 {
+                break;
+            }
+        }
+    }
+
+    parse_reading(&header).map(|r| r.metadata)
 }
 
 /// Render a reading back to its on-disk text format.
@@ -163,6 +203,51 @@ Body.
 ";
         let parsed = parse_reading(content).unwrap();
         assert_eq!(parsed.metadata.read_at, None);
+    }
+
+    #[test]
+    fn read_metadata_matches_full_parse() {
+        // read_metadata must return exactly what a full parse_reading would,
+        // having read only the header.
+        let meta = sample_metadata(true, false, true);
+        let reading = Reading {
+            metadata: meta.clone(),
+            body: "# Long Article\n\n".to_string() + &"word ".repeat(5000),
+        };
+        let rendered = render_reading(&reading).unwrap();
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("article.md");
+        std::fs::write(&path, &rendered).unwrap();
+
+        assert_eq!(read_metadata(&path).unwrap(), meta);
+    }
+
+    #[test]
+    fn read_metadata_ignores_body_fences() {
+        // A `---` line inside the body (e.g. a Markdown thematic break) must not
+        // confuse the header scan: it stops at the *frontmatter's* closing fence.
+        let meta = sample_metadata(false, false, false);
+        let reading = Reading {
+            metadata: meta.clone(),
+            body: "Intro.\n\n---\n\nA section after a horizontal rule.\n".to_string(),
+        };
+        let rendered = render_reading(&reading).unwrap();
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("article.md");
+        std::fs::write(&path, &rendered).unwrap();
+
+        assert_eq!(read_metadata(&path).unwrap(), meta);
+    }
+
+    #[test]
+    fn read_metadata_errors_on_unfenced_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("not-a-reading.md");
+        std::fs::write(&path, "just some text, no frontmatter\n").unwrap();
+
+        assert!(read_metadata(&path).is_err());
     }
 
     proptest! {

@@ -22,7 +22,7 @@ mod url_norm;
 mod writer;
 
 pub use delete::delete_reading;
-pub use frontmatter::{parse_reading, render_reading};
+pub use frontmatter::{parse_reading, read_metadata, render_reading};
 pub use highlights::{
     add_highlight, delete_highlight, list_highlights, toggle_highlight, Highlight,
 };

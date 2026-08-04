@@ -6,7 +6,7 @@ use std::io::Write as _;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 
-use crate::frontmatter::{parse_reading, render_reading};
+use crate::frontmatter::{read_metadata, render_reading};
 use crate::types::{LibraryRoot, Metadata, Reading};
 
 /// Write a reading to the library atomically (temp-file + rename).
@@ -88,11 +88,11 @@ fn scan_articles(
     for entry in fs::read_dir(&articles_dir)? {
         let path = entry?.path();
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(reading) = parse_reading(&content) {
-                    if matches(&reading.metadata) {
-                        return Ok(Some(reading.metadata.id));
-                    }
+            // Read only the frontmatter — the check compares URL fields and never
+            // needs the article body, which is the bulk of each file.
+            if let Ok(metadata) = read_metadata(&path) {
+                if matches(&metadata) {
+                    return Ok(Some(metadata.id));
                 }
             }
         }
