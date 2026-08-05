@@ -9,15 +9,16 @@ use serde_json::json;
 
 const HOST_NAME: &str = "app.readcontrol.host";
 
-/// Extension ID pinned by the `key` field in the extension's manifest.json.
-/// Keep this in sync with extension/manifest.json — the ID is
-/// derived from that public key, so both must change together.
-const DEFAULT_EXTENSION_ID: &str = "hkcidjlecfgjmnafcadkolmglefhjgbk";
+/// Chrome extension ID assigned by the Chrome Web Store for the published
+/// extension. The store mints this on upload (the packaged manifest ships
+/// without `key`), so it is the store's ID, not the one derived from the `key`
+/// used for local unpacked development. Keep it in sync with the store listing.
+const DEFAULT_EXTENSION_ID: &str = "cegehgdbbjjeondepcaejickdmkacbck";
 
 /// Firefox identifies extensions by add-on ID, not the Chrome extension ID.
 /// This is the `browser_specific_settings.gecko.id` in the extension's
 /// manifest.json — keep the two in sync or Firefox rejects the native host.
-const FIREFOX_DEFAULT_EXTENSION_ID: &str = "read-control@readcontrol.app";
+const FIREFOX_DEFAULT_EXTENSION_ID: &str = "extension@readcontrol.app";
 
 /// Root under `$HOME` where macOS browsers keep their per-app data.
 const APP_SUPPORT: &str = "Library/Application Support";
