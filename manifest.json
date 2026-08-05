@@ -3,10 +3,10 @@
   "name": "ReadControl",
   "version": "0.1.0",
   "description": "Save any webpage to your computer, read anytime.",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv2ciLiMC9URlOs7X5T2Zt/ylHIMWYXLGZUg8hFyDDqltTrSQOEcaJ0w+IulUosQ4WMaxwXZCbEiwFmGM8nBLg7TSlkbbUgC5FhAs725SvhYEcxlcv52ifAp6kKpGyIdUve3oNVwqw9ko9nDu0HmxP+144FKyLAShxqbGTzJyKgfXB559RrvgeZrPpkK09p7eEabfuFyqQflNMHRVi6oO6ytDlQes0hNvV2AR8kx2Gnei57Qfspc9rikDEWUBaT+XdFyI3o/UQ5YpGL05pxkBcmZsJUrHus91FK/nZ97TDPrOhbkIIlW+VHgNA3g86G6VC7Rtqg7jZNZ2bwGvhmTW7QIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArlfbOXU8yQ8ZZf9A0IQh0T5q/6sofpKSMD5dJdsgdHiZj3+0LlAklYa/arxjxJ6yJGKj50HA7jQuMwZ5hw+rlxFxAa8p/nSKSxCXWSXAaJPd+wU2plEXXBTrP76LDFb8nWvHILKRRTR6GJNqFrNwtTtrYSgEoS6tMXqfzXJNbzuiHkWJAooOZKwrO5mZoPfq7CuoHpJc2K0QwQSq+XiM4Ak4Fsb/eYoYiu6UrJid17VK3I/0tVh8gpGWyRXQbbkw+J28HDNRgEEpByGqK+0u5Mq1VeZYJ0vOBXVo+Ec1V6Oy0hxib8hnf7/MmRwYvIOfZFVbEEDkID6BZb6evbHZGwIDAQAB",
   "browser_specific_settings": {
     "gecko": {
-      "id": "read-control@readcontrol.app",
+      "id": "extension@readcontrol.app",
       "strict_min_version": "115.0"
     }
   },
