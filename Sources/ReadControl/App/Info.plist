@@ -29,6 +29,6 @@
     <key>SUFeedURL</key>
     <string>https://www.readcontrol.app/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>REPLACE_WITH_YOUR_SPARKLE_ED25519_PUBLIC_KEY</string>
+    <string>fT6DkWgi8AWRySFcpI1iEnoLuijq1WIYg9sGpvzruro=</string>
 </dict>
 </plist>
