@@ -107,3 +107,11 @@ extension, and lint/format for every repo. See [SANDBOX.md](./SANDBOX.md) for de
 - [docs/library-format.md](./docs/library-format.md) — **versioned library-format spec** (the cross-repo contract).
 - [docs/native-messaging.md](./docs/native-messaging.md) — native messaging protocol (extension ↔ host).
 - [docs/fixtures/](./docs/fixtures/) — sample article file, save request/response JSON.
+
+## Releases
+
+What users download is the macOS app — a signed `.dmg` published on GitHub with a
+Sparkle appcast entry for in-app updates.
+
+- [RELEASE.md](./RELEASE.md) — the step-by-step release runbook.
+- [CHANGELOG.md](./CHANGELOG.md) — notable changes per version.

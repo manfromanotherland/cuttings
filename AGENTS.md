@@ -137,6 +137,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>  ← AI co-author traile
   [UBIQUITOUS_LANGUAGE.md](./UBIQUITOUS_LANGUAGE.md) in docs, code, UI, and commit messages.
 - **Reference docs:** [ARCHITECTURE.md](./ARCHITECTURE.md) for the components, data flow, and data
   model; [DESIGN.md](./DESIGN.md) for the macOS UI/UX design.
+- **Releasing:** a public release is the signed macOS `.dmg` on GitHub plus a Sparkle appcast
+  entry. Follow [RELEASE.md](./RELEASE.md) for the runbook and record changes in
+  [CHANGELOG.md](./CHANGELOG.md).
 - Treat the **library format as a public contract** — version it; don't break readers/writers
   silently.
 - Never write logic into Swift/JS that belongs in `core`.
