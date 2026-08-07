@@ -23,4 +23,19 @@ struct OnboardingPage {
     func chooseLibrary() {
         chooseLibraryButton.clickWhenReady()
     }
+
+    // ── Extension step (onboarding step 2) ────────────────────────────────────
+
+    /// The "Continue" button on the extension-install step that follows the folder
+    /// pick.
+    var extensionContinueButton: XCUIElement {
+        app.byId(A11y.Onboarding.extensionContinue)
+    }
+
+    /// Dismiss the extension-install step to reach the main view. (The download
+    /// itself opens an `NSSavePanel`, which XCUITest can't drive, so the journey
+    /// just clicks through.)
+    func continuePastExtensionStep() {
+        extensionContinueButton.clickWhenReady()
+    }
 }

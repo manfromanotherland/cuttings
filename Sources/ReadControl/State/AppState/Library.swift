@@ -39,7 +39,22 @@ extension AppState {
                 stopAccessing()
                 accessedURL = LibraryBookmark.resolve()
             }
+            // Raise the extension-install step *before* boot flips `libraryURL`,
+            // so the main view never flashes in the gap while boot finishes
+            // indexing (boot sets `libraryURL`, then `await`s a refresh — a window
+            // in which the reading list would otherwise render). It's a
+            // first-run-only prompt: skip it once the user has dismissed it, so
+            // re-picking the library from Settings doesn't resurface it. Restoring
+            // a saved library on launch goes straight through `boot`, never here.
+            if !hasCompletedExtensionSetup {
+                showExtensionSetup = true
+            }
             await boot(url: url)
+            // Boot swallows its errors; if it couldn't open the library,
+            // `libraryURL` stays nil — drop the flag so a retry starts clean.
+            if libraryURL == nil {
+                showExtensionSetup = false
+            }
         } catch {
             self.error = error.localizedDescription
         }

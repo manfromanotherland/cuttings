@@ -19,6 +19,16 @@ enum A11y {
     enum Onboarding {
         static let title = "onboarding.title"
         static let chooseLibrary = "onboarding.chooseLibrary"
+        /// The second onboarding step: install the browser extension.
+        static let extensionTitle = "onboarding.extension.title"
+        static let extensionContinue = "onboarding.extension.continue"
+    }
+
+    /// ── Browser extension ─────────────────────────────────────────────────
+    /// Shared by the onboarding step and the Settings › Extensions tab.
+    enum Extensions {
+        static let download = "extensions.download"
+        static let sourceLink = "extensions.sourceLink"
     }
 
     /// ── Sidebar ─────────────────────────────────────────────────────────────

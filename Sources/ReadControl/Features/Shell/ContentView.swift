@@ -29,7 +29,13 @@ struct ContentView: View {
         @Bindable var appState = appState
         Group {
             if appState.libraryURL != nil {
-                mainContent
+                if appState.showExtensionSetup {
+                    // Second onboarding step: offer the extension download before
+                    // dropping into the library (see `AppState.showExtensionSetup`).
+                    ExtensionSetupView()
+                } else {
+                    mainContent
+                }
             } else if appState.isRestoringLibrary {
                 // A saved library is still being opened; stay neutral rather than
                 // flashing onboarding for the few frames before boot settles.
@@ -160,6 +166,14 @@ private struct OnboardingView: View {
                 .accessibilityIdentifier(A11y.Onboarding.title)
             Text("Choose an existing library folder or create a new one.")
                 .foregroundStyle(.secondary)
+            Text(
+                "Your saved pages live here as plain files you own — pick a folder you can "
+                    + "back up or sync, and ReadControl keeps your whole library in it."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 360)
             Button("Choose Library…") {
                 appState.chooseLibrary()
             }
@@ -168,5 +182,54 @@ private struct OnboardingView: View {
             .accessibilityIdentifier(A11y.Onboarding.chooseLibrary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// ── Extension setup (onboarding step 2) ───────────────────────────────────────
+// Shown once, right after a fresh library pick, to hand the user the browser
+// extension while it's still awaiting Chrome Web Store / Firefox review. Dismissed
+// by "Continue", which clears `showExtensionSetup` and reveals the main view.
+
+private struct ExtensionSetupView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "puzzlepiece.extension")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.secondary)
+                    Text("Add the browser extension")
+                        .font(.title)
+                        .accessibilityIdentifier(A11y.Onboarding.extensionTitle)
+                    Text("The extension saves pages straight into your library.")
+                        .foregroundStyle(.secondary)
+                }
+
+                ExtensionApprovalNote()
+                ExtensionDownloadButton(prominent: true)
+
+                Divider()
+
+                ExtensionInstallSteps()
+
+                HStack {
+                    Spacer()
+                    Button("Continue") {
+                        appState.completeExtensionSetup()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier(A11y.Onboarding.extensionContinue)
+                }
+            }
+            .frame(maxWidth: 460, alignment: .leading)
+            .padding(40)
+            .frame(maxWidth: .infinity)
+            // Let users copy the URLs and steps rather than retype them. Applied
+            // via the environment, so it reaches the Text in the child components
+            // (the approval note and install steps) too.
+            .textSelection(.enabled)
+        }
     }
 }

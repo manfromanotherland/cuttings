@@ -120,78 +120,100 @@ private struct LibrarySettingsTab: View {
 
 // ── Extensions ────────────────────────────────────────────────────────────────
 
-/// Public store listings for the browser extension. These are placeholders until
-/// the extensions are published — swap in the real Chrome Web Store and Firefox
-/// Add-ons URLs and the links go live.
-private enum ExtensionStore {
-    static let chrome = URL(string: "https://chromewebstore.google.com/")!
-    static let firefox = URL(string: "https://addons.mozilla.org/firefox/")!
-}
+// Public store listings for the browser extension. Commented out while the
+// extension is under Chrome Web Store / Firefox Add-ons review — until it's
+// approved the app hands out the packaged download below instead. Restore these
+// (and the `ExtensionLink` rows) once the listings go live.
+//
+// private enum ExtensionStore {
+//     static let chrome = URL(string: "https://chromewebstore.google.com/")!
+//     static let firefox = URL(string: "https://addons.mozilla.org/firefox/")!
+// }
 
-/// Links out to the browser extension listings. The native-messaging manifest is
-/// installed automatically when the library boots (see `AppState.boot`), so this
-/// tab no longer surfaces the installer UI.
+/// Offers the browser extension as a sideload-able download while it awaits store
+/// review, with load-unpacked instructions. The native-messaging manifest is
+/// installed automatically when the library boots (see `AppState.boot`), so once
+/// the extension is loaded it connects to the app on its own.
 private struct ExtensionsSettingsTab: View {
     var body: some View {
         Form {
+            // Store listings — restore when the extension is approved:
+            //
+            // Section {
+            //     ExtensionLink(
+            //         name: "Chrome",
+            //         detail: "Also Edge, Brave, and other Chromium browsers",
+            //         url: ExtensionStore.chrome,
+            //         accessibilityID: A11y.Settings.chromeExtensionLink
+            //     )
+            //     ExtensionLink(
+            //         name: "Firefox",
+            //         detail: "Firefox 115 or newer",
+            //         url: ExtensionStore.firefox,
+            //         accessibilityID: A11y.Settings.firefoxExtensionLink
+            //     )
+            // } header: {
+            //     Text("Get the browser extension")
+            // } footer: {
+            //     Text("Install the extension in your browser to save pages to your library.")
+            // }
+
             Section {
-                ExtensionLink(
-                    name: "Chrome",
-                    detail: "Also Edge, Brave, and other Chromium browsers",
-                    url: ExtensionStore.chrome,
-                    accessibilityID: A11y.Settings.chromeExtensionLink
-                )
-                ExtensionLink(
-                    name: "Firefox",
-                    detail: "Firefox 115 or newer",
-                    url: ExtensionStore.firefox,
-                    accessibilityID: A11y.Settings.firefoxExtensionLink
-                )
+                ExtensionApprovalNote()
+                ExtensionDownloadButton()
             } header: {
                 Text("Get the browser extension")
-            } footer: {
-                Text("Install the extension in your browser to save pages to your library.")
+            }
+
+            Section {
+                ExtensionInstallSteps()
+            } header: {
+                Text("Install it as a developer build")
             }
         }
         .formStyle(.grouped)
-        .frame(minHeight: 140)
+        .frame(minHeight: 320)
+        // Let users copy the URLs and steps rather than retype them (matches the
+        // onboarding step). Applied via the environment, so it reaches the Text in
+        // the child components too.
+        .textSelection(.enabled)
         .accessibilityIdentifier(A11y.Settings.extensionsTab)
     }
 }
 
-/// One store row: browser name, a short note, and an open-in-browser hint.
-/// Tapping opens the listing in the user's default browser. Uses a plain-styled
-/// button rather than `Link` so the row keeps the standard label/gray text colors
-/// instead of the blue accent tint.
-private struct ExtensionLink: View {
-    let name: String
-    let detail: String
-    let url: URL
-    let accessibilityID: String
-
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        Button {
-            openURL(url)
-        } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .foregroundStyle(.primary)
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.up.forward.square")
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(accessibilityID)
-    }
-}
+// One store row: browser name, a short note, and an open-in-browser hint.
+// Restore alongside the store-listing section above once the extension is
+// approved and the `ExtensionStore` URLs go live.
+//
+// private struct ExtensionLink: View {
+//     let name: String
+//     let detail: String
+//     let url: URL
+//     let accessibilityID: String
+//
+//     @Environment(\.openURL) private var openURL
+//
+//     var body: some View {
+//         Button {
+//             openURL(url)
+//         } label: {
+//             HStack(spacing: 12) {
+//                 VStack(alignment: .leading, spacing: 2) {
+//                     Text(name)
+//                         .foregroundStyle(.primary)
+//                     Text(detail)
+//                         .font(.caption)
+//                         .foregroundStyle(.secondary)
+//                 }
+//
+//                 Spacer()
+//
+//                 Image(systemName: "arrow.up.forward.square")
+//                     .foregroundStyle(.secondary)
+//             }
+//             .contentShape(Rectangle())
+//         }
+//         .buttonStyle(.plain)
+//         .accessibilityIdentifier(accessibilityID)
+//     }
+// }

@@ -21,8 +21,11 @@ final class FirstRunJourney: UITestCase {
         XCTAssertFalse(app.byId(A11y.List.table).exists, "No reading list before a library is chosen")
 
         // 2. Choose the (empty) library folder → the app scaffolds it and seeds
-        //    the Welcome article, then boots into the main view.
+        //    the Welcome article. A fresh pick then shows the extension-install
+        //    step; continue past it to boot into the main view.
         onboarding.chooseLibrary()
+        XCTAssertTrue(onboarding.extensionContinueButton.waitExists(), "Extension step should follow the pick")
+        onboarding.continuePastExtensionStep()
         XCTAssertTrue(app.byId(A11y.Sidebar.viewRow("all")).waitExists(), "Main view should appear")
 
         // 3. Counts reflect the single seeded article.
