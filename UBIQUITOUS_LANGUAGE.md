@@ -136,7 +136,7 @@ paragraphs, and the welcome article.
 | Term | Definition |
 |------|------------|
 | Read-later app | The product category, used so people recognize what ReadControl is (the Pocket/Instapaper category). Category label only — never imply the library holds only unread things. |
-| Reading library | Preferred description of what the user builds: a permanent, file-based library of readings they own. Use it to balance "read-later" positioning ("a read-later app that builds a reading library you own"). |
+| Reading library | Preferred description of what the user builds: a permanent, file-based library of the articles they save and own. Use it to balance "read-later" positioning ("a read-later app that builds a reading library you own"). |
 | Local-first | Marketing shorthand for the no-accounts, no-servers, files-on-your-disk principles. |
 | Save | The only user-facing verb for adding a page, in marketing as elsewhere (matches Pocket "Save to Pocket", Instapaper "Save Anything. Read Anywhere.", GoodLinks "Save. Read. Anywhere."). |
 
@@ -148,6 +148,7 @@ paragraphs, and the welcome article.
 | Database source | Index | The database is disposable and derived from files. |
 | Sync engine | External sync | The app does not sync for the user. |
 | Article as domain object | Reading | Article is useful for file names and reader UI, but reading is the product entity. |
+| "Reading"/"readings" as a user-facing noun | Article, post, or page | In copy (welcome article, landing page, store text) naming the saved item a "reading" reads awkwardly. Prefer article/post/page for the item; keep **reading** for the activity and the "reading manager"/read-later positioning. In code and this glossary, reading stays the domain entity. |
 | Starred | Favorite or rating | Favorite is boolean; rating is 0 to 5 stars. |
 | Clip | Save | "Clip" is note-clipper vocabulary (Evernote, Notion, Obsidian Web Clipper) and suggests snipping fragments into a notes app. Read-later products say save. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
@@ -173,6 +174,13 @@ paragraphs, and the welcome article.
 - **"Bookmark" is overloaded.** It is the brand glyph, an Apple API term in the
   macOS client (security-scoped bookmarks), and a rejected user-facing verb.
   Only the first two uses are legitimate.
+- **"Reading" is the domain entity but a weak user-facing noun.** In code, docs,
+  and architecture a saved item is a **reading** (see Reading, Reading id,
+  Reading folder). In user-facing copy the noun reads awkwardly, so name the
+  saved item an **article**, **post**, or **page**, and reserve "reading" for the
+  activity ("read anytime", "Happy reading") and the **reading manager** /
+  **read-later** positioning. The visible tagline "the native macOS reading
+  manager" stays.
 
 ## Example Dialogue
 
