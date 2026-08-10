@@ -29,7 +29,7 @@ enum WelcomeArticle {
     private static let articleId = sha256Hex(normalizedSourceURL)
 
     private static let highlightId = "01JZWC0M0000000000000002"
-    private static let highlightedText = "ReadControl keeps your readings where you can always find them."
+    private static let highlightedText = "ReadControl keeps everything you save right where you can find it."
 
     /// Write the welcome article only if the library holds no readings yet —
     /// i.e. the user picked an empty folder. Failures are silently ignored so a
@@ -105,7 +105,7 @@ enum WelcomeArticle {
         content += "favorite: false\n"
         content += "rating: 5\n"
         content += "tags:\n- welcome\n"
-        content += "excerpt: A guide to getting started with ReadControl \u{2014} and a taste of what it can do.\n"
+        content += "excerpt: A guide to getting started with ReadControl, and a taste of what it can do.\n"
         content += "word_count: \(wordCount)\n"
         content += "lang: en\n"
         content += "source_hash: \(sourceHash)\n"

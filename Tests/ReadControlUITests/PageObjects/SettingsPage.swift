@@ -57,10 +57,10 @@ struct SettingsPage {
     }
 
     var chromeExtensionLink: XCUIElement {
-        app.byId(A11y.Settings.chromeExtensionLink)
+        app.byId(A11y.Extensions.chromeLink)
     }
 
     var firefoxExtensionLink: XCUIElement {
-        app.byId(A11y.Settings.firefoxExtensionLink)
+        app.byId(A11y.Extensions.firefoxLink)
     }
 }

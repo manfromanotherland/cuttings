@@ -25,10 +25,11 @@ enum A11y {
     }
 
     /// ── Browser extension ─────────────────────────────────────────────────
-    /// Shared by the onboarding step and the Settings › Extensions tab.
+    /// Store-listing links shared by the onboarding step and the
+    /// Settings › Extensions tab.
     enum Extensions {
-        static let download = "extensions.download"
-        static let sourceLink = "extensions.sourceLink"
+        static let chromeLink = "extensions.chrome"
+        static let firefoxLink = "extensions.firefox"
     }
 
     /// ── Sidebar ─────────────────────────────────────────────────────────────
@@ -177,7 +178,5 @@ enum A11y {
         static let fontPicker = "settings.font"
         static let sizePicker = "settings.size"
         static let changeLibrary = "settings.changeLibrary"
-        static let chromeExtensionLink = "settings.extension.chrome"
-        static let firefoxExtensionLink = "settings.extension.firefox"
     }
 }

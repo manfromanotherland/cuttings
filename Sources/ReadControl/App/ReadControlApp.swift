@@ -39,6 +39,9 @@ struct ReadControlApp: App {
                     NSApplication.shared.appearance = mode.nsAppearance
                 }
         }
+        // Open roomy the first time (no saved frame yet); afterwards SwiftUI
+        // restores the size the user left it at, so `.defaultSize` is ignored.
+        .defaultSize(width: 1100, height: 720)
         .windowStyle(.titleBar)
         // `showsTitle: false` drops the title from the titlebar entirely, so the
         // reading list's toolbar section starts at the column's leading edge
