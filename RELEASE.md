@@ -40,8 +40,13 @@ Note the two values it prints — you'll paste them into the appcast:
 - `sparkle:edSignature`
 - `length` (the DMG size in bytes)
 
-The signed DMG lands at `macos/dist/ReadControl.dmg`. Rename it to match the tag,
-e.g. `ReadControl-0.1.1.dmg`, before uploading.
+The signed DMG lands at `macos/dist/ReadControl.dmg`. Rename it to match the tag
+before uploading — the appcast enclosure URL and the GitHub release asset must use
+this exact name:
+
+```bash
+mv dist/ReadControl.dmg dist/ReadControl-0.1.1.dmg
+```
 
 > `make dmg` is the ad-hoc, local-testing path only — it is **not** notarized, so
 > Gatekeeper and Sparkle will reject it for public distribution.
@@ -56,8 +61,8 @@ cd macos
 git tag v0.1.1
 git push origin v0.1.1
 gh release create v0.1.1 dist/ReadControl-0.1.1.dmg \
-  --title "0.1.1" \
-  --notes "See the 0.1.1 section of CHANGELOG.md."
+  --title "ReadControl 0.1.1" \
+  --notes "See the 0.1.1 section of CHANGELOG.md in the root project."
 ```
 
 This produces the URL the appcast expects:
