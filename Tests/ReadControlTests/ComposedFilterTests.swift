@@ -28,6 +28,71 @@ final class ComposedFilterTests: XCTestCase {
         XCTAssertEqual(ComposedFilter.toggle(UInt8(5), 4), 4)
     }
 
+    // ── Narrowing ───────────────────────────────────────────────────────────
+    // Filters are ordered view → rating → tag, and changing one clears the
+    // narrower ones below it.
+
+    /// The worked example: Read ∩ ★5 ∩ #swift, then drop to ★4 — the tag goes.
+    func testChangingTheRatingClearsTheTag() {
+        let current = ComposedFilter.Selection(view: .read, rating: 5, tag: "swift")
+        let next = ComposedFilter.togglingRating(4, from: current)
+        XCTAssertEqual(next, ComposedFilter.Selection(view: .read, rating: 4, tag: nil))
+    }
+
+    /// …and switching Read → All drops both the rating and the tag.
+    func testChangingTheViewClearsRatingAndTag() {
+        let current = ComposedFilter.Selection(view: .read, rating: 5, tag: "swift")
+        let next = ComposedFilter.selectingView(.all, from: current)
+        XCTAssertEqual(next, ComposedFilter.Selection(view: .all, rating: nil, tag: nil))
+    }
+
+    /// Re-tapping the active view falls back to All — a change, so it cascades.
+    func testFallingBackToAllAlsoClearsNarrowerFilters() {
+        let current = ComposedFilter.Selection(view: .read, rating: 5, tag: "swift")
+        let next = ComposedFilter.selectingView(.read, from: current)
+        XCTAssertEqual(next, ComposedFilter.Selection(view: .all, rating: nil, tag: nil))
+    }
+
+    /// Broadening cascades as well: clearing a rating still clears the tag.
+    func testClearingTheRatingClearsTheTag() {
+        let current = ComposedFilter.Selection(view: .read, rating: 5, tag: "swift")
+        let next = ComposedFilter.togglingRating(5, from: current)
+        XCTAssertEqual(next, ComposedFilter.Selection(view: .read, rating: nil, tag: nil))
+    }
+
+    /// Tapping `.all` while it's already the base changes nothing, so it must not
+    /// clear the filters below it.
+    func testTappingAllWhileAlreadyTheBaseKeepsEverything() {
+        let current = ComposedFilter.Selection(view: .all, rating: 5, tag: "swift")
+        XCTAssertEqual(ComposedFilter.selectingView(.all, from: current), current)
+    }
+
+    /// The tag is the narrowest level: changing or clearing it touches nothing else.
+    func testChangingTheTagLeavesViewAndRatingAlone() {
+        let current = ComposedFilter.Selection(view: .read, rating: 5, tag: "swift")
+        XCTAssertEqual(
+            ComposedFilter.togglingTag("rust", from: current),
+            ComposedFilter.Selection(view: .read, rating: 5, tag: "rust")
+        )
+        XCTAssertEqual(
+            ComposedFilter.togglingTag("swift", from: current),
+            ComposedFilter.Selection(view: .read, rating: 5, tag: nil)
+        )
+    }
+
+    /// Selecting into an empty selection is unaffected by the cascade.
+    func testSelectingFromAnEmptySelectionJustApplies() {
+        let base = ComposedFilter.Selection(view: .all, rating: nil, tag: nil)
+        XCTAssertEqual(
+            ComposedFilter.selectingView(.unread, from: base),
+            ComposedFilter.Selection(view: .unread, rating: nil, tag: nil)
+        )
+        XCTAssertEqual(
+            ComposedFilter.togglingRating(4, from: base),
+            ComposedFilter.Selection(view: .all, rating: 4, tag: nil)
+        )
+    }
+
     /// Membership is the intersection of view, tag, and rating.
     func testMatchesIntersectsViewTagAndRating() {
         var row = makeReadingRow(read: false, archived: false)

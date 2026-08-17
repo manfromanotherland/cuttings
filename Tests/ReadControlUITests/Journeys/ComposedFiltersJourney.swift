@@ -2,11 +2,15 @@
 
 import XCTest
 
-/// The sidebar's three filters — smart view, rating, tag — are independent and
-/// compose (together with the search box): the list is scoped by their
-/// intersection, at most one of each. A selected rating or tag toggles off when
-/// clicked again. This is the "cross-filter" flow the Library/Ratings/Tags
-/// sections were built toward.
+/// The sidebar's three filters — smart view, rating, tag — compose (together with
+/// the search box): the list is scoped by their intersection, at most one of each.
+/// A selected rating or tag toggles off when clicked again.
+///
+/// They are also *ordered*: view, then rating, then tag, top to bottom as the
+/// sidebar reads. Changing one clears the narrower ones below it — covered by
+/// `testChangingTheViewClearsTheRatingAndTag` and
+/// `testChangingOrClearingTheRatingClearsTheTag`, with the rules themselves unit
+/// tested in `ComposedFilterTests`.
 ///
 /// Corpus (all non-archived), engineered so each intersection is a single known
 /// row:
@@ -94,6 +98,46 @@ final class ComposedFiltersJourney: UITestCase {
     }
 
     // swiftlint:enable function_body_length
+
+    // ── Narrowing ─────────────────────────────────────────────────────────
+
+    /// Switching the smart view clears both the rating and the tag beneath it.
+    /// The oracle is C: it's `#swift`, so it can only appear once the `#rust` tag
+    /// is gone — a list of 2 means the cascade ran, a list of 1 means it didn't.
+    func testChangingTheViewClearsTheRatingAndTag() throws {
+        try launchApp(articles: Self.corpus)
+
+        sidebar.select(.unread)
+        sidebar.selectRating(4)
+        sidebar.selectTag("rust")
+        XCTAssertTrue(list.waitForRowCount(1), "Unread ∩ ★4 ∩ #rust = A")
+
+        sidebar.select(.read)
+        XCTAssertTrue(list.waitForRowCount(2), "Read alone = B,C — ★4 and #rust were cleared")
+        XCTAssertTrue(list.row(Ids.charlie).waitExists(), "C (#swift) lists only if the tag went")
+    }
+
+    /// Changing the rating clears the tag, and so does clearing the rating.
+    /// D is the oracle both times: it's `#rust`, so it can only list once `#swift`
+    /// has gone.
+    func testChangingOrClearingTheRatingClearsTheTag() throws {
+        try launchApp(articles: Self.corpus)
+
+        sidebar.selectRating(4)
+        sidebar.selectTag("swift")
+        XCTAssertTrue(list.waitForRowCount(1), "★4 ∩ #swift = C")
+
+        // ★4 → ★3 is a change at the rating level, so #swift goes with it.
+        sidebar.selectRating(3)
+        XCTAssertTrue(list.waitForRowCount(1), "★3 alone = D — #swift was cleared")
+        XCTAssertTrue(list.row(Ids.delta).waitExists(), "D (#rust) lists only if the tag went")
+
+        // Broadening cascades too: toggling ★3 off clears the tag under it.
+        sidebar.selectTag("rust")
+        XCTAssertTrue(list.waitForRowCount(1), "★3 ∩ #rust = D")
+        sidebar.selectRating(3)
+        XCTAssertTrue(list.waitForRowCount(5), "clearing ★3 cleared #rust too — All = 5")
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 

@@ -151,31 +151,54 @@ extension AppState {
     }
 
     // ── Sidebar filter selection ──────────────────────────────────────────
-    // The three sidebar filters — smart view, tag, rating — are independent and
-    // compose (with the search box). Selecting one leaves the others in place;
-    // clicking an active tag or rating toggles it off. The view always has a value
-    // (`.all` is the unfiltered base), so it switches rather than toggling off.
+    // The three sidebar filters — smart view, rating, tag — compose as an
+    // intersection (with the search box), but they are *ordered*: view, then
+    // rating, then tag, top to bottom as the sidebar reads. Changing one clears
+    // the narrower ones below it, so the list always answers the question the
+    // last click asked. Clicking an active tag or rating toggles it off; the view
+    // always has a value (`.all` is the unfiltered base), so it falls back to
+    // that base rather than to nothing. The rules live in `ComposedFilter`.
 
-    /// Switch the active smart view, or fall back to `.all` when the already-active
-    /// view is clicked again — mirroring how a tag/rating toggles off, except the
-    /// view always has a value so it deselects to the `.all` base rather than to
-    /// nothing. Clicking `.all` while it's active is a no-op (it's already the base).
+    /// Switch the active smart view — or fall back to `.all` when the
+    /// already-active view is clicked again — and clear the rating and tag
+    /// beneath it. Clicking `.all` while it's already the base changes nothing,
+    /// and so clears nothing.
     func selectView(_ item: SidebarItem) {
-        let newView = ComposedFilter.resolveView(active: activeView, tapped: item)
-        guard newView != activeView else { return }
-        activeView = newView
-        Task { await reloadForSelectionChange() }
+        apply(ComposedFilter.selectingView(item, from: filterSelection))
     }
 
     /// Select a rating filter, or clear it if the same rating is already active.
+    /// Either way the rating changed, so the tag beneath it is cleared.
     func toggleRating(_ rating: UInt8) {
-        selectedRating = ComposedFilter.toggle(selectedRating, rating)
-        Task { await reloadForSelectionChange() }
+        apply(ComposedFilter.togglingRating(rating, from: filterSelection))
     }
 
-    /// Select a tag filter, or clear it if the same tag is already active.
+    /// Select a tag filter, or clear it if the same tag is already active. The
+    /// narrowest filter, so it leaves the view and rating alone.
     func toggleTag(_ tag: String) {
-        selectedTag = ComposedFilter.toggle(selectedTag, tag)
+        apply(ComposedFilter.togglingTag(tag, from: filterSelection))
+    }
+
+    /// The three sidebar filters as one value, for `ComposedFilter` to resolve.
+    private var filterSelection: ComposedFilter.Selection {
+        .init(view: activeView, rating: selectedRating, tag: selectedTag)
+    }
+
+    /// Adopt a resolved selection and reload, doing nothing when it matches what
+    /// is already applied. Each property is assigned only when it actually
+    /// differs: every one of them persists to defaults in `didSet`, so blind
+    /// assignment would rewrite unchanged keys and churn observation.
+    private func apply(_ selection: ComposedFilter.Selection) {
+        guard selection != filterSelection else { return }
+        if activeView != selection.view {
+            activeView = selection.view
+        }
+        if selectedRating != selection.rating {
+            selectedRating = selection.rating
+        }
+        if selectedTag != selection.tag {
+            selectedTag = selection.tag
+        }
         Task { await reloadForSelectionChange() }
     }
 
