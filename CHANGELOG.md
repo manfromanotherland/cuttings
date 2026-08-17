@@ -21,6 +21,15 @@ and versions track the app's `CFBundleShortVersionString`. See
   sidebar, without opening Settings: two icon-capped sliders matching the
   font-size slider already there.
 
+### Changed
+
+- The sidebar filters now narrow in order — smart view, then rating, then tag,
+  as the sidebar reads top to bottom. Changing one clears the narrower ones
+  below it, so switching from ★5 to ★4 drops the tag you had applied, and
+  going from Read back to All drops both. Previously they changed
+  independently, which left the list scoped by a combination you hadn't asked
+  for — often empty, for a reason hidden in a collapsed section.
+
 ### Fixed
 
 - The article header now shares the reader's measure instead of a fixed 680 pt,
