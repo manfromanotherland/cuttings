@@ -211,8 +211,8 @@ private struct OnboardingFlow: View {
     }
 }
 
-// Step 1: pick the library folder. Has no dismiss affordance — the only way
-// forward is choosing a folder, which raises the extension step.
+/// Step 1: pick the library folder. Has no dismiss affordance — the only way
+/// forward is choosing a folder, which raises the extension step.
 private struct ChooseLibraryStep: View {
     @Environment(AppState.self) private var appState
 
@@ -246,8 +246,8 @@ private struct ChooseLibraryStep: View {
     }
 }
 
-// Step 2: point the user at the browser extension on the Chrome Web Store and
-// Firefox Add-ons. "Continue" clears `showExtensionSetup`, dismissing the sheet.
+/// Step 2: point the user at the browser extension on the Chrome Web Store and
+/// Firefox Add-ons. "Continue" clears `showExtensionSetup`, dismissing the sheet.
 private struct ExtensionStep: View {
     @Environment(AppState.self) private var appState
 
