@@ -55,8 +55,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   macOS mockup's "Lists" section is implemented as **Tags** — manual Lists are not planned.)
 - **Item states** — native app. Mark readings **read/unread**, **favorite**, and **archive**
   (stored in frontmatter).
-- **Appearance** — native app. Light/Dark/System theme and an adjustable reader font/size,
-  stored as per-device preferences (not synced).
+- **Appearance** — native app. Light/Dark/System theme and adjustable reader typography
+  (font, size, width, line height), stored as per-device preferences (not synced).
 
 > The macOS UI is specified in [DESIGN.md](./DESIGN.md). An in-app **"Add Link"** (paste a URL)
 > appears in the mockup but is **deferred** — page capture stays in the browser plugin for now.
@@ -84,8 +84,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 - **The organizing model is Tags** (labels in frontmatter), not manual Lists. Smart views
   **All / Unread / Archive / Favorites** are backed by the frontmatter fields `read`,
   `archived`, and `favorite`.
-- **UI preferences** (theme, reader font/size) are per-device app preferences — not stored in
-  the library and not synced.
+- **UI preferences** (theme, reader font/size/width/line height) are per-device app
+  preferences — not stored in the library and not synced.
 - **In-app "Add Link" is deferred.** Page capture stays in the browser plugin; there is no
   engine-side fetch/extraction for now. See [DESIGN.md](./DESIGN.md).
 - **Name:** the product is **ReadControl** (readcontrol.app); shown to end users as "ReadControl".

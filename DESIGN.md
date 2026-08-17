@@ -71,8 +71,8 @@ never blue.** The only two non-gray brand accents anywhere are a marker **yellow
   are the focus and the chrome stays quiet.
 - **Shape & depth:** rounded corners and soft elevation — panels (sidebar, popovers) sit
   slightly above the main surface. Subtle, low-contrast dividers and borders.
-- **Typography:** **Inter** as the default UI font; the reader's font family and size are
-  user-adjustable (see Settings).
+- **Typography:** **Inter** as the default UI font; the reader's font family, size, width,
+  and line height are user-adjustable (see Settings).
 - **Native feel:** a standard macOS window with traffic-light controls; behaves like a Mac app.
 
 ### Design tokens (approximate — finalize before implementation)
@@ -206,9 +206,36 @@ Everything else is a multiple of this body size, so the document keeps its propo
 
 | Token | Value (× body) | At 17 pt | Role |
 |-------|----------------|----------|------|
-| Line spacing | `0.55em` | ~9.4 pt | added leading → effective line-height ≈ **1.75** |
+| Line spacing | `0.55em` | ~9.4 pt | added leading → effective line-height ≈ **1.75** (Normal) |
 | Block spacing | `1.0em` | 17 pt | vertical gap between top-level blocks |
-| Content measure | `680 pt` (fixed) | — | optimal line length (~60–75 chars); content is centered |
+| Content measure | `680 pt` (Medium) | — | optimal line length (~60–75 chars); content is centered |
+
+**Line height** and **content measure** are user-adjustable in Settings › Typography
+and in the sidebar's appearance popover (`ReaderLineHeight`, `ReaderWidth`); the values
+above are the defaults, and each is the **middle stop** of its five, so a slider at
+centre lands on the default. Settings labels the options in words; the popover is
+icon-only — two sliders matching the font-size slider above them, capped with
+horizontal compress/expand glyphs for width and vertical ones for line height.
+
+| Line height | Effective | Added leading (× body) |
+|-------------|-----------|------------------------|
+| Tight | 1.25 | `0.05em` |
+| Snug | 1.50 | `0.30em` |
+| **Normal (default)** | **1.75** | **`0.55em`** |
+| Relaxed | 2.00 | `0.80em` |
+| Loose | 2.25 | `1.05em` |
+
+| Width | Measure |
+|-------|---------|
+| Extra Small | 520 pt |
+| Small | 600 pt |
+| **Medium (default)** | **680 pt** |
+| Large | 800 pt |
+| Extra Large | 960 pt |
+
+The measure is a fixed point value, not a multiple of the body size, so bumping the
+text size doesn't silently widen the column too. The article header shares it, so the
+title stays flush with the body at every width.
 
 ### Heading hierarchy
 

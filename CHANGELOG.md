@@ -5,6 +5,27 @@ here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 and versions track the app's `CFBundleShortVersionString`. See
 [RELEASE.md](./RELEASE.md) for how a release is cut.
 
+## Unreleased
+
+### Added
+
+- Settings › Typography can now set the reader's **Width** — the measure the
+  article is laid out to — from Extra Small (520 pt) through Extra Large
+  (960 pt), with Medium (680 pt) the previous fixed value and still the default.
+- Settings › Typography can now set the reader's **Line Height** — Tight, Snug,
+  Normal, Relaxed, or Loose (1.25 to 2.25 in even quarter-steps), with Normal
+  (1.75) the previous fixed value and still the default.
+- The Typography settings show a live sample that reflects the chosen font, size,
+  width, and line height together.
+- Both are also adjustable from the appearance popover at the bottom of the
+  sidebar, without opening Settings: two icon-capped sliders matching the
+  font-size slider already there.
+
+### Fixed
+
+- The article header now shares the reader's measure instead of a fixed 680 pt,
+  so the title stays flush with the body copy at every width.
+
 ## 0.2.0 - 2026-08-10
 
 ### Added
