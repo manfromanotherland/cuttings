@@ -83,6 +83,10 @@ targets:
       - path: Sources/ReadControl/State/ReadingSort.swift
       - path: Sources/ReadControl/Shared/Formatting/ReadingTime.swift
       - path: Sources/ReadControl/Features/Tags/TagRules.swift
+      # Reader typography: the preference vocabulary and the theme that derives
+      # every measure/leading value from it. Pure value types, no FFI.
+      - path: Sources/ReadControl/Shared/Preferences/TypographySettings.swift
+      - path: Sources/ReadControl/Features/Reader/Markdown/MarkdownTheme.swift
       - path: Sources/ReadControl/Bridge/Mappers/ReadingRow.swift
       - path: Sources/ReadControl/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/ReadControl/Bridge/Mappers/HighlightRow.swift
@@ -116,6 +120,10 @@ targets:
       # Shared with the app target (it also lives under Sources/ReadControl/) so
       # tests and app compile the same accessibility identifiers.
       - path: Sources/ReadControl/AccessibilityID.swift
+      # Likewise shared: the reader's typography vocabulary (font, size, width,
+      # line height). Journeys assert against the same option labels and point
+      # values the app renders, so neither can drift from the other.
+      - path: Sources/ReadControl/Shared/Preferences/TypographySettings.swift
     dependencies:
       - target: ReadControl
     settings:

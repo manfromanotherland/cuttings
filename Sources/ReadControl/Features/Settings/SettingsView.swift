@@ -17,7 +17,9 @@ struct SettingsView: View {
             ExtensionsSettingsTab()
                 .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension") }
         }
-        .frame(width: 440)
+        // Wide enough for the Typography tab's five-segment Width picker to show
+        // "Extra Small" … "Extra Large" without truncating.
+        .frame(width: 520)
         .padding(20)
     }
 }
@@ -48,6 +50,8 @@ private struct AppearanceSettingsTab: View {
 private struct TypographySettingsTab: View {
     @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
     @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("readerWidth", store: AppDefaults.store) private var readerWidth: ReaderWidth = .medium
+    @AppStorage("readerLineHeight", store: AppDefaults.store) private var readerLineHeight: ReaderLineHeight = .normal
 
     var body: some View {
         Form {
@@ -67,15 +71,48 @@ private struct TypographySettingsTab: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier(A11y.Settings.sizePicker)
 
-            Text("The quick brown fox jumps over the lazy dog.")
-                .font(.custom(previewFontName, size: CGFloat(readerFontSize.rawValue)))
+            Picker("Width", selection: $readerWidth) {
+                ForEach(ReaderWidth.allCases) { width in
+                    Text(width.label).tag(width)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier(A11y.Settings.widthPicker)
+
+            Picker("Line Height", selection: $readerLineHeight) {
+                ForEach(ReaderLineHeight.allCases) { lineHeight in
+                    Text(lineHeight.label).tag(lineHeight)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier(A11y.Settings.lineHeightPicker)
+
+            // A live sample of every choice at once: the chosen face and size, set
+            // to the chosen leading, inside a column scaled to the chosen measure.
+            // Enough lines to make both the wrap width and the leading visible.
+            Text(Self.previewText)
+                .font(.custom(previewFontName, size: readerFontSize.points))
+                .lineSpacing(readerFontSize.points * readerLineHeight.extraLeadingMultiple)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: previewWidth, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
+                .accessibilityIdentifier(A11y.Settings.typographyPreview)
         }
         .formStyle(.grouped)
-        .frame(minHeight: 160)
+        .frame(minHeight: 260)
         .accessibilityIdentifier(A11y.Settings.typographyTab)
+    }
+
+    private static let previewText = """
+    The quick brown fox jumps over the lazy dog, then \
+    settles in to read a long article without straining.
+    """
+
+    /// The reader's measure, scaled down to fit the settings form. Shows the
+    /// *relative* effect of each width — the real column is `readerWidth.points`.
+    private var previewWidth: CGFloat {
+        readerWidth.points * 0.45
     }
 
     private var previewFontName: String {

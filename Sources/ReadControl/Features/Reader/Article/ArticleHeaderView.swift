@@ -21,7 +21,9 @@ struct ArticleHeaderView: View {
         }
         .padding(.top, 24)
         .padding(.bottom, 16)
-        .frame(maxWidth: 680, alignment: .leading)
+        // Same measure as the body below it, so the title stays flush with the
+        // article text at every reader width.
+        .frame(maxWidth: theme.contentMaxWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 20)
     }

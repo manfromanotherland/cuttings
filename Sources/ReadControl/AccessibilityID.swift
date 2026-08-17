@@ -67,6 +67,8 @@ enum A11y {
 
         static let fontPicker = "sidebar.appearance.font"
         static let fontSizeSlider = "sidebar.appearance.fontSize"
+        static let widthSlider = "sidebar.appearance.width"
+        static let lineHeightSlider = "sidebar.appearance.lineHeight"
     }
 
     /// ── Reading list ──────────────────────────────────────────────────────
@@ -177,6 +179,9 @@ enum A11y {
         static let themePicker = "settings.theme"
         static let fontPicker = "settings.font"
         static let sizePicker = "settings.size"
+        static let widthPicker = "settings.width"
+        static let lineHeightPicker = "settings.lineHeight"
+        static let typographyPreview = "settings.typographyPreview"
         static let changeLibrary = "settings.changeLibrary"
     }
 }

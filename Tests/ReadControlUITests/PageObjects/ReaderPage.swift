@@ -129,6 +129,28 @@ struct ReaderPage {
         app.images.firstMatch.exists
     }
 
+    /// Width of the reader's body column, in points. The body's selectable runs
+    /// render into AppKit text views that fill the measure, so the widest one
+    /// tracks the Width typography setting (see `ReaderWidth`). Only text views
+    /// are measured — the list and sidebar render SwiftUI `Text` (static texts),
+    /// so they can't pollute the reading. Returns 0 when the body hasn't
+    /// rendered yet.
+    var bodyWidth: CGFloat {
+        app.textViews.allElementsBoundByIndex
+            .filter(\.exists)
+            .map(\.frame.width)
+            .max() ?? 0
+    }
+
+    /// Polls until the body column settles within `tolerance` of `expected` —
+    /// a width change reflows asynchronously.
+    @discardableResult
+    func waitForBodyWidth(_ expected: CGFloat, tolerance: CGFloat = 40,
+                          timeout: TimeInterval = 8) -> Bool
+    {
+        poll(timeout: timeout) { abs(bodyWidth - expected) <= tolerance }
+    }
+
     // ── Image zoom lightbox ───────────────────────────────────────────────────
 
     /// The first tappable figure in the reader body.

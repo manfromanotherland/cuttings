@@ -172,6 +172,8 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
     let assetBaseURL: URL?
     var font: ReaderFont = .system
     var fontSize: ReaderFontSize = .medium
+    var width: ReaderWidth = .medium
+    var lineHeight: ReaderLineHeight = .normal
     /// Verbatim text of the reading's highlights; each occurrence is tinted.
     var highlights: [String] = []
     /// Called with the selected text when the user highlights a passage.
@@ -184,6 +186,7 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
 
     init(document: ArticleDocument, assetBaseURL: URL?,
          font: ReaderFont = .system, fontSize: ReaderFontSize = .medium,
+         width: ReaderWidth = .medium, lineHeight: ReaderLineHeight = .normal,
          highlights: [String] = [], onHighlight: @escaping (String) -> Void = { _ in },
          @ViewBuilder header: @escaping () -> Header = { EmptyView() },
          @ViewBuilder footer: @escaping () -> Footer = { EmptyView() })
@@ -192,6 +195,8 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
         self.assetBaseURL = assetBaseURL
         self.font = font
         self.fontSize = fontSize
+        self.width = width
+        self.lineHeight = lineHeight
         self.highlights = highlights
         self.onHighlight = onHighlight
         self.header = header
@@ -199,7 +204,7 @@ struct MarkdownDocumentView<Header: View, Footer: View>: View {
     }
 
     private var theme: MarkdownTheme {
-        MarkdownTheme(font: font, fontSize: fontSize)
+        MarkdownTheme(font: font, fontSize: fontSize, width: width, lineHeight: lineHeight)
     }
 
     var body: some View {

@@ -5,7 +5,7 @@ import SwiftUI
 /// Derives every font, size, weight, and spacing value for the native Markdown
 /// reader from the user's typography settings. The scale follows Apple's
 /// Human Interface Guidelines: a clear six-level heading hierarchy, a generous
-/// reading measure (~680 pt), and asymmetric section spacing (more room above a
+/// reading measure (~680 pt by default), and asymmetric section spacing (more room above a
 /// heading than below it, so a heading binds to the text it introduces).
 ///
 /// All values are expressed *relative to the body size* so the whole document
@@ -14,6 +14,17 @@ import SwiftUI
 struct MarkdownTheme {
     let font: ReaderFont
     let fontSize: ReaderFontSize
+    let width: ReaderWidth
+    let lineHeight: ReaderLineHeight
+
+    init(font: ReaderFont, fontSize: ReaderFontSize,
+         width: ReaderWidth = .medium, lineHeight: ReaderLineHeight = .normal)
+    {
+        self.font = font
+        self.fontSize = fontSize
+        self.width = width
+        self.lineHeight = lineHeight
+    }
 
     var design: Font.Design {
         font.design
@@ -26,10 +37,10 @@ struct MarkdownTheme {
     // ── Reading rhythm ──────────────────────────────────────────────────────
 
     /// SwiftUI `lineSpacing` is the gap *between* lines, added on top of the
-    /// natural (~1.2×) line height. (1.75 − 1.2) ≈ 0.55 approximates a
-    /// comfortable `line-height: 1.75` reading measure.
+    /// natural (~1.2×) line height, so the reader's chosen line height becomes
+    /// the *extra* leading over that baseline (see `extraLeadingMultiple`).
     var lineSpacing: CGFloat {
-        bodySize * 0.55
+        bodySize * lineHeight.extraLeadingMultiple
     }
 
     /// Vertical gap between top-level blocks (~1em). Headings add extra space
@@ -38,9 +49,10 @@ struct MarkdownTheme {
         bodySize
     }
 
-    /// Optimal line length for sustained reading (~60–75 characters).
+    /// The reader's measure, from the reader's chosen width. The Medium default
+    /// (680) is the optimal line length for sustained reading (~60–75 characters).
     var contentMaxWidth: CGFloat {
-        680
+        width.points
     }
 
     var bodyFont: Font {

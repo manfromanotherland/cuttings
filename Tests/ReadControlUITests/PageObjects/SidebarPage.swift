@@ -94,7 +94,15 @@ struct SidebarPage {
 
     // ── Appearance popover ────────────────────────────────────────────────
 
+    /// Open the appearance popover, or leave it open if it already is.
+    ///
+    /// The gear is a *toggle*, so clicking it unconditionally would shut an
+    /// already-open popover — which is what happened when two setters that each
+    /// "open" it were called back to back. `fontPicker` is the popover's
+    /// open/closed probe (the same one `dismissAppearancePopover` uses), so
+    /// guarding on it makes this idempotent and lets the setters compose.
     func openAppearancePopover() {
+        guard !fontPicker.exists else { return }
         app.byId(A11y.Sidebar.settingsButton).clickWhenReady()
     }
 
@@ -164,6 +172,45 @@ struct SidebarPage {
     /// popover to be open; used to assert the size setting live and after relaunch.
     var fontSizePosition: Double {
         Double(fontSizeSlider.normalizedSliderPosition)
+    }
+
+    // ── Width and line height ─────────────────────────────────────────────
+    // Both are sliders in the popover, capped with icons and carrying no visible
+    // words, so they're addressed by accessibility identifier and read back by
+    // normalized position — the same way the font-size slider above them is.
+
+    var widthSlider: XCUIElement {
+        app.byId(A11y.Sidebar.widthSlider)
+    }
+
+    var lineHeightSlider: XCUIElement {
+        app.byId(A11y.Sidebar.lineHeightSlider)
+    }
+
+    /// The width slider's normalized position (0 = narrowest). Requires the
+    /// popover to be open.
+    var widthPosition: Double {
+        Double(widthSlider.normalizedSliderPosition)
+    }
+
+    /// The line-height slider's normalized position (0 = tightest). Requires the
+    /// popover to be open.
+    var lineHeightPosition: Double {
+        Double(lineHeightSlider.normalizedSliderPosition)
+    }
+
+    /// Set the reader width from the popover. `position` is normalized (0 =
+    /// Extra Small); the slider's discrete steps snap it to the nearest option.
+    func setWidth(position: Double) {
+        openAppearancePopover()
+        widthSlider.adjust(toNormalizedSliderPosition: position)
+    }
+
+    /// Set the reader line height from the popover. `position` is normalized
+    /// (0 = Tight); the slider's discrete steps snap it to the nearest option.
+    func setLineHeight(position: Double) {
+        openAppearancePopover()
+        lineHeightSlider.adjust(toNormalizedSliderPosition: position)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
