@@ -1,0 +1,41 @@
+{
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.svn",
+    "**/.hg",
+    "**/.jj",
+    "**/CVS",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.classpath",
+    "**/.settings",
+    "**/node_modules",
+    "**/target",
+    "**/dist",
+    "extension/artifacts",
+    "macos/build",
+    "macos/Frameworks",
+    "macos/GeneratedBindings",
+    "macos/ReadControl.xcodeproj",
+    "**/xcuserdata",
+    "**/DerivedData",
+    "**/.build",
+    "**/.swiftpm",
+    "**/*.log",
+    "**/*.tsbuildinfo",
+    "website/.next",
+    "website/out",
+    "**/.env.local"
+  ],
+  "file_scan_inclusions": [
+    ".env*",
+    "core",
+    "core/**",
+    "extension",
+    "extension/**",
+    "macos",
+    "macos/**",
+    "website",
+    "website/**"
+  ]
+}
