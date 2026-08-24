@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde_json::json;
 
-const HOST_NAME: &str = "app.readcontrol.host";
+const HOST_NAME: &str = "is.edmundo.cuttings.host";
 
 /// Chrome extension ID assigned by the Chrome Web Store for the published
 /// extension. The store mints this on upload (the packaged manifest ships
@@ -18,7 +18,7 @@ const DEFAULT_EXTENSION_ID: &str = "cegehgdbbjjeondepcaejickdmkacbck";
 /// Firefox identifies extensions by add-on ID, not the Chrome extension ID.
 /// This is the `browser_specific_settings.gecko.id` in the extension's
 /// manifest.json — keep the two in sync or Firefox rejects the native host.
-const FIREFOX_DEFAULT_EXTENSION_ID: &str = "extension@readcontrol.app";
+const FIREFOX_DEFAULT_EXTENSION_ID: &str = "cuttings@edmundo.is";
 
 /// Root under `$HOME` where macOS browsers keep their per-app data.
 const APP_SUPPORT: &str = "Library/Application Support";
@@ -104,7 +104,7 @@ const KNOWN_BROWSERS: &[KnownBrowser] = &[
     },
 ];
 
-/// Write `app.readcontrol.host.json` into every browser that can use it.
+/// Write `is.edmundo.cuttings.host.json` into every browser that can use it.
 ///
 /// `extension_id` is the Chrome extension ID (e.g. `abcdefghijklmnopqrstuvwxyz123456`).
 /// Pass `None` to use `DEFAULT_EXTENSION_ID`, the ID pinned by the extension's
@@ -224,7 +224,7 @@ fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json:
     );
     json!({
         "name": HOST_NAME,
-        "description": "ReadControl native messaging host",
+        "description": "Cuttings native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_origins": [origin]
@@ -234,7 +234,7 @@ fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json:
 fn firefox_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json::Value {
     json!({
         "name": HOST_NAME,
-        "description": "ReadControl native messaging host",
+        "description": "Cuttings native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_extensions": [extension_id.unwrap_or(FIREFOX_DEFAULT_EXTENSION_ID)]
@@ -272,12 +272,12 @@ mod tests {
         // Chrome is installed but has never created its NativeMessagingHosts dir.
         fs::create_dir_all(app_support(home.path()).join("Google/Chrome")).unwrap();
 
-        install_manifest_in(home.path(), "/opt/read-control/native-host", None).unwrap();
+        install_manifest_in(home.path(), "/opt/cuttings/cuttings-native-host", None).unwrap();
 
         let nmh = app_support(home.path()).join("Google/Chrome").join(NMH_DIR);
         let manifest = read_manifest(&nmh);
         assert_eq!(manifest["name"], HOST_NAME);
-        assert_eq!(manifest["path"], "/opt/read-control/native-host");
+        assert_eq!(manifest["path"], "/opt/cuttings/cuttings-native-host");
         assert_eq!(
             manifest["allowed_origins"][0],
             format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")

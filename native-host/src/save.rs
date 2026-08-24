@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use base64::Engine;
-use readcontrol_core::{
+use cuttings_core::{
     find_by_url, url_id, write_images, write_reading, ImageBytes, LibraryRoot, Metadata,
 };
 
@@ -29,7 +29,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         Err(_) => {
             return Ok(SaveResponse::error(
                 "library_not_configured",
-                "No library folder has been set. Open the ReadControl app to configure one.",
+                "No library folder has been set. Open the Cuttings app to configure one.",
             ))
         }
     };
@@ -114,12 +114,12 @@ pub fn classify_error(e: &anyhow::Error) -> (&'static str, String) {
 }
 
 pub(crate) fn find_library_path() -> Result<PathBuf> {
-    if let Ok(path) = std::env::var("READCONTROL_LIBRARY") {
+    if let Ok(path) = std::env::var("CUTTINGS_LIBRARY") {
         return Ok(PathBuf::from(path));
     }
 
     let home = std::env::var("HOME")?;
-    let config_file = PathBuf::from(home).join(".config/readcontrol/library");
+    let config_file = PathBuf::from(home).join(".config/cuttings/library");
     if config_file.is_file() {
         let path = std::fs::read_to_string(config_file)?.trim().to_string();
         if !path.is_empty() {

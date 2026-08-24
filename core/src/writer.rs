@@ -207,7 +207,7 @@ mod tests {
         assert!(
             find_by_url(
                 &lib,
-                "https://paulgraham.com/taste.html?utm_source=readcontrol.app"
+                "https://paulgraham.com/taste.html?utm_source=cuttings"
             )
             .unwrap()
             .is_some(),

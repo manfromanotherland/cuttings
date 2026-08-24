@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|a| a == "--version") {
-        println!("native-host v{}", readcontrol_core::version());
+        println!("cuttings-native-host v{}", cuttings_core::version());
         return Ok(());
     }
 
@@ -170,7 +170,7 @@ mod integration_tests {
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    // Serialize all tests that touch READCONTROL_LIBRARY to avoid races.
+    // Serialize all tests that touch CUTTINGS_LIBRARY to avoid races.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn save_message(url: &str) -> Vec<u8> {
@@ -197,9 +197,9 @@ mod integration_tests {
         // into PoisonError failures in the others.
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = TempDir::new().unwrap();
-        std::env::set_var("READCONTROL_LIBRARY", dir.path());
+        std::env::set_var("CUTTINGS_LIBRARY", dir.path());
         let result = f(&dir);
-        std::env::remove_var("READCONTROL_LIBRARY");
+        std::env::remove_var("CUTTINGS_LIBRARY");
         result
     }
 
@@ -274,13 +274,13 @@ mod integration_tests {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         // Isolate BOTH library sources: the env var and the
-        // `$HOME/.config/readcontrol/library` fallback. Pointing HOME at an
+        // `$HOME/.config/cuttings/library` fallback. Pointing HOME at an
         // empty temp dir ensures the host can't resolve a real library that a
         // developer machine happens to have configured.
         let home = TempDir::new().unwrap();
         let prev_home = std::env::var_os("HOME");
         std::env::set_var("HOME", home.path());
-        std::env::remove_var("READCONTROL_LIBRARY");
+        std::env::remove_var("CUTTINGS_LIBRARY");
 
         let resp = dispatch(&save_message("https://example.com/no-lib"));
 
@@ -344,7 +344,7 @@ mod integration_tests {
                 .join(&id[..2])
                 .join(id)
                 .join("assets")
-                .join(format!("{}.png", readcontrol_core::sha256_hex(bytes)));
+                .join(format!("{}.png", cuttings_core::sha256_hex(bytes)));
             assert_eq!(std::fs::read(&asset).unwrap(), bytes);
             // The unsupplied image keeps its remote URL as a placeholder.
             assert!(

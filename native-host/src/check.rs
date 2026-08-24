@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use readcontrol_core::{find_by_url, LibraryRoot};
+use cuttings_core::{find_by_url, LibraryRoot};
 
 use crate::protocol::{CheckRequest, SaveResponse, PROTOCOL_VERSION};
 use crate::save::find_library_path;

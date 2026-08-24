@@ -1,6 +1,6 @@
 [package]
-name = "readcontrol-core"
-description = "Engine library for the readcontrol system."
+name = "cuttings-core"
+description = "Engine library for Cuttings."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
