@@ -35,6 +35,18 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Non-interactive macOS shells may omit rustup's shims even when Rust is
+# installed. Add the standard user/Homebrew locations before deciding to skip
+# the core checks.
+if ! command -v cargo >/dev/null 2>&1; then
+  for tool_dir in "$HOME/.cargo/bin" /opt/homebrew/opt/rustup/bin; do
+    if [ -x "$tool_dir/cargo" ]; then
+      export PATH="$tool_dir:$PATH"
+      break
+    fi
+  done
+fi
+
 # Components in quality-check order. Git itself always runs once at the root.
 ALL_COMPONENTS="core extension macos"
 
