@@ -7,10 +7,10 @@ enum ReadingLink {
     /// UTM parameters identifying Cuttings as the referrer, so sites can see
     /// the traffic came from the app.
     private static let utmParameters = [
-        URLQueryItem(name: "utm_source", value: "cuttings.app")
+        URLQueryItem(name: "utm_source", value: "cuttings")
     ]
 
-    /// Returns `url` with Cuttings's UTM reference appended. Existing query
+    /// Returns `url` with Cuttings' UTM reference appended. Existing query
     /// items are preserved; any `utm_source`/`utm_medium` already present are
     /// left untouched so we never double up. Returns `url` unchanged when it
     /// can't be decomposed into components.
