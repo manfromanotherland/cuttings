@@ -68,7 +68,7 @@ extension AppState {
     /// (see `CoreBridge.listReadings`).
     private func fetchReadings(_ core: any CoreBridging, offset: UInt32) async throws -> [ReadingRow] {
         let query = ReadingQuery(
-            view: activeView, sort: activeSort, ascending: sortAscending,
+            kind: selectedKind, view: activeView, sort: activeSort, ascending: sortAscending,
             tag: selectedTag, rating: selectedRating, search: activeQuery,
             limit: pageSize, offset: offset
         )
@@ -132,7 +132,8 @@ extension AppState {
         // Sidebar counts are non-critical, so a failed fetch just leaves the
         // sections as-is rather than surfacing an error.
         guard let counts = try? await core.sidebarCounts(
-            view: activeView, tag: selectedTag, rating: selectedRating, query: activeQuery
+            kind: selectedKind, view: activeView, tag: selectedTag,
+            rating: selectedRating, query: activeQuery
         ) else { return }
         sidebar.setViewCounts(ViewCounts(counts.views))
         sidebar.tags = counts.tags.map { TagCount($0) }
@@ -158,6 +159,15 @@ extension AppState {
     // last click asked. Clicking an active tag or rating toggles it off; the view
     // always has a value (`.all` is the unfiltered base), so it falls back to
     // that base rather than to nothing. The rules live in `ComposedFilter`.
+
+    /// Select a saved-item kind, or clear the kind facet with `nil`. Unlike the
+    /// ordered view/rating/tag stack this is a peer facet, so it does not discard
+    /// any of those selections.
+    func selectKind(_ kind: ReadingKind?) {
+        guard selectedKind != kind else { return }
+        selectedKind = kind
+        Task { await reloadForSelectionChange() }
+    }
 
     /// Switch the active smart view — or fall back to `.all` when the
     /// already-active view is clicked again — and clear the rating and tag

@@ -21,6 +21,7 @@ final class AppState {
     /// Keys the composed filter (smart view, tag, rating) and the search box
     /// persist under, so closing the app and reopening it lands on the same view.
     private enum FilterDefaultsKey {
+        static let kind = "selectedKind"
         static let view = "activeView"
         static let tag = "selectedTag"
         static let rating = "selectedRating"
@@ -72,6 +73,15 @@ final class AppState {
         }
     }
 
+    /// The optional saved-item kind facet. `nil` is the unfiltered "Everything"
+    /// choice; a concrete value composes with the existing view, tag, rating,
+    /// and full-text filters and is persisted across launches.
+    var selectedKind: ReadingKind? {
+        didSet {
+            AppDefaults.store.set(selectedKind?.rawValue, forKey: FilterDefaultsKey.kind)
+        }
+    }
+
     /// Sort applied while a search is active. Kept separate from `sortField` so
     /// searching (which defaults to relevance) never clobbers the list's own
     /// persisted sort. Not persisted — a fresh search starts on relevance.
@@ -89,9 +99,10 @@ final class AppState {
     @ObservationIgnored var searchTask: Task<Void, Never>?
 
     /// The active smart view. Always exactly one — `.all` is the unfiltered base.
-    /// Independent from the tag and rating filters so all three compose (together
-    /// with the search box): the reading list and the faceted counts are scoped by
-    /// `activeView` ∩ `selectedTag` ∩ `selectedRating` ∩ `searchQuery`.
+    /// Independent from the kind, tag, and rating filters so all four compose
+    /// (together with the search box): the reading list and faceted counts are
+    /// scoped by `selectedKind` ∩ `activeView` ∩ `selectedTag` ∩
+    /// `selectedRating` ∩ `searchQuery`.
     ///
     /// Persisted across launches; `init` restores it, defaulting to `.unread` on a
     /// first run so the app opens on the pile to work through, not everything.
@@ -203,6 +214,8 @@ final class AppState {
         // re-writing it.)
         activeView = defaults.string(forKey: FilterDefaultsKey.view)
             .flatMap(SidebarItem.init(rawValue:)) ?? .unread
+        selectedKind = defaults.string(forKey: FilterDefaultsKey.kind)
+            .flatMap(ReadingKind.init(rawValue:))
         selectedTag = defaults.string(forKey: FilterDefaultsKey.tag)
         selectedRating = (defaults.object(forKey: FilterDefaultsKey.rating) as? Int)
             .flatMap { UInt8(exactly: $0) }

@@ -12,7 +12,10 @@ final class ReadingRowMapperTests: XCTestCase {
         FfiReadingRow(
             id: "01JREADING000000000000000000",
             title: "The Title",
+            kind: .video,
             url: "https://example.com/article",
+            mediaUrl: "https://cdn.example.com/video.mp4",
+            previewAsset: "assets/poster.jpg",
             canonicalUrl: "https://example.com/article?canonical",
             author: "Ada Lovelace",
             site: "example.com",
@@ -46,13 +49,19 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.wordCount, ffi.wordCount)
         XCTAssertEqual(row.lang, ffi.lang)
         XCTAssertEqual(row.tags, ffi.tags)
+        XCTAssertEqual(row.kind, .video)
+        XCTAssertEqual(row.mediaUrl, ffi.mediaUrl)
+        XCTAssertEqual(row.previewAsset, ffi.previewAsset)
     }
 
     func testOptionalFieldsPreserveNil() {
         let ffi = FfiReadingRow(
             id: "01JREADING000000000000000001",
             title: "",
+            kind: .article,
             url: "https://example.com/b",
+            mediaUrl: nil,
+            previewAsset: nil,
             canonicalUrl: "https://example.com/b",
             author: nil,
             site: nil,
@@ -72,7 +81,16 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertNil(row.excerpt)
         XCTAssertNil(row.wordCount)
         XCTAssertNil(row.lang)
+        XCTAssertEqual(row.kind, .article)
+        XCTAssertNil(row.mediaUrl)
+        XCTAssertNil(row.previewAsset)
         XCTAssertTrue(row.tags.isEmpty)
+    }
+
+    func testMapsQuoteKind() {
+        var ffi = sampleFfiRow()
+        ffi.kind = .quote
+        XCTAssertEqual(ReadingRow(ffi).kind, .quote)
     }
 
     func testEqualityTracksFields() {

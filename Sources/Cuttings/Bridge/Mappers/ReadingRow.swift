@@ -2,6 +2,34 @@
 
 import Foundation
 
+/// The kind of thing saved in the library. Files store a stable lowercase value;
+/// the FFI exposes the same vocabulary as an exhaustive enum. The core maps a
+/// legacy file with no kind to `.article` before it reaches this boundary.
+enum ReadingKind: String, CaseIterable, Sendable {
+    case article
+    case image
+    case quote
+    case video
+
+    init(_ kind: FfiReadingKind) {
+        switch kind {
+        case .article: self = .article
+        case .image: self = .image
+        case .quote: self = .quote
+        case .video: self = .video
+        }
+    }
+
+    var ffiKind: FfiReadingKind {
+        switch self {
+        case .article: .article
+        case .image: .image
+        case .quote: .quote
+        case .video: .video
+        }
+    }
+}
+
 /// A list/search/sidebar presentation snapshot of a reading, kept apart from the
 /// `FfiReadingRow` boundary DTO so feature code speaks app language rather than
 /// "this came from the Rust FFI" (see ADR 0001). It mirrors the boundary fields
@@ -24,6 +52,9 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var wordCount: UInt32?
     var lang: String?
     var tags: [String]
+    var kind: ReadingKind = .article
+    var mediaUrl: String?
+    var previewAsset: String?
 }
 
 extension ReadingRow {
@@ -46,5 +77,8 @@ extension ReadingRow {
         wordCount = row.wordCount
         lang = row.lang
         tags = row.tags
+        kind = ReadingKind(row.kind)
+        mediaUrl = row.mediaUrl
+        previewAsset = row.previewAsset
     }
 }

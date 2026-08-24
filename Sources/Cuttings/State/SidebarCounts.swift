@@ -29,7 +29,7 @@ struct SidebarCounts {
     /// Fold a row's before/after state into the smart-view counts, mirroring the
     /// core's *faceted* rule (`list.rs` `count_where`) so the optimistic numbers
     /// match what `loadSidebar()` reconciles to: a view count is gated by the
-    /// selected `tag`/`rating` (the other sections), never by the view itself.
+    /// selected `kind`/`tag`/`rating` (the other sections), never by the view itself.
     ///
     /// Only the view badges are updated optimistically. The Tags and Ratings
     /// sections show a *pinned presence set* (which tiles exist, scoped by the
@@ -41,9 +41,13 @@ struct SidebarCounts {
     /// on the recount instead.
     mutating func applyDelta(
         from old: ReadingRow, to new: ReadingRow,
+        kind selectedKind: ReadingKind? = nil,
         tag selectedTag: String?, rating selectedRating: UInt8?
     ) {
         func matchesCross(_ row: ReadingRow) -> Bool {
+            if let selectedKind, row.kind != selectedKind {
+                return false
+            }
             if let selectedTag, !row.tags.contains(selectedTag) {
                 return false
             }

@@ -37,6 +37,7 @@ actor CoreBridge {
             ascending: query.ascending,
             tag: query.tag,
             rating: query.rating,
+            kind: query.kind?.ffiKind,
             since: nil, until: nil,
             query: query.search,
             limit: query.limit, offset: query.offset
@@ -49,9 +50,11 @@ actor CoreBridge {
     /// full-text match once and returns them together. Builds the core's
     /// `FfiCountScope` here so the query DTO stays in the bridge.
     func sidebarCounts(
-        view: SidebarItem, tag: String?, rating: UInt8?, query: String?
+        kind: ReadingKind?, view: SidebarItem, tag: String?, rating: UInt8?, query: String?
     ) throws -> FfiSidebarCounts {
-        let scope = FfiCountScope(view: view.ffiView, tag: tag, rating: rating, query: query)
+        let scope = FfiCountScope(
+            view: view.ffiView, tag: tag, rating: rating, kind: kind?.ffiKind, query: query
+        )
         return try database.sidebarCounts(scope: scope)
     }
 

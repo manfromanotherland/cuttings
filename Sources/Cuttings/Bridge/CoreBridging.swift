@@ -15,7 +15,7 @@ protocol CoreBridging: Sendable {
 
     func listReadings(_ query: ReadingQuery) async throws -> [FfiReadingRow]
     func sidebarCounts(
-        view: SidebarItem, tag: String?, rating: UInt8?, query: String?
+        kind: ReadingKind?, view: SidebarItem, tag: String?, rating: UInt8?, query: String?
     ) async throws -> FfiSidebarCounts
     func getReadingRow(id: String) async throws -> FfiReadingRow?
     func getBody(id: String) async throws -> String?

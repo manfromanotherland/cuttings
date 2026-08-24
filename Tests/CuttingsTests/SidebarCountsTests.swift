@@ -57,4 +57,15 @@ final class SidebarCountsTests: XCTestCase {
         XCTAssertEqual(counts.viewCounts[.unread], 2)
         XCTAssertEqual(counts.viewCounts[.read], 3)
     }
+
+    func testApplyDeltaIsGatedBySelectedKind() {
+        var counts = SidebarCounts()
+        counts.setViewCounts(ViewCounts(all: 5, unread: 3, read: 2, archive: 0, favorites: 0))
+        let old = makeReadingRow(read: false, kind: .image)
+        var updated = old
+        updated.read = true
+        counts.applyDelta(from: old, to: updated, kind: .quote, tag: nil, rating: nil)
+        XCTAssertEqual(counts.viewCounts[.unread], 3)
+        XCTAssertEqual(counts.viewCounts[.read], 2)
+    }
 }

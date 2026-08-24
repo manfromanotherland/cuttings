@@ -25,7 +25,10 @@ extension AppState {
         // recount in `refresh()` → `loadSidebar()` update the badges instead. (The
         // Tags/Ratings badges always come from that recount — see `applyDelta`.)
         if searchQuery.isEmpty {
-            sidebar.applyDelta(from: old, to: new, tag: selectedTag, rating: selectedRating)
+            sidebar.applyDelta(
+                from: old, to: new, kind: selectedKind,
+                tag: selectedTag, rating: selectedRating
+            )
         }
     }
 
