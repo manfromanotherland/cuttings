@@ -43,8 +43,9 @@ CDN/media address for the origin page.
 
 ## Components
 
-The system is a **polyrepo** — three components in their own repositories, sharing one library
-format and one Rust core.
+The system is a **monorepo** with three top-level components sharing one library format and one
+Rust core. Keeping them in one Git history lets protocol and format changes land atomically across
+every affected component.
 
 ### Browser extension (`extension`)
 - **Responsibility:** extract readable page content; capture a selected image; record a selected

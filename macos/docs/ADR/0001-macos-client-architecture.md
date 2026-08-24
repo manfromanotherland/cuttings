@@ -426,7 +426,7 @@ sufficient and lower ceremony.
 
 ## Guidance For AI Agents
 
-- Read this ADR and the meta repo's `UBIQUITOUS_LANGUAGE.md` before proposing
+- Read this ADR and the monorepo root's `UBIQUITOUS_LANGUAGE.md` before proposing
   large `macos` architecture changes.
 - Keep domain behavior in `core`.
 - Keep Swift feature code thin and presentation-focused.

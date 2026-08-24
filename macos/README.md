@@ -22,11 +22,11 @@ and watches the library folder for changes arriving through the user's own sync.
   (`brew install swiftformat swiftlint`, or `mise install` to match the pinned versions)
 - Rust targets for the XCFramework build: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 
-The core repository must sit as a sibling (`../core`) — the `Makefile` references it there.
+The Rust core lives at `../core` in this monorepo, and the `Makefile` references it there.
 
 ## Setup
 
-Run once after cloning (and again after updating `core`):
+Run once after cloning the monorepo (and again after updating `core`):
 
 ```bash
 make all        # build the core XCFramework, copy bindings, generate Cuttings.xcodeproj

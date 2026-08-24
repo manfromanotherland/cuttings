@@ -66,10 +66,10 @@ works). To wire it up:
 
 1. Load the unpacked extension (above).
 2. On `chrome://extensions`, copy the extension **ID** (32 lowercase letters).
-3. Register it with the host (see the core repository's README):
+3. Register it with the host (see the [core README](../core/README.md)):
 
    ```bash
-   ./target/release/native-host --install-manifest --extension-id <your-32-char-id>
+   ../core/target/release/cuttings-native-host --install-manifest --extension-id <your-32-char-id>
    ```
 
 Firefox needs no ID step — it matches the host by the fixed add-on ID baked into the manifest.

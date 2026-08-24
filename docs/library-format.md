@@ -5,7 +5,7 @@
 
 This document is the **shared contract** between all Cuttings components. Every component that
 reads or writes library files must conform to it. Treat breaking changes as a major version bump;
-announce them in all three repos.
+land them across all affected components in the same monorepo commit.
 
 ---
 
@@ -250,8 +250,7 @@ The macOS app's sidebar views are defined by frontmatter field values:
 - **Breaking changes** (renamed/removed required fields, changed semantics) bump the integer.
 - Readers must reject files with a `format_version` higher than the version they support, rather
   than silently misread them.
-- All three repos (`core`, `extension`, `macos`) must be
-  updated in lockstep on a version bump.
+- All three components (`core`, `extension`, `macos`) must be updated together on a version bump.
 
 ---
 

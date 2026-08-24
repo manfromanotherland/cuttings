@@ -40,7 +40,7 @@ host, and macOS app.
 |------|------------|
 | App | The user-facing product as a whole. In implementation, this currently means the browser extension, native messaging host, Rust core, and macOS client. |
 | Cuttings | The product name shown to users. |
-| cuttings | The internal project slug used for repos, packages, and file paths. Not shown to users. |
+| cuttings | The internal project slug used for the monorepo, packages, and file paths. Not shown to users. |
 | Library | The folder chosen by the user that stores their synced, durable reading data. |
 | Library folder | Same as Library, used when emphasizing the on-disk directory. |
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |

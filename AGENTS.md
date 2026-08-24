@@ -179,11 +179,8 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>  ← AI co-author traile
   *then* letting the row jump on the later refresh reads as a two-stage stutter; one motion (the
   Mail model) does not. Membership *ordering* still settles on the refresh.
 - Keep everything offline-capable; no network calls are required for core features.
-- This is a **polyrepo**: extension, engine+host, and client are separate repos. The library format
-  and the native-messaging message contract are the cross-repo contracts — change them in
-  lockstep across repos.
-- Each sub-project (`core/`, `extension/`, `macos/`) is an
-  **independent git repository with its own commit history**. They live inside this working
-  directory for local convenience but are git-ignored by this meta repo. Always `cd` into the
-  relevant sub-project directory before running `git` commands — running git from the root will
-  only see the meta repo and will miss all changes made in the sub-projects.
+- This is a **monorepo**: `core/`, `extension/`, and `macos/` share one Git history. The library
+  format and native-messaging protocol are cross-component contracts; update every affected
+  component in one atomic commit when either contract changes.
+- Run Git commands from the repository root. Use semantic scopes such as `core`, `extension`, or
+  `macos` when a commit is component-specific, and stage only the paths relevant to that change.

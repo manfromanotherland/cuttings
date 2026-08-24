@@ -169,4 +169,5 @@ otherwise — including when no library is configured (a `check` never errors on
 - Version `1` supported full-page article saves. Version `2` adds first-class card kind and media
   metadata for articles, images, videos, and quotes.
 - The extension and host must both support the same version; a mismatch should surface an error.
-- Version bumps follow the same lockstep rule as the library format: update both repos together.
+- Version bumps follow the same lockstep rule as the library format: update both components in one
+  monorepo commit.

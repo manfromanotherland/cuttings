@@ -1,7 +1,7 @@
 # Cuttings core
 
-The Rust engine for **Cuttings**, the native macOS reading manager. This repo is a Cargo
-workspace containing:
+The Rust engine for **Cuttings**, the native macOS reading manager. This monorepo component is a
+Cargo workspace containing:
 
 - **`core`** (`cuttings-core`) — the engine: library scanning/indexing, full-text search
   (SQLite + FTS5), tags, item state, and reading read/write. Embedded by the macOS client via

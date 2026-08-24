@@ -44,35 +44,35 @@ remains plain files in a user-selected iCloud Drive, Dropbox, or other folder.
 
 ## Components
 
-Each component is its **own repository** (polyrepo). Clone the ones you need:
+Cuttings is a **monorepo**. Clone it once to get the product contracts and all three components:
 
-| Repo | Component | Stack |
+| Path | Component | Stack |
 |------|-----------|-------|
-| [`root`](.) | meta/spec (this repo): docs, library-format contract, design, backlog | Markdown |
+| [repository root](.) | product docs, library-format contract, design, backlog | Markdown |
 | [`core`](./core) | engine + native messaging host (Cargo workspace) | Rust (SQLite + FTS5, UniFFI) |
 | [`extension`](./extension) | browser extension for page, media, and quote capture | TypeScript, Manifest V3 |
 | [`macos`](./macos) | native visual library and reader | Swift / SwiftUI |
 
-The three app repos sit as folders **inside** this `cuttings` folder for convenience
-(git-ignored by the meta repo); each is still an independent repo with its own history.
-See each repo's README for setup and run instructions.
+All paths share one Git history, so a library-format or native-messaging change can update every
+affected component in one atomic commit. See each component's README for setup and run instructions.
 
 ## Development
 
-Each repo has its own toolchain — see its README for setup. From the root, the `Makefile` drives
-them all at once (no `cd`-ing between folders):
+Each component keeps its native toolchain — see its README for setup. From the repository root,
+the `Makefile` drives them all at once (no `cd`-ing between folders):
 
 ```bash
-make lint          # lint every repo
-make test          # test every repo
-make build         # build every repo
+make lint          # lint every component
+make test          # test every component
+make build         # build every component
 make check         # lint + test (a quick pre-push gate)
-make push          # git push each repo's current branch
-make status        # git status across all repos
+make push          # git push the monorepo's current branch once
+make status        # git status for the monorepo
 ```
 
-Run `make help` for the full list, or `make REPO=core test` to target one repo. Each maps to the
-repo's native tools:
+Run `make help` for the full list, or `make REPO=core test` to target one component. Component
+selection applies to quality commands; Git commands always operate on the whole monorepo. Each
+quality command maps to the component's native tools:
 
 **Engine + native host (Rust) — `core`**
 ```bash
@@ -100,7 +100,7 @@ swiftlint            # + swiftformat
 ### Docker sandbox
 
 A reusable **Docker sandbox** pre-installs every toolchain (Node, Rust, Swift + linters), so you
-can run a coding agent — e.g. [Claude Code](https://claude.com/claude-code) — across all the repos
+can run a coding agent — e.g. [Claude Code](https://claude.com/claude-code) — across the monorepo
 in an isolated container with no per-session setup:
 
 ```bash
@@ -109,7 +109,7 @@ sbx run --template cuttings/sandbox:1 claude -- "$(cat initial_sandbox_prompt.tx
 ```
 
 The macOS app can't be built in the Linux sandbox (no Xcode) — it covers the Rust engine, the
-extension, and lint/format for every repo. See [SANDBOX.md](./SANDBOX.md) for details.
+extension, and macOS lint/format. See [SANDBOX.md](./SANDBOX.md) for details.
 
 ## Documentation
 
@@ -117,7 +117,7 @@ extension, and lint/format for every repo. See [SANDBOX.md](./SANDBOX.md) for de
 - [AGENTS.md](./AGENTS.md) — goals, principles, decisions, and conventions for contributors.
 - [DESIGN.md](./DESIGN.md) — the macOS UI/UX design.
 - [UBIQUITOUS_LANGUAGE.md](./UBIQUITOUS_LANGUAGE.md) — the shared product vocabulary (glossary).
-- [docs/library-format.md](./docs/library-format.md) — **versioned library-format spec** (the cross-repo contract).
+- [docs/library-format.md](./docs/library-format.md) — **versioned library-format spec** (the cross-component contract).
 - [docs/native-messaging.md](./docs/native-messaging.md) — native messaging protocol (extension ↔ host).
 - [docs/fixtures/](./docs/fixtures/) — sample article file, save request/response JSON.
 
