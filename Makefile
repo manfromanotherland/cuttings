@@ -1,4 +1,4 @@
-# Build helpers for the readcontrol macOS app.
+# Build helpers for the cuttings macOS app.
 # Run these on macOS from the macos/ directory.
 #
 # Prerequisites:
@@ -8,7 +8,7 @@
 CORE_DIR := ../core
 FRAMEWORKS_DIR := Frameworks
 BINDINGS_DIR := GeneratedBindings
-DMG := dist/ReadControl.dmg
+DMG := dist/Cuttings.dmg
 
 # Path to Sparkle's `sign_update` tool. Left empty so it's auto-discovered from
 # the SPM artifact at run time; override on the command line if it lives
@@ -23,8 +23,8 @@ all: xcframework bindings xcodegen
 xcframework:
 	cd $(CORE_DIR) && ./scripts/build-xcframework.sh --release
 	mkdir -p $(FRAMEWORKS_DIR)
-	rm -rf $(FRAMEWORKS_DIR)/ReadControlCore.xcframework
-	cp -R $(CORE_DIR)/dist/ReadControlCore.xcframework $(FRAMEWORKS_DIR)/
+	rm -rf $(FRAMEWORKS_DIR)/CuttingsCore.xcframework
+	cp -R $(CORE_DIR)/dist/CuttingsCore.xcframework $(FRAMEWORKS_DIR)/
 
 ## Copy generated Swift bindings into GeneratedBindings/
 bindings: xcframework
@@ -38,12 +38,12 @@ xcodegen:
 	xcodegen generate
 
 ## Run the test suites. The scheme runs the fast, hostless unit tests
-## (ReadControlTests) before the UI suite, so logic regressions surface first.
+## (CuttingsTests) before the UI suite, so logic regressions surface first.
 ## Assumes `make all` has generated the framework, bindings, and project.
 test:
-	xcodebuild test -scheme ReadControl
+	xcodebuild test -scheme Cuttings
 
-## Build a Release .app and wrap it in a distributable .dmg (dist/ReadControl.dmg).
+## Build a Release .app and wrap it in a distributable .dmg (dist/Cuttings.dmg).
 ## Ad-hoc signed only (local testing) — for a shippable build use `make release`.
 dmg: all
 	./scripts/package-dmg.sh
@@ -52,7 +52,7 @@ dmg: all
 ## Sparkle-signed. Requires a Developer ID cert and a notarytool profile, passed
 ## via env (nothing sensitive is stored in the repo):
 ##   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-##   NOTARY_PROFILE=readcontrol-notary make release
+##   NOTARY_PROFILE=cuttings-notary make release
 ## sparkle-sign runs last, on the final stapled .dmg (stapling rewrites the .dmg,
 ## so the EdDSA signature must be taken after it). See README "Software updates".
 release: all
@@ -97,4 +97,4 @@ lint-fix:
 	swiftlint --fix
 
 clean:
-	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) ReadControl.xcodeproj build dist
+	rm -rf $(FRAMEWORKS_DIR) $(BINDINGS_DIR) Cuttings.xcodeproj build dist

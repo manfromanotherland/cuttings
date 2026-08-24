@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build ReadControl.app in Release and wrap it in a distributable .dmg.
+# Build Cuttings.app in Release and wrap it in a distributable .dmg.
 #
 # No Apple Developer ID is required: the app is signed ad-hoc (`codesign -s -`),
 # which is enough to run locally but is NOT notarized. On another Mac, Gatekeeper
 # will quarantine it — the recipient must right-click the app → Open once, or run
-#   xattr -dr com.apple.quarantine /Applications/ReadControl.app
+#   xattr -dr com.apple.quarantine /Applications/Cuttings.app
 #
 # Run this on macOS from the macos/ directory (or via `make dmg`).
 # Prereqs: `make all` has generated the xcframework, bindings, and xcodeproj.
@@ -14,9 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="ReadControl"
-SCHEME="ReadControl"
-PROJECT="ReadControl.xcodeproj"
+APP_NAME="Cuttings"
+SCHEME="Cuttings"
+PROJECT="Cuttings.xcodeproj"
 BUILD_DIR="$ROOT/build"
 STAGING="$ROOT/dist/dmg-staging"
 DIST="$ROOT/dist"
@@ -37,7 +37,7 @@ echo "==> Ad-hoc signing (no Developer ID)"
 # Sign inner Mach-O first, then the app bundle, so signatures nest correctly.
 # `--deep` on the app also covers nested code, but signing these explicitly
 # avoids ordering issues on some toolchains. Each step is guarded: the
-# native-host binary and a Frameworks dir may legitimately be absent (e.g. a
+# cuttings-native-host binary and a Frameworks dir may legitimately be absent (e.g. a
 # statically linked core), and an unguarded failure would abort under pipefail.
 #
 # Sparkle ships as Sparkle.framework in Contents/Frameworks (with nested XPC
@@ -45,8 +45,8 @@ echo "==> Ad-hoc signing (no Developer ID)"
 # final `--deep` pass re-signs its nested code. This is enough to *run* an
 # ad-hoc build locally. A public, auto-updating build needs a real Developer ID
 # signature + notarization instead — see README "Software updates (Sparkle)".
-if [ -f "$APP/Contents/MacOS/native-host" ]; then
-  codesign --force --timestamp=none -s - "$APP/Contents/MacOS/native-host"
+if [ -f "$APP/Contents/MacOS/cuttings-native-host" ]; then
+  codesign --force --timestamp=none -s - "$APP/Contents/MacOS/cuttings-native-host"
 fi
 if [ -d "$APP/Contents/Frameworks" ]; then
   while IFS= read -r -d '' fw; do
@@ -75,7 +75,7 @@ attempt=1
 until hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG_PATH"; do
   if [ "$attempt" -ge 3 ]; then
     echo "error: hdiutil create kept failing (Resource busy) after $attempt tries." >&2
-    echo "       Close any Finder window on the ReadControl volume; see 'hdiutil info'." >&2
+    echo "       Close any Finder window on the Cuttings volume; see 'hdiutil info'." >&2
     exit 1
   fi
   echo "    hdiutil busy — retrying ($attempt)…" >&2

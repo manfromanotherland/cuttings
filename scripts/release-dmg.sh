@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build ReadControl.app in Release, sign it with your Apple Developer ID, then
+# Build Cuttings.app in Release, sign it with your Apple Developer ID, then
 # notarize and staple BOTH the app and the .dmg that wraps it — a real, shippable,
 # build that opens on any Mac (unlike the ad-hoc `make dmg`).
 #
@@ -24,14 +24,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="ReadControl"
-SCHEME="ReadControl"
-PROJECT="ReadControl.xcodeproj"
+APP_NAME="Cuttings"
+SCHEME="Cuttings"
+PROJECT="Cuttings.xcodeproj"
 BUILD_DIR="$ROOT/build"
 STAGING="$ROOT/dist/dmg-staging"
 DIST="$ROOT/dist"
 DMG_PATH="$DIST/${APP_NAME}.dmg"
-ENTITLEMENTS="$ROOT/Sources/ReadControl/App/ReadControl.entitlements"
+ENTITLEMENTS="$ROOT/Sources/Cuttings/App/Cuttings.entitlements"
 
 # ---- required config -------------------------------------------------------
 : "${SIGN_IDENTITY:?set SIGN_IDENTITY to your 'Developer ID Application: Name (TEAMID)' — see: security find-identity -v -p codesigning}"
@@ -66,10 +66,10 @@ echo "==> Signing with Developer ID (hardened runtime + timestamp)"
 # XPC services and helpers (Installer.xpc, Downloader.xpc, Autoupdate,
 # Updater.app); each must carry the same identity + hardened runtime. We sign
 # these explicitly rather than with `--deep`, which Apple discourages for
-# distribution. Guards: native-host and a Frameworks dir may legitimately be
+# distribution. Guards: cuttings-native-host and a Frameworks dir may legitimately be
 # absent, and an unguarded miss would abort under `set -e`.
-if [ -f "$APP/Contents/MacOS/native-host" ]; then
-  sign "$APP/Contents/MacOS/native-host"
+if [ -f "$APP/Contents/MacOS/cuttings-native-host" ]; then
+  sign "$APP/Contents/MacOS/cuttings-native-host"
 fi
 if [ -d "$APP/Contents/Frameworks" ]; then
   # Nested bundles/executables inside the frameworks first...
@@ -122,8 +122,8 @@ attempt=1
 until hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG_PATH"; do
   if [ "$attempt" -ge 3 ]; then
     echo "error: hdiutil create kept failing (Resource busy) after $attempt tries." >&2
-    echo "       Close any Finder window on the ReadControl volume, then check:" >&2
-    echo "         hdiutil info   # detach any stale ReadControl image" >&2
+    echo "       Close any Finder window on the Cuttings volume, then check:" >&2
+    echo "         hdiutil info   # detach any stale Cuttings image" >&2
     exit 1
   fi
   echo "    hdiutil busy — retrying ($attempt)…" >&2

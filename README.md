@@ -1,24 +1,24 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/readcontrol/root/main/assets/icon.png" alt="ReadControl" width="128">
+  <img src="https://raw.githubusercontent.com/cuttings/root/main/assets/icon.png" alt="Cuttings" width="128">
 </p>
-<h1 align="center">ReadControl</h1>
+<h1 align="center">Cuttings</h1>
 <p align="center">
   The native macOS reading manager
   <br />
-  <a href="https://github.com/readcontrol/macos">macOS</a>
+  <a href="https://github.com/cuttings/macos">macOS</a>
   ·
-  <a href="https://github.com/readcontrol/core">core</a>
+  <a href="https://github.com/cuttings/core">core</a>
   ·
-  <a href="https://github.com/readcontrol/extension">extension</a>
+  <a href="https://github.com/cuttings/extension">extension</a>
   ·
-  <a href="https://github.com/readcontrol/root">root</a>
+  <a href="https://github.com/cuttings/root">root</a>
 </p>
 
 ---
 
 # macos
 
-The macOS client (Swift / SwiftUI) for **ReadControl**, the native macOS reading manager.
+The macOS client (Swift / SwiftUI) for **Cuttings**, the native macOS reading manager.
 Browse, read, search, and tag your saved readings. It embeds the Rust engine (`core`) via UniFFI and watches
 the library folder for changes that arrive via the user's own sync.
 
@@ -30,7 +30,7 @@ the library folder for changes that arrive via the user's own sync.
   (`brew install swiftformat swiftlint`, or `mise install` to match the pinned versions)
 - Rust targets for the XCFramework build: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 
-The [core](https://github.com/readcontrol/core) repo must sit as a sibling (`../core`) — the
+The [core](https://github.com/cuttings/core) repo must sit as a sibling (`../core`) — the
 `Makefile` references it there.
 
 ## Setup
@@ -38,29 +38,29 @@ The [core](https://github.com/readcontrol/core) repo must sit as a sibling (`../
 Run once after cloning (and again after updating `core`):
 
 ```bash
-make all        # build the core XCFramework, copy bindings, generate ReadControl.xcodeproj
+make all        # build the core XCFramework, copy bindings, generate Cuttings.xcodeproj
 ```
 
 ## Run
 
 ```bash
-open ReadControl.xcodeproj                                    # then press Run in Xcode
-xcodebuild build -project ReadControl.xcodeproj -scheme ReadControl   # or from the CLI
+open Cuttings.xcodeproj                                    # then press Run in Xcode
+xcodebuild build -project Cuttings.xcodeproj -scheme Cuttings   # or from the CLI
 ```
 
 ## Test
 
 ```bash
-make test       # runs the unit suite (ReadControlTests) then the UI suite (ReadControlUITests)
+make test       # runs the unit suite (CuttingsTests) then the UI suite (CuttingsUITests)
 ```
 
-- `ReadControlTests` — fast, hostless unit tests for pure app logic.
-- `ReadControlUITests` — end-to-end XCUITest against a throwaway temp library.
+- `CuttingsTests` — fast, hostless unit tests for pure app logic.
+- `CuttingsUITests` — end-to-end XCUITest against a throwaway temp library.
 
 Both are dependency-free (Xcode + the macOS SDK only). Run one suite or test while iterating:
 
 ```bash
-xcodebuild test -scheme ReadControl -only-testing:ReadControlTests
+xcodebuild test -scheme Cuttings -only-testing:CuttingsTests
 ```
 
 ## Format & lint
@@ -76,10 +76,10 @@ make lint       # swiftlint lint — reports remaining violations
 ## Software updates (Sparkle)
 
 The app ships in-app updates via [Sparkle](https://sparkle-project.org), added as a Swift Package.
-A **Check for Updates…** item sits in the app menu below *About ReadControl*. Sparkle reads two
-keys from `Sources/ReadControl/App/Info.plist`:
+A **Check for Updates…** item sits in the app menu below *About Cuttings*. Sparkle reads two
+keys from `Sources/Cuttings/App/Info.plist`:
 
-- `SUFeedURL` — the appcast feed, set to `https://www.readcontrol.app/appcast.xml`.
+- `SUFeedURL` — the appcast feed, set to `https://www.cuttings.app/appcast.xml`.
 - `SUPublicEDKey` — your Sparkle EdDSA public key (currently a placeholder; set it before your
   first public release, as it's baked into every shipped build).
 
@@ -91,7 +91,7 @@ both reject an ad-hoc signature on a downloaded update. `make release` does the 
 
 ```bash
 SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-NOTARY_PROFILE=readcontrol-notary \
+NOTARY_PROFILE=cuttings-notary \
 make release
 ```
 

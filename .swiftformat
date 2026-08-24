@@ -1,4 +1,4 @@
-# SwiftFormat configuration for the ReadControl macOS app.
+# SwiftFormat configuration for the Cuttings macOS app.
 #
 # SwiftFormat rewrites code; SwiftLint (.swiftlint.yml) checks it. These options
 # keep the two tools from fighting over the same source:
@@ -18,4 +18,4 @@
 
 # Generated bindings, the vendored XCFramework, build output, and the Xcode
 # project are not hand-written Swift — never reformat them.
---exclude GeneratedBindings,Frameworks,build,dist,.build,ReadControl.xcodeproj
+--exclude GeneratedBindings,Frameworks,build,dist,.build,Cuttings.xcodeproj
