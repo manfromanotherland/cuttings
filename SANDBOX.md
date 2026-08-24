@@ -1,6 +1,6 @@
 # Docker Sandbox template
 
-A single reusable image that pre-installs the toolchains for the ReadControl
+A single reusable image that pre-installs the toolchains for the Cuttings
 repos, so a fresh [Docker Sandbox](https://docs.docker.com/ai/sandboxes/) is ready
 to build/test without per-session setup.
 
@@ -29,22 +29,22 @@ Or manually, following the
 [templates docs](https://docs.docker.com/ai/sandboxes/customize/templates/):
 
 ```bash
-docker build -t readcontrol/sandbox:1 .
-docker image save readcontrol/sandbox:1 -o rc-sandbox.tar
+docker build -t cuttings/sandbox:1 .
+docker image save cuttings/sandbox:1 -o rc-sandbox.tar
 sbx template load rc-sandbox.tar
 ```
 
 ## Use
 
 ```bash
-sbx run --template readcontrol/sandbox:1 claude
+sbx run --template cuttings/sandbox:1 claude
 ```
 
 To brief the agent that it's in this Linux sandbox (macOS app can't be built
 here — only linted/formatted), pass `initial_sandbox_prompt.txt` as the first prompt:
 
 ```bash
-sbx run --template readcontrol/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
+sbx run --template cuttings/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
 ```
 
 We pass the note at run time rather than baking a Claude Code `SessionStart`
@@ -92,7 +92,7 @@ compile non-UI Swift logic.
 - **Memory:** the SwiftSyntax compile is memory-hungry. The build serializes it
   (`SWIFT_BUILD_JOBS=1`) to avoid OOM, but still give Docker Desktop **≥6–8 GB**
   (Settings → Resources → Memory). With more RAM you can speed it up:
-  `docker build --build-arg SWIFT_BUILD_JOBS=4 -t readcontrol/sandbox:1 .`
+  `docker build --build-arg SWIFT_BUILD_JOBS=4 -t cuttings/sandbox:1 .`
 - **Updating a pinned version:** change it in the relevant repo's `.mise.toml`
   and rebuild — `sandbox-build.sh` reads versions directly from `.mise.toml`.
   The `ARG` defaults in the `Dockerfile` are fallbacks for manual `docker build`

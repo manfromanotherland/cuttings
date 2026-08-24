@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# ReadControl — Docker Sandbox template
+# Cuttings — Docker Sandbox template
 #
 #   extension  Node (pinned in extension/.mise.toml)
 #   core       Rust stable    (core/.mise.toml)

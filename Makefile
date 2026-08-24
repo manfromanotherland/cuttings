@@ -1,4 +1,4 @@
-# Root task runner for the ReadControl polyrepo.
+# Root task runner for the Cuttings polyrepo.
 #
 # Drives every sub-repo (core, extension, macos, website) from this umbrella
 # directory via scripts/repos.sh, so you don't cd between folders to run the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the ReadControl Docker Sandbox template and load it into the local sbx
+# Build the Cuttings Docker Sandbox template and load it into the local sbx
 # CLI, so a fresh sandbox already has Node, Rust and the Swift lint/format tools.
 #
 # Tool versions are derived automatically from each repo's .mise.toml, so there
@@ -12,7 +12,7 @@
 #   ./scripts/sandbox-build.sh [--tag NAME] [--build-only]
 #
 # Then start a sandbox with it:
-#   sbx run --template readcontrol/sandbox:1 claude
+#   sbx run --template cuttings/sandbox:1 claude
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +24,7 @@ need docker
 need awk
 need sed
 
-TAG="readcontrol/sandbox:1"
+TAG="cuttings/sandbox:1"
 BUILD_ONLY=0
 while [[ $# -gt 0 ]]; do
     case "$1" in

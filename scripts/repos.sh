@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Multi-repo task runner for the ReadControl polyrepo.
+# Multi-repo task runner for the Cuttings polyrepo.
 #
 # Drive every sub-repo's git / format / lint / test / build from the umbrella
 # directory, so you never have to cd between core/, extension/, macos/, and
@@ -77,7 +77,7 @@ phase_cmd() {
     macos:fmt)       echo 'make format' ;;
     macos:lint)      echo 'make format-check && make lint' ;;
     macos:test)      echo 'make test' ;;
-    macos:build)     echo 'make all && xcodebuild build -project ReadControl.xcodeproj -scheme ReadControl -configuration Debug CODE_SIGNING_ALLOWED=NO' ;;
+    macos:build)     echo 'make all && xcodebuild build -project Cuttings.xcodeproj -scheme Cuttings -configuration Debug CODE_SIGNING_ALLOWED=NO' ;;
 
     *)               echo '' ;;
   esac
@@ -167,7 +167,7 @@ phase_summary() {
 
 usage() {
   cat <<EOF
-${B}ReadControl multi-repo runner${RST}  —  scripts/repos.sh <command> [repo ...]
+${B}Cuttings multi-repo runner${RST}  —  scripts/repos.sh <command> [repo ...]
 
   ${B}git${RST}      status  push  pull  fetch        (all repos, current branch)
   ${B}quality${RST}  fmt  lint  test  build            (per-repo toolchain, below)

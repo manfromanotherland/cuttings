@@ -16,7 +16,7 @@
     "macos/build",
     "macos/Frameworks",
     "macos/GeneratedBindings",
-    "macos/ReadControl.xcodeproj",
+    "macos/Cuttings.xcodeproj",
     "**/xcuserdata",
     "**/DerivedData",
     "**/.build",
