@@ -8,9 +8,8 @@ import XCTest
 /// pre-set 5-star rating → mark it read → Unread 0 (it stays in All).
 final class FirstRunJourney: UITestCase {
     /// The Welcome article's content-addressed id, seeded by the app into a fresh
-    /// library — `SHA256(normalize("https://www.cuttings.app"))`, matching
-    /// `WelcomeArticle`.
-    private let welcomeId = "d9b68f436a63429191a157ea8ad8286bad858b867aaf18c540af99d22565d21f"
+    /// library — `SHA256("cuttings://welcome")`, matching `WelcomeArticle`.
+    private let welcomeId = "32726b7601c556c1267735e6636be21606009f38d3d96ac0d46acf350a23bc5e"
 
     func testOnboardThenReadWelcome() throws {
         // 1. Fresh launch with no library → the onboarding screen, and no

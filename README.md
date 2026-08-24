@@ -1,26 +1,18 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/cuttings/root/main/assets/icon.png" alt="Cuttings" width="128">
+  <img src="Sources/Cuttings/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" alt="Cuttings" width="128">
 </p>
 <h1 align="center">Cuttings</h1>
 <p align="center">
-  The native macOS reading manager
-  <br />
-  <a href="https://github.com/cuttings/macos">macOS</a>
-  ·
-  <a href="https://github.com/cuttings/core">core</a>
-  ·
-  <a href="https://github.com/cuttings/extension">extension</a>
-  ·
-  <a href="https://github.com/cuttings/root">root</a>
+  Keep what you find, with where it came from.
 </p>
 
 ---
 
 # macos
 
-The macOS client (Swift / SwiftUI) for **Cuttings**, the native macOS reading manager.
-Browse, read, search, and tag your saved readings. It embeds the Rust engine (`core`) via UniFFI and watches
-the library folder for changes that arrive via the user's own sync.
+The native SwiftUI client for **Cuttings**. Browse articles, images, videos, and quotes as a mixed
+visual board, then search, tag, rate, and read them. It embeds the Rust engine (`core`) via UniFFI
+and watches the library folder for changes arriving through the user's own sync.
 
 ## Prerequisites
 
@@ -30,8 +22,7 @@ the library folder for changes that arrive via the user's own sync.
   (`brew install swiftformat swiftlint`, or `mise install` to match the pinned versions)
 - Rust targets for the XCFramework build: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 
-The [core](https://github.com/cuttings/core) repo must sit as a sibling (`../core`) — the
-`Makefile` references it there.
+The core repository must sit as a sibling (`../core`) — the `Makefile` references it there.
 
 ## Setup
 

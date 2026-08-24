@@ -157,11 +157,9 @@ private struct LibrarySettingsTab: View {
 
 // ── Extensions ────────────────────────────────────────────────────────────────
 
-/// The public store listings for the browser extension. The native-messaging
-/// manifest is installed automatically when the library boots (see
-/// `AppState.boot`), so once the extension is installed it connects to the app on
-/// its own. The store links themselves live in `ExtensionStore.swift`, shared with
-/// the onboarding step.
+/// Browser extension availability. The native-messaging manifest is installed
+/// automatically when the library boots (see `AppState.boot`); public store
+/// actions remain unavailable until official Cuttings listings exist.
 private struct ExtensionsSettingsTab: View {
     var body: some View {
         Form {
@@ -170,7 +168,7 @@ private struct ExtensionsSettingsTab: View {
             } header: {
                 Text("Get the browser extension")
             } footer: {
-                Text("Install the extension in your browser to save pages to your library.")
+                Text("Public Cuttings extension listings are coming soon.")
             }
         }
         .formStyle(.grouped)

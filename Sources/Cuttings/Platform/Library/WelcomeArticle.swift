@@ -12,17 +12,13 @@ import Foundation
 /// same URL dedupes against it. A pre-set highlight (`highlights.md`) is written
 /// alongside the article to demonstrate the highlights feature.
 enum WelcomeArticle {
-    /// The address the welcome reading points at — stored as `url` and
-    /// `canonical_url`.
-    private static let sourceURL = "https://www.cuttings.app"
+    /// App-owned origin for the bundled welcome reading. A custom URL keeps the
+    /// card self-contained until Cuttings has an official public website.
+    private static let sourceURL = "cuttings://welcome"
 
-    /// `sourceURL` in the form core's `url_norm` produces: the leading `www.` is
-    /// dropped and the empty path is normalized to a root `/`, giving
-    /// `https://cuttings.app/`. The reading id is the SHA-256 of this, so it
-    /// must equal `normalize_url(sourceURL)` exactly — keeping the id equal to
-    /// core's `url_id(sourceURL)` so a real save of the same page dedupes against
-    /// the seed. Keep it in sync with core's `normalize_url`.
-    private static let normalizedSourceURL = "https://cuttings.app/"
+    /// Stable identity input for the bundled reading. This is deliberately not
+    /// an external page URL, so the welcome card never points at upstream content.
+    private static let normalizedSourceURL = sourceURL
 
     /// Content-addressed id: SHA-256 (hex) of the normalized source URL, matching
     /// core's `url_id`. The reading-folder name and frontmatter `id`.
@@ -99,7 +95,7 @@ enum WelcomeArticle {
         content += "canonical_url: \(sourceURL)\n"
         content += "title: Welcome to Cuttings\n"
         content += "author: Rodrigo Boniatti\n"
-        content += "site: cuttings.app\n"
+        content += "site: Cuttings\n"
         content += "saved_at: \(savedAt)\n"
         content += "archived: false\n"
         content += "favorite: false\n"

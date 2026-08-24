@@ -1,10 +1,10 @@
-Cuttings helps you save articles from the web and read them whenever you want. Everything you save lives in a plain folder you control, on iCloud Drive, Dropbox, Google Drive, or wherever you like. No accounts, no servers, just files.
+Cuttings helps you save articles, images, videos, and quotes from the web and return to them whenever you want. Everything you save lives in a plain folder you control, on iCloud Drive, Dropbox, Google Drive, or wherever you like. No accounts, no servers, just files.
 
 Here is a quick tour to get you started.
 
-## Saving a page
+## Saving from the web
 
-Install the Cuttings extension for [Chrome](https://chromewebstore.google.com/detail/cuttings/cegehgdbbjjeondepcaejickdmkacbck) or [Firefox](https://addons.mozilla.org/en-US/firefox/addon/cuttings) and click its button to save any page. It clears away the clutter, the popups, the banners, and the ads, and keeps just what you came to read. Your new article shows up in Cuttings right away.
+Install the Cuttings browser extension from this project. Use its toolbar button to save a full article, or right-click an image, video, or text selection and choose **Add to Cuttings**. Every card keeps the page it came from, and articles are cleaned into readable Markdown before they reach your library.
 
 ## Your library
 

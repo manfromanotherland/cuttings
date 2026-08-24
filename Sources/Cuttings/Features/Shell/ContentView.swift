@@ -147,8 +147,8 @@ private struct ChooseLibraryStep: View {
     }
 }
 
-/// Step 2: point the user at the browser extension on the Chrome Web Store and
-/// Firefox Add-ons. "Continue" clears `showExtensionSetup`, dismissing the sheet.
+/// Step 2: explain the browser extension while public store listings are deferred.
+/// "Continue" clears `showExtensionSetup`, dismissing the sheet.
 private struct ExtensionStep: View {
     @Environment(AppState.self) private var appState
 
@@ -161,8 +161,11 @@ private struct ExtensionStep: View {
                 Text("Add the browser extension")
                     .font(.title)
                     .accessibilityIdentifier(A11y.Onboarding.extensionTitle)
-                Text("The extension saves pages straight into your library.")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "The extension saves pages and clips straight into your library. "
+                        + "Public store listings are coming soon."
+                )
+                .foregroundStyle(.secondary)
             }
 
             VStack(spacing: 8) {
