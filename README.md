@@ -1,22 +1,35 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/readcontrol/root/main/assets/icon.png" alt="ReadControl" width="128">
+  <img src="./assets/icon.png" alt="Cuttings" width="128">
 </p>
-<h1 align="center">ReadControl</h1>
+<h1 align="center">Cuttings</h1>
 <p align="center">
-  The native macOS reading manager
+  Keep what you find, with where it came from
   <br />
-  <a href="https://github.com/readcontrol/macos">macOS</a>
+  <a href="./macos">macOS</a>
   ·
-  <a href="https://github.com/readcontrol/core">core</a>
+  <a href="./core">core</a>
   ·
-  <a href="https://github.com/readcontrol/extension">extension</a>
+  <a href="./extension">extension</a>
   ·
-  <a href="https://github.com/readcontrol/root">root</a>
+  <a href=".">root</a>
 </p>
 
 ---
 
-The native macOS reading manager. Save any webpage to your computer, read anytime. No account needed. It's totally free.
+Cuttings is a native, local-first home for articles, images, videos, and quotes you find on the
+web. Everything is stored as ordinary files in a folder you choose. No account or server needed.
+
+## What Cuttings does
+
+This fork turns the reading list into a local, visual memory library. The browser extension can
+save a full article, a right-clicked image or video, or selected text. The macOS client presents
+those saves as a mixed masonry board of article, image, video, and quote cards.
+
+Every card retains its origin page URL, canonical URL, page title/site, and save date. Image and
+video cards additionally retain a durable media URL when the browser exposes one; session-local
+video streams receive a compact stable capture reference instead. Captured images and video posters
+are stored inside the card's own folder. Video files themselves are not downloaded. The library
+remains plain files in a user-selected iCloud Drive, Dropbox, or other folder.
 
 ## Principles
 
@@ -35,12 +48,12 @@ Each component is its **own repository** (polyrepo). Clone the ones you need:
 
 | Repo | Component | Stack |
 |------|-----------|-------|
-| [`root`](https://github.com/readcontrol/root) | meta/spec (this repo): docs, library-format contract, design, backlog | Markdown |
-| [`core`](https://github.com/readcontrol/core) | engine + native messaging host (Cargo workspace) | Rust (SQLite + FTS5, UniFFI) |
-| [`extension`](https://github.com/readcontrol/extension) | browser plugin | TypeScript, Manifest V3 |
-| [`macos`](https://github.com/readcontrol/macos) | macOS client | Swift / SwiftUI |
+| [`root`](.) | meta/spec (this repo): docs, library-format contract, design, backlog | Markdown |
+| [`core`](./core) | engine + native messaging host (Cargo workspace) | Rust (SQLite + FTS5, UniFFI) |
+| [`extension`](./extension) | browser extension for page, media, and quote capture | TypeScript, Manifest V3 |
+| [`macos`](./macos) | native visual library and reader | Swift / SwiftUI |
 
-The three app repos sit as folders **inside** this `readcontrol` folder for convenience
+The three app repos sit as folders **inside** this `cuttings` folder for convenience
 (git-ignored by the meta repo); each is still an independent repo with its own history.
 See each repo's README for setup and run instructions.
 
@@ -69,7 +82,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --check
 ```
 
-**Browser plugin (TypeScript) — `extension`**
+**Browser extension (TypeScript) — `extension`**
 ```bash
 npm install
 npm run build        # bundle the MV3 extension
@@ -92,7 +105,7 @@ in an isolated container with no per-session setup:
 
 ```bash
 ./scripts/sandbox-build.sh   # build + load the image (run on your host)
-sbx run --template readcontrol/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
+sbx run --template cuttings/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
 ```
 
 The macOS app can't be built in the Linux sandbox (no Xcode) — it covers the Rust engine, the
