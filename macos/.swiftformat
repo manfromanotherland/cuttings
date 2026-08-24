@@ -1,0 +1,21 @@
+# SwiftFormat configuration for the Cuttings macOS app.
+#
+# SwiftFormat rewrites code; SwiftLint (.swiftlint.yml) checks it. These options
+# keep the two tools from fighting over the same source:
+#
+#   * --commas inline keeps SwiftFormat from adding trailing commas to
+#     collection literals, which SwiftLint's default `trailing_comma` rule flags.
+#   * --indent 4 and the K&R else default match SwiftLint's `colon` and
+#     `statement_position` rules.
+#   * --header enforces the SPDX identifier on every file (see "Do I need the
+#     license in every file?" — yes, we keep it uniform and machine-readable).
+
+--swiftversion 6.0
+
+--indent 4
+--commas inline
+--header "// SPDX-License-Identifier: GPL-3.0-or-later"
+
+# Generated bindings, the vendored XCFramework, build output, and the Xcode
+# project are not hand-written Swift — never reformat them.
+--exclude GeneratedBindings,Frameworks,build,dist,.build,Cuttings.xcodeproj

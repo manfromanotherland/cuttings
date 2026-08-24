@@ -1,0 +1,11 @@
+.DS_Store
+/.build/
+/build/
+/dist/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+/Frameworks/
+/GeneratedBindings/
+/Cuttings.xcodeproj/

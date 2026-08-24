@@ -1,0 +1,263 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import XCTest
+
+/// The five smart views, mirroring the app's `SidebarItem` ids so the page
+/// object stays dependency-free.
+enum SmartView: String {
+    case all, unread, read, archive, favorites
+}
+
+/// The left column: smart views + counts, tag tiles + counts, rating rows, and
+/// the appearance popover behind the settings gear.
+struct SidebarPage {
+    let app: XCUIApplication
+
+    // ── Smart views ───────────────────────────────────────────────────────
+
+    func select(_ view: SmartView) {
+        app.byId(A11y.Sidebar.viewRow(view.rawValue)).clickWhenReady()
+    }
+
+    /// The count for a view. The sidebar List collapses each row into a single
+    /// element, so the count is read from the row's accessibility value (set by
+    /// the app), with label/badge fallbacks.
+    func count(of view: SmartView) -> Int {
+        Self.count(
+            row: app.byId(A11y.Sidebar.viewRow(view.rawValue)),
+            badge: app.byId(A11y.Sidebar.viewCount(view.rawValue))
+        )
+    }
+
+    /// Polls until a view's count equals `expected` (counts load asynchronously
+    /// after launch and after mutations).
+    @discardableResult
+    func waitForCount(_ view: SmartView, equals expected: Int, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { count(of: view) == expected }
+    }
+
+    /// Whether `view` is the selected smart view — the row carries the
+    /// `.isSelected` trait (set by the app) when it's the active filter.
+    func isSelected(_ view: SmartView) -> Bool {
+        app.byId(A11y.Sidebar.viewRow(view.rawValue)).isSelected
+    }
+
+    // ── Tags ────────────────────────────────────────────────────────────────
+
+    func selectTag(_ tag: String) {
+        app.byId(A11y.Sidebar.tagTile(tag)).clickWhenReady()
+    }
+
+    func tagTile(_ tag: String) -> XCUIElement {
+        app.byId(A11y.Sidebar.tagTile(tag))
+    }
+
+    func tagCount(_ tag: String) -> Int {
+        Self.count(
+            row: app.byId(A11y.Sidebar.tagTile(tag)),
+            badge: app.byId(A11y.Sidebar.tagCount(tag))
+        )
+    }
+
+    @discardableResult
+    func waitForTagCount(_ tag: String, equals expected: Int, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { tagCount(tag) == expected }
+    }
+
+    // ── Ratings ───────────────────────────────────────────────────────────
+
+    func selectRating(_ rating: UInt8) {
+        app.byId(A11y.Sidebar.ratingRow(rating)).clickWhenReady()
+    }
+
+    func ratingRow(_ rating: UInt8) -> XCUIElement {
+        app.byId(A11y.Sidebar.ratingRow(rating))
+    }
+
+    /// Reading count in a rating row, parsed from its label ("N stars, M readings").
+    func ratingCount(_ rating: UInt8) -> Int {
+        let row = ratingRow(rating)
+        guard row.exists else { return 0 }
+        return Self.lastNumber(in: row.label) ?? 0
+    }
+
+    @discardableResult
+    func waitForRatingCount(_ rating: UInt8, equals expected: Int, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { ratingCount(rating) == expected }
+    }
+
+    /// Whether `rating` is the selected rating filter — the row carries the
+    /// `.isSelected` trait (set by the app) when it's active.
+    func isRatingSelected(_ rating: UInt8) -> Bool {
+        ratingRow(rating).isSelected
+    }
+
+    // ── Appearance popover ────────────────────────────────────────────────
+
+    /// Open the appearance popover, or leave it open if it already is.
+    ///
+    /// The gear is a *toggle*, so clicking it unconditionally would shut an
+    /// already-open popover — which is what happened when two setters that each
+    /// "open" it were called back to back. `fontPicker` is the popover's
+    /// open/closed probe (the same one `dismissAppearancePopover` uses), so
+    /// guarding on it makes this idempotent and lets the setters compose.
+    func openAppearancePopover() {
+        guard !fontPicker.exists else { return }
+        app.byId(A11y.Sidebar.settingsButton).clickWhenReady()
+    }
+
+    /// Set the theme from the appearance popover (`mode` mirrors `AppearanceMode.id`:
+    /// `light` / `dark` / `system`). Opens the popover first.
+    func setTheme(_ mode: String) {
+        openAppearancePopover()
+        app.byId(A11y.Sidebar.themeButton(mode)).clickWhenReady()
+    }
+
+    var fontPicker: XCUIElement {
+        app.byId(A11y.Sidebar.fontPicker)
+    }
+
+    var fontSizeSlider: XCUIElement {
+        app.byId(A11y.Sidebar.fontSizeSlider)
+    }
+
+    /// Set the reader font from the appearance popover's menu picker
+    /// (`label` mirrors `ReaderFont.label`: "System" / "Serif" / "Monospace").
+    /// Opens the popover and the picker menu, then selects the option.
+    func setFont(_ label: String) {
+        openAppearancePopover()
+        fontPicker.clickWhenReady()
+        // Scope to the picker's own menu: the app's "Typography" menu bar also has
+        // a "Serif" item, so an app-wide `menuItems[label]` is ambiguous.
+        fontPicker.menuItems[label].clickWhenReady()
+    }
+
+    /// Waits until the font picker reads `value` ("System" / "Serif" /
+    /// "Monospace"), reflecting the live `readerFont` setting. Reads the element's
+    /// value directly — a separate `defaults` process can't reliably see a running
+    /// app's just-written preference. Requires the appearance popover to be open.
+    @discardableResult
+    func waitForFontValue(_ value: String, timeout: TimeInterval = 8) -> Bool {
+        poll(timeout: timeout) { (fontPicker.value as? String) == value }
+    }
+
+    /// Apply theme, reader font, and font size in a single popover session, and
+    /// leave the popover open so the caller can read the live font value. Opening
+    /// the popover once per setter would toggle it shut between calls (the gear is
+    /// a toggle). `sizePosition` is a normalized slider position (0 = smallest);
+    /// with the size slider's discrete steps it snaps to the nearest option.
+    func setAppearance(theme: String, font: String, sizePosition: Double) {
+        openAppearancePopover()
+        app.byId(A11y.Sidebar.themeButton(theme)).clickWhenReady()
+        fontPicker.clickWhenReady()
+        fontPicker.menuItems[font].clickWhenReady()
+        fontSizeSlider.adjust(toNormalizedSliderPosition: sizePosition)
+    }
+
+    /// Dismiss the appearance popover (Escape), e.g. before interacting with the
+    /// list again.
+    func dismissAppearancePopover() {
+        if fontPicker.exists {
+            app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        }
+    }
+
+    /// Whether the given theme (`light`/`dark`/`system`) is the active one, read
+    /// from the theme button's selected trait. Requires the popover to be open.
+    func themeSelected(_ mode: String) -> Bool {
+        app.byId(A11y.Sidebar.themeButton(mode)).isSelected
+    }
+
+    /// The reader-size slider's normalized position (0 = smallest). Requires the
+    /// popover to be open; used to assert the size setting live and after relaunch.
+    var fontSizePosition: Double {
+        Double(fontSizeSlider.normalizedSliderPosition)
+    }
+
+    // ── Width and line height ─────────────────────────────────────────────
+    // Both are sliders in the popover, capped with icons and carrying no visible
+    // words, so they're addressed by accessibility identifier and read back by
+    // normalized position — the same way the font-size slider above them is.
+
+    var widthSlider: XCUIElement {
+        app.byId(A11y.Sidebar.widthSlider)
+    }
+
+    var lineHeightSlider: XCUIElement {
+        app.byId(A11y.Sidebar.lineHeightSlider)
+    }
+
+    /// The width slider's normalized position (0 = narrowest). Requires the
+    /// popover to be open.
+    var widthPosition: Double {
+        Double(widthSlider.normalizedSliderPosition)
+    }
+
+    /// The line-height slider's normalized position (0 = tightest). Requires the
+    /// popover to be open.
+    var lineHeightPosition: Double {
+        Double(lineHeightSlider.normalizedSliderPosition)
+    }
+
+    /// Set the reader width from the popover. `position` is normalized (0 =
+    /// Extra Small); the slider's discrete steps snap it to the nearest option.
+    func setWidth(position: Double) {
+        openAppearancePopover()
+        widthSlider.adjust(toNormalizedSliderPosition: position)
+    }
+
+    /// Set the reader line height from the popover. `position` is normalized
+    /// (0 = Tight); the slider's discrete steps snap it to the nearest option.
+    func setLineHeight(position: Double) {
+        openAppearancePopover()
+        lineHeightSlider.adjust(toNormalizedSliderPosition: position)
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private func poll(timeout: TimeInterval, until condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+        return false
+    }
+
+    /// Reads a count for a collapsed sidebar row: prefer the row's accessibility
+    /// value (set by the app), then a trailing number in its label, then a
+    /// separately-queryable badge if one exists. Absent row ⇒ 0.
+    private static func count(row: XCUIElement, badge: XCUIElement) -> Int {
+        guard row.exists else {
+            return badge.exists ? (Int(badge.label) ?? 0) : 0
+        }
+        if let value = row.value as? String, let number = lastNumber(in: value) {
+            return number
+        }
+        if let number = lastNumber(in: row.label) {
+            return number
+        }
+        return badge.exists ? (Int(badge.label) ?? 0) : 0
+    }
+
+    /// The last run of digits in `text` (the count always sits at the end of a
+    /// row's label/value, after the view or tag name).
+    private static func lastNumber(in text: String) -> Int? {
+        var last: Int?
+        var current = ""
+        for character in text {
+            if character.isNumber {
+                current.append(character)
+            } else if !current.isEmpty {
+                last = Int(current)
+                current = ""
+            }
+        }
+        if !current.isEmpty {
+            last = Int(current)
+        }
+        return last
+    }
+}

@@ -1,0 +1,166 @@
+name: Cuttings
+options:
+  bundleIdPrefix: is.edmundo
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  Markdown:
+    url: https://github.com/apple/swift-markdown.git
+    exactVersion: "0.8.0"
+  # Sparkle drives in-app software updates (the "Check for Updates…" menu item and,
+  # once the user opts in, periodic background checks). Distributed as a binary
+  # XCFramework over SPM, so Xcode embeds and signs Sparkle.framework into the app
+  # automatically — no manual "Embed Frameworks" phase needed.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.9.4"
+
+targets:
+  Cuttings:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/Cuttings
+      - path: GeneratedBindings
+        optional: true   # populated by `make bindings`
+    dependencies:
+      - framework: Frameworks/CuttingsCore.xcframework
+        embed: false
+      - sdk: SystemConfiguration.framework
+      - package: Markdown
+      - package: Sparkle
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings
+        PRODUCT_NAME: Cuttings
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: Sources/Cuttings/App/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/cuttings_coreFFI.modulemap
+    entitlements:
+      path: Sources/Cuttings/App/Cuttings.entitlements
+    preBuildScripts:
+      - name: Build and copy cuttings-native-host
+        script: |
+          set -e
+          # Xcode runs build phases with a sanitized PATH that omits ~/.cargo/bin,
+          # so make cargo discoverable before invoking it.
+          if [ -f "$HOME/.cargo/env" ]; then
+            . "$HOME/.cargo/env"
+          fi
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/rustup/bin:$PATH"
+          CORE="${SRCROOT}/../core"
+          cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin cuttings-native-host
+          SRC="${CORE}/target/release/cuttings-native-host"
+          DST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/cuttings-native-host"
+          cp "${SRC}" "${DST}"
+          chmod +x "${DST}"
+        inputFiles:
+          - $(SRCROOT)/../core/native-host/src/main.rs
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/cuttings-native-host
+
+  # Fast, hostless unit tests for pure app logic: smart-view membership,
+  # reading-time formatting, and the FFI-to-presentation ReadingRow mapper. It
+  # compiles the specific files under test directly — the same way
+  # CuttingsUITests shares AccessibilityID.swift — rather than hosting in the
+  # app, so the suite never launches the app, opens a window, or touches the
+  # dev's real library or defaults. The generated bindings and the static core
+  # framework are linked because the code under test still meets the FFI
+  # boundary: the mapper takes an `FfiReadingRow` and `SidebarItem.ffiView`
+  # returns an `FfiView`.
+  CuttingsTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/CuttingsTests
+      - path: Sources/Cuttings/State/SidebarItem.swift
+      - path: Sources/Cuttings/State/SidebarCounts.swift
+      - path: Sources/Cuttings/State/ComposedFilter.swift
+      - path: Sources/Cuttings/State/ReadingSort.swift
+      - path: Sources/Cuttings/Shared/Formatting/ReadingTime.swift
+      - path: Sources/Cuttings/Features/Tags/TagRules.swift
+      # Reader typography: the preference vocabulary and the theme that derives
+      # every measure/leading value from it. Pure value types, no FFI.
+      - path: Sources/Cuttings/Shared/Preferences/TypographySettings.swift
+      - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
+      - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
+      - path: Sources/Cuttings/Features/Cuttings/MasonryLayout.swift
+      - path: Sources/Cuttings/Bridge/Mappers/SidebarCountModels.swift
+      - path: Sources/Cuttings/Bridge/Mappers/HighlightRow.swift
+      - path: Sources/Cuttings/Bridge/Mappers/SidebarItem+FFI.swift
+      - path: Sources/Cuttings/Bridge/Mappers/ReadingSort+FFI.swift
+      - path: Sources/Cuttings/Platform/Library/LibrarySetup.swift
+      - path: Sources/Cuttings/Platform/NativeHost/NativeHostInstaller.swift
+      - path: GeneratedBindings
+        optional: true   # populated by `make bindings`
+    dependencies:
+      - framework: Frameworks/CuttingsCore.xcframework
+        embed: false
+      - sdk: SystemConfiguration.framework
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings.tests
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/cuttings_coreFFI.modulemap
+
+  # XCUITest end-to-end suite. Drives the real app as a separate process, and is
+  # dependency-free (only Xcode + the macOS SDK). The app stays on Swift 6; this
+  # target uses 5.0 to avoid strict-concurrency friction in XCTest code.
+  CuttingsUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/CuttingsUITests
+      # Shared with the app target (it also lives under Sources/Cuttings/) so
+      # tests and app compile the same accessibility identifiers.
+      - path: Sources/Cuttings/AccessibilityID.swift
+      # Likewise shared: the reader's typography vocabulary (font, size, width,
+      # line height). Journeys assert against the same option labels and point
+      # values the app renders, so neither can drift from the other.
+      - path: Sources/Cuttings/Shared/Preferences/TypographySettings.swift
+    dependencies:
+      - target: Cuttings
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Cuttings
+
+# A shared scheme so `xcodebuild -scheme Cuttings` works from the command line
+# and CI. Without this, xcodegen emits no scheme and only Xcode.app auto-creates
+# a throwaway one under xcuserdata (not committed, wiped by `make clean`).
+schemes:
+  Cuttings:
+    build:
+      targets:
+        Cuttings: all
+    # Serial: UI tests steal keyboard focus, so parallel runs are flaky.
+    # Per-test temp libraries keep future sharding open.
+    test:
+      config: Debug
+      targets:
+        # Unit tests first: they're fast and hostless, so a logic regression
+        # fails the run before the slow UI suite even launches the app.
+        - name: CuttingsTests
+        - name: CuttingsUITests
+          parallelizable: false
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
