@@ -28,7 +28,7 @@
 # components failed, exiting non-zero if any did.
 #
 # Tip: the root Makefile wraps this — `make push`, `make lint`, `make test`, and
-# `make REPO=core test`.
+# `make COMPONENT=core test`.
 
 set -uo pipefail
 

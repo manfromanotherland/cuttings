@@ -10,12 +10,12 @@
 #   make check           # lint + test (fast pre-push gate)
 #   make ci              # lint + test + build
 #   make status          # git status for the monorepo
-#   make REPO=core test  # narrow a quality target to one component
+#   make COMPONENT=core test  # narrow a quality target to one component
 #
-# REPO is optional for quality targets; leave it empty to hit all components.
+# COMPONENT is optional for quality targets; leave it empty to hit all components.
 
-RUN  := scripts/components.sh
-REPO ?=
+RUN       := scripts/components.sh
+COMPONENT ?=
 
 .DEFAULT_GOAL := help
 .PHONY: help status push pull fetch fmt lint test build check ci
@@ -24,31 +24,31 @@ help:   ## Show this runner's help and per-component command mapping
 	@$(RUN) help
 
 status: ## git status -sb for the monorepo
-	@$(RUN) status $(REPO)
+	@$(RUN) status
 
 push:   ## git push the current monorepo branch (sets upstream)
-	@$(RUN) push $(REPO)
+	@$(RUN) push
 
 pull:   ## git pull --ff-only for the monorepo
-	@$(RUN) pull $(REPO)
+	@$(RUN) pull
 
 fetch:  ## git fetch --all --prune for the monorepo
-	@$(RUN) fetch $(REPO)
+	@$(RUN) fetch
 
 fmt:    ## Auto-format every component
-	@$(RUN) fmt $(REPO)
+	@$(RUN) fmt $(COMPONENT)
 
 lint:   ## Lint every component
-	@$(RUN) lint $(REPO)
+	@$(RUN) lint $(COMPONENT)
 
 test:   ## Run unit tests in every component
-	@$(RUN) test $(REPO)
+	@$(RUN) test $(COMPONENT)
 
 build:  ## Build every component
-	@$(RUN) build $(REPO)
+	@$(RUN) build $(COMPONENT)
 
 check:  ## lint + test (fast pre-push gate)
-	@$(RUN) check $(REPO)
+	@$(RUN) check $(COMPONENT)
 
 ci:     ## lint + test + build (full)
-	@$(RUN) ci $(REPO)
+	@$(RUN) ci $(COMPONENT)

@@ -70,7 +70,7 @@ make push          # git push the monorepo's current branch once
 make status        # git status for the monorepo
 ```
 
-Run `make help` for the full list, or `make REPO=core test` to target one component. Component
+Run `make help` for the full list, or `make COMPONENT=core test` to target one component. Component
 selection applies to quality commands; Git commands always operate on the whole monorepo. Each
 quality command maps to the component's native tools:
 
