@@ -110,7 +110,10 @@ mod tests {
         Metadata {
             format_version: 1,
             id: id.to_string(),
+            kind: Default::default(),
             url: "https://example.com".to_string(),
+            media_url: None,
+            preview_asset: None,
             canonical_url: "https://example.com".to_string(),
             title: "Test".to_string(),
             author: None,

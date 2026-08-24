@@ -175,7 +175,7 @@ mod integration_tests {
 
     fn save_message(url: &str) -> Vec<u8> {
         serde_json::to_vec(&serde_json::json!({
-            "protocol_version": 1,
+            "protocol_version": 2,
             "action": "save",
             "metadata": {
                 "url": url,
@@ -184,6 +184,31 @@ mod integration_tests {
                 "saved_at": "2026-06-13T15:00:00Z"
             },
             "markdown": "# Test Article\n\nSome content here.\n",
+            "images": []
+        }))
+        .unwrap()
+    }
+
+    fn kind_save_message(
+        kind: &str,
+        source_url: &str,
+        media_url: Option<&str>,
+        markdown: &str,
+    ) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "protocol_version": 2,
+            "action": "save",
+            "metadata": {
+                "kind": kind,
+                "url": source_url,
+                "media_url": media_url,
+                "canonical_url": source_url,
+                "title": "Saved item",
+                "site": "example.com",
+                "excerpt": markdown,
+                "saved_at": "2026-06-13T15:00:00Z"
+            },
+            "markdown": markdown,
             "images": []
         }))
         .unwrap()
@@ -235,6 +260,7 @@ mod integration_tests {
         with_library(|_dir| {
             let resp = dispatch(&save_message("https://example.com/resp-shape"));
             assert!(resp.ok);
+            assert_eq!(resp.protocol_version, 2);
 
             let id = resp
                 .id
@@ -302,7 +328,7 @@ mod integration_tests {
             let bytes = b"\x89PNG\r\n\x1a\npixels";
             let data_b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 1,
+                "protocol_version": 2,
                 "action": "save",
                 "metadata": {
                     "url": "https://example.com/img-test",
@@ -346,6 +372,11 @@ mod integration_tests {
                 .join("assets")
                 .join(format!("{}.png", cuttings_core::sha256_hex(bytes)));
             assert_eq!(std::fs::read(&asset).unwrap(), bytes);
+            let reading = cuttings_core::parse_reading(&content).unwrap();
+            assert_eq!(
+                reading.metadata.preview_asset,
+                Some(format!("assets/{}.png", cuttings_core::sha256_hex(bytes)))
+            );
             // The unsupplied image keeps its remote URL as a placeholder.
             assert!(
                 content.contains("https://cdn.example.com/missing.png"),
@@ -355,12 +386,134 @@ mod integration_tests {
     }
 
     #[test]
+    fn media_identity_distinguishes_items_on_one_source_page() {
+        with_library(|dir| {
+            let source = "https://example.com/gallery";
+            let first = kind_save_message(
+                "image",
+                source,
+                Some("https://cdn.example.com/first.jpg"),
+                "![First](https://cdn.example.com/first.jpg)",
+            );
+            let second = kind_save_message(
+                "image",
+                source,
+                Some("https://cdn.example.com/second.jpg"),
+                "![Second](https://cdn.example.com/second.jpg)",
+            );
+
+            let first_response = dispatch(&first);
+            let second_response = dispatch(&second);
+            assert!(first_response.ok);
+            assert!(second_response.ok);
+            assert_ne!(first_response.id, second_response.id);
+
+            let duplicate = dispatch(&first);
+            assert_eq!(duplicate.error.as_deref(), Some("duplicate"));
+
+            let first_path = dir.path().join(first_response.path.unwrap());
+            let reading =
+                cuttings_core::parse_reading(&std::fs::read_to_string(first_path).unwrap())
+                    .unwrap();
+            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Image);
+            assert_eq!(reading.metadata.url, source);
+            assert_eq!(reading.metadata.canonical_url, source);
+            assert_eq!(reading.metadata.site.as_deref(), Some("example.com"));
+            assert_eq!(
+                reading.metadata.media_url.as_deref(),
+                Some("https://cdn.example.com/first.jpg")
+            );
+        });
+    }
+
+    #[test]
+    fn media_save_requires_media_url() {
+        with_library(|_dir| {
+            let response = dispatch(&kind_save_message(
+                "video",
+                "https://example.com/watch",
+                None,
+                "A video",
+            ));
+            assert_eq!(response.error.as_deref(), Some("invalid_request"));
+        });
+    }
+
+    #[test]
+    fn video_save_accepts_blob_media_url() {
+        with_library(|dir| {
+            let source = "https://example.com/watch";
+            let response = dispatch(&kind_save_message(
+                "video",
+                source,
+                Some("blob:https://example.com/7e64a8cf"),
+                "A saved video",
+            ));
+            assert!(
+                response.ok,
+                "blob media URL should save: {:?}",
+                response.error
+            );
+
+            let reading = cuttings_core::parse_reading(
+                &std::fs::read_to_string(dir.path().join(response.path.unwrap())).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Video);
+            assert_eq!(
+                reading.metadata.media_url.as_deref(),
+                Some("blob:https://example.com/7e64a8cf")
+            );
+        });
+    }
+
+    #[test]
+    fn quote_identity_dedupes_normalized_selection_but_allows_another_quote() {
+        with_library(|dir| {
+            let source = "https://example.com/post";
+            let first = dispatch(&kind_save_message(
+                "quote",
+                source,
+                None,
+                "A selected\npassage.",
+            ));
+            assert!(first.ok);
+
+            let same_normalized = dispatch(&kind_save_message(
+                "quote",
+                source,
+                None,
+                "  A selected passage.  ",
+            ));
+            assert_eq!(same_normalized.error.as_deref(), Some("duplicate"));
+
+            let different = dispatch(&kind_save_message(
+                "quote",
+                source,
+                None,
+                "A different passage.",
+            ));
+            assert!(different.ok);
+            assert_ne!(first.id, different.id);
+
+            let reading = cuttings_core::parse_reading(
+                &std::fs::read_to_string(dir.path().join(first.path.unwrap())).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Quote);
+            assert_eq!(reading.metadata.url, source);
+            assert_eq!(reading.metadata.media_url, None);
+            assert_eq!(reading.body, "A selected\npassage.\n");
+        });
+    }
+
+    #[test]
     fn check_returns_not_saved_for_empty_library() {
         // No articles saved yet: check scans an empty (or absent) articles/ dir
         // and reports saved: false.
         with_library(|_dir| {
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 1,
+                "protocol_version": 2,
                 "action": "check",
                 "url": "https://example.com/not-there"
             }))
@@ -378,7 +531,7 @@ mod integration_tests {
             dispatch(&save_message("https://example.com/saved"));
 
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 1,
+                "protocol_version": 2,
                 "action": "check",
                 "url": "https://example.com/not-there"
             }))
@@ -397,7 +550,7 @@ mod integration_tests {
             dispatch(&save_message("https://example.com/for-check"));
 
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 1,
+                "protocol_version": 2,
                 "action": "check",
                 "url": "https://example.com/for-check"
             }))
@@ -413,7 +566,7 @@ mod integration_tests {
     fn missing_required_field_returns_invalid_request() {
         // canonical_url, title, and saved_at are all absent — serde must reject this.
         let msg = serde_json::to_vec(&serde_json::json!({
-            "protocol_version": 1,
+            "protocol_version": 2,
             "action": "save",
             "metadata": { "url": "https://example.com" },
             "markdown": "# Test",

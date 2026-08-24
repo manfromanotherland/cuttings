@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use base64::Engine;
 use cuttings_core::{
-    find_by_url, url_id, write_images, write_reading, ImageBytes, LibraryRoot, Metadata,
+    find_by_media, find_by_url, first_local_image_asset, media_id, quote_id, url_id, write_images,
+    write_reading, ImageBytes, LibraryRoot, Metadata, ReadingKind,
 };
 
 use crate::protocol::{SaveRequest, SaveResponse, PROTOCOL_VERSION};
@@ -35,23 +36,46 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
     };
     let library = LibraryRoot::new(&library_path)?;
 
-    // The id is content-addressed: SHA256 of the normalized *visited* URL. This
-    // is both the dedup key and the filename stem.
-    let id = match url_id(&req.metadata.url) {
+    // Articles retain their original URL-only identity. Media includes its
+    // clicked URL; quotes include their normalized selected Markdown.
+    let id_result = match req.metadata.kind {
+        ReadingKind::Article => url_id(&req.metadata.url),
+        ReadingKind::Image | ReadingKind::Video => match req.metadata.media_url.as_deref() {
+            Some(media_url) => media_id(req.metadata.kind, &req.metadata.url, media_url),
+            None => {
+                return Ok(SaveResponse::error(
+                    "invalid_request",
+                    "image and video saves require metadata.media_url",
+                ))
+            }
+        },
+        ReadingKind::Quote => quote_id(&req.metadata.url, &req.markdown),
+    };
+    let id = match id_result {
         Ok(id) => id,
-        Err(_) => {
+        Err(error) => {
             return Ok(SaveResponse::error(
                 "invalid_request",
-                &format!("could not parse url: {}", req.metadata.url),
+                &format!("could not derive reading id: {error}"),
             ))
         }
     };
 
     // Duplicate check — a single stat on the content-addressed path.
-    if let Some(existing_id) = find_by_url(&library, &req.metadata.url)? {
+    let existing_id = match req.metadata.kind {
+        ReadingKind::Article => find_by_url(&library, &req.metadata.url)?,
+        ReadingKind::Image | ReadingKind::Video => find_by_media(
+            &library,
+            req.metadata.kind,
+            &req.metadata.url,
+            req.metadata.media_url.as_deref().expect("validated above"),
+        )?,
+        ReadingKind::Quote => library.article_path(&id).is_file().then(|| id.clone()),
+    };
+    if let Some(existing_id) = existing_id {
         return Ok(SaveResponse::error(
             "duplicate",
-            &format!("A reading with this URL already exists (id: {existing_id})"),
+            &format!("This reading already exists (id: {existing_id})"),
         ));
     }
 
@@ -74,11 +98,15 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
 
     // Write the supplied images and rewrite their links. The host never downloads.
     let markdown = write_images(&library, &id, &req.markdown, &images)?;
+    let preview_asset = first_local_image_asset(&markdown);
 
     let metadata = Metadata {
         format_version: 1,
         id: id.clone(),
+        kind: req.metadata.kind,
         url: req.metadata.url,
+        media_url: req.metadata.media_url,
+        preview_asset,
         canonical_url: req.metadata.canonical_url,
         title: req.metadata.title,
         author: req.metadata.author,

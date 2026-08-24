@@ -7,7 +7,7 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 
 use crate::frontmatter::{read_metadata, render_reading};
-use crate::types::{LibraryRoot, Metadata, Reading};
+use crate::types::{LibraryRoot, Metadata, Reading, ReadingKind};
 
 /// Write a reading to the library atomically (temp-file + rename).
 ///
@@ -71,6 +71,40 @@ pub fn find_by_url(library: &LibraryRoot, url: &str) -> Result<Option<String>> {
     }
 }
 
+/// Content-addressed lookup for an image or video saved from a source page.
+///
+/// As with [`find_by_url`], this is one hash plus one stat. The frontmatter
+/// check guards against a hash collision and confirms all identity components.
+pub fn find_by_media(
+    library: &LibraryRoot,
+    kind: ReadingKind,
+    source_page_url: &str,
+    media_url: &str,
+) -> Result<Option<String>> {
+    let id = match crate::media_id(kind, source_page_url, media_url) {
+        Ok(id) => id,
+        Err(_) => return Ok(None),
+    };
+    let path = library.article_path(&id);
+    if !path.is_file() {
+        return Ok(None);
+    }
+
+    match read_metadata(&path) {
+        Ok(metadata)
+            if metadata.kind == kind
+                && metadata.media_url.as_deref().is_some_and(|stored| {
+                    crate::media_id(metadata.kind, &metadata.url, stored)
+                        .is_ok_and(|stored_id| stored_id == id)
+                }) =>
+        {
+            Ok(Some(id))
+        }
+        Ok(_) => Ok(None),
+        Err(_) => Ok(Some(id)),
+    }
+}
+
 /// Normalize a URL for matching, falling back to the raw string when it can't be
 /// parsed (e.g. a non-http scheme) so exact-equality matching still works.
 fn norm_key(url: &str) -> String {
@@ -99,7 +133,10 @@ mod tests {
         Metadata {
             format_version: 1,
             id: crate::url_id(url).unwrap(),
+            kind: Default::default(),
             url: url.to_string(),
+            media_url: None,
+            preview_asset: None,
             canonical_url: url.to_string(),
             title: "Test".to_string(),
             author: None,
@@ -244,5 +281,25 @@ mod tests {
                 .is_none(),
             "the declared canonical is not the key"
         );
+    }
+
+    #[test]
+    fn find_by_media_distinguishes_items_on_one_page() {
+        let (_dir, lib) = tmp_library();
+        let source = "https://example.com/gallery";
+        let first_url = "https://cdn.example.com/first.jpg";
+        let second_url = "https://cdn.example.com/second.jpg";
+        let mut metadata = metadata_for(source);
+        metadata.kind = ReadingKind::Image;
+        metadata.media_url = Some(first_url.to_string());
+        metadata.id = crate::media_id(metadata.kind, source, first_url).unwrap();
+        write_reading(&lib, metadata, "![first](assets/first.jpg)".into()).unwrap();
+
+        assert!(find_by_media(&lib, ReadingKind::Image, source, first_url)
+            .unwrap()
+            .is_some());
+        assert!(find_by_media(&lib, ReadingKind::Image, source, second_url)
+            .unwrap()
+            .is_none());
     }
 }

@@ -2,7 +2,10 @@
 
 use std::sync::{Mutex, OnceLock};
 
+use anyhow::bail;
 use ulid::{Generator, Ulid};
+
+use crate::ReadingKind;
 
 /// Generate a new ULID string (26-char Crockford Base32).
 ///
@@ -31,6 +34,64 @@ pub fn url_id(url: &str) -> anyhow::Result<String> {
     Ok(crate::writer::sha256_hex(
         crate::normalize_url(url)?.as_bytes(),
     ))
+}
+
+/// Content-addressed id for one image or video saved from a page.
+///
+/// The identity includes the kind, normalized source-page URL, and a direct
+/// media identity. HTTP(S) media URLs are normalized; opaque schemes such as
+/// `blob:` retain their trimmed raw value. NUL separators make the three
+/// components unambiguous.
+/// Articles deliberately continue to use [`url_id`] so their existing ids do
+/// not change.
+pub fn media_id(
+    kind: ReadingKind,
+    source_page_url: &str,
+    media_url: &str,
+) -> anyhow::Result<String> {
+    if !kind.is_media() {
+        bail!("media_id requires image or video kind");
+    }
+
+    let source_page_url = crate::normalize_url(source_page_url)?;
+    let media_url = normalized_media_identity(media_url)?;
+    let identity = format!("{}\0{}\0{}", kind.as_str(), source_page_url, media_url);
+    Ok(crate::writer::sha256_hex(identity.as_bytes()))
+}
+
+/// HTTP(S) assets receive the same URL normalization as source pages. Browser
+/// media can also be addressed by `blob:` or another page-local scheme; those
+/// values are stable only as opaque strings, so preserve their trimmed form.
+fn normalized_media_identity(media_url: &str) -> anyhow::Result<String> {
+    let media_url = media_url.trim();
+    if media_url.is_empty() {
+        bail!("media_id requires a non-empty media URL");
+    }
+
+    let is_http = url::Url::parse(media_url)
+        .map(|url| matches!(url.scheme(), "http" | "https"))
+        .unwrap_or(false);
+    if is_http {
+        crate::normalize_url(media_url)
+    } else {
+        Ok(media_url.to_string())
+    }
+}
+
+/// Content-addressed id for a selected quote saved from a page.
+///
+/// Quote identity is the normalized source-page URL plus normalized selected
+/// Markdown. Selection normalization trims its edges and collapses every run of
+/// Unicode whitespace to one ASCII space; case and punctuation remain intact.
+/// The original Markdown is still stored unchanged as the reading body.
+pub fn quote_id(source_page_url: &str, markdown: &str) -> anyhow::Result<String> {
+    let source_page_url = crate::normalize_url(source_page_url)?;
+    let selected_text = markdown.split_whitespace().collect::<Vec<_>>().join(" ");
+    if selected_text.is_empty() {
+        bail!("quote_id requires non-empty selected markdown");
+    }
+    let identity = format!("quote\0{source_page_url}\0{selected_text}");
+    Ok(crate::writer::sha256_hex(identity.as_bytes()))
 }
 
 #[cfg(test)]
@@ -97,5 +158,112 @@ mod tests {
     #[test]
     fn url_id_errors_on_unparseable_url() {
         assert!(url_id("not a url").is_err());
+    }
+
+    #[test]
+    fn media_id_is_deterministic() {
+        let source = "https://example.com/gallery";
+        let media = "https://cdn.example.com/photo.jpg";
+        assert_eq!(
+            media_id(ReadingKind::Image, source, media).unwrap(),
+            media_id(ReadingKind::Image, source, media).unwrap()
+        );
+    }
+
+    #[test]
+    fn media_id_distinguishes_media_on_the_same_page() {
+        let source = "https://example.com/gallery";
+        assert_ne!(
+            media_id(ReadingKind::Image, source, "https://cdn.example.com/a.jpg").unwrap(),
+            media_id(ReadingKind::Image, source, "https://cdn.example.com/b.jpg").unwrap()
+        );
+    }
+
+    #[test]
+    fn media_id_distinguishes_image_from_video() {
+        let source = "https://example.com/post";
+        let media = "https://cdn.example.com/media";
+        assert_ne!(
+            media_id(ReadingKind::Image, source, media).unwrap(),
+            media_id(ReadingKind::Video, source, media).unwrap()
+        );
+    }
+
+    #[test]
+    fn media_id_normalizes_both_urls() {
+        assert_eq!(
+            media_id(
+                ReadingKind::Image,
+                "https://example.com/gallery?utm_source=feed",
+                "https://cdn.example.com/photo.jpg?utm_campaign=social"
+            )
+            .unwrap(),
+            media_id(
+                ReadingKind::Image,
+                "https://example.com/gallery",
+                "https://cdn.example.com/photo.jpg"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn media_id_accepts_trimmed_blob_urls() {
+        let source = "https://example.com/watch";
+        let blob = "blob:https://example.com/7e64a8cf";
+        assert_eq!(
+            media_id(ReadingKind::Video, source, &format!("  {blob}\n")).unwrap(),
+            media_id(ReadingKind::Video, source, blob).unwrap()
+        );
+        assert_ne!(
+            media_id(ReadingKind::Video, source, blob).unwrap(),
+            media_id(
+                ReadingKind::Video,
+                source,
+                "blob:https://example.com/another"
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn media_id_rejects_empty_media_url() {
+        assert!(media_id(ReadingKind::Image, "https://example.com/gallery", "  \n ").is_err());
+    }
+
+    #[test]
+    fn media_id_rejects_article_kind() {
+        assert!(media_id(
+            ReadingKind::Article,
+            "https://example.com/post",
+            "https://cdn.example.com/photo.jpg"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn quote_id_normalizes_source_and_selected_whitespace() {
+        assert_eq!(
+            quote_id(
+                "https://example.com/post?utm_source=feed",
+                "  A quoted\n\tpassage.  "
+            )
+            .unwrap(),
+            quote_id("https://example.com/post", "A quoted passage.").unwrap()
+        );
+    }
+
+    #[test]
+    fn quote_id_distinguishes_selections_on_one_page() {
+        let source = "https://example.com/post";
+        assert_ne!(
+            quote_id(source, "First passage").unwrap(),
+            quote_id(source, "Second passage").unwrap()
+        );
+    }
+
+    #[test]
+    fn quote_id_rejects_empty_selection() {
+        assert!(quote_id("https://example.com/post", " \n\t ").is_err());
     }
 }

@@ -2,8 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use cuttings_core::ReadingKind;
+
 /// The wire protocol version shared with the browser extension.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Incoming save request from the browser extension.
 #[derive(Debug, Deserialize)]
@@ -31,7 +33,11 @@ pub struct RequestImage {
 
 #[derive(Debug, Deserialize)]
 pub struct RequestMetadata {
+    #[serde(default)]
+    pub kind: ReadingKind,
     pub url: String,
+    #[serde(default)]
+    pub media_url: Option<String>,
     pub canonical_url: String,
     pub title: String,
     pub author: Option<String>,

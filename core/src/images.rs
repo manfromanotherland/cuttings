@@ -56,6 +56,38 @@ pub fn write_images(
     Ok(result)
 }
 
+/// Return the first local image target in rewritten Markdown.
+///
+/// `write_images` emits targets in the constrained form `assets/<file>`, so a
+/// small scanner is sufficient here and avoids treating ordinary links as
+/// previews. Remote images that could not be captured are skipped.
+pub fn first_local_image_asset(markdown: &str) -> Option<String> {
+    let mut remaining = markdown;
+    while let Some(image_start) = remaining.find("![") {
+        let after_marker = &remaining[image_start + 2..];
+        let destination_start = after_marker.find("](")?;
+        let destination_and_rest = &after_marker[destination_start + 2..];
+        let destination_end = destination_and_rest.find(')')?;
+
+        let raw = destination_and_rest[..destination_end].trim();
+        let target = raw
+            .strip_prefix('<')
+            .and_then(|s| s.strip_suffix('>'))
+            .unwrap_or_else(|| raw.split_ascii_whitespace().next().unwrap_or(""));
+        if is_local_asset_path(target) {
+            return Some(target.to_string());
+        }
+
+        remaining = &destination_and_rest[destination_end + 1..];
+    }
+    None
+}
+
+fn is_local_asset_path(path: &str) -> bool {
+    path.strip_prefix("assets/")
+        .is_some_and(|file| !file.is_empty() && !file.contains('/') && file != "." && file != "..")
+}
+
 /// Choose a file extension from the `Content-Type`, falling back to the URL's
 /// own extension, then `bin`.
 fn ext_for(content_type: &str, url: &str) -> String {
@@ -192,5 +224,20 @@ mod tests {
         // No bytes supplied for the URL → it stays remote.
         let out = write_images(&library, id, &markdown, &[]).unwrap();
         assert_eq!(out, markdown);
+    }
+
+    #[test]
+    fn first_local_image_asset_skips_remote_images() {
+        let markdown = "![remote](https://example.com/a.jpg)\n![local](assets/hash.png)";
+        assert_eq!(
+            first_local_image_asset(markdown).as_deref(),
+            Some("assets/hash.png")
+        );
+    }
+
+    #[test]
+    fn first_local_image_asset_ignores_non_image_links_and_escaping_paths() {
+        let markdown = "[asset](assets/file.png)\n![bad](assets/../secret.png)";
+        assert_eq!(first_local_image_asset(markdown), None);
     }
 }

@@ -105,7 +105,10 @@ mod tests {
         Metadata {
             format_version: 1,
             id: "01J9Z8X7Q2VBKN3P4HXYZ01AB".to_string(),
+            kind: Default::default(),
             url: "https://example.com/article".to_string(),
+            media_url: None,
+            preview_asset: None,
             canonical_url: "https://example.com/article".to_string(),
             title: "Test Article".to_string(),
             author: Some("Jane Doe".to_string()),
@@ -134,6 +137,24 @@ mod tests {
         let parsed = parse_reading(&rendered).unwrap();
         assert_eq!(parsed.metadata, meta);
         assert_eq!(parsed.body.trim(), reading.body.trim());
+    }
+
+    #[test]
+    fn round_trip_media_fields() {
+        let mut meta = sample_metadata(false, false, false);
+        meta.kind = crate::ReadingKind::Video;
+        meta.media_url = Some("https://cdn.example.com/clip.mp4".into());
+        meta.preview_asset = Some("assets/poster.jpg".into());
+        let reading = Reading {
+            metadata: meta.clone(),
+            body: "![Poster](assets/poster.jpg)\n".into(),
+        };
+
+        let rendered = render_reading(&reading).unwrap();
+        assert!(rendered.contains("kind: video"));
+        assert!(rendered.contains("media_url: https://cdn.example.com/clip.mp4"));
+        assert!(rendered.contains("preview_asset: assets/poster.jpg"));
+        assert_eq!(parse_reading(&rendered).unwrap().metadata, meta);
     }
 
     #[test]
@@ -180,6 +201,9 @@ Body.
             parsed.metadata.read_at.as_deref(),
             Some("2026-06-13T15:00:00Z")
         );
+        assert_eq!(parsed.metadata.kind, crate::ReadingKind::Article);
+        assert_eq!(parsed.metadata.media_url, None);
+        assert_eq!(parsed.metadata.preview_asset, None);
     }
 
     #[test]

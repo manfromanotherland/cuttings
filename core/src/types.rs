@@ -5,12 +5,51 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
+/// The kind of content saved in a reading folder.
+///
+/// Older article files do not have a `kind` field, so [`Article`](Self::Article)
+/// is the serde default. The lowercase wire names are shared by frontmatter and
+/// the native-messaging protocol.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReadingKind {
+    #[default]
+    Article,
+    Image,
+    Video,
+    Quote,
+}
+
+impl ReadingKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Article => "article",
+            Self::Image => "image",
+            Self::Video => "video",
+            Self::Quote => "quote",
+        }
+    }
+
+    pub fn is_media(self) -> bool {
+        matches!(self, Self::Image | Self::Video)
+    }
+}
+
 /// All YAML frontmatter fields for a saved reading.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Metadata {
     pub format_version: u32,
     pub id: String,
+    /// Missing in older files, which are always articles.
+    #[serde(default)]
+    pub kind: ReadingKind,
     pub url: String,
+    /// The clicked image/video URL. Articles and older files leave this unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_url: Option<String>,
+    /// Relative path to the first locally captured preview image.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_asset: Option<String>,
     pub canonical_url: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
