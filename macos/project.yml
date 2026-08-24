@@ -29,6 +29,8 @@ targets:
       - framework: Frameworks/CuttingsCore.xcframework
         embed: false
       - sdk: SystemConfiguration.framework
+      - sdk: AVFoundation.framework
+      - sdk: AVKit.framework
       - package: Markdown
       - package: Sparkle
     settings:
@@ -105,6 +107,7 @@ targets:
       - framework: Frameworks/CuttingsCore.xcframework
         embed: false
       - sdk: SystemConfiguration.framework
+      - sdk: AVFoundation.framework
     settings:
       base:
         SWIFT_VERSION: "6.0"

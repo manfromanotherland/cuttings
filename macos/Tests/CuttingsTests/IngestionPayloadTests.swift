@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
+import AVFoundation
 import ImageIO
 import UniformTypeIdentifiers
 import XCTest
 
+@MainActor
 final class IngestionPayloadTests: XCTestCase {
     func testTrimmedHTTPTextBecomesLink() throws {
         XCTAssertEqual(
@@ -198,6 +200,100 @@ final class IngestionPayloadTests: XCTestCase {
         XCTAssertEqual(payload, .text("fallback"))
     }
 
+    func testDirectMovieRemainsFileBackedAndValidatesWithAVFoundation() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movieURL = directory.appendingPathComponent("Clip.mp4")
+        try await makeMovie(at: movieURL, fileType: .mp4)
+
+        let source = try XCTUnwrap(IngestionPayloadDecoder.videoFile(at: movieURL))
+        XCTAssertEqual(source.file.url, movieURL, "Finder file URLs should not be copied to temp")
+        XCTAssertEqual(source.contentType, "video/mp4")
+
+        let payload = await IngestionPayloadDecoder.payload(
+            forStagedVideo: StagedVideoFile(
+                file: source.file,
+                contentType: source.contentType,
+                suggestedFilename: source.suggestedFilename
+            )
+        )
+        guard case let .video(file, contentType, filename) = payload else {
+            return XCTFail("expected a validated file-backed video")
+        }
+        XCTAssertEqual(file.url, movieURL)
+        XCTAssertEqual(contentType, "video/mp4")
+        XCTAssertEqual(filename, "Clip.mp4")
+    }
+
+    func testCorruptRenamedMovieIsRejectedAndStagingIsCleanedUp() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movieURL = directory.appendingPathComponent("Not really a movie.mov")
+        try Data("not a movie".utf8).write(to: movieURL)
+
+        let staged = try XCTUnwrap(IngestionPayloadDecoder.stageVideoFile(at: movieURL))
+        let stagedURL = staged.file.url
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stagedURL.path))
+
+        let payload = await IngestionPayloadDecoder.payload(forStagedVideo: staged)
+
+        XCTAssertNil(payload)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stagedURL.path))
+    }
+
+    @MainActor
+    func testMovieFileRepresentationSurvivesProviderTemporaryURL() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movieURL = directory.appendingPathComponent("Provider clip.m4v")
+        try await makeMovie(at: movieURL, fileType: .mp4)
+
+        let provider = NSItemProvider()
+        provider.suggestedName = movieURL.lastPathComponent
+        provider.registerFileRepresentation(
+            forTypeIdentifier: UTType.mpeg4Movie.identifier,
+            fileOptions: [],
+            visibility: .all
+        ) { completion in
+            completion(movieURL, false, nil)
+            return nil
+        }
+
+        let payload = await IngestionItemProviderLoader.load(from: provider)
+        guard case let .video(file, contentType, filename) = payload else {
+            return XCTFail("expected the provider's movie representation")
+        }
+        XCTAssertNotEqual(file.url, movieURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.url.path))
+        XCTAssertEqual(contentType, "video/mp4")
+        XCTAssertEqual(filename, "Provider clip.m4v")
+
+        let stagedURL = file.url
+        file.remove()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stagedURL.path))
+    }
+
+    func testFinderFileURLProviderLoadsVideoWithoutTemporaryCopy() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movieURL = directory.appendingPathComponent("Finder clip.mp4")
+        try await makeMovie(at: movieURL, fileType: .mp4)
+        let provider = try XCTUnwrap(NSItemProvider(contentsOf: movieURL))
+        XCTAssertTrue(provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier))
+
+        let payload = await IngestionItemProviderLoader.load(from: provider)
+        guard case let .video(file, contentType, filename) = payload else {
+            return XCTFail("expected Finder's public.file-url to load as video")
+        }
+        XCTAssertEqual(file.url.standardizedFileURL, movieURL.standardizedFileURL)
+        XCTAssertEqual(contentType, "video/mp4")
+        XCTAssertEqual(filename, "Finder clip.mp4")
+    }
+
     private func dataProvider(type: UTType, data: Data) -> NSItemProvider {
         let provider = NSItemProvider()
         provider.registerDataRepresentation(forTypeIdentifier: type.identifier, visibility: .all) { completion in
@@ -238,5 +334,48 @@ final class IngestionPayloadTests: XCTestCase {
             throw CocoaError(.fileWriteUnknown)
         }
         return data as Data
+    }
+
+    private func makeMovie(at url: URL, fileType: AVFileType) async throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: fileType)
+        let input = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 16,
+                AVVideoHeightKey: 16
+            ]
+        )
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: 16,
+                kCVPixelBufferHeightKey as String: 16
+            ]
+        )
+        guard writer.canAdd(input) else { throw CocoaError(.featureUnsupported) }
+        writer.add(input)
+        guard writer.startWriting() else {
+            throw writer.error ?? CocoaError(.fileWriteUnknown)
+        }
+        writer.startSession(atSourceTime: .zero)
+
+        var pixelBuffer: CVPixelBuffer?
+        let status = CVPixelBufferCreate(
+            nil, 16, 16, kCVPixelFormatType_32BGRA, nil, &pixelBuffer
+        )
+        guard status == kCVReturnSuccess, let pixelBuffer, input.isReadyForMoreMediaData,
+              adaptor.append(pixelBuffer, withPresentationTime: .zero)
+        else {
+            writer.cancelWriting()
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        input.markAsFinished()
+        await writer.finishWriting()
+        guard writer.status == .completed else {
+            throw writer.error ?? CocoaError(.fileWriteUnknown)
+        }
     }
 }

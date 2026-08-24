@@ -1,8 +1,54 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AVFoundation
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+
+/// A file-backed movie source. Finder URLs remain at their original location and
+/// are accessed under a security scope; `NSItemProvider` file representations
+/// instead carry an app-owned temporary directory because the provider URL is
+/// only guaranteed to exist inside its completion handler. Explicit cleanup
+/// after import keeps disk use predictable, while `deinit` covers cancellation.
+final class IngestionVideoFile: @unchecked Sendable, Equatable {
+    let url: URL
+
+    private let cleanupDirectoryURL: URL?
+    private let lock = NSLock()
+    private var removed = false
+
+    init(url: URL, cleanupDirectoryURL: URL? = nil) {
+        self.url = url
+        self.cleanupDirectoryURL = cleanupDirectoryURL
+    }
+
+    static func == (lhs: IngestionVideoFile, rhs: IngestionVideoFile) -> Bool {
+        lhs === rhs
+    }
+
+    func remove() {
+        lock.lock()
+        guard !removed else {
+            lock.unlock()
+            return
+        }
+        removed = true
+        lock.unlock()
+        if let cleanupDirectoryURL {
+            try? FileManager.default.removeItem(at: cleanupDirectoryURL)
+        }
+    }
+
+    deinit {
+        remove()
+    }
+}
+
+struct StagedVideoFile: Sendable {
+    let file: IngestionVideoFile
+    let contentType: String
+    let suggestedFilename: String?
+}
 
 /// One item decoded from a paste or drop operation.
 ///
@@ -12,6 +58,7 @@ import UniformTypeIdentifiers
 /// a title while saving their contents as a quote.
 enum IngestionPayload: Equatable, Sendable {
     case image(data: Data, contentType: String, suggestedFilename: String?)
+    case video(file: IngestionVideoFile, contentType: String, suggestedFilename: String?)
     case link(URL)
     case text(String)
     case markdownFile(data: Data, suggestedFilename: String?)
@@ -132,6 +179,121 @@ enum IngestionPayloadDecoder {
             || type.conforms(to: .image)
     }
 
+    static func isSupportedVideo(_ type: UTType) -> Bool {
+        type.conforms(to: .mpeg4Movie) || type.conforms(to: .quickTimeMovie)
+    }
+
+    /// Copy an MP4/M4V/MOV into an app-owned temporary directory. This function
+    /// is deliberately synchronous so an item-provider callback can complete the
+    /// copy before returning and invalidating its source URL. It copies the file
+    /// on disk and never materializes the movie as `Data`.
+    static func stageVideoFile(
+        at url: URL,
+        declaredTypeIdentifier: String? = nil,
+        suggestedFilename: String? = nil
+    ) -> StagedVideoFile? {
+        guard let source = videoFile(
+            at: url,
+            declaredTypeIdentifier: declaredTypeIdentifier,
+            suggestedFilename: suggestedFilename
+        ) else { return nil }
+
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Cuttings-Ingestion", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let destination = parent.appendingPathComponent("video.\(source.fileExtension)")
+
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: parent, withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(at: url, to: destination)
+            return StagedVideoFile(
+                file: IngestionVideoFile(url: destination, cleanupDirectoryURL: parent),
+                contentType: source.contentType,
+                suggestedFilename: source.suggestedFilename
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: parent)
+            return nil
+        }
+    }
+
+    /// Classify a durable Finder file URL without copying it. Callers retain the
+    /// URL and open a security-scoped access window while validating and while
+    /// core streams it into the library.
+    static func videoFile(
+        at url: URL,
+        declaredTypeIdentifier: String? = nil,
+        suggestedFilename: String? = nil
+    ) -> (file: IngestionVideoFile, contentType: String, fileExtension: String, suggestedFilename: String?)? {
+        guard url.isFileURL else { return nil }
+
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let values = try? url.resourceValues(forKeys: [
+            .contentTypeKey, .fileSizeKey, .isRegularFileKey
+        ]),
+            values.isRegularFile == true,
+            values.fileSize.map({ $0 > 0 }) ?? true,
+            let videoType = videoType(
+                resourceType: values.contentType,
+                sourceURL: url,
+                declaredTypeIdentifier: declaredTypeIdentifier,
+                suggestedFilename: suggestedFilename
+            )
+        else {
+            return nil
+        }
+
+        return (
+            IngestionVideoFile(url: url),
+            videoType.contentType,
+            videoType.extension,
+            nonempty(suggestedFilename ?? "") ?? nonempty(url.lastPathComponent)
+        )
+    }
+
+    /// AVFoundation verifies the staged bytes are playable and contain a video
+    /// track. Extension/UTType checks alone would accept renamed or corrupt files.
+    static func payload(forStagedVideo staged: StagedVideoFile) async -> IngestionPayload? {
+        let didAccess = staged.file.url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                staged.file.url.stopAccessingSecurityScopedResource()
+            }
+        }
+        let asset = AVURLAsset(url: staged.file.url)
+        do {
+            guard try await asset.load(.isPlayable),
+                  try await !(asset.loadTracks(withMediaType: .video)).isEmpty
+            else {
+                staged.file.remove()
+                return nil
+            }
+        } catch {
+            staged.file.remove()
+            return nil
+        }
+
+        return .video(
+            file: staged.file,
+            contentType: staged.contentType,
+            suggestedFilename: staged.suggestedFilename
+        )
+    }
+
     private static let supportedRasterTypeIdentifiers = Set(
         (CGImageSourceCopyTypeIdentifiers() as NSArray).compactMap { $0 as? String }
     )
@@ -183,6 +345,31 @@ enum IngestionPayloadDecoder {
             return resourceType
         }
         return UTType(filenameExtension: url.pathExtension)
+    }
+
+    private static func videoType(
+        resourceType: UTType?,
+        sourceURL: URL,
+        declaredTypeIdentifier: String?,
+        suggestedFilename: String?
+    ) -> (contentType: String, extension: String)? {
+        let filenameExtension = suggestedFilename
+            .map { URL(fileURLWithPath: $0).pathExtension }
+            .flatMap { $0.isEmpty ? nil : $0 }
+        let candidates = [
+            resourceType,
+            UTType(filenameExtension: sourceURL.pathExtension),
+            filenameExtension.flatMap { UTType(filenameExtension: $0) },
+            declaredTypeIdentifier.flatMap(UTType.init)
+        ].compactMap(\.self)
+
+        for type in candidates where isSupportedVideo(type) {
+            if type.conforms(to: .quickTimeMovie) {
+                return ("video/quicktime", "mov")
+            }
+            return ("video/mp4", "mp4")
+        }
+        return nil
     }
 
     private static func isMarkdown(type: UTType, pathExtension: String) -> Bool {

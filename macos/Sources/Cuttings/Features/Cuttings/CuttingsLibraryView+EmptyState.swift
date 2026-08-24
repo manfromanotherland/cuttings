@@ -25,7 +25,7 @@ extension CuttingsLibraryView {
             ContentUnavailableView {
                 Label("Nothing here yet", systemImage: "sparkles.rectangle.stack")
             } description: {
-                Text("Drop a link, text, or image here, or paste with ⌘V.")
+                Text("Drop a link, text, image, or video here, or paste with ⌘V.")
             }
             .accessibilityIdentifier(A11y.List.emptyState)
         }

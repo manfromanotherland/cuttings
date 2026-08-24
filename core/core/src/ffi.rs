@@ -415,6 +415,22 @@ impl Database {
         Ok(outcome.into())
     }
 
+    /// Add a source-less local video by path. The core streams the source into
+    /// the library while hashing it; video bytes never cross the FFI boundary.
+    pub fn import_video_file(
+        &self,
+        library_path: String,
+        file_path: String,
+        content_type: String,
+        title: String,
+    ) -> Result<FfiImportResult, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let outcome = crate::import_video_file(&lib, Path::new(&file_path), &content_type, &title)
+            .map_err(e)?;
+        self.sync(library_path)?;
+        Ok(outcome.into())
+    }
+
     // ── Query ─────────────────────────────────────────────────────────────
 
     pub fn list_readings(&self, opts: FfiListOptions) -> Result<Vec<FfiReadingRow>, CoreError> {
@@ -598,5 +614,38 @@ impl Database {
     ) -> Result<(), CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         crate::delete_highlight(&lib, &reading_id, &highlight_id).map_err(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_based_video_import_is_indexed_without_a_byte_buffer() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let source_path = source_dir.path().join("clip.mp4");
+        std::fs::write(&source_path, b"file-backed ffi video").unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+
+        let imported = database
+            .import_video_file(
+                library_dir.path().display().to_string(),
+                source_path.display().to_string(),
+                "video/mp4".to_string(),
+                "Clip".to_string(),
+            )
+            .unwrap();
+        let row = database.get_reading_row(imported.id).unwrap().unwrap();
+
+        assert!(matches!(imported.disposition, FfiImportDisposition::Saved));
+        assert!(matches!(row.kind, FfiReadingKind::Video));
+        assert!(row
+            .media_url
+            .as_deref()
+            .is_some_and(|url| url.starts_with("cuttings-asset:assets/") && url.ends_with(".mp4")));
     }
 }

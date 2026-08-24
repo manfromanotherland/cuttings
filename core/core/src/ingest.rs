@@ -6,6 +6,13 @@
 //! module so identity, deduplication, asset writing, and placeholder upgrades
 //! stay identical across clients.
 
+use std::{
+    fs::{self, OpenOptions},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
+
+use sha2::{Digest, Sha256};
 use url::Url;
 
 use crate::{
@@ -19,6 +26,13 @@ use crate::{
 };
 
 const LOCAL_ORIGIN_SCHEME: &str = "cuttings://local";
+const LOCAL_ASSET_SCHEME: &str = "cuttings-asset:";
+// This single directory intentionally persists after its temporary files are
+// removed. Deleting a shared staging directory creates a cross-process race:
+// one importer can remove it between another importer's create_dir_all and
+// create_new calls. Empty operational directories are ignored by the scanner.
+const IMPORT_STAGING_DIRECTORY: &str = ".cuttings-imports";
+const VIDEO_COPY_BUFFER_SIZE: usize = 1024 * 1024;
 const QUOTE_EXCERPT_CHARACTERS: usize = 600;
 
 /// Everything required to persist one browser capture or native import.
@@ -67,6 +81,12 @@ pub enum SaveError {
     InvalidRequest(String),
     #[error(transparent)]
     Storage(#[from] anyhow::Error),
+}
+
+impl From<std::io::Error> for SaveError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Storage(error.into())
+    }
 }
 
 /// Save one capture, returning a duplicate as data rather than an error.
@@ -290,6 +310,200 @@ pub fn import_image(
     )
 }
 
+/// Import a source-less local video without materializing it in memory.
+///
+/// The source is streamed once into a temporary file inside the library while
+/// its bytes are hashed. The content hash determines the reading id and final
+/// asset filename, so filenames and MIME aliases never affect deduplication.
+/// The caller's path is used only for this copy and is never persisted.
+pub fn import_video_file(
+    library: &LibraryRoot,
+    file_path: &Path,
+    content_type: &str,
+    title: &str,
+) -> Result<SaveOutcome, SaveError> {
+    let extension = video_extension(content_type)?;
+    let mut staged = stage_video(library, file_path)?;
+    let content_hash = staged.content_hash.clone();
+    let origin = format!("{LOCAL_ORIGIN_SCHEME}/video/{content_hash}");
+    let id = local_video_id(&content_hash);
+    let filename = format!("{content_hash}.{extension}");
+    let relative_asset = format!("assets/{filename}");
+    let media_reference = format!("{LOCAL_ASSET_SCHEME}{relative_asset}");
+
+    // Hashing must finish before the content-addressed lock is known. Hold it
+    // from the duplicate check through the asset move and article rename so two
+    // processes importing the same bytes cannot race each other.
+    let lock = lock_reading(library, &id)?;
+    if library.article_path(&id).is_file() {
+        return Ok(outcome(library, SaveDisposition::Duplicate, id));
+    }
+
+    let assets_dir = library.assets_dir(&id);
+    fs::create_dir_all(&assets_dir)?;
+    let asset_path = assets_dir.join(&filename);
+    staged.persist(&asset_path)?;
+
+    let metadata = Metadata {
+        format_version: 1,
+        id: id.clone(),
+        kind: ReadingKind::Video,
+        lightweight: false,
+        url: origin.clone(),
+        media_url: Some(media_reference),
+        preview_asset: None,
+        canonical_url: origin,
+        title: match title.trim() {
+            "" => "Imported video".to_string(),
+            title => title.to_string(),
+        },
+        author: None,
+        site: None,
+        saved_at: crate::time::now_utc_iso(),
+        read_at: None,
+        archived: false,
+        favorite: false,
+        rating: 0,
+        tags: vec![],
+        excerpt: None,
+        word_count: None,
+        lang: None,
+        source_hash: String::new(),
+    };
+    let body = format!("[Play video]({relative_asset})");
+
+    if let Err(error) = write_reading_under_lock(library, metadata, body, &lock) {
+        // The article is the reading's commit marker. Do not leave a newly moved
+        // asset behind when that atomic article write reports an ordinary error.
+        let _ = fs::remove_file(&asset_path);
+        return Err(error.into());
+    }
+
+    Ok(outcome(library, SaveDisposition::Saved, id))
+}
+
+/// A source-less video's id depends only on its kind and raw content hash. The
+/// normalized extension is intentionally absent so the same bytes deduplicate
+/// even if a caller supplied another filename or equivalent content type.
+fn local_video_id(content_hash: &str) -> String {
+    sha256_hex(format!("video\0{content_hash}").as_bytes())
+}
+
+fn video_extension(content_type: &str) -> Result<&'static str, SaveError> {
+    let normalized = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    match normalized.as_str() {
+        "video/mp4" => Ok("mp4"),
+        "video/quicktime" => Ok("mov"),
+        "video/m4v" | "video/x-m4v" => Ok("m4v"),
+        "video/webm" => Ok("webm"),
+        "video/mpeg" => Ok("mpeg"),
+        "video/avi" | "video/x-msvideo" => Ok("avi"),
+        "video/ogg" => Ok("ogv"),
+        "video/x-matroska" => Ok("mkv"),
+        "video/3gpp" => Ok("3gp"),
+        "video/3gpp2" => Ok("3g2"),
+        _ => Err(SaveError::InvalidRequest(format!(
+            "unsupported video content type: {}",
+            content_type.trim()
+        ))),
+    }
+}
+
+struct StagedVideo {
+    path: Option<PathBuf>,
+    content_hash: String,
+}
+
+impl StagedVideo {
+    fn persist(&mut self, destination: &Path) -> Result<(), SaveError> {
+        let source = self.path.as_ref().expect("staged video not yet persisted");
+        fs::rename(source, destination)?;
+        self.path = None;
+        Ok(())
+    }
+}
+
+impl Drop for StagedVideo {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.as_ref() {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+fn stage_video(library: &LibraryRoot, file_path: &Path) -> Result<StagedVideo, SaveError> {
+    let metadata = fs::metadata(file_path).map_err(|error| {
+        SaveError::InvalidRequest(format!("could not read video file: {error}"))
+    })?;
+    if !metadata.is_file() {
+        return Err(SaveError::InvalidRequest(
+            "video import source must be a regular file".to_string(),
+        ));
+    }
+
+    let mut source = fs::File::open(file_path)?;
+    let staging_dir = library.path().join(IMPORT_STAGING_DIRECTORY);
+    fs::create_dir_all(&staging_dir)?;
+    let staging_path = staging_dir.join(format!("video-{}.tmp", crate::new_id()));
+    let mut destination = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&staging_path)?;
+
+    let copy_result = stream_and_hash(&mut source, &mut destination);
+    let sync_result = copy_result.as_ref().ok().map(|_| destination.sync_all());
+    drop(destination);
+
+    let (content_hash, byte_count) = match copy_result {
+        Ok(result) => result,
+        Err(error) => {
+            let _ = fs::remove_file(&staging_path);
+            return Err(error.into());
+        }
+    };
+    if let Some(Err(error)) = sync_result {
+        let _ = fs::remove_file(&staging_path);
+        return Err(error.into());
+    }
+    if byte_count == 0 {
+        let _ = fs::remove_file(&staging_path);
+        return Err(SaveError::InvalidRequest(
+            "video import requires a non-empty file".to_string(),
+        ));
+    }
+
+    Ok(StagedVideo {
+        path: Some(staging_path),
+        content_hash,
+    })
+}
+
+fn stream_and_hash(
+    source: &mut fs::File,
+    destination: &mut fs::File,
+) -> std::io::Result<(String, u64)> {
+    let mut hasher = Sha256::new();
+    let mut byte_count = 0_u64;
+    let mut buffer = vec![0_u8; VIDEO_COPY_BUFFER_SIZE];
+
+    loop {
+        let read = source.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        destination.write_all(&buffer[..read])?;
+        hasher.update(&buffer[..read]);
+        byte_count += read as u64;
+    }
+
+    Ok((hex::encode(hasher.finalize()), byte_count))
+}
+
 fn capture_id(input: &SaveInput) -> Result<String, SaveError> {
     let result = match input.kind {
         ReadingKind::Article => url_id(&input.url),
@@ -379,7 +593,7 @@ mod tests {
     use crate::{
         parse_reading, set_favorite, set_rating, set_read, writer::write_reading_under_lock,
     };
-    use std::sync::mpsc;
+    use std::{fs, sync::mpsc};
 
     fn library() -> (tempfile::TempDir, LibraryRoot) {
         let dir = tempfile::TempDir::new().unwrap();
@@ -404,6 +618,17 @@ mod tests {
             excerpt: Some("Full body.".to_string()),
             word_count: Some(2),
             lang: Some("en".to_string()),
+        }
+    }
+
+    fn assert_staging_empty(library: &LibraryRoot) {
+        let staging = library.path().join(IMPORT_STAGING_DIRECTORY);
+        if staging.is_dir() {
+            assert_eq!(
+                fs::read_dir(staging).unwrap().count(),
+                0,
+                "temporary video imports must be cleaned up"
+            );
         }
     }
 
@@ -494,6 +719,155 @@ mod tests {
             std::fs::read(library.reading_dir(&first.id).join(asset)).unwrap(),
             bytes
         );
+    }
+
+    #[test]
+    fn video_import_streams_to_a_content_addressed_local_asset() {
+        let (_dir, library) = library();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let source = source_dir.path().join("private-original-name.mp4");
+        let mut bytes = vec![0x5a; VIDEO_COPY_BUFFER_SIZE * 2 + 137];
+        bytes[0..8].copy_from_slice(b"ftypmp42");
+        fs::write(&source, &bytes).unwrap();
+
+        let imported = import_video_file(
+            &library,
+            &source,
+            " Video/MP4; codecs=avc1 ",
+            " Local clip ",
+        )
+        .unwrap();
+        let article = fs::read_to_string(library.article_path(&imported.id)).unwrap();
+        let reading = parse_reading(&article).unwrap();
+        let content_hash = sha256_hex(&bytes);
+        let relative_asset = format!("assets/{content_hash}.mp4");
+
+        assert_eq!(imported.disposition, SaveDisposition::Saved);
+        assert_eq!(imported.id, local_video_id(&content_hash));
+        assert_eq!(reading.metadata.kind, ReadingKind::Video);
+        assert_eq!(
+            reading.metadata.url,
+            format!("cuttings://local/video/{content_hash}")
+        );
+        assert_eq!(reading.metadata.canonical_url, reading.metadata.url);
+        assert_eq!(reading.metadata.title, "Local clip");
+        assert_eq!(
+            reading.metadata.media_url.as_deref(),
+            Some(format!("cuttings-asset:{relative_asset}").as_str())
+        );
+        assert_eq!(reading.metadata.preview_asset, None);
+        assert_eq!(reading.body, format!("[Play video]({relative_asset})\n"));
+        assert_eq!(
+            fs::read(library.reading_dir(&imported.id).join(&relative_asset)).unwrap(),
+            bytes
+        );
+        assert!(
+            !article.contains(source.to_string_lossy().as_ref()),
+            "the caller's source path must never be persisted"
+        );
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn video_import_deduplicates_identical_bytes_across_names_and_types() {
+        let (_dir, library) = library();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let first_path = source_dir.path().join("first.mp4");
+        let second_path = source_dir.path().join("renamed.mov");
+        let bytes = b"the exact same local video bytes";
+        fs::write(&first_path, bytes).unwrap();
+        fs::write(&second_path, bytes).unwrap();
+
+        let first = import_video_file(&library, &first_path, "video/mp4", "First title").unwrap();
+        let duplicate =
+            import_video_file(&library, &second_path, "video/quicktime", "Different title")
+                .unwrap();
+
+        assert_eq!(duplicate.disposition, SaveDisposition::Duplicate);
+        assert_eq!(duplicate.id, first.id);
+        let reading = read_metadata(&library.article_path(&first.id)).unwrap();
+        assert_eq!(reading.title, "First title");
+        assert!(reading.media_url.unwrap().ends_with(".mp4"));
+        assert_eq!(
+            fs::read_dir(library.assets_dir(&first.id)).unwrap().count(),
+            1
+        );
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn imported_video_remains_after_the_source_is_deleted() {
+        let (_dir, library) = library();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let source = source_dir.path().join("delete-me.webm");
+        let bytes = b"portable copied video";
+        fs::write(&source, bytes).unwrap();
+
+        let imported = import_video_file(&library, &source, "video/webm", "Portable clip").unwrap();
+        fs::remove_file(&source).unwrap();
+
+        let metadata = read_metadata(&library.article_path(&imported.id)).unwrap();
+        let reference = metadata.media_url.unwrap();
+        let relative_asset = reference.strip_prefix(LOCAL_ASSET_SCHEME).unwrap();
+        assert_eq!(
+            fs::read(library.reading_dir(&imported.id).join(relative_asset)).unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
+    fn video_import_rejects_missing_directory_empty_and_unsupported_inputs() {
+        let (_dir, library) = library();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let empty = source_dir.path().join("empty.mp4");
+        let nonempty = source_dir.path().join("clip.mp4");
+        fs::write(&empty, []).unwrap();
+        fs::write(&nonempty, b"bytes").unwrap();
+
+        for result in [
+            import_video_file(
+                &library,
+                &source_dir.path().join("missing.mp4"),
+                "video/mp4",
+                "Missing",
+            ),
+            import_video_file(&library, source_dir.path(), "video/mp4", "Directory"),
+            import_video_file(&library, &empty, "video/mp4", "Empty"),
+            import_video_file(&library, &nonempty, "application/octet-stream", "Unknown"),
+        ] {
+            assert!(matches!(result, Err(SaveError::InvalidRequest(_))));
+        }
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn video_staging_file_is_cleaned_when_the_save_fails() {
+        let (_dir, library) = library();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let source = source_dir.path().join("clip.mp4");
+        fs::write(&source, b"staged before lock failure").unwrap();
+        // Blocking the lock directory makes the post-hash save fail after the
+        // staging file exists, exercising the guard's downstream-error cleanup.
+        fs::write(library.path().join(".cuttings-locks"), b"not a directory").unwrap();
+
+        assert!(matches!(
+            import_video_file(&library, &source, "video/mp4", "Clip"),
+            Err(SaveError::Storage(_))
+        ));
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn video_content_types_map_to_safe_canonical_extensions() {
+        assert_eq!(video_extension("video/mp4").unwrap(), "mp4");
+        assert_eq!(
+            video_extension("VIDEO/QUICKTIME; charset=binary").unwrap(),
+            "mov"
+        );
+        assert_eq!(video_extension("video/x-m4v").unwrap(), "m4v");
+        assert_eq!(video_extension("video/webm").unwrap(), "webm");
+        assert!(video_extension("../video/mp4").is_err());
+        assert!(video_extension("application/octet-stream").is_err());
     }
 
     #[test]

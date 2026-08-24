@@ -43,12 +43,12 @@ struct CuttingsReadingOverlay: View {
             onClose()
         }
         .onKeyPress(.leftArrow) {
-            guard !appState.isEditingText else { return .ignored }
+            guard !appState.isEditingText, !row.hasLocalVideoAsset else { return .ignored }
             onMove(-1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            guard !appState.isEditingText else { return .ignored }
+            guard !appState.isEditingText, !row.hasLocalVideoAsset else { return .ignored }
             onMove(1)
             return .handled
         }
@@ -63,7 +63,11 @@ struct CuttingsReadingOverlay: View {
         case .image:
             mediaDetail(showsPlay: false)
         case .video:
-            mediaDetail(showsPlay: true)
+            if row.hasLocalVideoAsset {
+                LocalReadingVideo(row: row, libraryURL: appState.libraryURL)
+            } else {
+                mediaDetail(showsPlay: true)
+            }
         case .quote:
             CuttingsQuoteDetailView(row: row)
         }

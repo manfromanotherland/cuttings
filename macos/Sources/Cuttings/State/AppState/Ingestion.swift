@@ -109,6 +109,25 @@ extension AppState {
                 contentType: contentType,
                 title: title(from: suggestedFilename) ?? "Pasted image"
             )
+
+        case let .video(file, contentType, suggestedFilename):
+            // Core copies the source file into the library before returning. A
+            // provider-owned temporary directory is removed on every outcome;
+            // `IngestionVideoFile.deinit` covers cancellation before here. A
+            // Finder URL has no cleanup directory, but its security scope must
+            // remain active until core has finished streaming it.
+            defer { file.remove() }
+            let didAccess = file.url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    file.url.stopAccessingSecurityScopedResource()
+                }
+            }
+            return try await core.importVideoFile(
+                filePath: file.url.path,
+                contentType: contentType,
+                title: title(from: suggestedFilename) ?? "Imported video"
+            )
         }
     }
 

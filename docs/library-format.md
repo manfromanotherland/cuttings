@@ -16,12 +16,14 @@ land them across all affected components in the same monorepo commit.
   .cuttings-locks/            # persistent operational advisory-lock sidecars
     <prefix>/                 # first 2 chars of SHA-256(reading id)
       <sha256-id>.lock        # empty; one stable lock inode per reading id
+  .cuttings-imports/          # persistent staging directory for streamed local-video imports
+    video-<ulid>.tmp          # transient; removed after success, duplicate, or failure
   articles/
     <prefix>/                 # first 2 chars of the id — a fan-out bucket
       <id>/                   # one self-contained folder per reading
         article.md            # the reading (Markdown + YAML frontmatter)
         assets/
-          <sha256>.<ext>      # captured image, linked as assets/<file>
+          <sha256>.<ext>      # captured/imported media, linked as assets/<file>
         highlights.md         # optional — the reading's saved highlights (§ Highlights)
         note.md               # optional — the user's personal Markdown note (§ Personal note)
         original.html         # optional — raw HTML snapshot for future re-processing
@@ -39,6 +41,9 @@ land them across all affected components in the same monorepo commit.
   replace its lock inode while another process is waiting. Sidecars deliberately persist after an
   operation or deletion, are not reading data, and are ignored by the scanner; syncing their empty
   files does not carry a live OS lock to another device.
+- `.cuttings-imports/` remains present so concurrent importers never race directory removal. Its
+  uniquely named temporary files exist only while a local video is copied and hashed, are ignored
+  by the scanner, and are cleaned after every completed import path.
 
 ---
 
@@ -91,15 +96,17 @@ is true only for a URL-only paste/drop card.
 - `saved_at` is set once at save time and **never updated**, even when metadata is edited.
 - For a web save, `url`, `canonical_url`, `title`, and `site` describe the **origin page**. A media
   card's asset identity belongs in `media_url`; it never replaces the origin. A source-less local
-  text/image save uses a deterministic `cuttings://local/...` URL in the two required URL fields,
+  text/image/video save uses a deterministic `cuttings://local/...` URL in the two required URL fields,
   leaves `site` unset, and is presented as saved locally rather than as an openable web source.
 - `lightweight: true` means the app had only an HTTP(S) URL, so the body is a link rather than
   cleaned page content. A later full browser capture at the same URL replaces the captured
   metadata/body and clears this marker while preserving `saved_at`, state, rating, and tags.
 - `kind` is one of `article`, `image`, `video`, or `quote`.
 - `media_url` is meaningful only for `image` and `video` cards. It is normally a durable HTTP(S)
-  direct URL. When a video only exposes a session-local `blob:`/`data:` source, the extension stores
-  a compact opaque `cuttings-video:` reference instead; raw transient URLs are never persisted.
+  direct URL. When a browser video only exposes a session-local `blob:`/`data:` source, the
+  extension stores a compact opaque `cuttings-video:` reference instead; raw transient URLs are
+  never persisted. A source-less video uses `cuttings-asset:assets/<filename>` to identify the
+  copied file inside its own reading folder without persisting the original machine path.
 - `preview_asset`, when present, must be the safe single-file shape `assets/<filename>`. It is
   derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
 - **Read state is the presence of `read_at`**: a timestamp means read (its value is when it was
@@ -221,14 +228,17 @@ A **reading id** is a deterministic lowercase-hex SHA-256 content address. The i
 depends on the card kind:
 
 - **Article:** normalized origin `url` (the existing `url_id` behavior).
-- **Image/video:** kind + normalized origin `url` + `media_url` identity (a durable direct URL or a
-  stable opaque reference for a session-local video).
+- **Web image/video:** kind + normalized origin `url` + `media_url` identity (a durable direct URL
+  or a stable opaque reference for a session-local video).
 - **Quote:** normalized origin `url` + normalized selected Markdown body.
 - **Source-less text:** a `cuttings://local/quote/<hash>` origin derived from whitespace-normalized
   text, then the ordinary quote identity rule. Whitespace-only variations deduplicate.
 - **Source-less image:** a `cuttings://local/image/<hash>` origin/media identity derived from the
   validated imported image bytes, then the ordinary image identity rule. File names do not affect
   identity.
+- **Source-less video:** a `cuttings://local/video/<hash>` origin derived while streaming a copy of
+  the selected file into the library. Its `cuttings-asset:` media reference points at that copy;
+  the original path and file name do not affect identity.
 
 This permits several media/quote cards from one origin while an exact repeat save deduplicates.
 

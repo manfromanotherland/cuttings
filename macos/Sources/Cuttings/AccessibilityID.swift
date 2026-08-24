@@ -108,6 +108,8 @@ enum A11y {
         static let empty = "detail.empty"
         static let oversize = "detail.oversize"
         static let oversizeOpenInBrowser = "detail.oversize.openInBrowser"
+        static let videoPlayer = "detail.videoPlayer"
+        static let videoUnavailable = "detail.videoUnavailable"
     }
 
     /// ── Reader content ────────────────────────────────────────────────────────

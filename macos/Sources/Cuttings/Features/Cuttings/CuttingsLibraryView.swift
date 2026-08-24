@@ -36,13 +36,13 @@ struct CuttingsLibraryView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: presentedReading?.id)
-        .onDrop(of: supportedSaveTypes, isTargeted: $isDropTargeted) { providers in
+        .onDrop(of: supportedDropTypes, isTargeted: $isDropTargeted) { providers in
             guard !providers.isEmpty else { return false }
             save(providers)
             return true
         }
         .onPasteCommand(
-            of: supportedSaveTypes,
+            of: supportedPasteTypes,
             validator: { providers in
                 appState.isEditingText || providers.isEmpty ? nil : providers
             },

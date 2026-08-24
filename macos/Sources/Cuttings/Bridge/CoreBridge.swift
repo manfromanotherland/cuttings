@@ -85,6 +85,19 @@ actor CoreBridge {
         )
     }
 
+    /// The staged movie stays file-backed across the FFI boundary so large
+    /// videos are never copied into a Swift or UniFFI byte buffer.
+    func importVideoFile(
+        filePath: String, contentType: String, title: String
+    ) throws -> FfiImportResult {
+        try database.importVideoFile(
+            libraryPath: libraryPath,
+            filePath: filePath,
+            contentType: contentType,
+            title: title
+        )
+    }
+
     // ── Notes ─────────────────────────────────────────────────────────────
 
     func getNote(readingId: String) throws -> String? {

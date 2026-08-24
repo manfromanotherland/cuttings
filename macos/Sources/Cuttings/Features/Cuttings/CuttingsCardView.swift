@@ -76,6 +76,7 @@ struct CuttingsCardView: View {
                         .offset(x: 2)
                 }
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+                .accessibilityHidden(true)
         }
         .overlay(alignment: .bottom) { mediaOrigin }
     }

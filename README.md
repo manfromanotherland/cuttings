@@ -24,16 +24,16 @@ web. Everything is stored as ordinary files in a folder you choose. No account o
 This fork turns the reading list into a local, visual memory library. The browser extension can
 save a full article, a right-clicked image or video, or selected text. The macOS client presents
 those saves as a mixed masonry board of article, image, video, and quote cards. You can also drop
-or paste a web link, text, or image anywhere on the board. Local text and images are copied into
-the library; a pasted link starts as a lightweight card that a later browser save can enrich with
-the cleaned article.
+or paste a web link, text, image, or MP4/MOV video anywhere on the board. Local text, images, and
+videos are copied into the library; a pasted link starts as a lightweight card that a later browser
+save can enrich with the cleaned article.
 
 Web cards retain their origin page URL, canonical URL, page title/site, and save date. Image and
 video cards additionally retain a durable media URL when the browser exposes one; session-local
 video streams receive a compact stable capture reference instead. Captured and locally pasted
-images, plus video posters, are stored inside the card's own folder. Video files themselves are not
-downloaded. The library remains plain files in a user-selected iCloud Drive, Dropbox, or other
-folder.
+images, video posters, and locally imported video files are stored inside the card's own folder.
+Remote browser video files themselves are not downloaded. The library remains plain files in a
+user-selected iCloud Drive, Dropbox, or other folder.
 
 Every card can also carry a personal Markdown note. Notes live as optional `note.md` files inside
 the same reading folder, so they remain editable without Cuttings and travel with the saved item.

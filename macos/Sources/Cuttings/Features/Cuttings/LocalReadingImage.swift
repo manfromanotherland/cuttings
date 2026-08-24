@@ -59,9 +59,10 @@ struct LocalReadingImage: View {
         let baseURL = AssetImageLoader.readingFolderURL(
             libraryURL: libraryURL, readingID: row.id
         )
-        guard let source = row.previewAsset,
-              let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL)
-        else {
+        // A local video intentionally has no poster in the first implementation;
+        // its kind glyph is the expected placeholder, not a failed-image state.
+        guard let source = row.previewAsset else { return }
+        guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
             failed = true
             return
         }

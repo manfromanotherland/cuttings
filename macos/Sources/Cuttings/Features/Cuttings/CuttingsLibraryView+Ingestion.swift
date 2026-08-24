@@ -4,7 +4,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension CuttingsLibraryView {
-    var supportedSaveTypes: [UTType] {
+    var supportedDropTypes: [UTType] {
+        [.fileURL, .movie, .image, .url, .plainText]
+    }
+
+    /// Finder copies videos as `public.file-url`, which is already accepted
+    /// here. Advertising the broad `.movie` type to `onPasteCommand` prevents
+    /// macOS from dispatching even ordinary text paste to this view, so inline
+    /// movie representations remain a drop-only capability.
+    var supportedPasteTypes: [UTType] {
         [.fileURL, .image, .url, .plainText]
     }
 
@@ -18,7 +26,7 @@ extension CuttingsLibraryView {
                     .font(.system(size: 34, weight: .medium))
                 Text("Drop to save")
                     .font(.title2.weight(.semibold))
-                Text("Links, text, images, and .txt or .md files")
+                Text("Links, text, images, videos, and .txt or .md files")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -35,7 +43,7 @@ extension CuttingsLibraryView {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Drop to save links, text, or images")
+        .accessibilityLabel("Drop to save links, text, images, videos, or text and Markdown files")
         .accessibilityIdentifier(A11y.Save.dropTarget)
     }
 

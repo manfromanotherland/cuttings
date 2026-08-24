@@ -42,6 +42,20 @@ enum IngestionItemProviderLoader {
         {
             return payload
         }
+
+        // Some pasteboards and non-Finder drag sources vend the movie itself
+        // instead of a public.file-url. `loadFileRepresentation` owns its URL only
+        // for the callback, so the helper stages it before resuming this task.
+        for identifier in movieTypeIdentifiers(from: provider) {
+            guard let staged = await loadStagedVideoRepresentation(
+                from: provider, typeIdentifier: identifier
+            ),
+                let payload = await IngestionPayloadDecoder.payload(forStagedVideo: staged)
+            else {
+                continue
+            }
+            return payload
+        }
         return nil
     }
 
@@ -114,6 +128,13 @@ enum IngestionItemProviderLoader {
         }
     }
 
+    private static func movieTypeIdentifiers(from provider: NSItemProvider) -> [String] {
+        provider.registeredTypeIdentifiers.filter { identifier in
+            guard let type = UTType(identifier) else { return false }
+            return type.conforms(to: .movie) && !type.conforms(to: .fileURL)
+        }
+    }
+
     private static func loadData(
         from provider: NSItemProvider,
         typeIdentifier: String
@@ -143,6 +164,27 @@ enum IngestionItemProviderLoader {
         await withCheckedContinuation { continuation in
             provider.loadItem(forTypeIdentifier: typeIdentifier, options: nil) { item, _ in
                 continuation.resume(returning: decodedString(from: item))
+            }
+        }
+    }
+
+    private static func loadStagedVideoRepresentation(
+        from provider: NSItemProvider,
+        typeIdentifier: String
+    ) async -> StagedVideoFile? {
+        let suggestedFilename = provider.suggestedName
+        return await withCheckedContinuation { continuation in
+            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, _ in
+                // The provider may remove `url` as soon as this closure returns.
+                // Finish the on-disk copy synchronously inside the closure.
+                let staged = url.flatMap {
+                    IngestionPayloadDecoder.stageVideoFile(
+                        at: $0,
+                        declaredTypeIdentifier: typeIdentifier,
+                        suggestedFilename: suggestedFilename
+                    )
+                }
+                continuation.resume(returning: staged)
             }
         }
     }
@@ -179,7 +221,21 @@ enum IngestionItemProviderLoader {
     }
 
     private static func decodeLocalFile(at url: URL) async -> IngestionPayload? {
-        await Task.detached {
+        if let source = await Task.detached(operation: {
+            IngestionPayloadDecoder.videoFile(at: url)
+        }).value,
+            let payload = await IngestionPayloadDecoder.payload(
+                forStagedVideo: StagedVideoFile(
+                    file: source.file,
+                    contentType: source.contentType,
+                    suggestedFilename: source.suggestedFilename
+                )
+            )
+        {
+            return payload
+        }
+
+        return await Task.detached {
             IngestionPayloadDecoder.payload(forLocalFile: url)
         }.value
     }
