@@ -3,15 +3,12 @@
 import XCTest
 
 /// Drives the app's keyboard shortcuts, mirroring `ShortcutCatalog`. Keeping them
-/// in one place means a journey reads as `keyboard.markRead()` rather than a raw
+/// in one place means a journey reads as `keyboard.toggleFavorite()` rather than a raw
 /// `typeKey`, and a shortcut change is updated once.
 struct Keyboard {
     let app: XCUIApplication
 
     /// ── Article actions (act on the current selection) ────────────────────
-    func markRead() {
-        app.typeKey("u", modifierFlags: .command)
-    } // ⌘U
     func toggleFavorite() {
         app.typeKey("f", modifierFlags: [.command, .shift])
     } // ⌘⇧F
@@ -21,9 +18,6 @@ struct Keyboard {
     func toggleHighlights() {
         app.typeKey("h", modifierFlags: [.command, .shift])
     } // ⌘⇧H
-    func archive() {
-        app.typeKey(.delete, modifierFlags: .command)
-    } // ⌘⌫
     func delete() {
         app.typeKey(.delete, modifierFlags: [.command, .option])
     } // ⌘⌥⌫
@@ -35,9 +29,6 @@ struct Keyboard {
     func focusSearch() {
         app.typeKey("k", modifierFlags: .command)
     } // ⌘K
-    func toggleSidebar() {
-        app.typeKey("s", modifierFlags: [.command, .control])
-    } // ⌃⌘S
     func toggleFocusMode() {
         app.typeKey("r", modifierFlags: [.command, .shift])
     } // ⌘⇧R

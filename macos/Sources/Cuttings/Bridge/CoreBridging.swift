@@ -14,8 +14,8 @@ protocol CoreBridging: Sendable {
     @discardableResult func sync() async throws -> UInt32
 
     func listReadings(_ query: ReadingQuery) async throws -> [FfiReadingRow]
-    func sidebarCounts(
-        kind: ReadingKind?, view: SidebarItem, tag: String?, rating: UInt8?, query: String?
+    func filterCounts(
+        kind: ReadingKind?, scope: LibraryScope, tag: String?, query: String?
     ) async throws -> FfiSidebarCounts
     func getReadingRow(id: String) async throws -> FfiReadingRow?
     func getBody(id: String) async throws -> String?
@@ -33,10 +33,7 @@ protocol CoreBridging: Sendable {
     func addTag(id: String, tag: String) async throws
     func removeTag(id: String, tag: String) async throws
 
-    func setRead(id: String, read: Bool) async throws
-    func setArchived(id: String, archived: Bool) async throws
     func setFavorite(id: String, favorite: Bool) async throws
-    func setRating(id: String, rating: UInt8) async throws
 
     func deleteReading(id: String) async throws
 

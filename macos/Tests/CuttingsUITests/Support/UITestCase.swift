@@ -44,16 +44,11 @@ class UITestCase: XCTestCase {
 
         var options = LaunchOptions(libraryPath: library.libraryURL.path, dbPath: library.dbURL.path)
         options.defaultsSuite = library.defaultsSuiteName
-        // The app now opens on Unread by default; pin All here so the many tests
-        // written against that original landing view keep starting there without an
-        // explicit `sidebar.select(.all)`. A test exercising the real default just
-        // drops this pin (`options.pinnedDefaults.removeValue(forKey: "activeView")`).
-        options.pinnedDefaults["activeView"] = SmartView.all.rawValue
         configure(&options)
         app = AppLauncher.launch(options)
         XCTAssertTrue(
-            app.byId(A11y.Sidebar.viewRow("all")).waitForExistence(timeout: 20),
-            "Main view (sidebar) did not appear after launch."
+            app.byId(A11y.List.rows).waitForExistence(timeout: 20),
+            "Library board did not appear after launch."
         )
         return app
     }
@@ -93,22 +88,18 @@ class UITestCase: XCTestCase {
         configure(&options)
         app = AppLauncher.launch(options)
         XCTAssertTrue(
-            app.byId(A11y.Sidebar.viewRow("all")).waitForExistence(timeout: 20),
-            "Main view (sidebar) did not appear after relaunch."
+            app.byId(A11y.List.rows).waitForExistence(timeout: 20),
+            "Library board did not appear after relaunch."
         )
         return app
     }
 
     // ── Page objects ────────────────────────────────────────────────────────
-    // Convenience accessors so a test reads as `sidebar.select(.unread)` etc.
-    // All wrap the running `app`; use them only after a `launch*` call.
+    // Convenience accessors wrapping the running app. Use them only after a
+    // `launch*` call.
 
     var onboarding: OnboardingPage {
         OnboardingPage(app: app)
-    }
-
-    var sidebar: SidebarPage {
-        SidebarPage(app: app)
     }
 
     var list: ReadingListPage {
@@ -129,14 +120,6 @@ class UITestCase: XCTestCase {
 
     var noteEditor: NotePage {
         NotePage(app: app)
-    }
-
-    var shortcutsSheet: ShortcutsSheetPage {
-        ShortcutsSheetPage(app: app)
-    }
-
-    var settings: SettingsPage {
-        SettingsPage(app: app)
     }
 
     var keyboard: Keyboard {

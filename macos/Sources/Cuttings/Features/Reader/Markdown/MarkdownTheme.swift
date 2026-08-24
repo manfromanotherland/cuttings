@@ -191,10 +191,9 @@ struct MarkdownTheme {
         .system(size: captionSize, design: design)
     }
 
-    // ── Article chrome (header title, metadata, rating) ───────────────────────
-    // The reader's non-body pieces — the header title, the metadata line, and the
-    // end-of-article rating — are sized from the body so they rescale with it
-    // (Small … Giant) instead of holding a fixed size while the copy grows.
+    // ── Article chrome (header title and metadata) ───────────────────────────
+    // The reader's non-body pieces are sized from the body so they rescale with
+    // it (Small … Giant) instead of holding a fixed size while the copy grows.
 
     /// The header title is the reading's sole h1 — the top of the heading scale —
     /// so it borrows the level-1 heading tokens (and, like the body, follows the
@@ -207,15 +206,9 @@ struct MarkdownTheme {
         headingTracking(1)
     }
 
-    /// The metadata line (site · author · reading time · tags) and the rating
-    /// prompt: a muted, secondary size that follows the reader font, sized from
-    /// the body.
+    /// The metadata line (site · author · reading time · tags): a muted,
+    /// secondary size that follows the reader font, sized from the body.
     var metadataFont: Font {
         .system(size: bodySize * 0.85, design: design)
-    }
-
-    /// Star glyphs in the end-of-article rating control.
-    var ratingStarFont: Font {
-        .system(size: bodySize * 1.2, design: design)
     }
 }

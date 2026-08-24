@@ -14,7 +14,7 @@ struct TagPickerSheet: View {
     /// Tags currently applied to the article. Re-supplied by the presenter on
     /// every render, so checkmarks stay in step as toggles take effect.
     var applied: [String]
-    /// All library tag names, alphabetical (the order of `SidebarCounts.tags`).
+    /// All library tag names, alphabetical (the order of `LibraryFilters.tags`).
     /// The sheet re-sorts anyway — applied tags float to the top on open.
     var allTags: [String]
     /// `(tag, shouldApply)` — apply the tag when `true`, remove it when `false`.

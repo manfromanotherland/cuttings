@@ -2,18 +2,13 @@
 
 import SwiftUI
 
-/// Menu bar commands that operate on the currently selected article.
+/// Menu bar commands that operate on the currently selected item.
 struct ArticleCommands: Commands {
     var appState: AppState
 
     var body: some Commands {
-        CommandMenu("Article") {
+        CommandMenu("Item") {
             if let row = selectedRow {
-                Button(row.read ? "Mark as Unread" : "Mark as Read") {
-                    Task { await appState.toggleRead(row) }
-                }
-                .keyboardShortcut(ShortcutCatalog.toggleRead)
-
                 Button(row.favorite ? "Remove from Favorites" : "Add to Favorites") {
                     Task { await appState.toggleFavorite(row) }
                 }
@@ -33,20 +28,6 @@ struct ArticleCommands: Commands {
 
                 Divider()
 
-                if row.archived {
-                    Button("Move to Library") {
-                        Task { await appState.unarchive(row) }
-                    }
-                } else {
-                    Button("Archive") {
-                        Task { await appState.archive(row) }
-                    }
-                    .keyboardShortcut(ShortcutCatalog.archive)
-                    // ⌘⌫ is "delete to start of line" in a text field; yield to it
-                    // while editing so typing isn't hijacked into archiving.
-                    .disabled(appState.isEditingText)
-                }
-
                 Button("Delete", role: .destructive) {
                     appState.pendingDelete = row
                 }
@@ -62,7 +43,7 @@ struct ArticleCommands: Commands {
                     .keyboardShortcut(ShortcutCatalog.openInBrowser)
                 }
             } else {
-                Text("No article selected")
+                Text("No item selected")
                     .foregroundStyle(.secondary)
             }
         }

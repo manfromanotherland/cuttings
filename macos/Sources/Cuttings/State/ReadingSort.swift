@@ -7,8 +7,6 @@ import Foundation
 enum ReadingSort: String, CaseIterable, Identifiable {
     case relevance
     case savedAt
-    case readAt
-    case rating
     case timeToRead
 
     var id: String {
@@ -20,20 +18,16 @@ enum ReadingSort: String, CaseIterable, Identifiable {
         switch self {
         case .relevance: "Relevance"
         case .savedAt: "Date saved"
-        case .readAt: "Date read"
-        case .rating: "Rating"
-        case .timeToRead: "Time to read"
+        case .timeToRead: "Length"
         }
     }
 
     /// Direction label tailored to the field (e.g. "Newest first" vs
-    /// "Highest rated"), for the ascending/descending picker.
+    /// "Shortest first"), for the ascending/descending picker.
     func directionLabel(ascending: Bool) -> String {
         switch self {
         case .relevance: "Most relevant first"
         case .savedAt: ascending ? "Oldest first" : "Newest first"
-        case .readAt: ascending ? "Read least recently" : "Read most recently"
-        case .rating: ascending ? "Lowest rated" : "Highest rated"
         case .timeToRead: ascending ? "Shortest first" : "Longest first"
         }
     }

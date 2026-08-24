@@ -30,12 +30,12 @@ enum ReadingKind: String, CaseIterable, Sendable {
     }
 }
 
-/// A list/search/sidebar presentation snapshot of a reading, kept apart from the
+/// A board/search presentation snapshot of a reading, kept apart from the
 /// `FfiReadingRow` boundary DTO so feature code speaks app language rather than
 /// "this came from the Rust FFI" (see ADR 0001). It mirrors the boundary fields
-/// exactly and as `var`, so the optimistic-UI edits in `AppState.Mutations`
-/// (`var updated = row; updated.read.toggle()`) copy-and-tweak a row unchanged.
-/// It is a snapshot, never persisted truth — mutations go through the core.
+/// exactly and as `var`, so optimistic favorite/tag edits can copy and tweak it.
+/// `read`, `archived`, and `rating` are compatibility-only snapshots from the
+/// format-v1 FFI record; current app queries and views do not use them.
 struct ReadingRow: Identifiable, Equatable, Sendable {
     var id: String
     var title: String
@@ -44,9 +44,12 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var author: String?
     var site: String?
     var savedAt: String
+    /// Compatibility-only snapshots of legacy library metadata. They remain on
+    /// the FFI row so older files round-trip, but no longer drive app behavior.
     var read: Bool
     var archived: Bool
     var favorite: Bool
+    /// Compatibility-only legacy metadata; no longer drives app behavior.
     var rating: UInt8
     var excerpt: String?
     var wordCount: UInt32?

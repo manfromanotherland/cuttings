@@ -15,8 +15,8 @@ host, and macOS app.
 - Use **capture** for the extension's technical extraction step (live DOM or
   right-click context → Markdown, origin metadata, image bytes). The user saves;
   the extension captures.
-- Use **reading** for the saved domain object the user browses, searches, reads,
-  annotates, tags, rates, archives, or deletes.
+- Use **reading** for the established internal saved-domain object. In user-facing copy, prefer
+  **card** or **saved item**: people browse, search, revisit, annotate, tag, favorite, or delete it.
 - Use **article file** only when talking about the on-disk `article.md` inside a
   reading's folder.
 - Use **reading folder** for the per-reading folder `articles/<prefix>/<id>/`
@@ -26,14 +26,9 @@ host, and macOS app.
 - Use **index** for the local SQLite database. Do not call it the source of
   truth.
 - Use **tag**, not list, collection, folder, or category.
-- Use **smart view** for All, Unread, Read, Archive, and Favorites.
-- Use lowercase **read**/**unread** for the boolean state and capitalized
-  **Read**/**Unread** for the smart views derived from it.
 - Use **extension** or **browser extension**, not plugin.
-- Use **archive** as the noun for the smart view and **archived** for the stored
-  state.
-- Use **favorite** for the boolean state and **rating** for the 0-to-5 star
-  judgement.
+- Use **favorite** for the one visible boolean curation state. `read_at`, `archived`, and `rating`
+  are legacy format-v1 field names, not current product vocabulary.
 
 ## Core Domain Terms
 
@@ -74,26 +69,17 @@ host, and macOS app.
 | Source hash | Hash of cleaned content used to detect stale index rows and content changes. |
 | Format version | Integer frontmatter version for the library file contract. |
 
-## State And Organization
+## Curation And Organization
 
 | Term | Definition |
 |------|------------|
-| Read | Boolean state meaning the user has read the reading. Stored in frontmatter. |
-| Unread | Boolean state where `read == false`. |
-| Archived | Boolean state meaning the reading is moved out of the active library list. Stored in frontmatter. |
 | Favorite | Boolean state meaning the user marked the reading as important or worth returning to. Stored in frontmatter. |
-| Rating | Integer star rating from 0 to 5, where 0 means unrated. Stored in frontmatter. |
 | Tag | User-defined label stored in a reading's frontmatter. Tags organize readings and power tag filters. |
-| Kind filter | Optional card-kind axis (`article`, `image`, `video`, `quote`) composed with smart view, rating, tag, and search in the core query. |
-| Smart view | Built-in navigation-rail filter derived from frontmatter fields. One is always active (`All` is the base); it composes with optional kind, tag, and rating filters. |
-| Composed filter | The active view, kind, tag, and rating (plus search) applied as an intersection to scope the board and counts. At most one value from each axis. |
-| All | Smart view for non-archived readings. |
-| Unread | Smart view for non-archived readings where `read == false`. |
-| Read (smart view) | Smart view for non-archived readings where `read == true`. |
-| Archive | Smart view for archived readings. |
-| Favorites | Smart view for favorite readings, regardless of archive state. |
-| Sidebar count | Derived presentation count for a smart view, tag, or rating. It is never persisted as source data. Scoped by the active search and selected facet (see Faceted count). |
-| Faceted count | The rule that each sidebar section (Library, Ratings, Tags) counts against the active search plus the *other* sections' selection, never its own axis — so a selected facet still shows the alternatives you could switch to. |
+| Kind filter | Optional card-kind axis (`article`, `image`, `video`, `quote`) composed with favorites, tag, and search in the core query. |
+| Board filter | The optional favorites, kind, and tag selections plus search, applied as an intersection to the board. |
+| All | The unfiltered board scope. It includes every saved item, including files carrying a legacy `archived: true` value. |
+| Favorites | Board scope for readings where `favorite == true`. |
+| Legacy state field | `read_at`, `archived`, or `rating` in a format-v1 file. The core preserves these for compatibility; the current macOS app does not display or mutate them. |
 | Selection | The currently open reading in the macOS app. It may remain open even when it no longer appears in the active filtered list. |
 
 ## Storage And Sync
@@ -118,8 +104,8 @@ host, and macOS app.
 | Extension | Browser extension that captures a cleaned page, clicked image/video, or selected-text quote and sends Markdown, universal origin metadata, and optional image bytes to the native host. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |
-| Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, states, ratings, highlights, personal notes, and the UniFFI surface. |
-| macOS client | SwiftUI app that lets the user save by paste/drop, browse, read, search, annotate, tag, rate, highlight, archive, favorite, and configure the library. |
+| Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, favorites, compatibility fields, highlights, personal notes, and the UniFFI surface. |
+| macOS client | SwiftUI app that lets the user save by paste/drop, browse, search, revisit, annotate, tag, highlight, favorite, delete, and configure the library. |
 | UniFFI bindings | Generated Swift bridge that lets the macOS client call the Rust core. |
 | Thin client | A client that delegates domain logic to the Rust core and keeps only presentation, navigation, and local UI state. |
 | Folder watcher | macOS file-system watcher that notices library changes and triggers reconcile. |
@@ -130,12 +116,11 @@ host, and macOS app.
 | Term | Definition |
 |------|------------|
 | Reader | Main article reading surface in the macOS app. It renders Markdown natively and supports local assets, text selection, highlights, and typography settings. |
-| Card board | Mixed masonry presentation of reading rows for the active smart view, kind, tag, rating, search query, and sort. |
+| Card board | Full-width mixed masonry presentation of reading rows for the active favorites, kind, tag, search query, and sort. |
 | Note editor | The raw-Markdown sheet opened from a card's inspector to add, replace, or delete that reading's personal note. |
 | Reading list | Legacy name for the old row-based macOS presentation and for the core listing API; the current user-facing home is the card board. |
-| Sidebar | Navigation area containing smart views, ratings, tags, and settings. |
 | Search | Full-text query over indexed reading title, content, and tags. |
-| Sort | User-selected order for the reading list: relevance, date saved, date read, rating, or time to read. |
+| Sort | User-selected order for the card board: relevance, date saved, or content length. |
 | Optimistic UI | UI pattern where local state changes immediately, then the core write and refresh reconcile against persisted truth. |
 | Refresh | UI reload from the core/index after a mutation, sync, filter change, search change, or sort change. |
 | One-motion removal | Interaction rule where a row that leaves the active filter is removed and selection advances in the same render tick. |
@@ -150,53 +135,45 @@ paragraphs, and the welcome article.
 
 | Term | Definition |
 |------|------------|
-| Read-later app | The product category, used so people recognize what Cuttings is (the Pocket/Instapaper category). Category label only — never imply the library holds only unread things. |
-| Reading library | Preferred description of what the user builds: a permanent, file-based library of the articles they save and own. Use it to balance "read-later" positioning ("a read-later app that builds a reading library you own"). |
+| Inspiration library | Preferred product category: a visual, permanent place for articles, images, videos, and quotes that spark ideas. |
+| Visual library | Shorter supporting description when "inspiration library" has already established the product. |
 | Local-first | Marketing shorthand for the no-accounts, no-servers, files-on-your-disk principles. |
-| Save | The only user-facing verb for adding a page, in marketing as elsewhere (matches Pocket "Save to Pocket", Instapaper "Save Anything. Read Anywhere.", GoodLinks "Save. Read. Anywhere."). |
+| Save | The user-facing verb for adding a page, media item, or quote to Cuttings. |
 
 ## Terms To Avoid Or Use Carefully
 
 | Avoid | Use Instead | Reason |
 |-------|-------------|--------|
-| List | Tag, smart view, or reading list | Manual Lists are not a product model. |
+| List | Tag, filter, or board | Manual Lists are not a product model. |
 | Database source | Index | The database is disposable and derived from files. |
 | Sync engine | External sync | The app does not sync for the user. |
 | Article as domain object | Reading | Article is useful for file names and reader UI, but reading is the product entity. |
-| "Reading"/"readings" as a user-facing noun | Article, post, or page | In copy (welcome article, landing page, store text) naming the saved item a "reading" reads awkwardly. Prefer article/post/page for the item; keep **reading** for the activity and the "reading manager"/read-later positioning. In code and this glossary, reading stays the domain entity. |
-| Starred | Favorite or rating | Favorite is boolean; rating is 0 to 5 stars. |
-| Clip | Save | "Clip" is note-clipper vocabulary (Evernote, Notion, Obsidian Web Clipper) and suggests snipping fragments into a notes app. Read-later products say save. |
+| "Reading"/"readings" as a user-facing noun | Card, saved item, article, image, video, or quote | The internal domain term should not make the product sound like a reading queue. |
+| Starred | Favorite | Favorite is the product's one visible boolean curation state. |
+| Clip | Save | One verb covers pages, media, quotes, and in-app paste/drop without implying that only a fragment is kept. |
 | Standalone note | Personal note | A note in Cuttings annotates a saved reading; it is not a fifth card kind or a general-purpose notes-app document. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
 | Bookmark (user action) | Save | A full browser capture stores cleaned content; a URL-only app save is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |
-| Read-it-later system | Read-later app | One category phrase everywhere; "system" is architecture-speak. |
+| Read-later app | Inspiration library | The product is organized around collecting and revisiting inspiration, not clearing an unread queue. |
 | Preferences | Settings | macOS renamed Preferences to Settings; the app's UI says Settings. |
-| Star Ratings (section name) | Ratings | The sidebar section is "Ratings". "Star rating" is fine when describing the 0–5 value itself. |
 | Web reader | Reader | The macOS reader is native, not WebView-based. |
 | Add Link | Paste or drop a link; Save | The app uses the standard paste/drop gestures rather than a bespoke form, and the user-facing action is still Save. |
 
 ## Flagged Ambiguities
 
-- **"Read" is both a state and a smart view.** Lowercase `read` is the boolean
-  frontmatter state; capitalized **Read** is the smart view scoped to
-  non-archived readings where `read == true`.
 - **"Save" vs "capture".** The *user saves* a page; the *extension captures*
   it (extraction, cleaning, image bytes) as the technical step inside that
   save.
-- **"Read later" as identity.** Saving is time-neutral — users also save pages
-  they already read to keep and reread. "Read-later app" stays as the category
-  label, but copy should not describe saving as only for later reading.
+- **"Inspiration" as identity.** It describes why mixed pages, images, videos,
+  and quotes belong together. It does not imply that every card must be visually
+  decorative or that articles stop being readable.
 - **"Bookmark" is overloaded.** It is the brand glyph, an Apple API term in the
   macOS client (security-scoped bookmarks), and a rejected user-facing verb.
   Only the first two uses are legitimate.
-- **"Reading" is the domain entity but a weak user-facing noun.** In code, docs,
-  and architecture a saved item is a **reading** (see Reading, Reading id,
-  Reading folder). In user-facing copy the noun reads awkwardly, so name the
-  saved item an **article**, **post**, or **page**, and reserve "reading" for the
-  activity ("read anytime", "Happy reading") and the **reading manager** /
-  **read-later** positioning. The visible tagline "the native macOS reading
-  manager" stays.
+- **"Reading" remains the internal domain entity.** Renaming the storage model is
+  a separate format/API migration. User-facing copy says card, saved item, or the
+  concrete kind so the product identity stays broader than articles.
 
 ## Example Dialogue
 
@@ -207,12 +184,11 @@ paragraphs, and the welcome article.
 > cleans the live DOM and gathers image bytes. The **native messaging host**
 > writes the **reading** into the **library** through the **core**."
 >
-> **Dev:** "And once they finish it, does the reading leave the **library**?"
+> **Dev:** "How does someone organize what they saved?"
 >
-> **Domain expert:** "It just flips the `read` state, so it moves from the
-> **Unread** smart view to **Read**. It only leaves the active list when they
-> **archive** it — and even then, an archived **favorite** still shows under
-> **Favorites**."
+> **Domain expert:** "Everything stays together on the board. They can add
+> **tags**, mark a card as a **favorite**, search for it later, or permanently
+> **delete** it when it no longer belongs."
 >
 > **Dev:** "So the **index** knows all of this?"
 >

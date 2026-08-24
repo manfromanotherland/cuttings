@@ -27,16 +27,16 @@ actor CoreBridge {
 
     // ── Query ─────────────────────────────────────────────────────────────
 
-    /// One page of readings for the composed view/tag/rating filter, the chosen
-    /// sort, and an optional full-text query. Takes app-language values and builds
-    /// the core's `FfiListOptions` here so the `Ffi*` query DTO stays in the bridge.
+    /// One page of readings for the composed scope/tag filter, the chosen sort,
+    /// and an optional full-text query. Dormant rating support remains nil at the
+    /// FFI boundary for library-format compatibility.
     func listReadings(_ query: ReadingQuery) throws -> [FfiReadingRow] {
         let opts = FfiListOptions(
-            view: query.view.ffiView,
+            view: query.scope.ffiView,
             sort: query.sort.ffiSort,
             ascending: query.ascending,
             tag: query.tag,
-            rating: query.rating,
+            rating: nil,
             kind: query.kind?.ffiKind,
             since: nil, until: nil,
             query: query.search,
@@ -45,17 +45,15 @@ actor CoreBridge {
         return try database.listReadings(opts: opts)
     }
 
-    /// All three sidebar count sections — view badges, tag counts, rating counts
-    /// — in one call, scoped by the active search + selected facets. Resolves the
-    /// full-text match once and returns them together. Builds the core's
-    /// `FfiCountScope` here so the query DTO stays in the bridge.
-    func sidebarCounts(
-        kind: ReadingKind?, view: SidebarItem, tag: String?, rating: UInt8?, query: String?
+    /// Reuse the compatible count payload to enumerate tags for the app's filter
+    /// menu. Legacy view and rating counts remain dormant at the FFI boundary.
+    func filterCounts(
+        kind: ReadingKind?, scope: LibraryScope, tag: String?, query: String?
     ) throws -> FfiSidebarCounts {
-        let scope = FfiCountScope(
-            view: view.ffiView, tag: tag, rating: rating, kind: kind?.ffiKind, query: query
+        let ffiScope = FfiCountScope(
+            view: scope.ffiView, tag: tag, rating: nil, kind: kind?.ffiKind, query: query
         )
-        return try database.sidebarCounts(scope: scope)
+        return try database.sidebarCounts(scope: ffiScope)
     }
 
     func getReadingRow(id: String) throws -> FfiReadingRow? {
@@ -122,23 +120,8 @@ actor CoreBridge {
 
     // ── Status flags ──────────────────────────────────────────────────────
 
-    func setRead(id: String, read: Bool) throws {
-        try database.setRead(libraryPath: libraryPath, id: id, read: read)
-    }
-
-    func setArchived(id: String, archived: Bool) throws {
-        try database.setArchived(libraryPath: libraryPath, id: id, archived: archived)
-    }
-
     func setFavorite(id: String, favorite: Bool) throws {
         try database.setFavorite(libraryPath: libraryPath, id: id, favorite: favorite)
-    }
-
-    // ── Ratings ───────────────────────────────────────────────────────────
-
-    /// Set a reading's star rating (0–5, where 0 clears it).
-    func setRating(id: String, rating: UInt8) throws {
-        try database.setRating(libraryPath: libraryPath, id: id, rating: rating)
     }
 
     // ── Deletion ──────────────────────────────────────────────────────────

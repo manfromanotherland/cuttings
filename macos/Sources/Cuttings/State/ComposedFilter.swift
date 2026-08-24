@@ -2,79 +2,47 @@
 
 import Foundation
 
-/// Pure decision logic for the composed filter — the active smart view, tag, and
-/// rating applied together as an intersection over the reading list (mirrors the
-/// core's `list.rs`). Extracted from `AppState` so it can be unit-tested without
-/// the core, filesystem, or AppKit; `AppState` holds the state and delegates the
-/// rules here. The async optimistic apply/reconcile stays in `AppState`.
+/// Pure decision logic for the board's library scope and optional tag filter.
+/// Extracted from `AppState` so it can be unit-tested without the core,
+/// filesystem, or AppKit.
 enum ComposedFilter {
-    /// The active smart view after `tapped` is clicked. Clicking the
-    /// already-active view falls back to `.all` — except `.all` itself, which is
-    /// the base and stays — mirroring how a tag/rating toggles off, since the view
-    /// always has a value and so deselects to the base rather than to nothing.
-    static func resolveView(active: SidebarItem, tapped: SidebarItem) -> SidebarItem {
+    /// The active scope after `tapped` is clicked. Clicking Favorites again falls
+    /// back to All; All itself is the stable base.
+    static func resolveScope(active: LibraryScope, tapped: LibraryScope) -> LibraryScope {
         (tapped == active && tapped != .all) ? .all : tapped
     }
 
-    /// A single-select facet (tag or rating) after `tapped` is clicked: selecting
-    /// the active value clears it, otherwise it becomes the selection. This is why
-    /// at most one tag and one rating can be active at a time.
+    /// A single-select facet after `tapped` is clicked: selecting the active value
+    /// clears it, otherwise it becomes the selection.
     static func toggle<Value: Equatable>(_ selected: Value?, _ tapped: Value) -> Value? {
         selected == tapped ? nil : tapped
     }
 
     // ── Narrowing ───────────────────────────────────────────────────────────
 
-    /// The sidebar's three filter selections as one value.
+    /// The board's two filter selections as one value.
     struct Selection: Equatable {
-        var view: SidebarItem
-        var rating: UInt8?
+        var scope: LibraryScope
         var tag: String?
     }
 
-    // The three filters are **hierarchical, not independent**, in the order the
-    // sidebar reads top to bottom: the smart view is the broadest, a rating
-    // narrows it, and a tag narrows that again. Changing a filter therefore
-    // clears every narrower one below it.
-    //
-    // The alternative — leaving them in place — strands the reader on a
-    // combination they never asked for: going from ★5 to ★4 while `#swift` is
-    // still applied silently answers a different question than the one the click
-    // asked, and most often lands on an empty list whose cause is off-screen in a
-    // collapsed section. Broadening cascades too: dropping a rating, or falling
-    // back from Read to All, is still a change at that level.
-    //
-    // Selecting a tag clears nothing — it is already the narrowest level.
-
-    /// Apply a smart-view click. Clears the rating and tag, unless the click
-    /// didn't change the view (tapping `.all` while it's already the base), which
-    /// leaves the whole selection untouched.
-    static func selectingView(_ tapped: SidebarItem, from current: Selection) -> Selection {
-        let view = resolveView(active: current.view, tapped: tapped)
-        guard view != current.view else { return current }
-        return Selection(view: view, rating: nil, tag: nil)
+    /// Apply a scope click. A scope change clears the narrower tag filter; a
+    /// no-op click on All leaves the current selection untouched.
+    static func selectingScope(_ tapped: LibraryScope, from current: Selection) -> Selection {
+        let scope = resolveScope(active: current.scope, tapped: tapped)
+        guard scope != current.scope else { return current }
+        return Selection(scope: scope, tag: nil)
     }
 
-    /// Apply a rating click, clearing the tag. Every rating click changes the
-    /// rating — to the tapped value, or to nothing when it was already active —
-    /// so this always cascades.
-    static func togglingRating(_ tapped: UInt8, from current: Selection) -> Selection {
-        Selection(view: current.view, rating: toggle(current.rating, tapped), tag: nil)
-    }
-
-    /// Apply a tag click. The narrowest level, so nothing below it to clear.
+    /// Apply a tag click without changing the current library scope.
     static func togglingTag(_ tapped: String, from current: Selection) -> Selection {
-        Selection(view: current.view, rating: current.rating, tag: toggle(current.tag, tapped))
+        Selection(scope: current.scope, tag: toggle(current.tag, tapped))
     }
 
-    /// Whether `row` belongs in the list under the composed filter: it must be in
-    /// the smart view and match the selected tag and rating (each optional).
-    static func matches(_ row: ReadingRow, view: SidebarItem, tag: String?, rating: UInt8?) -> Bool {
-        guard view.contains(row) else { return false }
+    /// Whether `row` belongs in the list under the selected scope and tag.
+    static func matches(_ row: ReadingRow, scope: LibraryScope, tag: String?) -> Bool {
+        guard scope.contains(row) else { return false }
         if let tag, !row.tags.contains(tag) {
-            return false
-        }
-        if let rating, row.rating != rating {
             return false
         }
         return true

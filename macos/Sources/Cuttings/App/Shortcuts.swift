@@ -61,21 +61,18 @@ enum ShortcutCatalog {
     // line_length is off for this block only.
     // swiftlint:disable line_length
 
-    // Article actions
-    static let toggleRead = AppShortcut(title: "Mark Read / Unread", key: "u", modifiers: .command, keyGlyph: "U")
+    // Item actions
     static let toggleFavorite = AppShortcut(title: "Add / Remove Favorite", key: "f", modifiers: [.command, .shift], keyGlyph: "F")
     static let editTags = AppShortcut(title: "Edit Tags", key: "t", modifiers: [.command, .shift], keyGlyph: "T")
     static let toggleHighlights = AppShortcut(title: "Show / Hide Highlights", key: "h", modifiers: [.command, .shift], keyGlyph: "H")
-    static let archive = AppShortcut(title: "Archive", key: .delete, modifiers: .command, keyGlyph: "⌫")
     static let delete = AppShortcut(title: "Delete", key: .delete, modifiers: [.command, .option], keyGlyph: "⌫")
     static let openInBrowser = AppShortcut(title: "Open in Browser", key: "o", modifiers: [.command, .shift], keyGlyph: "O")
 
     // View / navigation
     static let focusSearch = AppShortcut(title: "Focus Search", key: "k", modifiers: .command, keyGlyph: "K")
-    static let toggleSidebar = AppShortcut(title: "Toggle Sidebar", key: "s", modifiers: [.control, .command], keyGlyph: "S")
     static let toggleFocusMode = AppShortcut(title: "Toggle Focus Mode", key: "r", modifiers: [.command, .shift], keyGlyph: "R")
 
-    // Reading
+    // Typography
     static let increaseFont = AppShortcut(title: "Increase Text Size", key: "+", modifiers: .command, keyGlyph: "+")
     static let decreaseFont = AppShortcut(title: "Decrease Text Size", key: "-", modifiers: .command, keyGlyph: "-")
 
@@ -84,9 +81,9 @@ enum ShortcutCatalog {
 
     /// Groups in cheat-sheet display order.
     static let groups: [Group] = [
-        Group(name: "Article", shortcuts: [toggleRead, toggleFavorite, editTags, toggleHighlights, archive, delete, openInBrowser]),
-        Group(name: "View", shortcuts: [focusSearch, toggleSidebar, toggleFocusMode]),
-        Group(name: "Reading", shortcuts: [increaseFont, decreaseFont]),
+        Group(name: "Item", shortcuts: [toggleFavorite, editTags, toggleHighlights, delete, openInBrowser]),
+        Group(name: "View", shortcuts: [focusSearch, toggleFocusMode]),
+        Group(name: "Typography", shortcuts: [increaseFont, decreaseFont]),
         Group(name: "Help", shortcuts: [showShortcuts])
     ]
     // swiftlint:enable line_length

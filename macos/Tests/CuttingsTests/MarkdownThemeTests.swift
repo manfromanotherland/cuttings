@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import AppKit
 import XCTest
 
 /// The reader's measure and leading, which `MarkdownTheme` derives from the
@@ -128,29 +127,5 @@ final class MarkdownThemeTests: XCTestCase {
     func testEveryOptionHasADistinctLabel() {
         XCTAssertEqual(Set(ReaderWidth.allCases.map(\.label)).count, ReaderWidth.allCases.count)
         XCTAssertEqual(Set(ReaderLineHeight.allCases.map(\.label)).count, ReaderLineHeight.allCases.count)
-    }
-
-    // ── Sidebar popover icons ───────────────────────────────────────────────
-    // The appearance popover shows these controls icon-only, with no text to fall
-    // back on. A misspelled SF Symbol name renders as an empty or placeholder
-    // glyph rather than failing to build, so resolve each one here.
-
-    func testSliderEndCapIconsResolveAsSFSymbols() {
-        let icons = [
-            ReaderWidth.narrowIcon, ReaderWidth.wideIcon,
-            ReaderLineHeight.tightIcon, ReaderLineHeight.looseIcon
-        ]
-        for icon in icons {
-            XCTAssertNotNil(
-                NSImage(systemSymbolName: icon, accessibilityDescription: nil),
-                "'\(icon)' is not a valid SF Symbol"
-            )
-        }
-    }
-
-    /// A slider whose two caps share a glyph reads as having no direction.
-    func testSliderEndCapIconsAreDistinct() {
-        XCTAssertNotEqual(ReaderWidth.narrowIcon, ReaderWidth.wideIcon)
-        XCTAssertNotEqual(ReaderLineHeight.tightIcon, ReaderLineHeight.looseIcon)
     }
 }

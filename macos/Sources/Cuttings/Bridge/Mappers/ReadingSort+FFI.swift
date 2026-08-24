@@ -11,8 +11,6 @@ extension ReadingSort {
         switch self {
         case .relevance: .relevance
         case .savedAt: .savedAt
-        case .readAt: .readAt
-        case .rating: .rating
         case .timeToRead: .wordCount
         }
     }

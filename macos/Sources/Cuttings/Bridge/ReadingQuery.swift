@@ -2,16 +2,15 @@
 
 import Foundation
 
-/// A reading-list query in app language: the composed kind/view/tag/rating
-/// filter, an optional full-text search, the sort, and paging. `CoreBridge` turns it into the
-/// core's `FfiListOptions`, keeping that boundary DTO inside the bridge (ADR 0001).
+/// A reading-list query in app language: the composed kind/scope/tag filter, an
+/// optional full-text search, the sort, and paging. `CoreBridge` turns it into
+/// the core's compatible `FfiListOptions` at the bridge boundary.
 struct ReadingQuery {
     var kind: ReadingKind?
-    var view: SidebarItem
+    var scope: LibraryScope
     var sort: ReadingSort
     var ascending: Bool
     var tag: String?
-    var rating: UInt8?
     var search: String?
     var limit: UInt32
     var offset: UInt32

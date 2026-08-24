@@ -2,8 +2,7 @@
 
 import XCTest
 
-/// The reader (detail) column: header, body, toolbar actions, and the
-/// end-of-article rating footer.
+/// The reading overlay: article content plus inspector actions.
 struct ReaderPage {
     let app: XCUIApplication
 
@@ -132,8 +131,8 @@ struct ReaderPage {
     /// Width of the reader's body column, in points. The body's selectable runs
     /// render into AppKit text views that fill the measure, so the widest one
     /// tracks the Width typography setting (see `ReaderWidth`). Only text views
-    /// are measured — the list and sidebar render SwiftUI `Text` (static texts),
-    /// so they can't pollute the reading. Returns 0 when the body hasn't
+    /// are measured — the board renders SwiftUI `Text` (static texts), so it
+    /// can't pollute the reading. Returns 0 when the body hasn't
     /// rendered yet.
     var bodyWidth: CGFloat {
         app.textViews.allElementsBoundByIndex
@@ -204,20 +203,13 @@ struct ReaderPage {
 
     // ── Toolbar actions ─────────────────────────────────────────────────────
 
-    func markReadToggle() {
-        app.byId(A11y.Toolbar.markRead).clickWhenReady()
+    func close() {
+        app.byId(A11y.Detail.close).clickWhenReady()
     }
 
     func favoriteToggle() {
-        app.byId(A11y.Toolbar.favorite).clickWhenReady()
-    }
-
-    func archive() {
-        app.byId(A11y.Toolbar.archive).clickWhenReady()
-    }
-
-    func unarchive() {
-        app.byId(A11y.Toolbar.unarchive).clickWhenReady()
+        let remove = app.buttons["Remove from favorites"]
+        (remove.exists ? remove : app.buttons["Add to favorites"]).clickWhenReady()
     }
 
     func openInBrowser() {
@@ -225,7 +217,7 @@ struct ReaderPage {
     }
 
     func openTagPicker() {
-        app.byId(A11y.Toolbar.tags).clickWhenReady()
+        app.buttons["Edit tags…"].clickWhenReady()
     }
 
     /// Highlight the reader's current text selection. With nothing selected this
@@ -240,40 +232,6 @@ struct ReaderPage {
     }
 
     func delete() {
-        app.byId(A11y.Toolbar.delete).clickWhenReady()
-    }
-
-    // ── Rating footer ─────────────────────────────────────────────────────
-
-    func star(_ index: Int) -> XCUIElement {
-        app.byId(A11y.RatingFooter.star(index))
-    }
-
-    func rate(_ index: Int) {
-        scrollToFooter()
-        star(index).clickWhenReady()
-    }
-
-    /// Scroll the reader to reveal the end-of-article rating footer. The reader's
-    /// scroll view has no identifier and isn't necessarily the first, so swipe up
-    /// on each scroll view until the last star appears.
-    @discardableResult
-    func scrollToFooter(timeout: TimeInterval = 10) -> Bool {
-        let anchor = star(5)
-        let deadline = Date().addingTimeInterval(timeout)
-        while !anchor.exists, Date() < deadline {
-            let scrollViews = app.scrollViews.allElementsBoundByIndex
-            if scrollViews.isEmpty {
-                app.swipeUp()
-            } else {
-                for scrollView in scrollViews where scrollView.exists {
-                    scrollView.swipeUp()
-                    if anchor.exists {
-                        break
-                    }
-                }
-            }
-        }
-        return anchor.exists
+        app.buttons["Delete"].firstMatch.clickWhenReady()
     }
 }

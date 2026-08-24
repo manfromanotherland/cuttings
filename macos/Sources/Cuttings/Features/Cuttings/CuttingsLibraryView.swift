@@ -6,13 +6,23 @@ import UniformTypeIdentifiers
 struct CuttingsLibraryView: View {
     @Environment(AppState.self) var appState
 
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var presentedReading: ReadingRow?
     @State private var presentationOrder: [String] = []
     @State private var tagTargetID: String?
     @State private var isDropTargeted = false
 
     var body: some View {
+        deletionSurface
+            .alert("Cuttings couldn’t complete that action", isPresented: errorAlertPresented) {
+                Button("OK") { appState.error = nil }
+            } message: {
+                Text(appState.error ?? "An unknown error occurred.")
+            }
+    }
+}
+
+extension CuttingsLibraryView {
+    private var layeredSurface: some View {
         ZStack {
             librarySurface
 
@@ -35,88 +45,75 @@ struct CuttingsLibraryView: View {
                 saveNotice(notice)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: presentedReading?.id)
-        .onDrop(of: supportedDropTypes, isTargeted: $isDropTargeted) { providers in
-            guard !providers.isEmpty else { return false }
-            save(providers)
-            return true
-        }
-        .onPasteCommand(
-            of: supportedPasteTypes,
-            validator: { providers in
-                appState.isEditingText || providers.isEmpty ? nil : providers
-            },
-            perform: save
-        )
-        .background { rowsProbe }
-        .task { await appState.loadReadings() }
-        .onChange(of: appState.isFocusMode, initial: true) { _, isFocusMode in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                columnVisibility = isFocusMode ? .detailOnly : .all
+    }
+
+    private var ingestibleSurface: some View {
+        layeredSurface
+            .animation(.easeInOut(duration: 0.2), value: presentedReading?.id)
+            .onDrop(of: supportedDropTypes, isTargeted: $isDropTargeted) { providers in
+                guard !providers.isEmpty else { return false }
+                save(providers)
+                return true
             }
-        }
-        .onChange(of: columnVisibility) { _, visibility in
-            if appState.isFocusMode, visibility != .detailOnly {
-                appState.isFocusMode = false
+            .onPasteCommand(
+                of: supportedPasteTypes,
+                validator: { providers in
+                    appState.isEditingText || providers.isEmpty ? nil : providers
+                },
+                perform: save
+            )
+            .background { rowsProbe }
+            .task { await appState.loadReadings() }
+    }
+
+    private var reactiveSurface: some View {
+        ingestibleSurface
+            .onChange(of: appState.searchQuery) { _, _ in
+                appState.searchDidChange()
             }
-        }
-        .onChange(of: appState.searchQuery) { _, _ in
-            appState.searchDidChange()
-        }
-        .onChange(of: appState.sortField) { _, _ in
-            Task { await appState.loadReadings() }
-        }
-        .onChange(of: appState.searchSort) { _, _ in
-            Task { await appState.loadReadings() }
-        }
-        .onChange(of: appState.sortAscending) { _, _ in
-            Task { await appState.loadReadings() }
-        }
-        .onChange(of: appState.readings) { _, rows in
-            guard let id = presentedReading?.id,
-                  let refreshed = rows.first(where: { $0.id == id }) else { return }
-            presentedReading = refreshed
-        }
-        .sheet(isPresented: tagSheetPresented) {
-            tagPicker
-        }
-        .confirmationDialog(
-            "Delete this item?",
-            isPresented: deleteDialogPresented,
-            presenting: appState.pendingDelete
-        ) { row in
-            Button("Delete", role: .destructive) {
-                delete(row)
+            .onChange(of: appState.sortField) { _, _ in
+                Task { await appState.loadReadings() }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { row in
-            Text("“\(row.displayTitle)” and its local files will be permanently deleted.")
-        }
-        .alert("Cuttings couldn’t complete that action", isPresented: errorAlertPresented) {
-            Button("OK") { appState.error = nil }
-        } message: {
-            Text(appState.error ?? "An unknown error occurred.")
-        }
+            .onChange(of: appState.searchSort) { _, _ in
+                Task { await appState.loadReadings() }
+            }
+            .onChange(of: appState.sortAscending) { _, _ in
+                Task { await appState.loadReadings() }
+            }
+            .onChange(of: appState.readings) { _, rows in
+                guard let id = presentedReading?.id,
+                      let refreshed = rows.first(where: { $0.id == id }) else { return }
+                presentedReading = refreshed
+            }
+    }
+
+    private var presentedSurface: some View {
+        reactiveSurface
+            .sheet(isPresented: tagSheetPresented) {
+                tagPicker
+            }
+    }
+
+    private var deletionSurface: some View {
+        presentedSurface
+            .confirmationDialog(
+                "Delete this item?",
+                isPresented: deleteDialogPresented,
+                presenting: appState.pendingDelete
+            ) { row in
+                Button("Delete", role: .destructive) {
+                    delete(row)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { row in
+                Text("“\(row.displayTitle)” and its local files will be permanently deleted.")
+            }
     }
 }
 
 extension CuttingsLibraryView {
     private var librarySurface: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(selection: activeViewSelection) {
-                Section("Library") {
-                    ForEach(SidebarItem.allCases) { item in
-                        sidebarRow(item)
-                            .tag(item)
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("Cuttings")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
-        } detail: {
-            detailSurface
-        }
+        detailSurface
     }
 
     @ViewBuilder
@@ -137,9 +134,27 @@ extension CuttingsLibraryView {
     @ToolbarContentBuilder
     private var boardToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
+            favoritesToggle
             filterMenu
             sortMenu
         }
+    }
+
+    private var favoritesToggle: some View {
+        let showingFavorites = appState.activeScope == .favorites
+
+        return Button {
+            appState.selectScope(showingFavorites ? .all : .favorites)
+        } label: {
+            Label(
+                showingFavorites ? "Show all" : "Favorites",
+                systemImage: showingFavorites ? "heart.fill" : "heart"
+            )
+        }
+        .accessibilityLabel(showingFavorites ? "Show all cuttings" : "Show favorites")
+        .accessibilityValue(showingFavorites ? "On" : "Off")
+        .accessibilityIdentifier(A11y.Filter.favorites)
+        .help(showingFavorites ? "Show all cuttings" : "Show favorites")
     }
 
     private var filterMenu: some View {
@@ -152,26 +167,15 @@ extension CuttingsLibraryView {
                 }
             }
 
-            Divider()
-
-            Picker("Rating", selection: ratingSelection) {
-                Text("Any Rating").tag(nil as UInt8?)
-                ForEach(1 ... 5, id: \.self) { value in
-                    Text("\(value) star\(value == 1 ? "" : "s")")
-                        .tag(UInt8(value) as UInt8?)
-                        .accessibilityIdentifier(A11y.Sidebar.ratingRow(UInt8(value)))
-                }
-            }
-
-            if !appState.sidebar.tags.isEmpty {
+            if !appState.filters.tags.isEmpty {
                 Divider()
 
                 Picker("Tag", selection: tagSelection) {
                     Text("Any Tag").tag(nil as String?)
-                    ForEach(appState.sidebar.tags, id: \.tag) { item in
+                    ForEach(appState.filters.tags, id: \.tag) { item in
                         Text("#\(item.tag)")
                             .tag(item.tag as String?)
-                            .accessibilityIdentifier(A11y.Sidebar.tagTile(item.tag))
+                            .accessibilityIdentifier(A11y.Filter.tag(item.tag))
                     }
                 }
             }
@@ -184,6 +188,7 @@ extension CuttingsLibraryView {
             )
         }
         .help("Filter cuttings")
+        .accessibilityIdentifier(A11y.Filter.menu)
     }
 
     private var sortMenu: some View {
@@ -209,23 +214,6 @@ extension CuttingsLibraryView {
         }
         .help("Sort cuttings")
         .accessibilityIdentifier(A11y.List.sortMenu)
-    }
-
-    private func sidebarRow(_ item: SidebarItem) -> some View {
-        let count = appState.sidebar.viewCounts[item] ?? 0
-
-        return HStack {
-            Label(item.label, systemImage: item.icon)
-            Spacer()
-            if count > 0 {
-                Text(count > 999 ? "999+" : "\(count)")
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .accessibilityIdentifier(A11y.Sidebar.viewCount(item.id))
-            }
-        }
-        .accessibilityValue("\(count)")
-        .accessibilityIdentifier(A11y.Sidebar.viewRow(item.id))
     }
 
     @ViewBuilder
@@ -264,6 +252,7 @@ extension CuttingsLibraryView {
                     }
                     .frame(width: contentWidth)
                     .padding(.horizontal, 30)
+                    .padding(.top, 30)
                     .padding(.bottom, 42)
                 }
                 .accessibilityIdentifier(A11y.List.table)
@@ -291,7 +280,7 @@ extension CuttingsLibraryView {
         if let row = tagTargetRow {
             TagPickerSheet(
                 applied: row.tags,
-                allTags: appState.sidebar.tags.map(\.tag),
+                allTags: appState.filters.tags.map(\.tag),
                 onToggle: { tag, shouldApply in
                     updateTag(tag, applies: shouldApply, to: row)
                 }
@@ -344,16 +333,6 @@ extension CuttingsLibraryView {
         )
     }
 
-    private var activeViewSelection: Binding<SidebarItem?> {
-        Binding(
-            get: { appState.activeView },
-            set: { item in
-                guard let item, item != appState.activeView else { return }
-                appState.selectView(item)
-            }
-        )
-    }
-
     private var searchQuery: Binding<String> {
         Binding(
             get: { appState.searchQuery },
@@ -365,20 +344,6 @@ extension CuttingsLibraryView {
         Binding(
             get: { appState.selectedKind },
             set: { appState.selectKind($0) }
-        )
-    }
-
-    private var ratingSelection: Binding<UInt8?> {
-        Binding(
-            get: { appState.selectedRating },
-            set: { rating in
-                guard rating != appState.selectedRating else { return }
-                if let rating {
-                    appState.toggleRating(rating)
-                } else if let current = appState.selectedRating {
-                    appState.toggleRating(current)
-                }
-            }
         )
     }
 
@@ -418,7 +383,7 @@ extension CuttingsLibraryView {
     }
 
     private var hasActiveFilters: Bool {
-        appState.selectedKind != nil || appState.selectedRating != nil || appState.selectedTag != nil
+        appState.selectedKind != nil || appState.selectedTag != nil
     }
 
     private var tagTargetRow: ReadingRow? {

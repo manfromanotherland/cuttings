@@ -7,12 +7,13 @@
 
 ## What this is
 
-**Cuttings** is a local-first, single-user "save it now, keep it forever" system.
+**Cuttings** is a local-first, single-user visual inspiration library: save it now, keep it
+forever, and return to it when it sparks something.
 
 You save a web page, a right-clicked image or video, or selected text from your browser. Each save
 becomes a **Markdown file plus local assets on your own disk**. A native app lets you browse the
-result as a mixed visual board, read articles, inspect media and quotes, search, tag, and rate every
-card. There are no accounts, no servers, no logins, no telemetry. The files remain usable without
+result as a mixed visual board, inspect media and quotes, open articles, search, tag, and favorite
+cards. There are no accounts, no servers, no logins, no telemetry. The files remain usable without
 this app.
 
 ## Core principles
@@ -23,7 +24,7 @@ These are load-bearing. Most architectural questions resolve by appealing to one
    server to run and nothing to log into.
 
 2. **Files are the source of truth.** Each reading is a Markdown file with YAML frontmatter.
-   Everything that matters — content, source URL, tags, read/unread state, save date — lives
+   Everything that matters — content, source URL, tags, favorites, save date — lives
    *in the file*. If every other part of this project vanished, the user's library would still
    be complete and usable in any text editor.
 
@@ -52,17 +53,16 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 - **Save in the app** — macOS client. Drop or paste an HTTP(S) link, plain text, or image anywhere
   on the board. Text and image bytes are stored locally; a link is explicitly lightweight until a
   later browser capture upgrades the same URL-derived reading.
-- **Visual card board** — native app. Browse articles, images, videos, and quotes in a mixed
-  masonry layout, organized by smart views:
-  **All**, **Unread**, **Archive**, **Favorites**.
+- **Visual card board** — native app. Browse articles, images, videos, and quotes together in one
+  full-width masonry layout. Favorites remain available as a lightweight board filter.
 - **Search** — native app. Full-text search over readings (title, content, tags) via SQLite
   FTS5. Word-occurrence lookup and word meanings are noted as future ideas, not v1 scope.
 - **Tags** — native app. Organize readings with labels stored in each file's frontmatter. (The
   macOS mockup's "Lists" section is implemented as **Tags** — manual Lists are not planned.)
 - **Personal notes** — native app. Attach one plain-Markdown note to any reading, stored as
   `note.md` inside that reading's folder and synced with it.
-- **Item states** — native app. Mark readings **read/unread**, **favorite**, and **archive**
-  (stored in frontmatter).
+- **Curation** — native app. Mark useful cards as **favorites**, organize them with tags, or
+  permanently delete cards that no longer belong.
 - **Card kind** — every reading is an **article**, **image**, **video**, or **quote**. Older files
   without a kind remain articles.
 - **Origin** — web captures retain the originating page URL, canonical URL, page title/site, and
@@ -107,12 +107,12 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   when available, captures its poster as a local preview asset. Session-local streams get a stable
   opaque capture reference and link back to the source page. The extension does not buffer
   arbitrary video files into native-messaging JSON.
-- **The macOS home is a search-first masonry board.** The old three-column sidebar/list shell is
-  superseded in this fork. Articles still use the existing native Markdown reader in the card
-  detail overlay; no WebView is introduced.
-- **The organizing model is Tags** (labels in frontmatter), not manual Lists. Smart views
-  **All / Unread / Archive / Favorites** are backed by the frontmatter fields `read`,
-  `archived`, and `favorite`.
+- **The macOS home is a search-first, sidebar-free masonry board.** Articles still use the
+  existing native Markdown reader in the card detail overlay; no WebView is introduced.
+- **The organizing model is Tags plus Favorites** (both stored in frontmatter), not manual Lists,
+  read/unread queues, ratings, or an archive. The main board includes every saved item. Legacy
+  `read_at`, `archived`, and `rating` fields remain readable as format-v1 compatibility data but
+  are not exposed by the current macOS product.
 - **UI preferences** (theme, reader font/size/width/line height) are per-device app
   preferences — not stored in the library and not synced.
 - **Paste/drop URL saves are deliberately lightweight.** The app never pretends a URL alone is a
@@ -150,7 +150,7 @@ Optional body explaining why, not what.
 Good examples:
 ```
 feat: add tag picker sheet to the article header
-fix(search): include archived items in search results
+fix(search): include every saved item in search results
 feat(core): add per-reading text highlights
 test: isolate native-host library resolution from the host machine
 ```
@@ -184,12 +184,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>  ← AI co-author traile
   next frame, then `await` the core call and a refresh that reconciles against the index. The
   refresh is the self-heal — a failed write re-reads as the prior truth, so optimistic guesses can
   never get stuck wrong. Don't add manual rollback paths; let the refresh be authoritative.
-- **When an action removes the selected row from the current view, advance in one motion.** If an
-  optimistic status change pushes a row out of the active filter (e.g. Archive in *All*, Mark Read
-  in *Unread*), remove it **and** move selection to an adjacent row in the *same* render tick —
-  mirror the core's view/tag/rating filter client-side to decide. Flipping the icon in place and
-  *then* letting the row jump on the later refresh reads as a two-stage stutter; one motion (the
-  Mail model) does not. Membership *ordering* still settles on the refresh.
+- **When an action removes the selected row from the current filter, advance in one motion.** If
+  an optimistic edit pushes a row out of Favorites or the active tag, remove it **and** move
+  selection to an adjacent row in the *same* render tick. Flipping the control in place and then
+  letting the row jump on the later refresh reads as a two-stage stutter. Membership ordering
+  still settles on the refresh.
 - Keep everything offline-capable; no network calls are required for core features.
 - This is a **monorepo**: `core/`, `extension/`, and `macos/` share one Git history. The library
   format and native-messaging protocol are cross-component contracts; update every affected

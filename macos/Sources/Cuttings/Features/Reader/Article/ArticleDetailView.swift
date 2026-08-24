@@ -46,8 +46,8 @@ struct ArticleDetailView: View {
     let maxParseWords: UInt32 = 1_000_000
 
     /// Reader typography, derived once from the persisted font settings and shared
-    /// by the body (`MarkdownDocumentView`) and the surrounding chrome
-    /// (`ArticleHeaderView`, `RatingFooter`) so they all rescale together.
+    /// by the body (`MarkdownDocumentView`) and `ArticleHeaderView` so both rescale
+    /// together.
     private var theme: MarkdownTheme {
         MarkdownTheme(font: readerFont, fontSize: readerFontSize,
                       width: readerWidth, lineHeight: readerLineHeight)
@@ -88,7 +88,7 @@ struct ArticleDetailView: View {
         // material sits above it and leaves a lit band across the top of the zoom.
         // Dropping that material while a zoom is up lets the backdrop — which
         // already ignores the safe area — run the window's full height. The bar
-        // itself stays put (search, sort and the sidebar toggle keep working); only
+        // itself stays put (search, sort and board filters keep working); only
         // its background steps aside, and it returns when the lightbox closes.
         .toolbarBackground(imageZoom.target == nil ? .automatic : .hidden, for: .windowToolbar)
         .inspector(isPresented: $appState.showHighlights) {
@@ -135,7 +135,7 @@ struct ArticleDetailView: View {
     }
 
     /// The parsed reader itself, handed the reader's typography (face, size,
-    /// measure, and leading) plus the header and rating footer that scroll with it.
+    /// measure, and leading) plus the header that scrolls with it.
     private func reader(row: ReadingRow, document: ArticleDocument) -> some View {
         MarkdownDocumentView(
             document: document,
@@ -150,8 +150,7 @@ struct ArticleDetailView: View {
             onHighlight: { text in
                 Task { await appState.toggleHighlight(id: row.id, text: text) }
             },
-            header: { ArticleHeaderView(row: row, theme: theme) },
-            footer: { ratingFooter(row: row) }
+            header: { ArticleHeaderView(row: row, theme: theme) }
         )
     }
 
@@ -166,8 +165,6 @@ struct ArticleDetailView: View {
                         .italic()
                         .lineSpacing(theme.lineSpacing)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ratingFooter(row: row)
-                        .frame(maxWidth: .infinity)
                 }
                 .frame(maxWidth: theme.contentMaxWidth, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -177,26 +174,8 @@ struct ArticleDetailView: View {
         }
     }
 
-    // ── Rating control ────────────────────────────────────────────────────
-
-    /// End-of-article rating (see `RatingFooter`). The optimistic wiring lives
-    /// here because this view owns the detail `row` state: flip the stars now,
-    /// then reconcile with the authoritative row once the core write + refresh
-    /// land (falling back to the prior row if the write didn't take).
-    private func ratingFooter(row: ReadingRow) -> some View {
-        RatingFooter(row: row, theme: theme) { newValue in
-            let previous = self.row
-            var optimistic = row
-            optimistic.rating = newValue
-            self.row = optimistic
-            Task {
-                self.row = await appState.setRating(id: row.id, rating: newValue) ?? previous
-            }
-        }
-    }
-
     private var emptyDetail: some View {
-        ContentUnavailableView("Select an article to read", systemImage: "doc.text")
+        ContentUnavailableView("Select an item to view", systemImage: "doc.text")
             .accessibilityIdentifier(A11y.Detail.empty)
     }
 
@@ -211,10 +190,7 @@ struct ArticleDetailView: View {
     private var currentRow: ReadingRow? {
         guard let id = appState.selectedId else { return nil }
         // Fall back to the loaded detail row when the selection sits outside the
-        // current list — e.g. after re-rating the open article inside a rating
-        // filter, where it stays selected and shown but drops off the list. Keeps
-        // the toolbar populated instead of blanking the actions for what's on
-        // screen.
+        // current list, keeping the toolbar populated for what's still on screen.
         return appState.readings.first(where: { $0.id == id }) ?? (row?.id == id ? row : nil)
     }
 
@@ -223,9 +199,8 @@ struct ArticleDetailView: View {
         // The lightbox's backdrop is a content overlay and can't cover the unified
         // title bar, so the reader's own actions step aside while an image is
         // zoomed — they'd float above the dark backdrop and act on an article the
-        // user can't see. Only these go: the search field, sort control and sidebar
-        // toggle belong to the other columns, which the zoom never covers, so
-        // hiding them was gratuitous.
+        // user can't see. Search, sort, and board filters remain available because
+        // the zoom never covers the board toolbar.
         if showsToolbar, let row = currentRow, imageZoom.target == nil {
             ArticleToolbar(row: row, appState: appState)
         }

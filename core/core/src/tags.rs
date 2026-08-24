@@ -360,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn list_tags_archived_only_tag_shows_zero_in_active_view() {
+    fn list_tags_includes_legacy_archived_readings_in_all() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
 
@@ -370,10 +370,10 @@ mod tests {
         write_reading(&lib, m, "body".into()).unwrap();
         rebuild(&conn, &lib).unwrap();
 
-        // The tag set is fixed, so an archived-only tag stays present, but the All
-        // view's count excludes archived readings — so it shows a pinned 0.
+        // All is the complete inspiration library, so cards written by older builds
+        // remain discoverable even when their metadata still says archived.
         let tags = list_tags(&conn, &CountScope::default()).unwrap();
-        assert_eq!(tags, vec![("hidden".to_string(), 0)]);
+        assert_eq!(tags, vec![("hidden".to_string(), 1)]);
     }
 
     /// Build the faceting corpus shared by the scoped tag-count tests:
@@ -456,8 +456,8 @@ mod tests {
         let lib = make_library(&dir);
         faceting_corpus(&lib, &conn);
 
-        // 5★ + default All view: only A qualifies for the counts (C is 5★ but
-        // archived), so rust/prog report 1 and the archived-only "old" is pinned at 0.
+        // The legacy 5★ facet still sees both A and archived C in the complete All
+        // library, so rust reports 2 while prog and old each report 1.
         let tags = list_tags(
             &conn,
             &CountScope {
@@ -469,9 +469,9 @@ mod tests {
         assert_eq!(
             tags,
             vec![
-                ("old".to_string(), 0),
+                ("old".to_string(), 1),
                 ("prog".to_string(), 1),
-                ("rust".to_string(), 1),
+                ("rust".to_string(), 2),
             ]
         );
     }
@@ -718,9 +718,9 @@ mod tests {
         assert_eq!(
             selected,
             vec![
-                ("old".to_string(), 0),
+                ("old".to_string(), 1),
                 ("prog".to_string(), 1),
-                ("rust".to_string(), 2),
+                ("rust".to_string(), 3),
             ]
         );
     }

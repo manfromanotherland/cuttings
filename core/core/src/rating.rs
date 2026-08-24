@@ -232,7 +232,8 @@ mod tests {
         let conn = open(&dir.path().join("index.db")).unwrap();
         faceting_corpus(&lib, &conn);
 
-        // The "sci" tag (active side) covers A (5★) and C (3★); B is "cook".
+        // The "sci" tag covers A and legacy-archived D (5★), plus C (3★);
+        // B is "cook".
         let ratings = list_ratings(
             &conn,
             &CountScope {
@@ -241,7 +242,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(ratings, vec![(5, 1), (3, 1)]);
+        assert_eq!(ratings, vec![(5, 2), (3, 1)]);
     }
 
     #[test]
@@ -402,6 +403,6 @@ mod tests {
             selected,
             list_ratings(&conn, &CountScope::default()).unwrap()
         );
-        assert_eq!(selected, vec![(5, 2), (3, 1)]);
+        assert_eq!(selected, vec![(5, 3), (3, 1)]);
     }
 }

@@ -3,25 +3,18 @@
 import AppKit
 import XCTest
 
-/// The middle column: the reading list, its rows, sort menu, search, and empty
-/// states.
+/// The visual board, its cards, toolbar controls, search, sort, and empty states.
 struct ReadingListPage {
     let app: XCUIApplication
 
     /// Sort menu labels, mirroring `ReadingSort.label` / `directionLabel`.
     enum Sort {
         static let dateSaved = "Date saved"
-        static let dateRead = "Date read"
-        static let rating = "Rating"
-        static let timeToRead = "Time to read"
+        static let length = "Length"
         static let relevance = "Relevance"
 
         static let newestFirst = "Newest first"
         static let oldestFirst = "Oldest first"
-        static let readMostRecently = "Read most recently"
-        static let readLeastRecently = "Read least recently"
-        static let highestRated = "Highest rated"
-        static let lowestRated = "Lowest rated"
         static let longestFirst = "Longest first"
         static let shortestFirst = "Shortest first"
     }
@@ -30,13 +23,39 @@ struct ReadingListPage {
         app.byId(A11y.List.table)
     }
 
+    var favoritesToggle: XCUIElement {
+        app.byId(A11y.Filter.favorites)
+    }
+
+    var filterMenu: XCUIElement {
+        app.byId(A11y.Filter.menu)
+    }
+
+    func showFavorites() {
+        favoritesToggle.clickWhenReady()
+    }
+
+    func showAll() {
+        favoritesToggle.clickWhenReady()
+    }
+
+    func selectTagFilter(_ tag: String) {
+        filterMenu.clickWhenReady()
+        let identified = app.byId(A11y.Filter.tag(tag))
+        if identified.exists {
+            identified.clickWhenReady()
+        } else {
+            app.menuItems["#\(tag)"].clickWhenReady()
+        }
+    }
+
     // ── Rows ────────────────────────────────────────────────────────────────
 
     func row(_ id: String) -> XCUIElement {
         app.byId(A11y.List.row(id))
     }
 
-    /// Selecting a row also opens it in the reader (selection drives the detail).
+    /// Selecting a card opens it in the reading overlay.
     func select(_ id: String) {
         row(id).clickWhenReady()
     }

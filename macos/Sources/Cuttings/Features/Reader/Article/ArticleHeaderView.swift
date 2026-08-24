@@ -3,7 +3,7 @@
 import SwiftUI
 
 /// Fixed-height header above the reader's own scroll: the article title and a
-/// metadata row (reading time on the left, a read-only tag summary on the right).
+/// metadata row (estimated length on the left, a read-only tag summary on the right).
 /// Driven entirely by the passed-in row, so it lives apart from
 /// `ArticleDetailView`'s loading state.
 struct ArticleHeaderView: View {

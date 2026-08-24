@@ -68,10 +68,10 @@ preview_asset: assets/3f4a1b8e....jpg      # optional local card preview written
 author: Jane Doe                           # optional; extracted byline
 site: example.com                          # eTLD+1 of canonical_url
 saved_at: 2026-06-13T15:00:00Z            # ISO-8601 UTC; set once at save time; never updated
-read_at: 2026-06-14T09:00:00Z             # optional ISO-8601 UTC; present == read, absent == unread
-archived: false                            # bool — moved out of the active list?
-favorite: false                            # bool — starred?
-rating: 0                                  # integer 0–5; 0 means unrated
+read_at: 2026-06-14T09:00:00Z             # optional legacy state; preserved for compatibility
+archived: false                            # required legacy state; current macOS app ignores it
+favorite: false                            # bool — marked as a favorite?
+rating: 0                                  # required legacy 0–5 value; current macOS app ignores it
 tags: [rust, local-first]                  # string[]; elements are lowercase, no spaces
 excerpt: One-sentence summary.             # optional; shown in the list view
 word_count: 1234                           # integer; word count of the cleaned body
@@ -109,9 +109,10 @@ is true only for a URL-only paste/drop card.
   copied file inside its own reading folder without persisting the original machine path.
 - `preview_asset`, when present, must be the safe single-file shape `assets/<filename>`. It is
   derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
-- **Read state is the presence of `read_at`**: a timestamp means read (its value is when it was
-  last marked read); an absent field means unread. There is no separate `read` boolean.
-- `archived`, `favorite`, and `rating` are the source of truth for those states — the DB mirrors them.
+- `read_at`, `archived`, and `rating` remain part of the format-v1 compatibility contract. Older
+  clients may still interpret and mutate them, so current readers preserve them when rewriting a
+  file. The current macOS product does not expose them as curation controls.
+- `favorite` is the source of truth for the visible favorite state; the DB mirrors it.
 - `tags` elements must be lowercase, trimmed, and contain no spaces (use `-` as separator).
 - `source_hash` is recomputed on any edit to the body; the DB uses it to detect stale index entries.
 
@@ -279,16 +280,18 @@ the same content can still produce two readings — an accepted trade-off of ori
 
 ---
 
-## Smart-view semantics
+## Current macOS board scopes
 
-The macOS app's sidebar views are defined by frontmatter field values:
+The current macOS app has no sidebar and does not expose read, archive, or rating workflows:
 
-| View | Filter |
-|------|--------|
-| **All** | `archived == false` |
-| **Unread** | `archived == false AND read_at is absent` |
-| **Archive** | `archived == true` |
-| **Favorites** | `favorite == true` (regardless of archived) |
+| Scope | Filter |
+|-------|--------|
+| **All** | every saved item, regardless of legacy state fields |
+| **Favorites** | `favorite == true` |
+
+The core continues to parse, index, and round-trip `read_at`, `archived`, and `rating` so opening
+an existing library does not strip data used by an older client. Those fields no longer hide cards
+from **All**.
 
 ---
 

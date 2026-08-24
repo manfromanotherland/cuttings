@@ -127,6 +127,8 @@ struct CuttingsReadingOverlay: View {
                 .background(.regularMaterial, in: Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Close")
+        .accessibilityIdentifier(A11y.Detail.close)
         .help("Close")
         .keyboardShortcut(.cancelAction)
         .padding(14)
@@ -138,10 +140,14 @@ struct CuttingsReadingOverlay: View {
                 Image(systemName: "chevron.left")
                     .frame(width: 28, height: 28)
             }
+            .accessibilityLabel("Previous item")
+            .accessibilityIdentifier(A11y.Detail.previous)
             Button { onMove(1) } label: {
                 Image(systemName: "chevron.right")
                     .frame(width: 28, height: 28)
             }
+            .accessibilityLabel("Next item")
+            .accessibilityIdentifier(A11y.Detail.next)
         }
         .buttonStyle(.plain)
         .background(.regularMaterial, in: Capsule())

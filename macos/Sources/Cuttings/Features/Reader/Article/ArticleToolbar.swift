@@ -2,8 +2,8 @@
 
 import SwiftUI
 
-/// The reader's primary-action toolbar: read/favorite/archive, open in
-/// browser, tags, highlight, delete. The parent resolves which row to build
+/// The reader's primary-action toolbar: favorite, open in browser, tags,
+/// highlight, and delete. The parent resolves which row to build
 /// it for (see `ArticleDetailView.currentRow`); actions write through
 /// `appState`, whose refresh supplies the updated row on the next render.
 struct ArticleToolbar: ToolbarContent {
@@ -20,20 +20,6 @@ struct ArticleToolbar: ToolbarContent {
             Spacer()
 
             Button {
-                // Optimistic via the parent's `currentRow`; on a selection
-                // advance `onChange(selectedId)` reloads the detail — so no
-                // row reload here, which would fight that advance.
-                Task { await appState.toggleRead(row) }
-            } label: {
-                Label(
-                    row.read ? "Mark Unread" : "Mark Read",
-                    systemImage: row.read ? "circle" : "checkmark.circle"
-                )
-            }
-            .help(row.read ? "Mark as unread" : "Mark as read")
-            .accessibilityIdentifier(A11y.Toolbar.markRead)
-
-            Button {
                 Task { await appState.toggleFavorite(row) }
             } label: {
                 Label(
@@ -43,24 +29,6 @@ struct ArticleToolbar: ToolbarContent {
             }
             .help(row.favorite ? "Remove from favorites" : "Add to favorites")
             .accessibilityIdentifier(A11y.Toolbar.favorite)
-
-            if row.archived {
-                Button {
-                    Task { await appState.unarchive(row) }
-                } label: {
-                    Label("Move to Library", systemImage: "tray.and.arrow.up")
-                }
-                .help("Move back to library")
-                .accessibilityIdentifier(A11y.Toolbar.unarchive)
-            } else {
-                Button {
-                    Task { await appState.archive(row) }
-                } label: {
-                    Label("Archive", systemImage: "archivebox")
-                }
-                .help("Archive this article")
-                .accessibilityIdentifier(A11y.Toolbar.archive)
-            }
 
             if let url = row.sourceURL {
                 Button {
@@ -104,7 +72,7 @@ struct ArticleToolbar: ToolbarContent {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-            .help("Permanently delete this reading")
+            .help("Permanently delete this item")
             .accessibilityIdentifier(A11y.Toolbar.delete)
 
             Button {

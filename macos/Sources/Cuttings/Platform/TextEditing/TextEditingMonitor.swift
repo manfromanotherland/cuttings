@@ -4,10 +4,10 @@ import AppKit
 
 /// Tracks whether the user is editing a text field (the toolbar search field,
 /// the tag picker, …). macOS dispatches menu/context-menu key-equivalents
-/// *before* the focused field editor, so a global ⌘⌫ ("Archive") would fire
-/// mid-edit instead of deleting the line; commands whose shortcuts collide
-/// with the field editor's own keys disable themselves while a field is
-/// focused. Rather than wire focus into every field, this watches the field
+/// *before* the focused field editor, so a global shortcut can fire instead of
+/// editing the line; commands whose shortcuts collide with the field editor's
+/// own keys disable themselves while a field is focused. Rather than wire focus
+/// into every field, this watches the field
 /// editor's begin/end-editing notifications (and key window changes) and
 /// re-reads the key window's first responder — one place, covering the search
 /// field, the tag picker, and any field added later.

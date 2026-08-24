@@ -7,7 +7,7 @@ struct NavigationCommands: Commands {
     var appState: AppState
 
     var body: some Commands {
-        CommandGroup(after: .sidebar) {
+        CommandGroup(replacing: .sidebar) {
             Button("Focus Search") {
                 appState.focusSearchField()
             }

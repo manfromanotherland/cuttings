@@ -76,13 +76,6 @@ enum ReaderWidth: Int, CaseIterable, Identifiable {
     var points: CGFloat {
         CGFloat(rawValue)
     }
-
-    /// Icons flanking the width slider in the sidebar's appearance popover —
-    /// horizontal compress / expand, mirroring the small-to-large "Aa" pair on
-    /// the font-size slider above it. Five graded column icons don't exist in SF
-    /// Symbols, so the scale is conveyed by the slider and its two end caps.
-    static let narrowIcon = "arrow.right.and.line.vertical.and.arrow.left"
-    static let wideIcon = "arrow.left.and.line.vertical.and.arrow.right"
 }
 
 /// Leading between body lines, as a CSS-style line-height multiple of the body
@@ -126,11 +119,4 @@ enum ReaderLineHeight: String, CaseIterable, Identifiable {
     var extraLeadingMultiple: CGFloat {
         max(multiple - 1.2, 0)
     }
-
-    /// Icons capping the line-height slider in the sidebar's appearance popover —
-    /// vertical compress / expand, the axis line height moves on. Same reasoning
-    /// as `ReaderWidth`'s end caps: five graded glyphs don't exist, so the slider
-    /// carries the scale.
-    static let tightIcon = "arrow.down.and.line.horizontal.and.arrow.up"
-    static let looseIcon = "arrow.up.and.line.horizontal.and.arrow.down"
 }

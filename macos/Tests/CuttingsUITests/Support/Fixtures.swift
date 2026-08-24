@@ -5,15 +5,13 @@ import Foundation
 /// The shared, fixed set of fake readings every journey asserts against, plus
 /// the **oracle** constants (known counts and orderings) derived from it. The
 /// oracles are hand-computed against the real core's rules, verified in
-/// `list.rs` / `tags.rs` / `rating.rs`:
+/// `list.rs` / `tags.rs`:
 ///
-/// - views: All =`archived=0`, Unread =`archived=0 & read_at IS NULL`,
-///   Read =`archived=0 & read_at IS NOT NULL`, Archive =`archived=1`,
-///   Favorites =`favorite=1` (crosses archive);
-/// - tag counts: non-archived only, count desc then name asc;
-/// - rating counts: non-archived, ratings 1–5, rating desc;
-/// - sort: `field DIR, id DESC`, with `read_at`/`word_count` NULLs forced last
-///   in both directions; the app default is `saved_at` descending.
+/// - scopes: All includes every card, including legacy archived metadata;
+///   Favorites =`favorite=1`;
+/// - tag counts include every card in All;
+/// - sort: `field DIR, id DESC`, with `word_count` NULLs forced last in both
+///   directions; the app default is `saved_at` descending.
 ///
 /// Every article's id is `TestULID.make(index)`, so ids sort in index order —
 /// which makes the `id DESC` tiebreak (and the whole default ordering) predictable.
@@ -132,27 +130,17 @@ enum Fixtures {
     // ── Oracles ─────────────────────────────────────────────────────────────
 
     enum Oracle {
-        // Sidebar smart-view badge counts.
+        // Board scope counts.
         // swiftlint:disable:next nesting
         enum ViewCounts {
-            static let all = 8
-            static let unread = 5
-            static let read = 3
-            static let archive = 2
+            static let all = 10
             static let favorites = 3
         }
 
-        /// Sidebar Tags section: non-archived counts, listed alphabetically by name
-        /// (the fixed, count-independent order the tiles render in).
+        /// Toolbar tag options across the whole board, alphabetical by name.
         static let tagCounts: [(tag: String, count: Int)] = [
-            ("markdown", 1), ("programming", 3), ("rust", 2), ("swift", 2), ("unicode", 1)
-        ]
-
-        /// Sidebar Ratings section: non-archived, ratings 1–5, rating desc. Each
-        /// bucket has one article (5→idx0, 4→idx5, 3→idx6, 2→idx7, 1→idx3); idx9
-        /// is rating 5 but archived, so it's excluded.
-        static let ratingCounts: [(rating: UInt8, count: Int)] = [
-            (5, 1), (4, 1), (3, 1), (2, 1), (1, 1)
+            ("archived-tag", 1), ("markdown", 1), ("programming", 3),
+            ("rust", 3), ("swift", 2), ("unicode", 1)
         ]
 
         // Expected row order (by id) in the **All** view for each sort field and
@@ -161,20 +149,12 @@ enum Fixtures {
         // swiftlint:disable:next nesting
         enum Sort {
             // saved_at increases with index → DESC is reverse index order.
-            static let savedAtDescending = ids([7, 6, 5, 4, 3, 2, 1, 0]) // also the app default
-            static let savedAtAscending = ids([0, 1, 2, 3, 4, 5, 6, 7])
+            static let savedAtDescending = ids([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+            static let savedAtAscending = ids([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
-            // read: 0=Feb01, 5=Feb10, 6=Feb15; unread {1,2,3,4,7} last by id DESC.
-            static let readAtDescending = ids([6, 5, 0, 7, 4, 3, 2, 1])
-            static let readAtAscending = ids([0, 5, 6, 7, 4, 3, 2, 1])
-
-            // ratings: 0→5, 5→4, 6→3, 7→2, 3→1; zeros {1,2,4} tie, id DESC.
-            static let ratingDescending = ids([0, 5, 6, 7, 3, 4, 2, 1])
-            static let ratingAscending = ids([4, 2, 1, 3, 7, 6, 5, 0])
-
-            // word_count: 2=5000,7=3200,1=2500,5=1800,0=1200,6=600,3=300; 4=NULL last.
-            static let wordCountDescending = ids([2, 7, 1, 5, 0, 6, 3, 4])
-            static let wordCountAscending = ids([3, 6, 0, 5, 1, 7, 2, 4])
+            // word_count: 2=5000 ... 3=300; 4=NULL and remains last.
+            static let wordCountDescending = ids([2, 7, 1, 5, 9, 0, 8, 6, 3, 4])
+            static let wordCountAscending = ids([3, 6, 8, 0, 9, 5, 1, 7, 2, 4])
         }
 
         private static func ids(_ indices: [Int]) -> [String] {

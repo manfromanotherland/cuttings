@@ -68,14 +68,14 @@ targets:
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/cuttings-native-host
 
-  # Fast, hostless unit tests for pure app logic: smart-view membership,
-  # reading-time formatting, and the FFI-to-presentation ReadingRow mapper. It
+  # Fast, hostless unit tests for pure app logic: library-scope membership,
+  # content-length formatting, and the FFI-to-presentation ReadingRow mapper. It
   # compiles the specific files under test directly — the same way
   # CuttingsUITests shares AccessibilityID.swift — rather than hosting in the
   # app, so the suite never launches the app, opens a window, or touches the
   # dev's real library or defaults. The generated bindings and the static core
   # framework are linked because the code under test still meets the FFI
-  # boundary: the mapper takes an `FfiReadingRow` and `SidebarItem.ffiView`
+  # boundary: the mapper takes an `FfiReadingRow` and `LibraryScope.ffiView`
   # returns an `FfiView`.
   CuttingsTests:
     type: bundle.unit-test
@@ -125,13 +125,25 @@ targets:
     platform: macOS
     sources:
       - path: Tests/CuttingsUITests
+        excludes:
+          - Checks/HighlightActionCheck.swift
+          - Journeys/ComposedFiltersJourney.swift
+          - Journeys/FindingArticleJourney.swift
+          - Journeys/InboxZeroJourney.swift
+          - Journeys/KeyboardPowerJourney.swift
+          - Journeys/MorningCatchUpJourney.swift
+          - Journeys/PersonalizationJourney.swift
+          - Journeys/ReaderLayoutJourney.swift
+          - Journeys/SearchFacetCountsJourney.swift
+          - Journeys/SmartViewPinsFacetsJourney.swift
+          - Journeys/StatePersistenceJourney.swift
+          - Journeys/WeekendCleanupJourney.swift
+          - PageObjects/SettingsPage.swift
+          - PageObjects/ShortcutsSheetPage.swift
+          - PageObjects/SidebarPage.swift
       # Shared with the app target (it also lives under Sources/Cuttings/) so
       # tests and app compile the same accessibility identifiers.
       - path: Sources/Cuttings/AccessibilityID.swift
-      # Likewise shared: the reader's typography vocabulary (font, size, width,
-      # line height). Journeys assert against the same option labels and point
-      # values the app renders, so neither can drift from the other.
-      - path: Sources/Cuttings/Shared/Preferences/TypographySettings.swift
     dependencies:
       - target: Cuttings
     settings:

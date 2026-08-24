@@ -70,7 +70,7 @@ never blue.** The only two non-gray brand accents anywhere are a marker **yellow
 - **Theme:** **System** by default, with explicit **Light / Dark / System** options.
 - **Tone:** minimal, calm, content-first. Generous negative space; the reading list and reader
   are the focus and the chrome stays quiet.
-- **Shape & depth:** use standard macOS window, sidebar, toolbar, menu, popover, sheet, and control
+- **Shape & depth:** use standard macOS window, toolbar, menu, popover, sheet, and control
   treatments. Cards may be rounded because they represent content, but app chrome does not invent
   its own pills, rails, shadows, or selection styles.
 - **Typography:** San Francisco through semantic system text styles for app chrome. The reader's
@@ -94,28 +94,25 @@ user-supplied mymind screenshots are a reference for **how mixed image, quote, v
 cards organize into masonry columns**. The surrounding mymind branding and chrome are not copied.
 
 ```
-┌──────────────┬──────────────────────────────────────────────────┐
-│ Cuttings     │ Toolbar: [ Search ]       [Filter] [Sort]        │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Library      │ ┌─────────┐ ┌───────┐ ┌─────────┐ ┌──────────┐   │
-│   All        │ │ quote   │ │ image │ │ video   │ │ article  │   │
-│   Unread     │ │         │ └───────┘ │ poster  │ │ preview  │   │
-│   Read       │ └─────────┘ ┌───────┐ └─────────┘ └──────────┘   │
-│   Archive    │                                                  │
-│   Favorites  │                                                  │
-└──────────────┴──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ Cuttings      [Favorites] [Filter] [Sort]       [ Search ]      │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────┐ ┌───────┐ ┌─────────┐ ┌──────────┐                │
+│  │ quote   │ │ image │ │ video   │ │ article  │                │
+│  │         │ └───────┘ │ poster  │ │ preview  │                │
+│  └─────────┘ ┌───────┐ └─────────┘ └──────────┘                │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Navigation and search
 
-- Use a two-column `NavigationSplitView`. Its standard macOS sidebar contains the Cuttings title
-  and Library smart views: **All / Unread / Read / Archive / Favorites**, with native symbols and
-  badges. The system sidebar toggle and window restoration behavior remain intact.
+- Use one full-width board with no sidebar or navigation rail. Keep the first masonry row inset
+  from the toolbar by the same 30 pt used at the board's horizontal edges.
 - Put the native search field in the unified window toolbar using `.searchable`, with the prompt
   *"Search Cuttings"*. Do not create a bespoke `NSSearchField` or oversized page header.
-- Put card kind, rating, and tag in one standard toolbar **Filter** menu; put sort field and order
-  in a standard toolbar **Sort** menu. Do not duplicate the smart views or render pill controls.
-- Search, view, kind, rating, and tag remain intersections. Filtering is performed in the Rust
+- Keep **Favorites** as a visible heart control in the toolbar. Put card kind and tag in one
+  standard toolbar **Filter** menu; put sort field and order in a standard toolbar **Sort** menu.
+- Search, favorites, kind, and tag remain intersections. Filtering is performed in the Rust
   core, not on the currently loaded Swift page, so pagination remains correct.
 
 ### Masonry cards
@@ -141,8 +138,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - Browser right-click uses one **"Add to Cuttings"** command for a page, image, video, or selected
   text. Selection becomes a quote card; image bytes and video posters are copied locally when
   available.
-- The native card context menu provides tags, rating, read/favorite/archive state, open origin,
-  reveal local files, and delete. Destructive actions retain confirmation.
+- The native card context menu provides favorite, tags, open origin, and permanent delete.
+  Destructive actions retain confirmation.
 
 ### Card detail
 
@@ -152,15 +149,15 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.
   Videos show the local poster and source/media actions without silently downloading a stream.
   Quotes show the full selected text natively.
-- The inspector consistently shows origin, saved date, rating, tags, read/favorite/archive state,
-  a personal note, and relevant local/direct-media paths. The note opens in a focused raw-Markdown
+- The inspector consistently shows origin, saved date, tags, favorite state, a personal note, and
+  relevant local/direct-media paths. The note opens in a focused raw-Markdown
   editor sheet; saving blank content removes it. If sync changes the note while that sheet is open,
   the user chooses whether to load the latest file or explicitly replace it with the draft.
 
 ### Content states
 
 - **Empty state:** quiet browser-extension guidance for saving a page, media item, or selection.
-- **Board:** the masonry result for the composed filters, with incremental pagination.
+- **Board:** the masonry result for the active favorites/kind/tag filters, with incremental pagination.
 - **No results:** identifies the active search/filter and offers to clear that axis.
 
 ### Settings / appearance
@@ -217,11 +214,8 @@ Everything else is a multiple of this body size, so the document keeps its propo
 | Content measure | `680 pt` (Medium) | — | optimal line length (~60–75 chars); content is centered |
 
 **Line height** and **content measure** are user-adjustable in Settings › Typography
-and in the sidebar's appearance popover (`ReaderLineHeight`, `ReaderWidth`); the values
-above are the defaults, and each is the **middle stop** of its five, so a slider at
-centre lands on the default. Settings labels the options in words; the popover is
-icon-only — two sliders matching the font-size slider above them, capped with
-horizontal compress/expand glyphs for width and vertical ones for line height.
+(`ReaderLineHeight`, `ReaderWidth`). The values above are the defaults, and each is the
+**middle stop** of its five, so the middle choice lands on the default.
 
 | Line height | Effective | Added leading (× body) |
 |-------------|-----------|------------------------|
@@ -336,12 +330,12 @@ the section it introduces* (a core HIG/typography principle) and major sections 
 
 Above the scrolling reader (in `ArticleDetailView`), each article shows:
 
-- **Title** at the **H1 type token** (bold) — the reading's sole h1. Like the metadata and rating,
+- **Title** at the **H1 type token** (bold) — the reading's sole h1. Like the metadata,
   it is sized from the reader's body size, so the whole header rescales when the reader changes the
   font size instead of staying fixed while the copy grows.
-- **Metadata row** — site (`globe`), author (`person`), and estimated reading time (`clock`) as
-  secondary labels sized from the body, shown only when present. Reading time is derived from
-  word count at an average **200 wpm**, rounded up to a 1-minute minimum (e.g. "5 min read"); the
+- **Metadata row** — site (`globe`), author (`person`), and estimated article length (`clock`) as
+  secondary labels sized from the body, shown only when present. Length is derived from word
+  count at an average **200 wpm**, rounded up to a 1-minute minimum (e.g. "5 min"); the
   raw word count is kept as the label's hover tooltip. Icon–label gaps use the 4 pt
   icon–label spacing token.
 - **Tags** as rounded **capsule chips** in the header, each removable with an inline ×. New
@@ -350,19 +344,6 @@ Above the scrolling reader (in `ArticleDetailView`), each article shows:
   checkmark, and offers to create-and-apply a new tag as you type. (Adding lives in the sheet,
   not inline, so revealing matches never reflows the article below.)
 - A divider separates the header from the scrollable body.
-
-The **rating is deliberately *not* in the header.** A rating is a judgment formed *after* reading,
-so a 5-star control would prompt for a verdict before the reader has read a word. Instead it lives
-at the **end of the reading** (see below).
-
-### End-of-article rating
-
-A 5-star control sits at the **foot of the article body**, rendered as a `footer` inside the
-reader's own scroll (`MarkdownDocumentView`) — so it surfaces only when the reader reaches the end
-of the piece, matching the moment a rating is actually formed. A short "Rate this article" label
-and a divider set it off from the body. Clicking the current rating again clears it back to
-unrated. The same footer is appended to the excerpt-only fallback path so unfetched readings can
-still be rated.
 
 ### Text selection
 
@@ -411,50 +392,36 @@ produce. Anything unrecognized recurses into its children so **no content is sil
 > HTML→Markdown (e.g. flatten footnotes, drop math) so the reader stays clean. Revisit footnotes and
 > syntax highlighting as future enhancements.
 
-## Item states & data-model impact
+## Curation & data-model impact
 
-The mockup introduces item states beyond read/unread. These are **reading data**, so they live
-in each file's frontmatter (the source of truth) and are mirrored in the index:
+The visible organizing model is deliberately small:
 
-| State | Frontmatter field | Notes |
-|-------|-------------------|-------|
-| Read / unread | `read: bool` | already planned |
-| Archived | `archived: bool` | moved out of the active list |
-| Favorite | `favorite: bool` | starred |
-| Rating | `rating: u8` | 0–5 stars (0 = unrated); powers the sidebar **Ratings** filter |
-| Tags | `tags: [..]` | labels; power the sidebar **Tags** section |
+| Curation | Frontmatter field | Notes |
+|----------|-------------------|-------|
+| Favorite | `favorite: bool` | powers the toolbar Favorites filter |
+| Tags | `tags: [..]` | labels; power the toolbar tag filter |
 
-**Smart-view semantics (assumption — please confirm):**
-- **All** — readings that are **not archived** (the active list).
-- **Unread** — not archived **and** `read == false`.
-- **Archive** — `archived == true`.
-- **Favorites** — `favorite == true` (regardless of archive state).
+The main board includes every saved item. The format-v1 `read_at`, `archived`, and `rating`
+fields remain readable and round-trippable for compatibility with existing libraries and older
+clients, but the current macOS app neither displays nor mutates them.
 
 ## Interaction model — optimistic & self-healing
 
-Status changes (read, favorite, archive, rating, tags) **apply to the UI instantly**; persistence
-happens in the background. The user clicks, the star/heart/dot flips on the next frame, and the
+Favorite and tag changes **apply to the UI instantly**; persistence happens in the background.
+The user clicks, the heart or tag flips on the next frame, and the
 core write + index refresh run behind it. Because the markdown file is the source of truth and the
 refresh re-reads from it, a failed write simply reconciles back — no spinners, no manual undo.
 
-**One motion, not two.** When an action moves a reading out of the view you're looking at —
-Archive in *All*, Mark Read in *Unread*, removing the tag you're filtered by — the row slides out
-**and** selection advances to the neighbouring reading in the same beat, like archiving in Mail.
+**One motion, not two.** When an action moves a card out of the filter you're looking at — removing
+it from Favorites or removing the selected tag — the row slides out **and** selection advances to
+the neighbouring card in the same beat.
 The reader follows to the next item. (Flipping the icon in place and letting the row jump a moment
 later, on the async refresh, reads as a stutter; this avoids it.) Row *re-ordering* after an edit
 still settles on the background refresh — only removal/advance is immediate.
 
-**The sidebar counts move with the row.** The view counts (All / Unread / Read / Archive /
-Favorites) and the **Tags** and **Ratings** sections are optimistic too: an edit folds its
-before/after into the counts in memory on the same frame, so archiving a tagged 5-star reading
-instantly does `All −1`, `Archive +1`, and drops it from both its tag count and the 5-star count.
-The deltas mirror the engine's own count rules — tag and rating counts include only non-archived
-readings; Favorites counts regardless of archived — and `loadSidebar()` reconciles to the true
-numbers on the background refresh. Counts are pure presentation, never persisted, so this stays a
-UI concern and never touches the file-first persistence model.
-
-**Selection can sit off-list.** A reading stays selected and shown in the reader even after an edit
-drops it from the visible list — e.g. re-rating the open article while in a Ratings filter. The
+**Selection can sit off-list.** A card stays selected and shown in the detail overlay even after
+an edit drops it from the visible board — for example, removing its favorite while viewing only
+Favorites. The
 list simply shows no highlight, and the toolbar reads from the open reading rather than the (now
 absent) list row. This keeps the reader and the list from disagreeing, and a post-edit refresh
 never re-homes the selection out from under you (only direct reloads — filter switch, sort, search,
@@ -485,6 +452,4 @@ first load — pick a default row).
 
 - ~~Exact extension color tokens and brand accent~~ — **resolved:** see the
   [Brand color palette](#brand-color-palette); the macOS app uses semantic system colors.
-- **Archive vs All** semantics (does "All" include archived?) — the assumption above pending
-  confirmation.
-- List-row density and exactly which indicators/metadata appear inline.
+- Exactly which quiet source metadata belongs on each card kind as the library grows.

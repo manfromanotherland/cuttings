@@ -4,7 +4,7 @@ import Foundation
 
 /// Builds a `ReadingRow` for logic tests, defaulting every field so a test sets
 /// only the flags it exercises. The non-flag fields are fixed placeholders; the
-/// smart-view and reading-time logic never reads them.
+/// library-scope and content-length logic never reads them.
 func makeReadingRow(
     read: Bool = false,
     archived: Bool = false,

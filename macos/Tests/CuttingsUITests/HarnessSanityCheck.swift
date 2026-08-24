@@ -10,8 +10,9 @@ final class HarnessSanityCheck: UITestCase {
     func testLaunchesEmptyLibraryAndTearsDown() throws {
         let app = try launchApp()
 
-        // Main view is up: the "All" smart-view row exists in the sidebar.
-        XCTAssertTrue(app.byId(A11y.Sidebar.viewRow("all")).exists)
+        // The board and its toolbar are mounted without relying on a sidebar.
+        XCTAssertTrue(app.byId(A11y.List.rows).exists)
+        XCTAssertTrue(app.byId(A11y.Filter.favorites).exists)
 
         // An empty library shows the "Nothing here yet" empty state, not a table.
         XCTAssertTrue(app.byId(A11y.List.emptyState).waitExists())

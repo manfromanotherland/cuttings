@@ -3,47 +3,33 @@
 import SwiftUI
 
 // ── Mutations ────────────────────────────────────────────────────────────────
-// Row edits (read/favorite/rating/archive/tags/delete) with optimistic UI:
-// each edit lands on screen within a frame, then the core write + `refresh()`
-// reconcile.
+// Favorite and tag edits land optimistically, then the core write + `refresh()`
+// reconcile. Deletion remains authoritative because it removes files from disk.
 
 extension AppState {
     /// Optimistically apply an edit so it shows on the next frame, before the
-    /// core write + `refresh()` land: swap the row in the visible list (if
-    /// present) and fold the before/after into the sidebar aggregates. Removing a
-    /// row that no longer matches the filter is the separate, explicit job of
-    /// `advancePastFilteredRow`; re-ordering is left to the follow-up `refresh()`.
-    /// A failed write self-heals: the refresh re-reads the index and overwrites
-    /// both the row and the counts.
+    /// core write + `refresh()` land by swapping the row in the visible list (if
+    /// present). Removing a row that no longer matches the filter is the explicit
+    /// job of `advancePastFilteredRow`; re-ordering is left to the follow-up
+    /// `refresh()`. A failed write self-heals from the index.
     private func applyOptimistic(_ old: ReadingRow, _ new: ReadingRow) {
         if let index = readings.firstIndex(where: { $0.id == old.id }) {
             readings[index] = new
         }
-        // The optimistic view-badge delta is faceted by the active tag/rating
-        // selection, mirroring the core's count queries. It can't evaluate the FTS
-        // query in Swift, so while searching we skip it and let the authoritative
-        // recount in `refresh()` → `loadSidebar()` update the badges instead. (The
-        // Tags/Ratings badges always come from that recount — see `applyDelta`.)
-        if searchQuery.isEmpty {
-            sidebar.applyDelta(
-                from: old, to: new, kind: selectedKind,
-                tag: selectedTag, rating: selectedRating
-            )
-        }
     }
 
-    /// Mirror of the core's view/tag/rating filter (see `list.rs`): does `row`
-    /// still belong in the list the user is currently looking at?
+    /// Mirror of the core's scope/tag filter: does `row` still belong in the list
+    /// the user is currently looking at?
     private func rowMatchesCurrentFilter(_ row: ReadingRow) -> Bool {
-        ComposedFilter.matches(row, view: activeView, tag: selectedTag, rating: selectedRating)
+        ComposedFilter.matches(row, scope: activeScope, tag: selectedTag)
     }
 
-    /// Pair with `applyOptimistic` for status changes: if the optimistic edit
+    /// Pair with `applyOptimistic`: if the optimistic edit
     /// pushed the row out of the current filter, slide it out and advance the
     /// selection to an adjacent row in the *same* render tick — one motion, not
     /// an in-place icon flip followed a beat later by the row jumping away. A
-    /// no-op when the row still matches (e.g. marking read in the All view).
-    /// Skipped during search, whose results span every view.
+    /// no-op when the row still matches. Skipped during search, whose FTS
+    /// predicate is not mirrored in Swift.
     private func advancePastFilteredRow(id: String) {
         guard searchQuery.isEmpty,
               let index = readings.firstIndex(where: { $0.id == id }),
@@ -56,16 +42,6 @@ extension AppState {
         }
     }
 
-    func toggleRead(_ row: ReadingRow) async {
-        guard let core else { return }
-        var updated = row
-        updated.read = !row.read
-        applyOptimistic(row, updated)
-        advancePastFilteredRow(id: row.id)
-        try? await core.setRead(id: row.id, read: updated.read)
-        await refresh()
-    }
-
     func toggleFavorite(_ row: ReadingRow) async {
         guard let core else { return }
         var updated = row
@@ -73,47 +49,6 @@ extension AppState {
         applyOptimistic(row, updated)
         advancePastFilteredRow(id: row.id)
         try? await core.setFavorite(id: row.id, favorite: updated.favorite)
-        await refresh()
-    }
-
-    /// Set a reading's star rating (0–5, 0 clears it). Returns the refreshed
-    /// row so detail views can update their local copy.
-    @discardableResult
-    func setRating(id: String, rating: UInt8) async -> ReadingRow? {
-        guard let core else { return nil }
-        if let old = readings.first(where: { $0.id == id }) {
-            var updated = old
-            updated.rating = rating
-            applyOptimistic(old, updated)
-        }
-        try? await core.setRating(id: id, rating: rating)
-        await refresh()
-        // The row may have left the current filtered list (e.g. its rating no
-        // longer matches), so fall back to fetching it straight from the index.
-        if let row = readings.first(where: { $0.id == id }) {
-            return row
-        }
-        guard let fetched = try? await core.getReadingRow(id: id) else { return nil }
-        return ReadingRow(fetched)
-    }
-
-    func archive(_ row: ReadingRow) async {
-        guard let core else { return }
-        var updated = row
-        updated.archived = true
-        applyOptimistic(row, updated)
-        advancePastFilteredRow(id: row.id)
-        try? await core.setArchived(id: row.id, archived: true)
-        await refresh()
-    }
-
-    func unarchive(_ row: ReadingRow) async {
-        guard let core else { return }
-        var updated = row
-        updated.archived = false
-        applyOptimistic(row, updated)
-        advancePastFilteredRow(id: row.id)
-        try? await core.setArchived(id: row.id, archived: false)
         await refresh()
     }
 
@@ -152,6 +87,7 @@ extension AppState {
             var updated = old
             updated.tags.removeAll { $0 == tag }
             applyOptimistic(old, updated)
+            advancePastFilteredRow(id: id)
         }
         try? await core.removeTag(id: id, tag: tag)
         await refresh()

@@ -175,11 +175,6 @@ struct CuttingsCardView: View {
                 Image(systemName: "heart.fill")
                     .foregroundStyle(onDark ? Color.white.opacity(0.9) : Color.red.opacity(0.7))
             }
-            if !row.read {
-                Circle()
-                    .fill(onDark ? Color.white.opacity(0.9) : Color.accentColor)
-                    .frame(width: 5, height: 5)
-            }
         }
         .font(.caption2.weight(.medium))
         .foregroundStyle(onDark ? Color.white.opacity(0.82) : Color.secondary)

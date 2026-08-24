@@ -3,8 +3,7 @@
 import SwiftUI
 
 /// A wrapping layout — like an `HStack` that flows onto new lines when it runs
-/// out of width. Used for tag chips in the article header and the tag tiles in
-/// the sidebar.
+/// out of width. Used for tag chips in the card inspector.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 

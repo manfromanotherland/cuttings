@@ -13,7 +13,7 @@ import Foundation
 /// **Dependency-free by design:** the UI-test target can't see app types, so the
 /// parameterized helpers take primitives (`String`/`Int`/`UInt8`). The app passes
 /// `item.id` / `mode.id` / a reading id at the call site; a test passes the same
-/// literal (e.g. `A11y.Sidebar.viewRow("unread")`).
+/// literal (e.g. `A11y.Filter.tag("local-first")`).
 enum A11y {
     /// ── Onboarding ────────────────────────────────────────────────────────
     enum Onboarding {
@@ -32,43 +32,15 @@ enum A11y {
         static let firefoxLink = "extensions.firefox"
     }
 
-    /// ── Sidebar ─────────────────────────────────────────────────────────────
-    enum Sidebar {
-        /// A smart-view row (All/Unread/Read/Archive/Favorites), keyed by `SidebarItem.id`.
-        static func viewRow(_ item: String) -> String {
-            "sidebar.view.\(item)"
-        }
+    /// ── Board filters ─────────────────────────────────────────────────────
+    enum Filter {
+        static let favorites = "filter.favorites"
+        static let menu = "filter.menu"
 
-        /// The count badge on a smart-view row.
-        static func viewCount(_ item: String) -> String {
-            "sidebar.view.\(item).count"
+        /// A tag option in the toolbar Filter menu, keyed by tag name.
+        static func tag(_ tag: String) -> String {
+            "filter.tag.\(tag)"
         }
-
-        /// A tag pill in the Tags section, keyed by tag name.
-        static func tagTile(_ tag: String) -> String {
-            "sidebar.tag.\(tag)"
-        }
-
-        /// The count badge on a tag pill.
-        static func tagCount(_ tag: String) -> String {
-            "sidebar.tag.\(tag).count"
-        }
-
-        /// A rating row in the Ratings section (1–5); its label carries the count.
-        static func ratingRow(_ rating: UInt8) -> String {
-            "sidebar.rating.\(rating)"
-        }
-
-        static let settingsButton = "sidebar.settings"
-        /// A theme button in the appearance popover, keyed by `AppearanceMode.id`.
-        static func themeButton(_ mode: String) -> String {
-            "sidebar.appearance.theme.\(mode)"
-        }
-
-        static let fontPicker = "sidebar.appearance.font"
-        static let fontSizeSlider = "sidebar.appearance.fontSize"
-        static let widthSlider = "sidebar.appearance.width"
-        static let lineHeightSlider = "sidebar.appearance.lineHeight"
     }
 
     /// ── Reading list ──────────────────────────────────────────────────────
@@ -105,6 +77,9 @@ enum A11y {
     enum Detail {
         static let title = "detail.title"
         static let tags = "detail.tags"
+        static let close = "detail.close"
+        static let previous = "detail.previous"
+        static let next = "detail.next"
         static let empty = "detail.empty"
         static let oversize = "detail.oversize"
         static let oversizeOpenInBrowser = "detail.oversize.openInBrowser"
@@ -125,26 +100,15 @@ enum A11y {
         static let close = "lightbox.close"
     }
 
-    /// ── Reader toolbar (7 actions; archive/unarchive share the slot) ──────────
+    /// ── Reader toolbar ────────────────────────────────────────────────────
     enum Toolbar {
-        static let markRead = "toolbar.markRead"
         static let favorite = "toolbar.favorite"
-        static let archive = "toolbar.archive"
-        static let unarchive = "toolbar.unarchive"
         static let openInBrowser = "toolbar.openInBrowser"
         static let tags = "toolbar.tags"
         static let highlight = "toolbar.highlight"
         /// The "select some text first" popover raised by `highlight`.
         static let highlightHint = "toolbar.highlightHint"
         static let delete = "toolbar.delete"
-    }
-
-    /// ── Rating footer ─────────────────────────────────────────────────────
-    enum RatingFooter {
-        /// A star button (1–5).
-        static func star(_ index: Int) -> String {
-            "rating.star.\(index)"
-        }
     }
 
     /// ── Tag picker sheet ────────────────────────────────────────────────────

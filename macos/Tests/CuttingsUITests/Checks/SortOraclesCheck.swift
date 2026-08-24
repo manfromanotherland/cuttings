@@ -3,7 +3,7 @@
 import XCTest
 
 /// Capability check: every sort field, ascending and descending, produces the
-/// exact row order — including NULLs-last for `read_at`/`word_count` and the
+/// exact row order — including NULLs-last for `word_count` and the
 /// `id`-DESC tiebreak — against the hand-computed oracles in `Fixtures.Oracle`.
 final class SortOraclesCheck: UITestCase {
     private typealias Menu = ReadingListPage.Sort
@@ -32,12 +32,8 @@ final class SortOraclesCheck: UITestCase {
         let cases = [
             SortCase(Menu.dateSaved, Menu.newestFirst, Order.savedAtDescending, "saved-at desc"),
             SortCase(Menu.dateSaved, Menu.oldestFirst, Order.savedAtAscending, "saved-at asc"),
-            SortCase(Menu.dateRead, Menu.readMostRecently, Order.readAtDescending, "read-at desc"),
-            SortCase(Menu.dateRead, Menu.readLeastRecently, Order.readAtAscending, "read-at asc"),
-            SortCase(Menu.rating, Menu.highestRated, Order.ratingDescending, "rating desc"),
-            SortCase(Menu.rating, Menu.lowestRated, Order.ratingAscending, "rating asc"),
-            SortCase(Menu.timeToRead, Menu.longestFirst, Order.wordCountDescending, "word-count desc"),
-            SortCase(Menu.timeToRead, Menu.shortestFirst, Order.wordCountAscending, "word-count asc")
+            SortCase(Menu.length, Menu.longestFirst, Order.wordCountDescending, "word-count desc"),
+            SortCase(Menu.length, Menu.shortestFirst, Order.wordCountAscending, "word-count asc")
         ]
 
         for sortCase in cases {

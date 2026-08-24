@@ -14,9 +14,8 @@ struct CuttingsInspectorView: View {
                 heading
                 sourceSection
                 noteSection
-                ratingSection
                 tagsSection
-                stateSection
+                actionsSection
             }
             .padding(.horizontal, 26)
             .padding(.top, 72)
@@ -131,31 +130,6 @@ struct CuttingsInspectorView: View {
         }
     }
 
-    private var ratingSection: some View {
-        inspectorSection("Rating") {
-            HStack(spacing: 5) {
-                ForEach(1 ... 5, id: \.self) { value in
-                    Button {
-                        setRating(UInt8(value))
-                    } label: {
-                        Image(systemName: value <= Int(row.rating) ? "star.fill" : "star")
-                            .font(.system(size: 17))
-                            .foregroundStyle(value <= Int(row.rating) ? Color.orange : Color.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
-                }
-                if row.rating > 0 {
-                    Button("Clear") { setRating(0) }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 6)
-                }
-            }
-        }
-    }
-
     private var tagsSection: some View {
         inspectorSection("Tags") {
             if row.tags.isEmpty {
@@ -181,22 +155,14 @@ struct CuttingsInspectorView: View {
         }
     }
 
-    private var stateSection: some View {
-        inspectorSection("State") {
+    private var actionsSection: some View {
+        inspectorSection("Actions") {
             VStack(spacing: 3) {
-                stateButton(
-                    row.read ? "Mark as unread" : "Mark as read",
-                    symbol: row.read ? "circle" : "checkmark.circle"
-                ) { toggleRead() }
-                stateButton(
-                    row.favorite ? "Remove favorite" : "Add to favorites",
+                actionButton(
+                    row.favorite ? "Remove from favorites" : "Add to favorites",
                     symbol: row.favorite ? "heart.slash" : "heart"
                 ) { toggleFavorite() }
-                stateButton(
-                    row.archived ? "Move to library" : "Archive",
-                    symbol: row.archived ? "tray.and.arrow.up" : "archivebox"
-                ) { toggleArchived() }
-                stateButton("Delete", symbol: "trash", role: .destructive) {
+                actionButton("Delete", symbol: "trash", role: .destructive) {
                     appState.pendingDelete = row
                 }
             }
@@ -216,7 +182,7 @@ struct CuttingsInspectorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func stateButton(
+    private func actionButton(
         _ title: String, symbol: String, role: ButtonRole? = nil,
         action: @escaping () -> Void
     ) -> some View {
@@ -229,41 +195,11 @@ struct CuttingsInspectorView: View {
         .padding(.vertical, 7)
     }
 
-    private func setRating(_ rating: UInt8) {
-        let id = row.id
-        row.rating = rating
-        Task {
-            row = await appState.setRating(id: id, rating: rating) ?? row
-        }
-    }
-
-    private func toggleRead() {
-        let old = row
-        row.read.toggle()
-        Task {
-            await appState.toggleRead(old)
-            row = await appState.reloadRow(id: old.id) ?? row
-        }
-    }
-
     private func toggleFavorite() {
         let old = row
         row.favorite.toggle()
         Task {
             await appState.toggleFavorite(old)
-            row = await appState.reloadRow(id: old.id) ?? row
-        }
-    }
-
-    private func toggleArchived() {
-        let old = row
-        row.archived.toggle()
-        Task {
-            if row.archived {
-                await appState.archive(old)
-            } else {
-                await appState.unarchive(old)
-            }
             row = await appState.reloadRow(id: old.id) ?? row
         }
     }

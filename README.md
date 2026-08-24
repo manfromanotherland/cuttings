@@ -21,7 +21,7 @@ web. Everything is stored as ordinary files in a folder you choose. No account o
 
 ## What Cuttings does
 
-This fork turns the reading list into a local, visual memory library. The browser extension can
+Cuttings turns things you find into a local, visual inspiration library. The browser extension can
 save a full article, a right-clicked image or video, or selected text. The macOS client presents
 those saves as a mixed masonry board of article, image, video, and quote cards. You can also drop
 or paste a web link, text, image, or MP4/MOV video anywhere on the board. Local text, images, and
@@ -41,8 +41,8 @@ the same reading folder, so they remain editable without Cuttings and travel wit
 ## Principles
 
 - **Local-first & offline** — everything works with no network and no backend.
-- **Files are the source of truth** — each reading is a Markdown file with YAML frontmatter;
-  content, tags, read state, and source URL live in that file, with an optional personal `note.md`
+- **Files are the source of truth** — each saved item is a Markdown file with YAML frontmatter;
+  content, tags, favorite state, and source URL live in that file, with an optional personal `note.md`
   beside it.
 - **You bring your own sync** — point the app at one *library folder* and sync it however you
   like (Dropbox, iCloud Drive, Google Drive, git…). The app never syncs for you.
@@ -59,7 +59,7 @@ Cuttings is a **monorepo**. Clone it once to get the product contracts and all t
 | [repository root](.) | product docs, library-format contract, design, backlog | Markdown |
 | [`core`](./core) | engine + native messaging host (Cargo workspace) | Rust (SQLite + FTS5, UniFFI) |
 | [`extension`](./extension) | browser extension for page, media, and quote capture | TypeScript, Manifest V3 |
-| [`macos`](./macos) | native visual library and reader | Swift / SwiftUI |
+| [`macos`](./macos) | native visual inspiration library and article viewer | Swift / SwiftUI |
 
 All paths share one Git history, so a library-format or native-messaging change can update every
 affected component in one atomic commit. See each component's README for setup and run instructions.

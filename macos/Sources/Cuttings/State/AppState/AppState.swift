@@ -7,7 +7,7 @@ import SwiftUI
 
 // The behavior lives in sibling extension files in this folder, one per
 // concern: Library.swift (onboarding, boot, sync), Readings.swift (list
-// loading, search, sidebar reloads), Mutations.swift (row edits with
+// loading, search, filter reloads), Mutations.swift (row edits with
 // optimistic UI), Highlights.swift, and Notes.swift. This file holds the stored state,
 // `init`, and the AppKit focus helpers.
 @MainActor
@@ -18,14 +18,14 @@ final class AppState {
         static let ascending = "sortAscending"
     }
 
-    /// Keys the composed filter (smart view, tag, rating) and the search box
-    /// persist under, so closing the app and reopening it lands on the same view.
+    /// Keys the library scope, tag filter, and search box persist under.
     private enum FilterDefaultsKey {
         static let kind = "selectedKind"
-        static let view = "activeView"
+        static let scope = "activeScope"
         static let tag = "selectedTag"
-        static let rating = "selectedRating"
         static let search = "searchQuery"
+        static let legacyView = "activeView"
+        static let legacyRating = "selectedRating"
     }
 
     private enum ExtensionSetupKey {
@@ -74,8 +74,8 @@ final class AppState {
     }
 
     /// The optional saved-item kind facet. `nil` is the unfiltered "Everything"
-    /// choice; a concrete value composes with the existing view, tag, rating,
-    /// and full-text filters and is persisted across launches.
+    /// choice; a concrete value composes with the library scope, tag, and
+    /// full-text filters and is persisted across launches.
     var selectedKind: ReadingKind? {
         didSet {
             AppDefaults.store.set(selectedKind?.rawValue, forKey: FilterDefaultsKey.kind)
@@ -93,34 +93,20 @@ final class AppState {
     @ObservationIgnored var searchTask: Task<Void, Never>?
     @ObservationIgnored var saveNoticeTask: Task<Void, Never>?
 
-    /// The active smart view. Always exactly one — `.all` is the unfiltered base.
-    /// Independent from the kind, tag, and rating filters so all four compose
-    /// (together with the search box): the reading list and faceted counts are
-    /// scoped by `selectedKind` ∩ `activeView` ∩ `selectedTag` ∩
-    /// `selectedRating` ∩ `searchQuery`.
-    ///
-    /// Persisted across launches; `init` restores it, defaulting to `.unread` on a
-    /// first run so the app opens on the pile to work through, not everything.
-    var activeView: SidebarItem = .unread {
+    /// The active library scope. Always exactly one; `.all` is the unfiltered
+    /// base. Persisted under a new key so legacy unread/read/archive selections
+    /// cannot become invisible filters after those features disappear.
+    var activeScope: LibraryScope = .all {
         didSet {
-            AppDefaults.store.set(activeView.rawValue, forKey: FilterDefaultsKey.view)
+            AppDefaults.store.set(activeScope.rawValue, forKey: FilterDefaultsKey.scope)
         }
     }
 
-    /// The active tag filter, if any. Composes with the view, rating, and search;
+    /// The active tag filter, if any. Composes with the scope and search;
     /// `nil` means no tag filter. At most one tag at a time. Persisted across launches.
     var selectedTag: String? {
         didSet {
             AppDefaults.store.set(selectedTag, forKey: FilterDefaultsKey.tag)
-        }
-    }
-
-    /// The active rating filter (1–5), if any. Composes with the view, tag, and
-    /// search; `nil` means no rating filter. At most one rating at a time. Persisted
-    /// across launches (stored as an `Int`; cleared when `nil`).
-    var selectedRating: UInt8? {
-        didSet {
-            AppDefaults.store.set(selectedRating.map { Int($0) }, forKey: FilterDefaultsKey.rating)
         }
     }
 
@@ -169,11 +155,10 @@ final class AppState {
     /// Open note controls use it to re-read files written by sync tools.
     var noteRevision: UInt64 = 0
 
-    // ── Sidebar metadata ──────────────────────────────────────────────────
+    // ── Filter metadata ───────────────────────────────────────────────────
 
-    /// Sidebar badge numbers (view counts, tag counts, rating counts) with
-    /// their optimistic delta bookkeeping; reconciled by `loadSidebar()`.
-    var sidebar = SidebarCounts()
+    /// Tag names used by the board's filter menu.
+    var filters = LibraryFilters()
 
     // ── Status ────────────────────────────────────────────────────────────
     var isLoading: Bool = false
@@ -189,8 +174,8 @@ final class AppState {
 
     /// True while the user is editing a text field (the toolbar search field, the
     /// tag picker, note editor, …). macOS dispatches menu/context-menu key-equivalents *before*
-    /// the focused field editor, so a global ⌘⌫ ("Archive") would fire mid-edit
-    /// instead of deleting the line. Commands whose shortcuts collide with the
+    /// the focused field editor, so global shortcuts can fire mid-edit instead of
+    /// editing the line. Commands whose shortcuts collide with the
     /// field editor's own keys disable themselves while this holds, letting the
     /// keystroke fall through to standard text editing. Kept in sync by
     /// `editingMonitor` (see `TextEditingMonitor`).
@@ -213,18 +198,20 @@ final class AppState {
             .flatMap(ReadingSort.init(rawValue:)) ?? .savedAt
         sortAscending = defaults.bool(forKey: SortDefaultsKey.ascending)
 
-        // Restore the view/tag/rating filters and the search box the user left last
-        // time. A first run has none of these, so the view falls back to `.unread`
-        // and the rest to empty — the app's default landing state. (Assigning in
-        // `init` doesn't fire the `didSet`s, so this reads the store without
-        // re-writing it.)
-        activeView = defaults.string(forKey: FilterDefaultsKey.view)
-            .flatMap(SidebarItem.init(rawValue:)) ?? .unread
+        // Restore the current scope or migrate the one compatible legacy value.
+        // Old unread/read/archive values become All so a removed control can never
+        // leave an invisible filter active. The old rating filter is discarded.
+        let persistedScope = defaults.string(forKey: FilterDefaultsKey.scope)
+            .flatMap(LibraryScope.init(rawValue:))
+        let legacyScope: LibraryScope = defaults.string(forKey: FilterDefaultsKey.legacyView)
+            == LibraryScope.favorites.rawValue ? .favorites : .all
+        activeScope = persistedScope ?? legacyScope
+        defaults.set(activeScope.rawValue, forKey: FilterDefaultsKey.scope)
+        defaults.removeObject(forKey: FilterDefaultsKey.legacyView)
+        defaults.removeObject(forKey: FilterDefaultsKey.legacyRating)
         selectedKind = defaults.string(forKey: FilterDefaultsKey.kind)
             .flatMap(ReadingKind.init(rawValue:))
         selectedTag = defaults.string(forKey: FilterDefaultsKey.tag)
-        selectedRating = (defaults.object(forKey: FilterDefaultsKey.rating) as? Int)
-            .flatMap { UInt8(exactly: $0) }
         searchQuery = defaults.string(forKey: FilterDefaultsKey.search) ?? ""
 
         // Resume the extension-install step if the user quit before dismissing it.

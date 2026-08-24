@@ -74,9 +74,9 @@ every affected component.
 - **Index:** local SQLite database with FTS5. Rebuildable; per-device; never synced.
 
 ### macOS client (`macos`, Swift)
-- **Responsibility:** the native UI — browse a mixed masonry board, filter by card kind and smart
-  view, read articles, inspect images/videos/quotes, search, tag, and set
-  read/favorite/archive/rating state; save supported drop/paste payloads; appearance settings.
+- **Responsibility:** the native UI — browse a mixed masonry board, filter by favorites, card kind,
+  and tag, open articles, inspect images/videos/quotes, search, favorite, and save supported
+  drop/paste payloads; appearance settings.
 - **Stack:** Swift / SwiftUI, embedding `core` via **UniFFI**-generated bindings.
 - **Native rendering only — never a WebView.** The reader renders article Markdown as a native
   SwiftUI view tree via Apple's [`swift-markdown`](https://github.com/apple/swift-markdown) parser —
@@ -139,8 +139,8 @@ The card metadata is additive and backwards compatible:
   replaces that placeholder at the same article id and clears the marker while preserving user
   state.
 
-- **Frontmatter is the source of truth** for metadata (title, tags, read/archive/favorite/rating
-  state, …). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the
+- **Frontmatter is the source of truth** for metadata (title, tags, favorite state, and legacy
+  format-v1 state fields). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the
   native-messaging contract is [`docs/native-messaging.md`](./docs/native-messaging.md).
 - **The index DB is a disposable cache** — derived from the files, rebuildable by re-scanning, and
   stored **outside** the library (per-device, never synced).

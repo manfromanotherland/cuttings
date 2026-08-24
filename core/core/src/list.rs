@@ -116,7 +116,7 @@ pub struct ReadingRow {
 /// disagree with the list it produces.
 pub(crate) fn view_clause(view: View) -> &'static str {
     match view {
-        View::All => "archived = 0",
+        View::All => "1 = 1",
         View::Unread => "archived = 0 AND read_at IS NULL",
         View::Read => "archived = 0 AND read_at IS NOT NULL",
         View::Archive => "archived = 1",
@@ -392,7 +392,7 @@ pub(crate) fn view_counts_with(
     };
     let sql = format!(
         "SELECT
-             COUNT(*) FILTER (WHERE archived = 0),
+             COUNT(*),
              COUNT(*) FILTER (WHERE archived = 0 AND read_at IS NULL),
              COUNT(*) FILTER (WHERE archived = 0 AND read_at IS NOT NULL),
              COUNT(*) FILTER (WHERE archived = 1),
@@ -767,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn list_all_returns_non_archived() {
+    fn list_all_includes_legacy_archived_readings() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
 
@@ -786,8 +786,9 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].title, "A");
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|row| row.title == "A"));
+        assert!(rows.iter().any(|row| row.title == "B" && row.archived));
     }
 
     #[test]
@@ -937,7 +938,7 @@ mod tests {
         rebuild(&conn, &lib).unwrap();
 
         let counts = view_counts(&conn, &CountScope::default()).unwrap();
-        assert_eq!(counts.all, 3); // A, B, D (C is archived)
+        assert_eq!(counts.all, 4); // All includes legacy archived rows.
         assert_eq!(counts.unread, 2); // A, D
         assert_eq!(counts.read, 1); // B
         assert_eq!(counts.archive, 1); // C
@@ -1018,7 +1019,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(counts.all, 2, "X, Y (W archived)");
+        assert_eq!(counts.all, 3, "X, Y, W (legacy archive ignored by All)");
         assert_eq!(counts.unread, 1, "X");
         assert_eq!(counts.read, 1, "Y");
         assert_eq!(counts.archive, 1, "W");
@@ -1042,7 +1043,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(counts.all, 1, "X only (Y is 3★, W archived)");
+        assert_eq!(counts.all, 2, "X, W (Y is 3★)");
         assert_eq!(counts.unread, 1, "X");
         assert_eq!(counts.read, 0, "Y dropped by the 5★ facet");
         assert_eq!(counts.archive, 1, "W");
