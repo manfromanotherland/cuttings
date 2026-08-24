@@ -24,6 +24,9 @@ protocol CoreBridging: Sendable {
     func importText(text: String, title: String?) async throws -> FfiImportResult
     func importImage(data: Data, contentType: String, title: String) async throws -> FfiImportResult
 
+    func getNote(readingId: String) async throws -> String?
+    func setNote(readingId: String, markdown: String) async throws
+
     func addTag(id: String, tag: String) async throws
     func removeTag(id: String, tag: String) async throws
 

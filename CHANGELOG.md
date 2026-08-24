@@ -12,6 +12,8 @@ and versions track the app's `CFBundleShortVersionString`. See
 - Links, text, images, and local `.txt`/`.md` files can now be saved by dropping
   them on the card board or pasting with ⌘V. URL-only saves remain visibly
   lightweight until a later browser capture upgrades them in place.
+- Every saved item can now carry a personal Markdown note. Notes are edited from the card inspector
+  and stored as an optional `note.md` beside the item's article file and assets.
 - Settings › Typography can now set the reader's **Width** — the measure the
   article is laid out to — from Extra Small (520 pt) through Extra Large
   (960 pt), with Medium (680 pt) the previous fixed value and still the default.

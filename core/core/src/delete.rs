@@ -4,8 +4,8 @@
 //!
 //! Unlike archiving (which only flips the `archived` flag in the frontmatter),
 //! deleting removes the reading's entire folder from disk — its `article.md`,
-//! `assets/`, and `highlights.md` in one `remove_dir_all` — then drops its row
-//! from the index. This is irreversible.
+//! `assets/`, `highlights.md`, and `note.md` in one `remove_dir_all` — then
+//! drops its row from the index. This is irreversible.
 
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -176,6 +176,8 @@ mod tests {
         fs::write(assets.join("image.png"), b"x").unwrap();
         // ...and a saved highlight, which lives outside the index.
         crate::highlights::add_highlight(&lib, &id, "a passage").unwrap();
+        // Personal notes are sidecars too, and must leave with the reading.
+        crate::set_note(&lib, &id, "A personal note").unwrap();
         rebuild(&conn, &lib).unwrap();
         assert_eq!(row_count(&conn, &id), 1);
 
@@ -184,6 +186,7 @@ mod tests {
         assert!(!lib.article_path(&id).exists());
         assert!(!assets.exists());
         assert!(!lib.highlights_path(&id).exists());
+        assert!(!lib.note_path(&id).exists());
         assert_eq!(row_count(&conn, &id), 0);
     }
 

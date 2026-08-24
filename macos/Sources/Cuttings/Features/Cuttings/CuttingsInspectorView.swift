@@ -13,6 +13,7 @@ struct CuttingsInspectorView: View {
             VStack(alignment: .leading, spacing: 26) {
                 heading
                 sourceSection
+                noteSection
                 ratingSection
                 tagsSection
                 stateSection
@@ -120,6 +121,13 @@ struct CuttingsInspectorView: View {
                 }
                 .padding(.top, 6)
             }
+        }
+    }
+
+    private var noteSection: some View {
+        inspectorSection("Note") {
+            ReadingNoteControl(readingID: row.id)
+                .id(row.id)
         }
     }
 

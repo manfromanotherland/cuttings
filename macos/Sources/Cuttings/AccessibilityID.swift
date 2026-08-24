@@ -159,6 +159,17 @@ enum A11y {
         static let done = "tagPicker.done"
     }
 
+    /// ── Per-reading Markdown note ─────────────────────────────────────────
+    enum Note {
+        static let preview = "note.preview"
+        static let add = "note.add"
+        static let edit = "note.edit"
+        static let editor = "note.editor"
+        static let cancel = "note.cancel"
+        static let save = "note.save"
+        static let delete = "note.delete"
+    }
+
     /// ── Highlights inspector ────────────────────────────────────────────────
     enum Highlights {
         static let list = "highlights.list"

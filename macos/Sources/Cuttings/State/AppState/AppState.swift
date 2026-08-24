@@ -8,7 +8,7 @@ import SwiftUI
 // The behavior lives in sibling extension files in this folder, one per
 // concern: Library.swift (onboarding, boot, sync), Readings.swift (list
 // loading, search, sidebar reloads), Mutations.swift (row edits with
-// optimistic UI), and Highlights.swift. This file holds the stored state,
+// optimistic UI), Highlights.swift, and Notes.swift. This file holds the stored state,
 // `init`, and the AppKit focus helpers.
 @MainActor
 @Observable
@@ -164,6 +164,11 @@ final class AppState {
     /// in-text tinting and the highlights inspector.
     var highlights: [HighlightRow] = []
 
+    /// Advances for every successful on-disk sync pass, including passes where
+    /// only a note sidecar changed and the indexed article count stays at zero.
+    /// Open note controls use it to re-read files written by sync tools.
+    var noteRevision: UInt64 = 0
+
     // ── Sidebar metadata ──────────────────────────────────────────────────
 
     /// Sidebar badge numbers (view counts, tag counts, rating counts) with
@@ -183,7 +188,7 @@ final class AppState {
     var isSaving: Bool = false
 
     /// True while the user is editing a text field (the toolbar search field, the
-    /// tag picker, …). macOS dispatches menu/context-menu key-equivalents *before*
+    /// tag picker, note editor, …). macOS dispatches menu/context-menu key-equivalents *before*
     /// the focused field editor, so a global ⌘⌫ ("Archive") would fire mid-edit
     /// instead of deleting the line. Commands whose shortcuts collide with the
     /// field editor's own keys disable themselves while this holds, letting the

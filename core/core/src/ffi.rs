@@ -451,6 +451,29 @@ impl Database {
             .map(|opt| opt.map(|(_row, body)| body))
     }
 
+    // ── Notes ─────────────────────────────────────────────────────────────
+
+    /// Fetch the optional personal Markdown note attached to a reading.
+    pub fn get_note(
+        &self,
+        library_path: String,
+        reading_id: String,
+    ) -> Result<Option<String>, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        crate::get_note(&lib, &reading_id).map_err(e)
+    }
+
+    /// Replace a reading's personal Markdown note. Blank Markdown clears it.
+    pub fn set_note(
+        &self,
+        library_path: String,
+        reading_id: String,
+        markdown: String,
+    ) -> Result<(), CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        crate::set_note(&lib, &reading_id, &markdown).map_err(e)
+    }
+
     // ── Tags ──────────────────────────────────────────────────────────────
 
     pub fn add_tag(&self, library_path: String, id: String, tag: String) -> Result<(), CoreError> {

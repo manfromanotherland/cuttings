@@ -20,6 +20,7 @@ hex = "0.4"
 fs2 = "0.4"
 anyhow = "1"
 rusqlite = { version = "0.32", features = ["bundled", "trace"] }
+rustix = { version = "1", features = ["fs"] }
 thiserror = "1"
 uniffi = "0.29"
 

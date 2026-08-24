@@ -59,6 +59,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   FTS5. Word-occurrence lookup and word meanings are noted as future ideas, not v1 scope.
 - **Tags** — native app. Organize readings with labels stored in each file's frontmatter. (The
   macOS mockup's "Lists" section is implemented as **Tags** — manual Lists are not planned.)
+- **Personal notes** — native app. Attach one plain-Markdown note to any reading, stored as
+  `note.md` inside that reading's folder and synced with it.
 - **Item states** — native app. Mark readings **read/unread**, **favorite**, and **archive**
   (stored in frontmatter).
 - **Card kind** — every reading is an **article**, **image**, **video**, or **quote**. Older files
@@ -77,6 +79,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 ## Decisions already made
 
 - Markdown + YAML frontmatter as the storage format; files are the source of truth.
+- Personal notes are per-reading Markdown sidecars, not standalone cards. A blank note removes the
+  optional `note.md`; notes stay separate from captured content and its source hash.
 - HTML cleanup runs in the extension (it has the live DOM).
 - All logic in a Rust core crate; native UIs are thin and share it.
 - The index is SQLite + FTS5, rebuildable, per-device, never synced.

@@ -12,6 +12,7 @@ pub mod index;
 mod ingest;
 pub mod list;
 mod locking;
+pub mod notes;
 pub mod rating;
 pub mod reconcile;
 pub mod scanner;
@@ -39,6 +40,7 @@ pub use list::{
     get_reading, list_readings, sidebar_counts, view_counts, CountScope, ListOptions, ReadingRow,
     SidebarCounts, SortField, View, ViewCounts,
 };
+pub use notes::{get_note, set_note};
 pub use rating::{list_ratings, set_rating};
 pub use reconcile::{apply_diffs, rebuild};
 pub use scanner::{diff, scan_library, ScanDiff, ScannedReading};

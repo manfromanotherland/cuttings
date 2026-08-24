@@ -127,6 +127,10 @@ class UITestCase: XCTestCase {
         HighlightsPage(app: app)
     }
 
+    var noteEditor: NotePage {
+        NotePage(app: app)
+    }
+
     var shortcutsSheet: ShortcutsSheetPage {
         ShortcutsSheetPage(app: app)
     }

@@ -38,12 +38,17 @@ struct CuttingsReadingOverlay: View {
         .focusable()
         .focused($receivesKeys)
         .onAppear { receivesKeys = true }
-        .onExitCommand(perform: onClose)
+        .onExitCommand {
+            guard !appState.isEditingText else { return }
+            onClose()
+        }
         .onKeyPress(.leftArrow) {
+            guard !appState.isEditingText else { return .ignored }
             onMove(-1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
+            guard !appState.isEditingText else { return .ignored }
             onMove(1)
             return .handled
         }

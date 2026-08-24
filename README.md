@@ -35,11 +35,15 @@ images, plus video posters, are stored inside the card's own folder. Video files
 downloaded. The library remains plain files in a user-selected iCloud Drive, Dropbox, or other
 folder.
 
+Every card can also carry a personal Markdown note. Notes live as optional `note.md` files inside
+the same reading folder, so they remain editable without Cuttings and travel with the saved item.
+
 ## Principles
 
 - **Local-first & offline** — everything works with no network and no backend.
 - **Files are the source of truth** — each reading is a Markdown file with YAML frontmatter;
-  content, tags, read state, and source URL all live in the file.
+  content, tags, read state, and source URL live in that file, with an optional personal `note.md`
+  beside it.
 - **You bring your own sync** — point the app at one *library folder* and sync it however you
   like (Dropbox, iCloud Drive, Google Drive, git…). The app never syncs for you.
 - **The database is a disposable cache** — a local index makes search fast but is rebuildable

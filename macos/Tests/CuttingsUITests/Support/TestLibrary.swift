@@ -5,7 +5,7 @@ import Foundation
 /// An isolated, on-disk library for one test: `<tmp>/<uuid>/library/` with a
 /// sibling `<tmp>/<uuid>/index.db`. Each reading is its own folder,
 /// `articles/<prefix>/<id>/` holding `article.md`, an `assets/` sub-folder, and
-/// `highlights.md` — the layout the real scanner indexes. Fixtures written here
+/// optional `highlights.md` / `note.md` sidecars — the layout the real scanner indexes. Fixtures written here
 /// are indexed by the real app — before launch (the boot rebuild picks them up)
 /// or after (exercising the FSEvents watcher). Destroyed in teardown.
 final class TestLibrary {
@@ -87,7 +87,7 @@ final class TestLibrary {
         articleContents(id: id).flatMap(Frontmatter.init(contents:))
     }
 
-    // ── Assets & highlights ───────────────────────────────────────────────
+    // ── Assets, highlights & notes ───────────────────────────────────────
 
     func writeAsset(articleId: String, fileName: String, data: Data) throws {
         let dir = readingDir(id: articleId).appendingPathComponent("assets", isDirectory: true)
@@ -112,6 +112,18 @@ final class TestLibrary {
         try? String(contentsOf: highlightsFileURL(id: articleId), encoding: .utf8)
     }
 
+    func writeNote(articleId: String, markdown: String) throws {
+        try markdown.write(to: noteFileURL(id: articleId), atomically: true, encoding: .utf8)
+    }
+
+    func noteExists(articleId: String) -> Bool {
+        FileManager.default.fileExists(atPath: noteFileURL(id: articleId).path)
+    }
+
+    func noteContents(articleId: String) -> String? {
+        try? String(contentsOf: noteFileURL(id: articleId), encoding: .utf8)
+    }
+
     // ── URL accessors ─────────────────────────────────────────────────────
 
     func articleFileURL(id: String) -> URL {
@@ -120,6 +132,10 @@ final class TestLibrary {
 
     func highlightsFileURL(id: String) -> URL {
         readingDir(id: id).appendingPathComponent("highlights.md")
+    }
+
+    func noteFileURL(id: String) -> URL {
+        readingDir(id: id).appendingPathComponent("note.md")
     }
 
     // ── Teardown ────────────────────────────────────────────────────────────

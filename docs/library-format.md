@@ -23,6 +23,7 @@ land them across all affected components in the same monorepo commit.
         assets/
           <sha256>.<ext>      # captured image, linked as assets/<file>
         highlights.md         # optional — the reading's saved highlights (§ Highlights)
+        note.md               # optional — the user's personal Markdown note (§ Personal note)
         original.html         # optional — raw HTML snapshot for future re-processing
 ```
 
@@ -200,6 +201,20 @@ are never mistaken for readings.
 
 ---
 
+## Personal note (`articles/<prefix>/<id>/note.md`)
+
+A reading may have one personal note. It is a plain UTF-8 CommonMark document with no frontmatter,
+stored as `note.md` beside the reading's article file and highlights. The app preserves the user's
+Markdown as written and replaces the whole file atomically when saving. Saving an empty or
+whitespace-only note removes the optional file.
+
+The note is separate from the captured body: editing it never changes `article.md` or that file's
+`source_hash`. It is read directly from the reading folder and is not mirrored in the disposable
+index or included in full-text search. As with `highlights.md`, the scanner's fixed `article.md`
+entry point ensures a note is never mistaken for another reading.
+
+---
+
 ## ID scheme
 
 A **reading id** is a deterministic lowercase-hex SHA-256 content address. The identity input
@@ -286,5 +301,6 @@ The macOS app's sidebar views are defined by frontmatter field values:
 | `articles/<prefix>/<id>/article.md` | SQLite index (`~/Library/Application Support/Cuttings/`) |
 | `articles/<prefix>/<id>/assets/*` | App preferences (theme, font, library path) |
 | `articles/<prefix>/<id>/highlights.md` | Native messaging host manifest |
+| `articles/<prefix>/<id>/note.md` (optional) | |
 | `articles/<prefix>/<id>/original.html` (optional) | |
 | `.cuttings-locks/<prefix>/<sha256-id>.lock` (operational, empty) | |

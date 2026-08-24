@@ -246,6 +246,7 @@ dependencies = [
  "hex",
  "proptest",
  "rusqlite",
+ "rustix",
  "serde",
  "serde_json",
  "serde_yaml",

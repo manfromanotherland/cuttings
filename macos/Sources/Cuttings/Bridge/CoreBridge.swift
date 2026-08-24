@@ -85,6 +85,18 @@ actor CoreBridge {
         )
     }
 
+    // ── Notes ─────────────────────────────────────────────────────────────
+
+    func getNote(readingId: String) throws -> String? {
+        try database.getNote(libraryPath: libraryPath, readingId: readingId)
+    }
+
+    func setNote(readingId: String, markdown: String) throws {
+        try database.setNote(
+            libraryPath: libraryPath, readingId: readingId, markdown: markdown
+        )
+    }
+
     // ── Tags ──────────────────────────────────────────────────────────────
 
     func addTag(id: String, tag: String) throws {

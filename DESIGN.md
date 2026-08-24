@@ -153,7 +153,9 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   Videos show the local poster and source/media actions without silently downloading a stream.
   Quotes show the full selected text natively.
 - The inspector consistently shows origin, saved date, rating, tags, read/favorite/archive state,
-  and relevant local/direct-media paths.
+  a personal note, and relevant local/direct-media paths. The note opens in a focused raw-Markdown
+  editor sheet; saving blank content removes it. If sync changes the note while that sheet is open,
+  the user chooses whether to load the latest file or explicitly replace it with the draft.
 
 ### Content states
 

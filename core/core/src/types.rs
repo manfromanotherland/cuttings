@@ -133,6 +133,11 @@ impl LibraryRoot {
     pub fn highlights_path(&self, id: &str) -> PathBuf {
         self.reading_dir(id).join("highlights.md")
     }
+
+    /// The optional personal Markdown note attached to one reading.
+    pub fn note_path(&self, id: &str) -> PathBuf {
+        self.reading_dir(id).join("note.md")
+    }
 }
 
 /// The fan-out sub-directory for a content-addressed id: its first two hex
