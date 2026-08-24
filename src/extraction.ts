@@ -31,6 +31,7 @@ export function extractPage(doc: Document, pageUrl: string): ExtractionResult | 
   const excerpt = article.excerpt ?? undefined;
 
   const metadata: SaveRequestMetadata = {
+    kind: "article",
     url: pageUrl,
     canonical_url: getCanonicalUrl(doc, pageUrl),
     title: article.title || doc.title,

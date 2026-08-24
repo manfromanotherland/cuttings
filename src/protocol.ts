@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: MIT
 
+/** The kind of item being saved. */
+export type SaveKind = "article" | "image" | "video" | "quote";
+
 /** Metadata sent alongside the Markdown body in a save request. */
 export interface SaveRequestMetadata {
+  kind: SaveKind;
   url: string;
   canonical_url: string;
+  /**
+   * A direct standalone image/video URL. A video with only a session-local
+   * source uses an opaque, stable page/video identity instead. Article and
+   * quote saves omit this.
+   */
+  media_url?: string;
   title: string;
   author?: string;
   site?: string;
@@ -14,7 +24,7 @@ export interface SaveRequestMetadata {
 }
 
 /** The wire protocol version shared with the native host. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /**
  * One image the extension captured from the page (reusing the browser's cache),

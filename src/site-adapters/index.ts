@@ -29,7 +29,7 @@ export function applySiteAdapters(doc: Document, pageUrl: string): void {
     try {
       adapter.preprocess(doc);
     } catch (err) {
-      console.warn(`readcontrol: site adapter "${adapter.id}" failed`, err);
+      console.warn(`cuttings: site adapter "${adapter.id}" failed`, err);
     }
   }
 }

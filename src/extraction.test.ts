@@ -115,6 +115,7 @@ describe("extractPage", () => {
   it("keeps in-article headings whose class trips the 'header' filter", () => {
     const result = extractPage(buildDoc(article), "https://example.com/post");
     expect(result).not.toBeNull();
+    expect(result!.metadata.kind).toBe("article");
     expect(result!.markdown).toContain("First section");
     expect(result!.markdown).toContain("Second section");
     expect(result!.markdown).toMatch(/^##\s+.*First section/m);
