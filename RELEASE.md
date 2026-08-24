@@ -6,8 +6,8 @@ that points at it.
 
 Everything here runs **on a Mac** with Xcode 16+ — the DMG build needs
 `xcodebuild`, code signing, and notarization, none of which work in the Linux dev
-sandbox. Commands run from the `macos/` sub-repo unless noted; paths like
-`Sources/…` are relative to `macos/`.
+sandbox. App build commands run from the `macos/` component unless noted; Git and GitHub commands
+run once from the monorepo root. Paths like `Sources/…` are relative to `macos/`.
 
 Record what changed in [CHANGELOG.md](./CHANGELOG.md) as part of the release.
 
@@ -53,16 +53,17 @@ mv dist/Cuttings.dmg dist/Cuttings-0.1.1.dmg
 
 ## 3. Publish the GitHub release
 
-Tag and upload the DMG to the configured macOS repository. The appcast enclosure URL (next step)
-points at exactly this asset, so the tag and file name must line up:
+Tag the monorepo and upload the DMG to its GitHub release. The appcast enclosure URL (next step)
+points at exactly this asset, so the tag and file name must line up. Return to the monorepo root
+after building in `macos/`:
 
 ```bash
-cd macos
+cd ..
 git tag v0.1.1
 git push origin v0.1.1
-gh release create v0.1.1 dist/Cuttings-0.1.1.dmg \
+gh release create v0.1.1 macos/dist/Cuttings-0.1.1.dmg \
   --title "Cuttings 0.1.1" \
-  --notes "See the 0.1.1 section of CHANGELOG.md in the root project."
+  --notes "See the 0.1.1 section of CHANGELOG.md in the monorepo root."
 ```
 
 Copy the release asset URL printed by GitHub; the appcast must use that exact URL.
