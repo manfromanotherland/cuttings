@@ -1,25 +1,19 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/readcontrol/root/main/assets/icon.png" alt="ReadControl" width="128">
+  <img src="icons/icon-128.png" alt="Cuttings" width="128">
 </p>
-<h1 align="center">ReadControl</h1>
+<h1 align="center">Cuttings</h1>
 <p align="center">
-  The native macOS reading manager
-  <br />
-  <a href="https://github.com/readcontrol/macos">macOS</a>
-  ·
-  <a href="https://github.com/readcontrol/core">core</a>
-  ·
-  <a href="https://github.com/readcontrol/extension">extension</a>
-  ·
-  <a href="https://github.com/readcontrol/root">root</a>
+  Keep what you find, with where it came from.
 </p>
 
 ---
 
-# extension
+# Browser extension
 
-The browser plugin (Manifest V3, TypeScript) for **ReadControl**, the native macOS reading manager. It extracts and cleans the current page (Readability-style extraction + HTML→Markdown)
-and hands the result to the native messaging host, which saves it into your library folder.
+The Manifest V3 browser extension for **Cuttings**, the local-first native macOS library. It saves
+cleaned articles, right-clicked images and videos, and selected-text quotes together with their
+origin. Captures travel through the `is.edmundo.cuttings.host` native messaging host and become Markdown
+plus local assets in your library folder.
 
 ## Build
 
@@ -36,7 +30,7 @@ npm run package
 
 Builds a fresh bundle, then zips only the files the manifest ships
 (`manifest.json`, `dist/`, `icons/`, `options.html`, `install.html`) into
-`artifacts/readcontrol-extension-<version>.zip` — ready to upload to the Chrome
+`artifacts/cuttings-extension-<version>.zip` — ready to upload to the Chrome
 Web Store, Edge Add-ons, or [AMO](https://addons.mozilla.org). Bump the
 `version` in `manifest.json` before packaging; the stores reject a re-upload of
 an existing version. Requires `zip` (preinstalled on macOS).
@@ -72,7 +66,7 @@ works). To wire it up:
 
 1. Load the unpacked extension (above).
 2. On `chrome://extensions`, copy the extension **ID** (32 lowercase letters).
-3. Register it with the host (see [core](https://github.com/readcontrol/core)):
+3. Register it with the host (see the core repository's README):
 
    ```bash
    ./target/release/native-host --install-manifest --extension-id <your-32-char-id>
