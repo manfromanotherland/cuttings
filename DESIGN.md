@@ -1,9 +1,10 @@
-# DESIGN.md — ReadControl
+# DESIGN.md — Cuttings
 
-> UI/UX design for the whole **ReadControl ecosystem** — the macOS app, the browser extension, and
-> the website ([readcontrol.app](https://readcontrol.app)). The shared identity (product name, logo,
-> and **color palette** below) applies to every surface; sections explicitly marked *Apple / macOS*
-> are specific to the Mac client. Architecture and data principles live in [AGENTS.md](./AGENTS.md).
+> UI/UX design for the whole **Cuttings ecosystem** — the macOS app and browser extension. The
+> shared identity (product name and logo) applies to every surface. The browser extension uses the
+> brand palette below; the Mac client uses Apple semantic colors and native controls so it follows
+> the current macOS appearance and accessibility settings. Architecture and data principles live
+> in [AGENTS.md](./AGENTS.md).
 
 ## Source
 
@@ -11,13 +12,11 @@
 
 ## Product name
 
-The product name is **ReadControl** ([readcontrol.app](https://readcontrol.app)). It is displayed
-to end users as "ReadControl." (An early mockup branded the app "Later" — that placeholder is
-superseded.)
+The product name is **Cuttings**. It is displayed to end users as "Cuttings."
 
 ## Logo / app icon
 
-<img src="./assets/icon.png" alt="ReadControl app icon" width="96" />
+<img src="./assets/icon.png" alt="Cuttings app icon" width="96" />
 
 The app icon is a rounded-square ("squircle") in the same near-black charcoal as the UI, with a
 centered cream/off-white **bookmark** glyph (notched bottom). It ties directly into the design
@@ -30,13 +29,15 @@ the app's empty state ("Your reading list is empty").
 - **To finalize:** export the full macOS icon set (`.icns` / `AppIcon.appiconset`, 16–1024 px)
   and the extension icon sizes (16 / 32 / 48 / 128 px); confirm the glyph stays legible at 16 px.
 
-## Color palette (shared across the whole ecosystem)
+## Brand color palette
 
-ReadControl uses **one palette on every surface** — the website, the browser extension (its
-options and install pages and the in-page save toast), and the macOS app. There are two themes,
-**"paper"** (light) and **"charcoal"** (dark). The canonical source of truth is the website's
-[`website/app/globals.css`](./website/app/globals.css); the extension mirrors these exact values,
-and the macOS tokens further down should resolve to them too.
+The browser extension, its install/options pages, and the in-page save toast use the **paper**
+(light) and **charcoal** (dark) palette below. The app icon uses the same brand neutrals.
+
+The macOS app does **not** reproduce these values as a custom UI skin. It uses dynamic AppKit and
+SwiftUI semantic colors such as window, control, text, and separator colors. This lets System,
+Light, and Dark appearance, increased contrast, and future macOS changes work without a parallel
+theme implementation.
 
 The identity is **paper + ink** — warm off-white and near-black. **The primary action is dark ink,
 never blue.** The only two non-gray brand accents anywhere are a marker **yellow** and a heart
@@ -66,106 +67,109 @@ never blue.** The only two non-gray brand accents anywhere are a marker **yellow
 
 ## Design language
 
-- **Theme:** dark by default, with **Light / Dark / System** options (the mockup shows Dark).
+- **Theme:** **System** by default, with explicit **Light / Dark / System** options.
 - **Tone:** minimal, calm, content-first. Generous negative space; the reading list and reader
   are the focus and the chrome stays quiet.
-- **Shape & depth:** rounded corners and soft elevation — panels (sidebar, popovers) sit
-  slightly above the main surface. Subtle, low-contrast dividers and borders.
-- **Typography:** **Inter** as the default UI font; the reader's font family, size, width,
-  and line height are user-adjustable (see Settings).
-- **Native feel:** a standard macOS window with traffic-light controls; behaves like a Mac app.
+- **Shape & depth:** use standard macOS window, sidebar, toolbar, menu, popover, sheet, and control
+  treatments. Cards may be rounded because they represent content, but app chrome does not invent
+  its own pills, rails, shadows, or selection styles.
+- **Typography:** San Francisco through semantic system text styles for app chrome. The reader's
+  font family, size, width, and line height remain user-adjustable (see Settings).
+- **Native feel:** follow the macOS Human Interface Guidelines and prefer SwiftUI/AppKit controls
+  over custom-drawn replacements.
 
-### Design tokens (approximate — finalize before implementation)
+### macOS semantic styling
 
-> The **canonical values are the shared palette above** ([Color palette](#color-palette-shared-across-the-whole-ecosystem)).
-> The charcoal approximations in this table predate it and should be replaced by those exact tokens
-> during implementation.
+- Use semantic colors (`windowBackgroundColor`, `controlBackgroundColor`, `textBackgroundColor`,
+  `labelColor`, `secondaryLabelColor`, `separatorColor`) instead of fixed light/dark RGB values.
+- Use native `Label`, `List`, `Menu`, `Picker`, `Button`, `searchable`, and split-view spacing and
+  focus behavior. Do not override their metrics solely to mimic a web design.
+- Reserve fixed black/white treatments for content that requires guaranteed contrast, such as a
+  video poster scrim and its play symbol.
 
-| Token | Role | Approx. (dark) |
-|-------|------|----------------|
-| `bg/base` | window background / main surface | near-black charcoal (~`#1B1B1D`) |
-| `bg/elevated` | sidebar, popovers | slightly lighter (~`#242427`) |
-| `bg/selected` | selected row / control | subtle highlight (~`#2E2E32`) |
-| `text/primary` | headings, body | near-white (~`#ECECEC`) |
-| `text/secondary` | metadata, hints, empty-state subtext | muted gray (~`#8A8A8E`) |
-| `border/subtle` | dividers, control outlines | low-contrast gray |
-| `accent` | primary actions, selection accent | **dark ink pill**, never blue (see shared palette) |
-| `radius/panel`, `radius/control` | corner radii | medium / small |
+## App layout — visual card board
 
-### Icon–label spacing
-
-Any icon paired with text (sidebar items, tag rows, the article header metadata
-row, etc.) uses a **4 pt** gap between the icon and its label — tighter than
-SwiftUI's default `Label`, which reads as too loose for our compact rows. This
-is the single source of truth: use the same value everywhere an icon sits next
-to a label.
-
-- Implemented as `TightIconLabelStyle` (constant `iconLabelSpacing = 4`); apply
-  with `.labelStyle(.tightIcon)`.
-- The spacing *between* separate metadata items (e.g. site · author · reading
-  time) is a distinct, larger value and is not governed by this token.
-
-## App layout
-
-A classic three-region macOS layout:
+The fork replaces the old three-column sidebar/list shell with a search-first visual library. The
+user-supplied mymind screenshots are a reference for **how mixed image, quote, video, and article
+cards organize into masonry columns**. The surrounding mymind branding and chrome are not copied.
 
 ```
-┌───────────┬──────────────────────────────────────────────┐
-│  Sidebar  │  Toolbar: [ Search ]            [+ Add Link] ⚙│
-│  (nav)    ├──────────────────────────────────────────────┤
-│           │                                                │
-│           │           Content: list / reader               │
-│           │                 / empty state                  │
-│ ⚙ Settings│                                                │
-└───────────┴──────────────────────────────────────────────┘
+┌──────────────┬──────────────────────────────────────────────────┐
+│ Cuttings     │ Toolbar: [ Search ]       [Filter] [Sort]        │
+├──────────────┼──────────────────────────────────────────────────┤
+│ Library      │ ┌─────────┐ ┌───────┐ ┌─────────┐ ┌──────────┐   │
+│   All        │ │ quote   │ │ image │ │ video   │ │ article  │   │
+│   Unread     │ │         │ └───────┘ │ poster  │ │ preview  │   │
+│   Read       │ └─────────┘ ┌───────┐ └─────────┘ └──────────┘   │
+│   Archive    │                                                  │
+│   Favorites  │                                                  │
+└──────────────┴──────────────────────────────────────────────────┘
 ```
 
-### Sidebar (left)
+### Navigation and search
 
-- **App title** at the top ("ReadControl").
-- **Smart views**, each with an icon and a count badge:
-  - **All** — the reading list.
-  - **Unread** — not yet read.
-  - **Archive** — items moved out of the active list.
-  - **Favorites** — starred items.
-- **Tags** section with a `+` to create/manage tags and an empty state
-  (*"No tags yet…"*). Selecting a tag filters the list.
-  > **Note:** the mockup labels this section **"Lists,"** but per design review we are using
-  > **Tags** (not manual Lists). The section is **Tags**.
-- **Settings** (gear) pinned to the bottom-left, opening the settings/appearance surface.
-- **Collapsible sections** — the **Library**, **Ratings**, and **Tags** groups each have a
-  disclosure triangle and can be collapsed independently. The expanded/collapsed state of each
-  section is **persisted** (per-section `@AppStorage` flags, default expanded), so the sidebar
-  reopens exactly as the user left it.
+- Use a two-column `NavigationSplitView`. Its standard macOS sidebar contains the Cuttings title
+  and Library smart views: **All / Unread / Read / Archive / Favorites**, with native symbols and
+  badges. The system sidebar toggle and window restoration behavior remain intact.
+- Put the native search field in the unified window toolbar using `.searchable`, with the prompt
+  *"Search Cuttings"*. Do not create a bespoke `NSSearchField` or oversized page header.
+- Put card kind, rating, and tag in one standard toolbar **Filter** menu; put sort field and order
+  in a standard toolbar **Sort** menu. Do not duplicate the smart views or render pill controls.
+- Search, view, kind, rating, and tag remain intersections. Filtering is performed in the Rust
+  core, not on the currently loaded Swift page, so pagination remains correct.
 
-### Toolbar (top of content)
+### Masonry cards
 
-- **Search field** — placeholder *"Search or paste a link…"*. For now this is **search-only**;
-  the paste-a-link affordance is deferred together with Add Link (below).
-- **+ Add Link** button — **deferred / out of scope for now** (see Deferred). Hidden or disabled
-  until in-app capture exists.
-- **Filter / sort** control at the far right.
+- A true masonry layout uses equal-width columns with variable-height cards and **20–24 pt** gaps.
+  At a wide desktop window it should naturally reach four or five columns around 220–250 pt each.
+- **Image:** local captured asset, full bleed, preserving a convincing square/portrait/landscape
+  mix. Redundant title chrome is hidden.
+- **Video:** captured poster image with a restrained play glyph. A durable media URL is secondary
+  metadata; session-local streams fall back to the source page for playback.
+- **Quote:** selected text rendered as an editorial typographic card. The origin domain is quiet but
+  always present.
+- **Article:** first local image plus compact title/domain treatment, or a text-led card when no
+  preview exists.
+- Cards have 8–12 pt continuous corners and a semantic separator border. Hover reveals only a
+  small standard action menu; cards do not add decorative lift or shadow effects. Tags and actions
+  do not permanently clutter the board.
+- Every card kind exposes its **origin page** (page URL, canonical URL, title/site, saved date).
+  Image/video `media_url` is secondary metadata and never replaces the origin.
+
+### Context menu and capture
+
+- Browser right-click uses one **"Add to Cuttings"** command for a page, image, video, or selected
+  text. Selection becomes a quote card; image bytes and video posters are copied locally when
+  available.
+- The native card context menu provides tags, rating, read/favorite/archive state, open origin,
+  reveal local files, and delete. Destructive actions retain confirmation.
+
+### Card detail
+
+- Single-click opens a full-window overlay and dims the board behind it. Escape closes; left/right
+  moves to adjacent cards.
+- Roughly 70% of the overlay is content and 320–380 pt is a fixed inspector.
+- Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.
+  Videos show the local poster and source/media actions without silently downloading a stream.
+  Quotes show the full selected text natively.
+- The inspector consistently shows origin, saved date, rating, tags, read/favorite/archive state,
+  and relevant local/direct-media paths.
 
 ### Content states
 
-- **Empty state:** centered bookmark icon, heading (*"Your reading list is empty"*), subtext
-  (*"Save articles and pages to read later"*), and a call to action. (The mockup's CTA is Add
-  Link, which is deferred — fall back to guidance about installing/using the browser plugin.)
-- **List view:** rows of saved readings (title, site, excerpt, estimated reading time,
-  read/favorite indicators, tags), filtered by the selected smart view / tag. Reading time
-  is derived from word count at 200 wpm (see "Article header chrome").
-- **Reader view:** the cleaned Markdown rendered with local assets and the user's chosen
-  typography; actions to mark read/unread, favorite, archive, and edit tags.
+- **Empty state:** quiet browser-extension guidance for saving a page, media item, or selection.
+- **Board:** the masonry result for the composed filters, with incremental pagination.
+- **No results:** identifies the active search/filter and offers to clear that axis.
 
-### Settings / appearance (popover from the gear)
+### Settings / appearance
 
 - **Appearance:** segmented **Light / Dark / System**.
 - **Font:** family picker (default **Inter**) and a size **slider** (small → large "Aa").
 - These are **per-device UI preferences** — stored in app preferences (e.g. `UserDefaults`),
   **not** in the library folder and **not synced**, consistent with the "the DB/cache is
   per-device" principle in [AGENTS.md](./AGENTS.md).
-- This surface is also the natural home for the **library-folder path** and **native-host
-  status**.
+- These controls live in the standard macOS **Settings** scene, opened from the application menu
+  or ⌘,. This surface also contains the **library-folder path** and **native-host status**.
 
 ## Apple platform style guide — the reader
 
@@ -183,12 +187,12 @@ A classic three-region macOS layout:
 
 | Concern | File |
 |---------|------|
-| All fonts / sizes / weights / spacing tokens | `Sources/ReadControl/Views/Markdown/MarkdownTheme.swift` |
+| All fonts / sizes / weights / spacing tokens | `Sources/Cuttings/Views/Markdown/MarkdownTheme.swift` |
 | Inline runs → styled `AttributedString` (bold, italic, code, links…) | `…/Markdown/InlineRenderer.swift` |
 | Block rendering (headings, lists, quotes, tables, code…) | `…/Markdown/MarkdownBlockView.swift` |
 | Images / figures + captions | `…/Markdown/AssetImageView.swift` |
 | Scroll container, reading measure, link handling | `…/Markdown/MarkdownDocumentView.swift` |
-| Article header chrome (title, metadata, tags) | `Sources/ReadControl/Views/ArticleDetailView.swift` |
+| Article header chrome (title, metadata, tags) | `Sources/Cuttings/Views/ArticleDetailView.swift` |
 
 ### Reader typography
 
@@ -465,8 +469,8 @@ first load — pick a default row).
 
 ## Open questions / to finalize
 
-- ~~Exact color tokens and the brand accent color~~ — **resolved:** see the shared
-  [Color palette](#color-palette-shared-across-the-whole-ecosystem); the accent is a dark ink pill.
+- ~~Exact extension color tokens and brand accent~~ — **resolved:** see the
+  [Brand color palette](#brand-color-palette); the macOS app uses semantic system colors.
 - **Archive vs All** semantics (does "All" include archived?) — the assumption above pending
   confirmation.
 - List-row density and exactly which indicators/metadata appear inline.
