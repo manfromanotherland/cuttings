@@ -4,9 +4,9 @@ import AppKit
 import SwiftUI
 
 /// Offline-only image rendering for card previews and the image/video overlay.
-/// `previewAsset` is resolved beneath the reading's own folder and decoded with
-/// ImageIO, so the board never reaches back to the network or materializes a
-/// needlessly full-resolution bitmap.
+/// Captured previews are decoded with ImageIO; a local video without a poster
+/// derives its thumbnail from the saved movie. Both paths stay beneath the
+/// reading's own folder and never reach back to the network.
 struct LocalReadingImage: View {
     let row: ReadingRow
     let libraryURL: URL?
@@ -44,7 +44,7 @@ struct LocalReadingImage: View {
     }
 
     private var loadKey: String {
-        "\(row.id):\(row.previewAsset ?? ""):\(Int(maxPixel))"
+        "\(row.id):\(row.previewAsset ?? row.localVideoAssetReference ?? ""):\(Int(maxPixel))"
     }
 
     private func imageAspectRatio(_ image: NSImage) -> CGFloat {
@@ -59,17 +59,25 @@ struct LocalReadingImage: View {
         let baseURL = AssetImageLoader.readingFolderURL(
             libraryURL: libraryURL, readingID: row.id
         )
-        // A local video intentionally has no poster in the first implementation;
-        // its kind glyph is the expected placeholder, not a failed-image state.
-        guard let source = row.previewAsset else { return }
-        guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
-            failed = true
+        let decoded: AssetImageLoader.Decoded?
+        if let source = row.previewAsset {
+            guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
+                failed = true
+                return
+            }
+            let target = maxPixel
+            decoded = await Task.detached {
+                AssetImageLoader.downsampledImage(at: url, maxPixel: target)
+            }.value
+        } else if let source = row.localVideoAssetReference {
+            guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
+                failed = true
+                return
+            }
+            decoded = await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
+        } else {
             return
         }
-        let target = maxPixel
-        let decoded = await Task.detached {
-            AssetImageLoader.downsampledImage(at: url, maxPixel: target)
-        }.value
         guard !Task.isCancelled else { return }
         image = decoded?.image
         failed = decoded == nil

@@ -10,6 +10,8 @@ import SwiftUI
 /// the existing single-file asset-path rules are accepted here. Browser video
 /// identities remain source-page cards and never enter this view.
 struct LocalReadingVideo: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let row: ReadingRow
     let libraryURL: URL?
 
@@ -72,7 +74,11 @@ struct LocalReadingVideo: View {
                 failed = true
                 return
             }
-            player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+            let loadedPlayer = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+            player = loadedPlayer
+            if !reduceMotion {
+                loadedPlayer.play()
+            }
         } catch {
             guard !Task.isCancelled else { return }
             failed = true

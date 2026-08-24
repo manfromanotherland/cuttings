@@ -91,6 +91,7 @@ targets:
       # Reader typography: the preference vocabulary and the theme that derives
       # every measure/leading value from it. Pure value types, no FFI.
       - path: Sources/Cuttings/Shared/Preferences/TypographySettings.swift
+      - path: Sources/Cuttings/Shared/Preferences/CardSize.swift
       - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
       - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryLayout.swift

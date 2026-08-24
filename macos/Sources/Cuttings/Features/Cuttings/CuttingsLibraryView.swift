@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct CuttingsLibraryView: View {
     @Environment(AppState.self) var appState
+    @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
 
     @State private var presentedReading: ReadingRow?
     @State private var presentationOrder: [String] = []
@@ -136,6 +137,7 @@ extension CuttingsLibraryView {
         ToolbarItemGroup(placement: .primaryAction) {
             favoritesToggle
             filterMenu
+            cardSizeMenu
             sortMenu
         }
     }
@@ -216,6 +218,21 @@ extension CuttingsLibraryView {
         .accessibilityIdentifier(A11y.List.sortMenu)
     }
 
+    private var cardSizeMenu: some View {
+        Menu {
+            Picker("Card Size", selection: $cardSize) {
+                ForEach(CardSize.allCases) { size in
+                    Label(size.label, systemImage: size.symbol)
+                        .tag(size)
+                }
+            }
+        } label: {
+            Label("Card Size", systemImage: cardSize.symbol)
+        }
+        .help("Change card size")
+        .accessibilityIdentifier(A11y.List.cardSizeMenu)
+    }
+
     @ViewBuilder
     private var board: some View {
         if appState.isLoading {
@@ -230,7 +247,11 @@ extension CuttingsLibraryView {
 
                 ScrollView {
                     LazyVStack(spacing: 22) {
-                        MasonryLayout(minimumColumnWidth: 220, spacing: 18, maximumColumns: 6) {
+                        MasonryLayout(
+                            minimumColumnWidth: cardSize.minimumColumnWidth,
+                            spacing: 18,
+                            maximumColumns: 6
+                        ) {
                             ForEach(appState.readings) { row in
                                 CuttingsCardView(
                                     row: row,

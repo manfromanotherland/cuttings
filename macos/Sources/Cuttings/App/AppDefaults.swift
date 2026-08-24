@@ -3,7 +3,7 @@
 import Foundation
 
 /// The `UserDefaults` store the app persists its per-device preferences to
-/// (theme, reader typography, board sort, and filters).
+/// (theme, reader typography, card size, board sort, and filters).
 ///
 /// In production this is `.standard`. Under UI testing, when the harness passes a
 /// suite name via `CUTTINGS_TEST_DEFAULTS`, it's a throwaway suite in that name

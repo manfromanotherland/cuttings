@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
+import AVFoundation
 import ImageIO
 
-/// Resolves and decodes the images referenced by article Markdown, shared by the
-/// inline reader figure (`AssetImageView`) and the full-screen zoom
-/// (`ImageLightbox`). Keeping path resolution and ImageIO downsampling in one
-/// place means the figure and the lightbox agree on where an asset lives and how
-/// it decodes — only the target pixel size differs (a small thumbnail for the
-/// inline figure, a larger decode for the zoom).
+/// Resolves and decodes local visual assets. Article figures and their lightbox
+/// share image path resolution and ImageIO downsampling; video cards reuse the
+/// same safe path resolution before deriving a first-frame thumbnail.
 enum AssetImageLoader {
-    /// Wraps an `NSImage` so a decode performed in a detached task can cross the
-    /// actor boundary back to the main actor. Safe because the image is fully
-    /// built inside that task and never mutated afterward — ownership transfers
-    /// to the main actor.
+    /// Wraps an `NSImage` so a background decode can cross the actor boundary
+    /// back to the main actor. Safe because the image is fully built before it
+    /// crosses and is never mutated afterward.
     struct Decoded: @unchecked Sendable {
         let image: NSImage
     }
@@ -82,5 +79,22 @@ enum AssetImageLoader {
         }
         let size = NSSize(width: cgImage.width, height: cgImage.height)
         return Decoded(image: NSImage(cgImage: cgImage, size: size))
+    }
+
+    /// Decode a display-oriented first frame for a locally saved video without
+    /// persisting a second copy of the media or reading beyond the safe URL
+    /// already resolved by `localURL`.
+    nonisolated static func videoThumbnail(at url: URL, maxPixel: CGFloat) async -> Decoded? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: maxPixel, height: maxPixel)
+
+        do {
+            let cgImage = try await generator.image(at: .zero).image
+            let size = NSSize(width: cgImage.width, height: cgImage.height)
+            return Decoded(image: NSImage(cgImage: cgImage, size: size))
+        } catch {
+            return nil
+        }
     }
 }

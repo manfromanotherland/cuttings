@@ -57,7 +57,6 @@ struct CuttingsCardView: View {
             row: row, libraryURL: appState.libraryURL,
             fallbackAspectRatio: 4 / 3, contentMode: .fit
         )
-        .overlay(alignment: .bottom) { mediaOrigin }
     }
 
     private var videoCard: some View {
@@ -78,7 +77,6 @@ struct CuttingsCardView: View {
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
                 .accessibilityHidden(true)
         }
-        .overlay(alignment: .bottom) { mediaOrigin }
     }
 
     @ViewBuilder
@@ -142,27 +140,6 @@ struct CuttingsCardView: View {
             sourceLine(onDark: false)
         }
         .padding(15)
-    }
-
-    private var mediaOrigin: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Spacer(minLength: 44)
-            if !row.title.isEmpty {
-                Text(row.title)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(2)
-            }
-            sourceLine(onDark: true)
-        }
-        .foregroundStyle(.white)
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.64)],
-                startPoint: .top, endPoint: .bottom
-            )
-        )
     }
 
     private func sourceLine(onDark: Bool) -> some View {

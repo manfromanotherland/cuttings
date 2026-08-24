@@ -3,6 +3,15 @@
 import XCTest
 
 final class MasonryGeometryTests: XCTestCase {
+    func testSmallCardSizePreservesExistingColumnWidth() {
+        XCTAssertEqual(CardSize.small.minimumColumnWidth, 220)
+    }
+
+    func testCardSizesProduceIncreasingColumnWidths() {
+        XCTAssertLessThan(CardSize.small.minimumColumnWidth, CardSize.medium.minimumColumnWidth)
+        XCTAssertLessThan(CardSize.medium.minimumColumnWidth, CardSize.large.minimumColumnWidth)
+    }
+
     func testResolvedWidthFallsBackForUnboundedProposals() {
         for proposedWidth: CGFloat? in [nil, .infinity, -.infinity, .nan] {
             XCTAssertEqual(

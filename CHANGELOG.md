@@ -10,7 +10,7 @@ and versions track the app's `CFBundleShortVersionString`. See
 ### Added
 
 - Links, text, images, videos, and local `.txt`/`.md` files can now be saved by dropping
-  them on the card board or pasting with ⌘V. URL-only saves remain visibly
+  them on the card board or pasting with ⌘V. URL-only saves remain explicitly
   lightweight until a later browser capture upgrades them in place. Local videos are copied into
   the library and play directly in Cuttings without depending on the original file.
 - Every saved item can now carry a personal Markdown note. Notes are edited from the card inspector
