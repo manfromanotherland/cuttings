@@ -2,8 +2,8 @@
 # Build the Cuttings Docker Sandbox template and load it into the local sbx
 # CLI, so a fresh sandbox already has Node, Rust and the Swift lint/format tools.
 #
-# Tool versions are derived automatically from each repo's .mise.toml, so there
-# is no version number to keep in sync between repos and the Dockerfile.
+# Tool versions are derived automatically from each component's .mise.toml, so
+# there is no duplicate version number to keep in sync with the Dockerfile.
 #
 # Run on your host (not inside a sandbox — the build fetches from swift.org,
 # github.com, sh.rustup.rs and the node image, which the sandbox firewall blocks).

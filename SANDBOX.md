@@ -1,10 +1,10 @@
 # Docker Sandbox template
 
 A single reusable image that pre-installs the toolchains for the Cuttings
-repos, so a fresh [Docker Sandbox](https://docs.docker.com/ai/sandboxes/) is ready
+monorepo components, so a fresh [Docker Sandbox](https://docs.docker.com/ai/sandboxes/) is ready
 to build/test without per-session setup.
 
-| Repo                    | Pre-installed                                  | Source of truth        |
+| Component               | Pre-installed                                  | Source of truth        |
 | ----------------------- | ---------------------------------------------- | ---------------------- |
 | `extension`             | Node 24.16.0                                   | `extension/.mise.toml` |
 | `core`                  | Rust stable + C toolchain (for `rusqlite`)     | `core/.mise.toml`      |
@@ -12,7 +12,7 @@ to build/test without per-session setup.
 
 Node, Rust and Swift are installed directly into the image (Node copied from the
 official image, Rust via rustup, Swift from the swift.org tarball) — no mise in
-the sandbox. The versions still come from each repo's `.mise.toml`:
+the sandbox. The versions still come from each component's `.mise.toml`:
 `sandbox-build.sh` reads them on the host and passes them to the build. mise
 still runs on developers' Macs; it just isn't needed in this Linux image, where
 the firewall would block it from fetching anything at runtime anyway.
@@ -52,8 +52,8 @@ hook into the image: a root-owned `~/.claude/settings.json` in the image makes
 the sandbox runtime fail to write that file as the `agent` user on startup, so
 the container exits seconds after creation.
 
-The three app repos are mounted into the sandbox at runtime (they are not copied
-into the image), so your working tree is live. Inside a sandbox:
+The monorepo is mounted into the sandbox at runtime (it is not copied into the
+image), so your working tree is live. Inside a sandbox:
 
 ```bash
 cd extension && npm run test        # Node 24.16.0
@@ -93,7 +93,7 @@ compile non-UI Swift logic.
   (`SWIFT_BUILD_JOBS=1`) to avoid OOM, but still give Docker Desktop **≥6–8 GB**
   (Settings → Resources → Memory). With more RAM you can speed it up:
   `docker build --build-arg SWIFT_BUILD_JOBS=4 -t cuttings/sandbox:1 .`
-- **Updating a pinned version:** change it in the relevant repo's `.mise.toml`
+- **Updating a pinned version:** change it in the relevant component's `.mise.toml`
   and rebuild — `sandbox-build.sh` reads versions directly from `.mise.toml`.
   The `ARG` defaults in the `Dockerfile` are fallbacks for manual `docker build`
   only; keep them loosely in sync but the script is the source of truth.

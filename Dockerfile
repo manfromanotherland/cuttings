@@ -7,7 +7,7 @@
 #
 # Toolchains are installed directly (no mise in the image): Node is copied from
 # the official node image, Rust via rustup, and Swift from the swift.org tarball.
-# The repos' .mise.toml files stay the version source of truth — sandbox-build.sh
+# The components' .mise.toml files stay the version source of truth — sandbox-build.sh
 # reads them on the host and passes each version in as a --build-arg. (mise still
 # runs on developers' Macs; it just isn't needed inside this Linux image, where
 # the firewall would block it from fetching anything at runtime anyway.)
