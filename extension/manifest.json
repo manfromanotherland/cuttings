@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "Cuttings",
+  "version": "0.1.0",
+  "description": "Save articles, images, videos, and quotes to your local Cuttings library.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArlfbOXU8yQ8ZZf9A0IQh0T5q/6sofpKSMD5dJdsgdHiZj3+0LlAklYa/arxjxJ6yJGKj50HA7jQuMwZ5hw+rlxFxAa8p/nSKSxCXWSXAaJPd+wU2plEXXBTrP76LDFb8nWvHILKRRTR6GJNqFrNwtTtrYSgEoS6tMXqfzXJNbzuiHkWJAooOZKwrO5mZoPfq7CuoHpJc2K0QwQSq+XiM4Ak4Fsb/eYoYiu6UrJid17VK3I/0tVh8gpGWyRXQbbkw+J28HDNRgEEpByGqK+0u5Mq1VeZYJ0vOBXVo+Ec1V6Oy0hxib8hnf7/MmRwYvIOfZFVbEEDkID6BZb6evbHZGwIDAQAB",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cuttings@edmundo.is",
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": [
+    "scripting",
+    "nativeMessaging",
+    "contextMenus",
+    "notifications",
+    "storage"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "dist/background.js",
+    "scripts": ["dist/background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Save page to Cuttings",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "save-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      },
+      "description": "Save current page to Cuttings"
+    }
+  }
+}

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Get the Cuttings app</title>
+    <style>
+      /* Cuttings "paper" palette — shared with the macOS app. See DESIGN.md. */
+      :root {
+        --accent: #17181a; /* dark ink; the primary action, never blue */
+        --accent-hover: #35363a;
+        --accent-fg: #f7f6f4; /* text on the ink action */
+        --red: #ff5f57;
+        --text: #17181a;
+        --text-muted: #55565a;
+        --bg: #fdfcfb;
+        --bg-muted: #f6f5f4;
+        --border: rgb(23 24 26 / 0.12);
+        --radius: 8px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      /* Cuttings "charcoal" palette — the app's dark theme; ink inverts. */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --accent: #e8e9eb;
+          --accent-hover: #f1f2f4;
+          --accent-fg: #17181a;
+          --text: #f1f0ee;
+          --text-muted: #9a9a9e;
+          --bg: #0d0d0f;
+          --bg-muted: #161618;
+          --border: rgb(255 255 255 / 0.1);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        padding: 48px 16px;
+      }
+
+      .card {
+        max-width: 560px;
+        width: 100%;
+      }
+
+      .logo {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius);
+        margin-bottom: 24px;
+        overflow: hidden;
+      }
+
+      .logo img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      h1 {
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .subtitle {
+        color: var(--text-muted);
+        font-size: 15px;
+        margin-bottom: 36px;
+        line-height: 1.5;
+      }
+
+      .section {
+        margin-bottom: 28px;
+      }
+
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+      }
+
+      .step {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 16px;
+      }
+
+      .step-num {
+        min-width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--accent-fg);
+        font-size: 13px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+
+      .step-body {
+        flex: 1;
+      }
+
+      .step-title {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .step-desc {
+        font-size: 14px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      code {
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        background: var(--bg-muted);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+
+      .divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 28px 0;
+      }
+
+      .note {
+        font-size: 13px;
+        color: var(--text-muted);
+        background: var(--bg-muted);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        line-height: 1.6;
+      }
+
+      .download {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 36px;
+        padding: 11px 20px;
+        background: var(--accent);
+        color: var(--accent-fg);
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: var(--radius);
+      }
+
+      .download:hover {
+        background: var(--accent-hover);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo">
+        <img src="icons/icon-128.png" alt="Cuttings" />
+      </div>
+
+      <h1>Get the Cuttings app</h1>
+      <p class="subtitle">
+        To save articles, images, videos, and quotes to your library, you need the Cuttings app on
+        your Mac. The extension hands each item to the app, which saves it as a file you own.
+      </p>
+
+      <p class="note" style="margin-bottom: 36px">
+        Install and open the Cuttings app build that came with this extension before continuing.
+      </p>
+
+      <div class="section">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Download and install the app</div>
+            <div class="step-desc">
+              Build or download Cuttings from this project, then move it to your Applications folder.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Open it once</div>
+            <div class="step-desc">
+              Launch <strong>Cuttings</strong> and choose the folder where your saved items will
+              live. It connects to this extension automatically.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Save anything you want to keep</div>
+            <div class="step-desc">
+              Use the Cuttings toolbar button for a page, or right-click a page, image, video, or
+              text selection and choose <strong>Add to Cuttings</strong>. The <code>⌃⇧S</code> shortcut
+              still saves the full page.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <p class="note">
+        <strong>Already installed it?</strong> Make sure you've opened the Cuttings app at least
+        once, then try saving again. If you moved the app after opening it, open it once more so it
+        can reconnect.
+      </p>
+    </div>
+  </body>
+</html>

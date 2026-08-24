@@ -1,0 +1,32 @@
+{
+  "name": "cuttings-extension",
+  "version": "0.1.0",
+  "description": "Browser extension for the Cuttings app.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "NODE_PATH=node_modules esbuild src/background.ts src/content.ts src/options.ts --bundle --outdir=dist --target=chrome120,firefox115",
+    "package": "npm run build && node scripts/package.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit && eslint src --max-warnings 0 && prettier --check src",
+    "lint:fix": "eslint src --fix && prettier --write src",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/chrome": "^0.0.290",
+    "@types/node": "^25.9.3",
+    "@types/turndown": "^5.0.6",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.0.0",
+    "happy-dom": "^20.10.3",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "turndown": "^7.2.4"
+  }
+}

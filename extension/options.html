@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cuttings options</title>
+    <style>
+      /* Cuttings "paper" palette — shared with the macOS app. See DESIGN.md.
+         --green / --amber are functional status signals, outside the brand
+         neutrals; --red is the website's heart red. */
+      :root {
+        --accent: #17181a; /* dark ink; the primary action, never blue */
+        --green: #22c55e;
+        --red: #ff5f57;
+        --amber: #f59e0b;
+        --text: #17181a;
+        --text-muted: #55565a;
+        --bg: #fdfcfb;
+        --bg-muted: #f6f5f4;
+        --border: rgb(23 24 26 / 0.12);
+        --radius: 8px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+      }
+
+      /* Cuttings "charcoal" palette — the app's dark theme; ink inverts. */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --accent: #f1f0ee;
+          --text: #f1f0ee;
+          --text-muted: #9a9a9e;
+          --bg: #0d0d0f;
+          --bg-muted: #161618;
+          --border: rgb(255 255 255 / 0.1);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        padding: 40px 16px;
+      }
+
+      .page {
+        max-width: 480px;
+        width: 100%;
+      }
+
+      .logo-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 32px;
+      }
+
+      .logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+
+      .logo img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .logo-row h1 {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .section {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+
+      .section-header {
+        padding: 10px 16px;
+        background: var(--bg-muted);
+        border-bottom: 1px solid var(--border);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+      }
+
+      .section-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      /* Connection status */
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .dot.connected {
+        background: var(--green);
+      }
+      .dot.missing {
+        background: var(--red);
+      }
+      .dot.error {
+        background: var(--amber);
+      }
+
+      #status-label {
+        flex: 1;
+        font-weight: 500;
+      }
+
+      .btn-ghost {
+        font-size: 13px;
+        color: var(--accent);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .btn-ghost:hover {
+        text-decoration: underline;
+      }
+
+      .install-hint {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      .install-hint a {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+
+      /* Form fields */
+
+      .label-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      /* Diagnostics log */
+
+      .log-view {
+        max-height: 220px;
+        overflow-y: auto;
+        background: var(--bg-muted);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .log-empty {
+        color: var(--text-muted);
+      }
+
+      .log-entry {
+        display: flex;
+        gap: 8px;
+        padding: 1px 0;
+        word-break: break-word;
+      }
+
+      .log-time {
+        color: var(--text-muted);
+        flex: 0 0 auto;
+      }
+
+      .log-msg {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .log-entry.error .log-msg {
+        color: var(--red);
+      }
+
+      .log-entry.warn .log-msg {
+        color: var(--amber);
+      }
+
+      .log-actions {
+        display: flex;
+        gap: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="logo-row">
+        <div class="logo">
+          <img src="icons/icon-128.png" alt="Cuttings" />
+        </div>
+        <h1>Cuttings</h1>
+      </div>
+
+      <!-- Connection -->
+      <div class="section">
+        <div class="section-header">Cuttings app</div>
+        <div class="section-body">
+          <div class="status-row">
+            <div id="status-dot" class="dot"></div>
+            <span id="status-label">Checking…</span>
+            <button id="check-btn" class="btn-ghost">Check again</button>
+          </div>
+          <p id="install-link" class="install-hint" hidden>
+            The Cuttings app isn't installed.
+            <a href="install.html" target="_blank">How to install →</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Diagnostics -->
+      <div class="section">
+        <div class="section-header">Diagnostics</div>
+        <div class="section-body">
+          <p class="label-hint">
+            Recent save activity and errors. If a save didn't work, reproduce it, then come back
+            here to see what happened.
+          </p>
+          <div id="log-view" class="log-view">Loading…</div>
+          <div class="log-actions">
+            <button id="log-refresh" class="btn-ghost">Refresh</button>
+            <button id="log-copy" class="btn-ghost">Copy</button>
+            <button id="log-clear" class="btn-ghost">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="dist/options.js"></script>
+  </body>
+</html>
