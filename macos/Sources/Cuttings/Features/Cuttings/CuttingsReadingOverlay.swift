@@ -96,17 +96,18 @@ struct CuttingsReadingOverlay: View {
             }
     }
 
+    @ViewBuilder
     private var videoSourceButton: some View {
-        Button("Open source page") {
-            if let url = URL(string: row.url) {
+        if let url = row.sourceURL {
+            Button("Open source page") {
                 ReadingLink.open(url)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.white.opacity(0.18))
+            .foregroundStyle(.white)
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(.white.opacity(0.18))
-        .foregroundStyle(.white)
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 
     private var closeButton: some View {

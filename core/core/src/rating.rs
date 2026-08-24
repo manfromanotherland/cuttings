@@ -89,6 +89,7 @@ mod tests {
             format_version: 1,
             id: id.to_string(),
             kind: Default::default(),
+            lightweight: false,
             url: "https://example.com".to_string(),
             media_url: None,
             preview_asset: None,

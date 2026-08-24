@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CuttingsLibraryView: View {
-    @Environment(AppState.self) private var appState
+    @Environment(AppState.self) var appState
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var presentedReading: ReadingRow?
     @State private var presentationOrder: [String] = []
     @State private var tagTargetID: String?
+    @State private var isDropTargeted = false
 
     var body: some View {
         ZStack {
@@ -24,8 +26,28 @@ struct CuttingsLibraryView: View {
                     .padding(18)
                     .transition(.scale(scale: 0.985).combined(with: .opacity))
             }
+
+            if isDropTargeted {
+                dropPrompt
+            }
+
+            if let notice = appState.saveNotice {
+                saveNotice(notice)
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: presentedReading?.id)
+        .onDrop(of: supportedSaveTypes, isTargeted: $isDropTargeted) { providers in
+            guard !providers.isEmpty else { return false }
+            save(providers)
+            return true
+        }
+        .onPasteCommand(
+            of: supportedSaveTypes,
+            validator: { providers in
+                appState.isEditingText || providers.isEmpty ? nil : providers
+            },
+            perform: save
+        )
         .background { rowsProbe }
         .task { await appState.loadReadings() }
         .onChange(of: appState.isFocusMode, initial: true) { _, isFocusMode in
@@ -246,30 +268,6 @@ extension CuttingsLibraryView {
                 }
                 .accessibilityIdentifier(A11y.List.table)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var emptyState: some View {
-        if !appState.searchQuery.isEmpty {
-            ContentUnavailableView.search(text: appState.searchQuery)
-                .accessibilityIdentifier(A11y.List.searchEmptyState)
-        } else if appState.selectedTag != nil {
-            ContentUnavailableView {
-                Label("Nothing here yet", systemImage: "sparkles.rectangle.stack")
-            } actions: {
-                Button("Clear tag filter") { Task { await appState.clearTag() } }
-                    .accessibilityIdentifier(A11y.List.clearTagFilter)
-            }
-            .accessibilityIdentifier(A11y.List.tagEmptyState)
-        } else if let kind = appState.selectedKind {
-            ContentUnavailableView(
-                "No \(kind.label.lowercased()) here yet", systemImage: kind.symbol
-            )
-            .accessibilityIdentifier(A11y.List.emptyState)
-        } else {
-            ContentUnavailableView("Nothing here yet", systemImage: "sparkles.rectangle.stack")
-                .accessibilityIdentifier(A11y.List.emptyState)
         }
     }
 

@@ -95,6 +95,12 @@ enum A11y {
         static let clearTagFilter = "list.clearTagFilter"
     }
 
+    /// ── Paste/drop save feedback ──────────────────────────────────────────
+    enum Save {
+        static let dropTarget = "save.dropTarget"
+        static let notice = "save.notice"
+    }
+
     /// ── Reader / detail ─────────────────────────────────────────────────────
     enum Detail {
         static let title = "detail.title"

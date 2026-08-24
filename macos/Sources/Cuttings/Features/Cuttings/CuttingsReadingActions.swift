@@ -56,12 +56,12 @@ struct CuttingsReadingActions: View {
             .disabled(appState.isEditingText)
         }
 
-        Button("Open Source") {
-            if let url = URL(string: row.url) {
+        if let url = row.sourceURL {
+            Button("Open Source") {
                 ReadingLink.open(url)
             }
+            .keyboardShortcut(ShortcutCatalog.openInBrowser)
         }
-        .keyboardShortcut(ShortcutCatalog.openInBrowser)
 
         Divider()
 

@@ -4,10 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use base64::Engine;
-use cuttings_core::{
-    find_by_media, find_by_url, first_local_image_asset, media_id, quote_id, url_id, write_images,
-    write_reading, ImageBytes, LibraryRoot, Metadata, ReadingKind,
-};
+use cuttings_core::{save_capture, ImageBytes, LibraryRoot, SaveDisposition, SaveError, SaveInput};
 
 use crate::protocol::{SaveRequest, SaveResponse, PROTOCOL_VERSION};
 
@@ -36,49 +33,6 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
     };
     let library = LibraryRoot::new(&library_path)?;
 
-    // Articles retain their original URL-only identity. Media includes its
-    // clicked URL; quotes include their normalized selected Markdown.
-    let id_result = match req.metadata.kind {
-        ReadingKind::Article => url_id(&req.metadata.url),
-        ReadingKind::Image | ReadingKind::Video => match req.metadata.media_url.as_deref() {
-            Some(media_url) => media_id(req.metadata.kind, &req.metadata.url, media_url),
-            None => {
-                return Ok(SaveResponse::error(
-                    "invalid_request",
-                    "image and video saves require metadata.media_url",
-                ))
-            }
-        },
-        ReadingKind::Quote => quote_id(&req.metadata.url, &req.markdown),
-    };
-    let id = match id_result {
-        Ok(id) => id,
-        Err(error) => {
-            return Ok(SaveResponse::error(
-                "invalid_request",
-                &format!("could not derive reading id: {error}"),
-            ))
-        }
-    };
-
-    // Duplicate check — a single stat on the content-addressed path.
-    let existing_id = match req.metadata.kind {
-        ReadingKind::Article => find_by_url(&library, &req.metadata.url)?,
-        ReadingKind::Image | ReadingKind::Video => find_by_media(
-            &library,
-            req.metadata.kind,
-            &req.metadata.url,
-            req.metadata.media_url.as_deref().expect("validated above"),
-        )?,
-        ReadingKind::Quote => library.article_path(&id).is_file().then(|| id.clone()),
-    };
-    if let Some(existing_id) = existing_id {
-        return Ok(SaveResponse::error(
-            "duplicate",
-            &format!("This reading already exists (id: {existing_id})"),
-        ));
-    }
-
     // Decode the image bytes the extension captured. An image whose base64 won't
     // decode is skipped, so its URL stays in the Markdown as a placeholder.
     let images: Vec<ImageBytes> = req
@@ -96,44 +50,41 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         })
         .collect();
 
-    // Write the supplied images and rewrite their links. The host never downloads.
-    let markdown = write_images(&library, &id, &req.markdown, &images)?;
-    let preview_asset = first_local_image_asset(&markdown);
-
-    let metadata = Metadata {
-        format_version: 1,
-        id: id.clone(),
-        kind: req.metadata.kind,
-        url: req.metadata.url,
-        media_url: req.metadata.media_url,
-        preview_asset,
-        canonical_url: req.metadata.canonical_url,
-        title: req.metadata.title,
-        author: req.metadata.author,
-        site: req.metadata.site,
-        saved_at: req.metadata.saved_at,
-        read_at: None,
-        archived: false,
-        favorite: false,
-        rating: 0,
-        tags: vec![],
-        excerpt: req.metadata.excerpt,
-        word_count: req.metadata.word_count,
-        lang: req.metadata.lang,
-        source_hash: String::new(), // set by write_reading
+    let outcome = match save_capture(
+        &library,
+        SaveInput {
+            quote_identity_markdown: None,
+            kind: req.metadata.kind,
+            lightweight: false,
+            url: req.metadata.url,
+            media_url: req.metadata.media_url,
+            canonical_url: req.metadata.canonical_url,
+            title: req.metadata.title,
+            author: req.metadata.author,
+            site: req.metadata.site,
+            saved_at: req.metadata.saved_at,
+            markdown: req.markdown,
+            images,
+            excerpt: req.metadata.excerpt,
+            word_count: req.metadata.word_count,
+            lang: req.metadata.lang,
+        },
+    ) {
+        Ok(outcome) => outcome,
+        Err(SaveError::InvalidRequest(message)) => {
+            return Ok(SaveResponse::error("invalid_request", &message));
+        }
+        Err(SaveError::Storage(error)) => return Err(error),
     };
 
-    write_reading(&library, metadata, markdown)?;
+    if outcome.disposition == SaveDisposition::Duplicate {
+        return Ok(SaveResponse::error(
+            "duplicate",
+            &format!("This reading already exists (id: {})", outcome.id),
+        ));
+    }
 
-    // Report the article's path relative to the library root (per-reading
-    // folder, e.g. articles/8f/<id>/article.md).
-    let article_path = library.article_path(&id);
-    let path = article_path
-        .strip_prefix(library.path())
-        .unwrap_or(&article_path)
-        .to_string_lossy()
-        .into_owned();
-    Ok(SaveResponse::success(id, path))
+    Ok(SaveResponse::success(outcome.id, outcome.path))
 }
 
 /// Classify an anyhow error into a protocol error code + message.

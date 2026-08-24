@@ -49,6 +49,9 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 
 - **Save from the browser** — browser extension. Capture a cleaned article, right-clicked image or
   video, or selected-text quote and save it locally with its origin.
+- **Save in the app** — macOS client. Drop or paste an HTTP(S) link, plain text, or image anywhere
+  on the board. Text and image bytes are stored locally; a link is explicitly lightweight until a
+  later browser capture upgrades the same URL-derived reading.
 - **Visual card board** — native app. Browse articles, images, videos, and quotes in a mixed
   masonry layout, organized by smart views:
   **All**, **Unread**, **Archive**, **Favorites**.
@@ -60,13 +63,16 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   (stored in frontmatter).
 - **Card kind** — every reading is an **article**, **image**, **video**, or **quote**. Older files
   without a kind remain articles.
-- **Origin** — every kind retains the originating page URL, canonical URL, page title/site, and
-  save date. Image/video `media_url` is additional and never replaces the page origin.
+- **Origin** — web captures retain the originating page URL, canonical URL, page title/site, and
+  save date. Image/video `media_url` is additional and never replaces the page origin. Source-less
+  paste/drop saves use an internal `cuttings://local/...` identity instead of inventing or leaking
+  a machine-local path.
 - **Appearance** — native app. Light/Dark/System theme and adjustable reader typography
   (font, size, width, line height), stored as per-device preferences (not synced).
 
-> The macOS UI is specified in [DESIGN.md](./DESIGN.md). An in-app **"Add Link"** (paste a URL)
-> appears in the mockup but is **deferred** — page capture stays in the browser extension for now.
+> The macOS UI is specified in [DESIGN.md](./DESIGN.md). Paste and drop are whole-board save
+> gestures, not a modal "Add Link" form. Full page extraction still belongs to the browser
+> extension because it has the live DOM.
 
 ## Decisions already made
 
@@ -105,8 +111,10 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   `archived`, and `favorite`.
 - **UI preferences** (theme, reader font/size/width/line height) are per-device app
   preferences — not stored in the library and not synced.
-- **In-app "Add Link" is deferred.** Page capture stays in the browser extension; there is no
-  engine-side fetch/extraction for now. See [DESIGN.md](./DESIGN.md).
+- **Paste/drop URL saves are deliberately lightweight.** The app never pretends a URL alone is a
+  captured article and does no hidden network fetch. It writes a marked link card at the normal
+  URL-derived id; a later full browser capture upgrades that card in place while preserving the
+  user's state. See [DESIGN.md](./DESIGN.md).
 - **Name:** the product name is **Cuttings** and the internal slug is **cuttings**. Product-facing,
   repository, bundle, Rust, and native-host identifiers use this name consistently.
 - **License / openness:** the project is **open source, multi-licensed by component**. The

@@ -62,15 +62,15 @@ struct ArticleToolbar: ToolbarContent {
                 .accessibilityIdentifier(A11y.Toolbar.archive)
             }
 
-            Button {
-                if let url = URL(string: row.url) {
+            if let url = row.sourceURL {
+                Button {
                     ReadingLink.open(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
                 }
-            } label: {
-                Label("Open in Browser", systemImage: "safari")
+                .help("Open original URL")
+                .accessibilityIdentifier(A11y.Toolbar.openInBrowser)
             }
-            .help("Open original URL")
-            .accessibilityIdentifier(A11y.Toolbar.openInBrowser)
 
             Button {
                 appState.showTagSheet = true

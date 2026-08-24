@@ -2,9 +2,9 @@
 
 Cuttings is three apps that share one data format and one Rust core: a browser **extension**
 captures cleaned articles, standalone media, and selected-text quotes; a **native messaging host**
-writes them into a plain-file library; and the **macOS app** (embedding the core) indexes and shows
-them as a visual card board. Files are the source of truth; the index is a disposable, per-device
-cache.
+writes them into a plain-file library; and the **macOS app** (embedding the core) both accepts
+paste/drop saves and shows the library as a visual card board. Files are the source of truth; the
+index is a disposable, per-device cache.
 
 ## How it works
 
@@ -19,11 +19,11 @@ cache.
                                               │   Library folder (disk)  │  ◀── user syncs this
                                               │   articles/ assets/ ...  │      (Dropbox/iCloud…)
                                               └───────────┬──────────────┘
-                                            file-watch +  │  reconcile on launch
+                                         write + watch +  │  reconcile on launch
                                                           ▼
- ┌─────────────────┐   UniFFI bindings        ┌──────────────────────────┐
+ ┌─────────────────┐   UniFFI saves/queries   ┌──────────────────────────┐
  │  macOS app      │ ◀──────────────────────▶ │  core (Rust)             │
- │  (SwiftUI)      │                          │  index • search • tags   │
+ │ paste/drop + UI │                          │ save • index • search   │
  └─────────────────┘                          └───────────┬──────────────┘
                                                           ▼
                                               SQLite + FTS5 (per-device, NOT synced)
@@ -32,8 +32,12 @@ cache.
 The extension either extracts and cleans the current page, captures the right-clicked image, records
 a right-clicked video plus its poster, or turns selected text into a quote. It hands Markdown,
 metadata, and captured image bytes to a small native host that writes them into the library folder.
-The macOS app watches that folder and indexes new files for the masonry board, full-text search,
-type filters, and tags — so a browser save and a file delivered by sync use the same code path.
+The macOS app also accepts dropped or pasted HTTP(S) links, text, and images. Both native entry
+points call the same core save service: local bytes are copied into the library, source-less items
+receive a private deterministic identity, and URL-only saves are marked lightweight so a later
+full browser capture upgrades them. The app watches the folder and indexes every new file for the
+masonry board, full-text search, type filters, and tags — so browser saves, in-app saves, and files
+delivered by sync reconcile through the same index path.
 
 Every card kind records its origin page in `url`/`canonical_url` plus its page title/site and save
 date. `media_url` stores a durable image/video address in addition to that origin. If a video only
@@ -62,8 +66,9 @@ every affected component.
   reference), and a locally captured poster when available.
 
 ### Engine (`core`, Rust)
-- **Responsibility:** owns the library format and all logic — scan & index the library, full-text
-  search, tags, read/write readings, reconcile changes that arrive via sync.
+- **Responsibility:** owns the library format and all logic — validate and write extension or
+  paste/drop saves, scan & index the library, full-text search, tags, and reconcile changes that
+  arrive via sync.
 - **Shape:** a core library crate reused by the other native pieces (the macOS app and the native
   messaging host both link it). Not a long-running daemon.
 - **Index:** local SQLite database with FTS5. Rebuildable; per-device; never synced.
@@ -71,7 +76,7 @@ every affected component.
 ### macOS client (`macos`, Swift)
 - **Responsibility:** the native UI — browse a mixed masonry board, filter by card kind and smart
   view, read articles, inspect images/videos/quotes, search, tag, and set
-  read/favorite/archive/rating state; appearance settings.
+  read/favorite/archive/rating state; save supported drop/paste payloads; appearance settings.
 - **Stack:** Swift / SwiftUI, embedding `core` via **UniFFI**-generated bindings.
 - **Native rendering only — never a WebView.** The reader renders article Markdown as a native
   SwiftUI view tree via Apple's [`swift-markdown`](https://github.com/apple/swift-markdown) parser —
@@ -79,7 +84,8 @@ every affected component.
   script-execution surface. The UI is specified in [DESIGN.md](./DESIGN.md).
 - Card detail is a full-window native overlay: the existing Markdown reader handles articles and
   quote bodies; image/video cards use local preview assets and source/media actions. Every detail
-  inspector exposes the origin page consistently.
+  inspector exposes the origin page when one exists and identifies source-less cards as saved
+  locally.
 - Owns the local index and watches the library folder for changes (including files arriving via
   sync), reindexing incrementally.
 
@@ -112,7 +118,8 @@ identity remains the normalized visited URL. Image/video identity combines the k
 origin page, and media identity. That identity is the durable media URL or, for session-local video
 streams, a stable page-and-element reference. Quote identity combines the normalized origin page
 and normalized selected Markdown. Exact repeat saves therefore deduplicate while multiple clips
-from one page can coexist.
+from one page can coexist. Source-less pasted text and images use content-derived local identities;
+their stored `cuttings://local/...` URLs are internal provenance, never openable web sources.
 
 The card metadata is additive and backwards compatible:
 
@@ -121,6 +128,9 @@ The card metadata is additive and backwards compatible:
   reference for a session-local video stream. The page origin remains in `url`.
 - `preview_asset`: optional safe `assets/<file>` path derived after the host writes captured image
   bytes. It drives the board thumbnail and is never a remote URL.
+- `lightweight`: optional `true` marker for a URL-only app save. A later full browser capture
+  replaces that placeholder at the same article id and clears the marker while preserving user
+  state.
 
 - **Frontmatter is the source of truth** for metadata (title, tags, read/archive/favorite/rating
   state, …). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the

@@ -7,8 +7,9 @@ host, and macOS app.
 
 ## Naming Rules
 
-- Use **save** for the user action that adds a page, image, video, or selected-text
-  quote to the library. Saving is time-neutral: people save things to revisit
+- Use **save** for the user action that adds a page, image, video, or text quote
+  to the library, whether from the extension or by pasting/dropping in the app. Saving is
+  time-neutral: people save things to revisit
   *and* things they already consumed and want to keep. Do not use download or
   bookmark for this action.
 - Use **capture** for the extension's technical extraction step (live DOM or
@@ -44,15 +45,17 @@ host, and macOS app.
 | Library | The folder chosen by the user that stores their synced, durable reading data. |
 | Library folder | Same as Library, used when emphasizing the on-disk directory. |
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |
-| Save | The user action that adds the current page, clicked media, or selected text to the library as a new reading/card. |
+| Save | The user action that adds a page, media item, or text to the library as a new reading/card, from either the extension or the app's paste/drop path. |
 | Capture | The extension step that turns a page or right-click context into Markdown, universal origin metadata, and optional local image bytes before the save is written. Internal/technical term; users just "save". |
 | Reading | One saved item in the user's library. A reading is backed by an article file, optional assets, and optional highlights — all inside its reading folder. |
 | Card | User-facing visual representation of a reading on the macOS masonry board. Do not rename the internal `Reading` domain type merely to match presentation. |
 | Card kind | The reading's capture/rendering kind: `article`, `image`, `video`, or `quote`. A missing kind on an older file means `article`. |
-| Origin | The source page for every card kind: `url`, `canonical_url`, page title/site, and save date. For image/video cards this is deliberately distinct from `media_url`. |
+| Origin | The source page for a web card: `url`, `canonical_url`, page title/site, and save date. For image/video cards this is deliberately distinct from `media_url`. Source-less app saves instead carry a private local identity. |
 | Media URL | Optional media identity for an image/video card. Normally it is a durable direct URL. A session-local video instead uses an opaque stable capture reference. It supplements the origin and never replaces the page URL. |
 | Preview asset | Optional safe local `assets/<file>` reference used by the masonry card. The host derives it only after captured image/poster bytes have been written. |
-| Quote | A selected-text card whose full selection is stored as Markdown and whose origin is the page on which the text was selected. |
+| Quote | A text card whose full text is stored as Markdown. Browser selections retain their page origin; source-less paste/drop text uses a private local identity. |
+| Lightweight link | An article card created by pasting or dropping only an HTTP(S) URL. It is explicitly marked `lightweight: true`; a later full browser capture upgrades the same reading in place. |
+| Local identity | A deterministic, non-web `cuttings://local/...` URL used for source-less text or image saves. It prevents machine-local paths leaking into synced files and is never shown as an openable source. |
 | Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its `assets/`, and its `highlights.md`. Moving or deleting a reading operates on this one folder. |
 | Article file | The `article.md` file inside a reading folder (`articles/<prefix>/<id>/article.md`) that stores one reading's frontmatter and body. |
 | Frontmatter | YAML metadata at the top of an article file. It is the source of truth for reading metadata and state. |
@@ -61,10 +64,10 @@ host, and macOS app.
 | Original HTML | Optional raw HTML snapshot stored as `original.html` inside the reading folder for future reprocessing. |
 | Highlight | A saved selected text passage for one reading. Highlights are stored in the reading folder, separate from the article file. |
 | Highlight file | The `highlights.md` file inside a reading folder (`articles/<prefix>/<id>/highlights.md`) that stores that reading's saved highlights. |
-| Reading id | Deterministic lowercase-hex SHA-256 content address. Articles hash the normalized origin URL; image/video cards hash kind + normalized origin + media identity; quote cards hash normalized origin + normalized selected Markdown. It names the reading folder and frontmatter `id`. |
+| Reading id | Deterministic lowercase-hex SHA-256 content address. Web articles hash the normalized origin URL; web image/video cards hash kind + normalized origin + media identity; web quotes hash normalized origin + normalized selected Markdown; source-less app saves derive identity from their content. It names the reading folder and frontmatter `id`. |
 | Content-addressed id | An id derived from stable card identity rather than assigned, so identical input yields an identical id without a coordinator. |
 | ULID | Sortable id scheme (Crockford Base32). Used for highlight ids; reading ids are content-addressed (see Reading id), not ULIDs. |
-| Source URL | The originating page URL stored as `url` for every card kind. For articles its normalized form is the whole identity; for media/quote it is one component of identity. |
+| Source URL | The originating page URL stored as `url` for a web card. For articles its normalized form is the whole identity; for media/quote it is one component of identity. A source-less app save stores a local identity in the same required field. |
 | Canonical URL | The page's own canonical URL when known, stored as `canonical_url` for reference. Dedup keys on the reading id (from the normalized *visited* URL), not this field. |
 | Source hash | Hash of cleaned content used to detect stale index rows and content changes. |
 | Format version | Integer frontmatter version for the library file contract. |
@@ -113,8 +116,8 @@ host, and macOS app.
 | Extension | Browser extension that captures a cleaned page, clicked image/video, or selected-text quote and sends Markdown, universal origin metadata, and optional image bytes to the native host. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |
-| Core | Rust engine that owns the library format, file parsing/writing, indexing, search, tags, states, ratings, highlights, and UniFFI surface. |
-| macOS client | SwiftUI app that lets the user browse, read, search, tag, rate, highlight, archive, favorite, and configure the library. |
+| Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, states, ratings, highlights, and the UniFFI surface. |
+| macOS client | SwiftUI app that lets the user save by paste/drop, browse, read, search, tag, rate, highlight, archive, favorite, and configure the library. |
 | UniFFI bindings | Generated Swift bridge that lets the macOS client call the Rust core. |
 | Thin client | A client that delegates domain logic to the Rust core and keeps only presentation, navigation, and local UI state. |
 | Folder watcher | macOS file-system watcher that notices library changes and triggers reconcile. |
@@ -161,13 +164,13 @@ paragraphs, and the welcome article.
 | Starred | Favorite or rating | Favorite is boolean; rating is 0 to 5 stars. |
 | Clip | Save | "Clip" is note-clipper vocabulary (Evernote, Notion, Obsidian Web Clipper) and suggests snipping fragments into a notes app. Read-later products say save. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
-| Bookmark (user action) | Save | A bookmark is a link, not content. Cuttings stores the cleaned article itself. The bookmark glyph as brand iconography is fine; the verb is not. |
+| Bookmark (user action) | Save | A full browser capture stores cleaned content; a URL-only app save is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |
 | Read-it-later system | Read-later app | One category phrase everywhere; "system" is architecture-speak. |
 | Preferences | Settings | macOS renamed Preferences to Settings; the app's UI says Settings. |
 | Star Ratings (section name) | Ratings | The sidebar section is "Ratings". "Star rating" is fine when describing the 0–5 value itself. |
 | Web reader | Reader | The macOS reader is native, not WebView-based. |
-| Add Link | Browser save or deferred in-app capture | In-app URL capture is not part of the current scope. |
+| Add Link | Paste or drop a link; Save | The app uses the standard paste/drop gestures rather than a bespoke form, and the user-facing action is still Save. |
 
 ## Flagged Ambiguities
 

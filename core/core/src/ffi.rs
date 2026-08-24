@@ -15,7 +15,7 @@ use std::{
 use crate::{
     list::{CountScope, ListOptions, SortField, View},
     scanner::ScannedReading,
-    LibraryRoot, ReadingKind,
+    LibraryRoot, ReadingKind, SaveDisposition, SaveOutcome,
 };
 
 // ── Error ────────────────────────────────────────────────────────────────────
@@ -89,6 +89,23 @@ pub struct FfiSidebarCounts {
 pub struct FfiHighlight {
     pub id: String,
     pub text: String,
+}
+
+/// Result of importing content through the native app. Exact duplicates are a
+/// successful, structured outcome so Swift can show friendly feedback without
+/// parsing an error string.
+#[derive(uniffi::Record)]
+pub struct FfiImportResult {
+    pub disposition: FfiImportDisposition,
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(uniffi::Enum)]
+pub enum FfiImportDisposition {
+    Saved,
+    Upgraded,
+    Duplicate,
 }
 
 #[derive(uniffi::Enum)]
@@ -201,6 +218,20 @@ impl From<crate::highlights::Highlight> for FfiHighlight {
         Self {
             id: h.id,
             text: h.text,
+        }
+    }
+}
+
+impl From<SaveOutcome> for FfiImportResult {
+    fn from(outcome: SaveOutcome) -> Self {
+        Self {
+            disposition: match outcome.disposition {
+                SaveDisposition::Saved => FfiImportDisposition::Saved,
+                SaveDisposition::Upgraded => FfiImportDisposition::Upgraded,
+                SaveDisposition::Duplicate => FfiImportDisposition::Duplicate,
+            },
+            id: outcome.id,
+            path: outcome.path,
         }
     }
 }
@@ -339,6 +370,49 @@ impl Database {
         }
         *self.last_scan.lock().unwrap() = new_scan;
         Ok(count)
+    }
+
+    // ── Imports ───────────────────────────────────────────────────────────
+
+    /// Add an HTTP(S) link as a lightweight article placeholder. A later full
+    /// browser capture upgrades it in place because both use the same id.
+    pub fn import_link(
+        &self,
+        library_path: String,
+        url: String,
+    ) -> Result<FfiImportResult, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let outcome = crate::import_link(&lib, &url).map_err(e)?;
+        self.sync(library_path)?;
+        Ok(outcome.into())
+    }
+
+    /// Add source-less plain text as a quote.
+    pub fn import_text(
+        &self,
+        library_path: String,
+        text: String,
+        title: Option<String>,
+    ) -> Result<FfiImportResult, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let outcome = crate::import_text(&lib, &text, title.as_deref()).map_err(e)?;
+        self.sync(library_path)?;
+        Ok(outcome.into())
+    }
+
+    /// Add source-less image bytes. `content_type` determines the local asset
+    /// extension and `title` supplies the visible card label.
+    pub fn import_image(
+        &self,
+        library_path: String,
+        bytes: Vec<u8>,
+        content_type: String,
+        title: String,
+    ) -> Result<FfiImportResult, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let outcome = crate::import_image(&lib, bytes, &content_type, &title).map_err(e)?;
+        self.sync(library_path)?;
+        Ok(outcome.into())
     }
 
     // ── Query ─────────────────────────────────────────────────────────────

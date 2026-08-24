@@ -46,10 +46,21 @@ extension ReadingRow {
         title.isEmpty ? url : title
     }
 
+    /// Only web origins can be opened outside the app. Source-less paste/drop
+    /// saves use a private `cuttings://local/...` identity so they remain
+    /// content-addressed without leaking a machine-specific file path.
+    var sourceURL: URL? {
+        guard let url = URL(string: url),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https"
+        else { return nil }
+        return url
+    }
+
     var displaySite: String? {
         if let site, !site.isEmpty {
             return site
         }
-        return URL(string: url)?.host?.replacingOccurrences(of: "www.", with: "")
+        return sourceURL?.host?.replacingOccurrences(of: "www.", with: "")
     }
 }

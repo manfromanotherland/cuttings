@@ -296,6 +296,28 @@ mod integration_tests {
     }
 
     #[test]
+    fn full_capture_upgrades_a_lightweight_link_without_protocol_changes() {
+        with_library(|dir| {
+            let library = cuttings_core::LibraryRoot::new(dir.path()).unwrap();
+            let imported =
+                cuttings_core::import_link(&library, "https://example.com/to-upgrade").unwrap();
+
+            let response = dispatch(&save_message("https://example.com/to-upgrade"));
+            assert!(response.ok, "upgrade should be a protocol-v2 success");
+            assert_eq!(response.protocol_version, 2);
+            assert_eq!(response.id.as_deref(), Some(imported.id.as_str()));
+            assert_eq!(response.error, None);
+
+            let reading = cuttings_core::parse_reading(
+                &std::fs::read_to_string(dir.path().join(response.path.unwrap())).unwrap(),
+            )
+            .unwrap();
+            assert!(!reading.metadata.lightweight);
+            assert_eq!(reading.body, "# Test Article\n\nSome content here.\n");
+        });
+    }
+
+    #[test]
     fn no_library_returns_library_not_configured() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 

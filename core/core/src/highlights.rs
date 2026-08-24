@@ -10,9 +10,14 @@
 //! followed by an HTML comment carrying a stable id, so highlights can be listed
 //! and deleted individually while the file stays human-readable.
 
+use std::io::Write as _;
+
 use anyhow::{bail, Result};
 
-use crate::{new_id, LibraryRoot};
+use crate::{
+    locking::{lock_reading, ReadingLock},
+    new_id, LibraryRoot,
+};
 
 /// A single saved highlight: a stable id and the verbatim selected text.
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +29,16 @@ pub struct Highlight {
 /// List a reading's highlights in creation order. A missing file (the common
 /// case — most readings have none) yields an empty list.
 pub fn list_highlights(library: &LibraryRoot, reading_id: &str) -> Result<Vec<Highlight>> {
+    let lock = lock_reading(library, reading_id)?;
+    list_highlights_under_lock(library, reading_id, &lock)
+}
+
+fn list_highlights_under_lock(
+    library: &LibraryRoot,
+    reading_id: &str,
+    lock: &ReadingLock,
+) -> Result<Vec<Highlight>> {
+    lock.ensure_protects(library, reading_id)?;
     let path = library.highlights_path(reading_id);
     if !path.is_file() {
         return Ok(Vec::new());
@@ -41,7 +56,8 @@ pub fn add_highlight(library: &LibraryRoot, reading_id: &str, text: &str) -> Res
     if trimmed.is_empty() {
         bail!("highlight text is empty");
     }
-    let mut highlights = list_highlights(library, reading_id)?;
+    let lock = lock_reading(library, reading_id)?;
+    let mut highlights = list_highlights_under_lock(library, reading_id, &lock)?;
     if let Some(existing) = highlights.iter().find(|h| h.text == trimmed) {
         return Ok(existing.clone());
     }
@@ -50,7 +66,7 @@ pub fn add_highlight(library: &LibraryRoot, reading_id: &str, text: &str) -> Res
         text: trimmed.to_string(),
     };
     highlights.push(highlight.clone());
-    write(library, reading_id, &highlights)?;
+    write_under_lock(library, reading_id, &highlights, &lock)?;
     Ok(highlight)
 }
 
@@ -63,13 +79,14 @@ pub fn toggle_highlight(library: &LibraryRoot, reading_id: &str, text: &str) -> 
     if trimmed.is_empty() {
         bail!("highlight text is empty");
     }
-    let mut highlights = list_highlights(library, reading_id)?;
+    let lock = lock_reading(library, reading_id)?;
+    let mut highlights = list_highlights_under_lock(library, reading_id, &lock)?;
     if let Some(pos) = highlights.iter().position(|h| h.text == trimmed) {
         highlights.remove(pos);
         if highlights.is_empty() {
-            delete_all_highlights(library, reading_id)?;
+            delete_all_highlights_under_lock(library, reading_id, &lock)?;
         } else {
-            write(library, reading_id, &highlights)?;
+            write_under_lock(library, reading_id, &highlights, &lock)?;
         }
         Ok(false)
     } else {
@@ -77,7 +94,7 @@ pub fn toggle_highlight(library: &LibraryRoot, reading_id: &str, text: &str) -> 
             id: new_id(),
             text: trimmed.to_string(),
         });
-        write(library, reading_id, &highlights)?;
+        write_under_lock(library, reading_id, &highlights, &lock)?;
         Ok(true)
     }
 }
@@ -85,22 +102,33 @@ pub fn toggle_highlight(library: &LibraryRoot, reading_id: &str, text: &str) -> 
 /// Remove the highlight with `highlight_id`. A no-op if it isn't present. When
 /// the last highlight is removed, the now-empty file is deleted.
 pub fn delete_highlight(library: &LibraryRoot, reading_id: &str, highlight_id: &str) -> Result<()> {
-    let mut highlights = list_highlights(library, reading_id)?;
+    let lock = lock_reading(library, reading_id)?;
+    let mut highlights = list_highlights_under_lock(library, reading_id, &lock)?;
     let before = highlights.len();
     highlights.retain(|h| h.id != highlight_id);
     if highlights.len() == before {
         return Ok(());
     }
     if highlights.is_empty() {
-        delete_all_highlights(library, reading_id)
+        delete_all_highlights_under_lock(library, reading_id, &lock)
     } else {
-        write(library, reading_id, &highlights)
+        write_under_lock(library, reading_id, &highlights, &lock)
     }
 }
 
 /// Remove a reading's entire highlights file. Used when the reading itself is
 /// deleted. A no-op if the file does not exist.
 pub fn delete_all_highlights(library: &LibraryRoot, reading_id: &str) -> Result<()> {
+    let lock = lock_reading(library, reading_id)?;
+    delete_all_highlights_under_lock(library, reading_id, &lock)
+}
+
+fn delete_all_highlights_under_lock(
+    library: &LibraryRoot,
+    reading_id: &str,
+    lock: &ReadingLock,
+) -> Result<()> {
+    lock.ensure_protects(library, reading_id)?;
     let path = library.highlights_path(reading_id);
     if path.is_file() {
         std::fs::remove_file(&path)?;
@@ -112,7 +140,13 @@ pub fn delete_all_highlights(library: &LibraryRoot, reading_id: &str) -> Result<
 
 /// Render highlights as a Markdown document. Each highlight is a block quote
 /// (one `> ` line per text line) terminated by `<!-- hl {id} -->`.
-fn write(library: &LibraryRoot, reading_id: &str, highlights: &[Highlight]) -> Result<()> {
+fn write_under_lock(
+    library: &LibraryRoot,
+    reading_id: &str,
+    highlights: &[Highlight],
+    lock: &ReadingLock,
+) -> Result<()> {
+    lock.ensure_protects(library, reading_id)?;
     // The highlights file lives inside the reading's folder; create it in case a
     // highlight is somehow saved before the article file exists.
     std::fs::create_dir_all(library.reading_dir(reading_id))?;
@@ -131,7 +165,14 @@ fn write(library: &LibraryRoot, reading_id: &str, highlights: &[Highlight]) -> R
         out.push_str(&h.id);
         out.push_str(" -->\n\n");
     }
-    std::fs::write(library.highlights_path(reading_id), out)?;
+    let path = library.highlights_path(reading_id);
+    let tmp_path = path.with_file_name("highlights.md.tmp");
+    {
+        let mut file = std::fs::File::create(&tmp_path)?;
+        file.write_all(out.as_bytes())?;
+        file.sync_all()?;
+    }
+    std::fs::rename(tmp_path, path)?;
     Ok(())
 }
 

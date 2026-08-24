@@ -5,10 +5,12 @@ use rusqlite::{params_from_iter, types::Value, Connection};
 
 use crate::{
     list::{pinned_count_filter, CountScope, Facet, ResolvedSearch},
+    locking::lock_reading,
     parse_reading,
     reconcile::apply_diffs,
     scanner::{ScanDiff, ScannedReading},
-    write_reading, LibraryRoot,
+    writer::write_reading_under_lock,
+    LibraryRoot,
 };
 
 /// The longest a tag name may be, counted in Unicode scalar values (`char`s),
@@ -22,6 +24,7 @@ pub const MAX_TAG_LEN: usize = 20;
 /// [`MAX_TAG_LEN`] characters. Updates the `.md` file first, then syncs the
 /// index row.
 pub fn add_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str) -> Result<()> {
+    let lock = lock_reading(library, id)?;
     let path = library.article_path(id);
     if !path.is_file() {
         bail!("reading not found: {id}");
@@ -40,7 +43,7 @@ pub fn add_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str) ->
     }
 
     reading.metadata.tags.push(tag);
-    let written = write_reading(library, reading.metadata, reading.body)?;
+    let written = write_reading_under_lock(library, reading.metadata, reading.body, &lock)?;
     sync_index(library, conn, &written.metadata.id)
 }
 
@@ -49,6 +52,7 @@ pub fn add_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str) ->
 /// No-ops if the tag is not present. Updates the `.md` file first, then
 /// syncs the index row.
 pub fn remove_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str) -> Result<()> {
+    let lock = lock_reading(library, id)?;
     let path = library.article_path(id);
     if !path.is_file() {
         bail!("reading not found: {id}");
@@ -63,7 +67,7 @@ pub fn remove_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str)
         return Ok(());
     }
 
-    let written = write_reading(library, reading.metadata, reading.body)?;
+    let written = write_reading_under_lock(library, reading.metadata, reading.body, &lock)?;
     sync_index(library, conn, &written.metadata.id)
 }
 
@@ -155,6 +159,7 @@ mod tests {
             format_version: 1,
             id: id.to_string(),
             kind: Default::default(),
+            lightweight: false,
             url: url.to_string(),
             media_url: None,
             preview_asset: None,

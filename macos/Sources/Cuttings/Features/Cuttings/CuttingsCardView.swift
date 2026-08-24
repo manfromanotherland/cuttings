@@ -168,7 +168,7 @@ struct CuttingsCardView: View {
         HStack(spacing: 6) {
             Image(systemName: row.kind.symbol)
                 .font(.system(size: 9, weight: .medium))
-            Text(row.displaySite ?? "Saved source")
+            Text(row.displaySite ?? "Saved locally")
                 .lineLimit(1)
             if row.favorite {
                 Image(systemName: "heart.fill")

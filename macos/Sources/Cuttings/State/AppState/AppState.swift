@@ -91,6 +91,7 @@ final class AppState {
     /// so the core is queried once typing settles, not per character. Plumbing
     /// only — not part of the observable UI state.
     @ObservationIgnored var searchTask: Task<Void, Never>?
+    @ObservationIgnored var saveNoticeTask: Task<Void, Never>?
 
     /// The active smart view. Always exactly one — `.all` is the unfiltered base.
     /// Independent from the kind, tag, and rating filters so all four compose
@@ -174,6 +175,12 @@ final class AppState {
     var isLoadingMore: Bool = false
     var hasMoreReadings: Bool = false
     var error: String?
+
+    /// Short, non-modal acknowledgement for paste/drop saves. Errors that stop
+    /// the whole operation still use `error`; duplicates and partial results are
+    /// routine status and stay out of an alert.
+    var saveNotice: SaveNotice?
+    var isSaving: Bool = false
 
     /// True while the user is editing a text field (the toolbar search field, the
     /// tag picker, …). macOS dispatches menu/context-menu key-equivalents *before*

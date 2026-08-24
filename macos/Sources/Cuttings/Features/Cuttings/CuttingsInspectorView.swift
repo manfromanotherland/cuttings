@@ -41,7 +41,9 @@ struct CuttingsInspectorView: View {
                     Text(site)
                 }
                 if !savedDate.isEmpty {
-                    Text("·")
+                    if row.displaySite != nil {
+                        Text("·")
+                    }
                     Text(savedDate)
                 }
             }
@@ -52,26 +54,37 @@ struct CuttingsInspectorView: View {
 
     private var sourceSection: some View {
         inspectorSection("Source") {
-            Button {
-                if let url = URL(string: row.url) {
+            if let url = row.sourceURL {
+                Button {
                     ReadingLink.open(url)
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(row.title.isEmpty ? (row.displaySite ?? "Originating page") : row.title)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        Text(row.url)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
                 }
-            } label: {
+                .buttonStyle(.plain)
+            } else {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(row.title.isEmpty ? (row.displaySite ?? "Originating page") : row.title)
+                    Label("Saved locally", systemImage: "internaldrive")
                         .font(.callout.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    Text(row.url)
+                    Text("Added from the clipboard or a local file.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
             }
-            .buttonStyle(.plain)
 
             if !row.canonicalUrl.isEmpty, row.canonicalUrl != row.url {
                 VStack(alignment: .leading, spacing: 3) {
@@ -86,7 +99,8 @@ struct CuttingsInspectorView: View {
                 .padding(.top, 6)
             }
 
-            if let mediaURL = row.mediaUrl,
+            if row.sourceURL != nil,
+               let mediaURL = row.mediaUrl,
                row.kind == .image || row.kind == .video
             {
                 VStack(alignment: .leading, spacing: 3) {

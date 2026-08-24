@@ -458,13 +458,25 @@ absent) list row. This keeps the reader and the list from disagreeing, and a pos
 never re-homes the selection out from under you (only direct reloads — filter switch, sort, search,
 first load — pick a default row).
 
+## Paste and drop
+
+- The whole card board is a drop target for HTTP(S) links, text, and images, including its empty
+  state. While a supported item is over the window, a clear non-blocking overlay says it can be
+  dropped to save.
+- With no text field active, standard Paste (⌘V) saves the same payloads through the same path.
+  Search, tag, and other text editors retain normal paste behavior.
+- Plain text becomes a quote card. Image data and supported local image files are copied into the
+  reading's `assets/` folder. Local text/Markdown files use their file name as the card title.
+- A pasted or dropped URL is a marked lightweight article card, not fake extracted content and not
+  a hidden network request. The browser extension remains the full-fidelity path: saving that URL
+  later replaces the lightweight body in place while retaining the user's tags and state.
+- Unsupported payloads such as PDFs, generic files, and local video files are rejected with visible
+  feedback; the app does not create cards it cannot render faithfully.
+
 ## Deferred / out of scope (for now)
 
-- **In-app "Add Link" / paste-a-URL.** Adding a reading by URL inside the app would require the
-  engine to fetch and clean the page **without a browser DOM** (a Rust-side readability +
-  HTML→Markdown path). Per design review this is **deferred** — capture stays in the browser
-  plugin. The Add Link button and the search field's paste-a-link behavior appear in the mockup
-  but are not built yet.
+- **Core-side URL fetching and cleanup.** The app does not reproduce the extension's live-DOM
+  extraction. Authenticated and JavaScript-rendered pages continue to require the browser extension.
 - **Lists.** The mockup's "Lists" section is replaced by **Tags**; manual Lists are not planned.
 
 ## Open questions / to finalize

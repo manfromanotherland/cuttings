@@ -20,6 +20,10 @@ protocol CoreBridging: Sendable {
     func getReadingRow(id: String) async throws -> FfiReadingRow?
     func getBody(id: String) async throws -> String?
 
+    func importLink(url: String) async throws -> FfiImportResult
+    func importText(text: String, title: String?) async throws -> FfiImportResult
+    func importImage(data: Data, contentType: String, title: String) async throws -> FfiImportResult
+
     func addTag(id: String, tag: String) async throws
     func removeTag(id: String, tag: String) async throws
 

@@ -106,6 +106,7 @@ mod tests {
             format_version: 1,
             id: "01J9Z8X7Q2VBKN3P4HXYZ01AB".to_string(),
             kind: Default::default(),
+            lightweight: false,
             url: "https://example.com/article".to_string(),
             media_url: None,
             preview_asset: None,

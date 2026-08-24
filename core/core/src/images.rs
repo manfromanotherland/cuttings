@@ -5,6 +5,7 @@ use std::fs;
 
 use anyhow::Result;
 
+use crate::locking::{lock_reading, ReadingLock};
 use crate::types::LibraryRoot;
 use crate::writer::sha256_hex;
 
@@ -33,6 +34,18 @@ pub fn write_images(
     markdown: &str,
     images: &[ImageBytes],
 ) -> Result<String> {
+    let lock = lock_reading(library, id)?;
+    write_images_under_lock(library, id, markdown, images, &lock)
+}
+
+pub(crate) fn write_images_under_lock(
+    library: &LibraryRoot,
+    id: &str,
+    markdown: &str,
+    images: &[ImageBytes],
+    lock: &ReadingLock,
+) -> Result<String> {
+    lock.ensure_protects(library, id)?;
     let assets_dir = library.assets_dir(id);
     fs::create_dir_all(&assets_dir)?;
 
@@ -105,6 +118,13 @@ fn content_type_to_ext(ct: &str) -> Option<&'static str> {
         "image/webp" => Some("webp"),
         "image/svg+xml" => Some("svg"),
         "image/avif" => Some("avif"),
+        "image/heic" | "image/heic-sequence" => Some("heic"),
+        "image/heif" | "image/heif-sequence" => Some("heif"),
+        "image/tiff" => Some("tiff"),
+        "image/bmp" => Some("bmp"),
+        "image/x-icon" | "image/vnd.microsoft.icon" => Some("ico"),
+        "image/jp2" => Some("jp2"),
+        "image/jxl" => Some("jxl"),
         _ => None,
     }
 }
@@ -156,6 +176,14 @@ mod tests {
     fn content_type_mapping() {
         assert_eq!(content_type_to_ext("image/jpeg"), Some("jpg"));
         assert_eq!(content_type_to_ext("image/png"), Some("png"));
+        assert_eq!(content_type_to_ext("image/heic"), Some("heic"));
+        assert_eq!(content_type_to_ext("image/heif"), Some("heif"));
+        assert_eq!(content_type_to_ext("image/tiff"), Some("tiff"));
+        assert_eq!(content_type_to_ext("image/bmp"), Some("bmp"));
+        assert_eq!(content_type_to_ext("image/x-icon"), Some("ico"));
+        assert_eq!(content_type_to_ext("image/jp2"), Some("jp2"));
+        assert_eq!(content_type_to_ext("image/jxl"), Some("jxl"));
+        assert_eq!(content_type_to_ext("image/vnd.microsoft.icon"), Some("ico"));
         assert_eq!(
             content_type_to_ext("image/jpeg; charset=utf-8"),
             Some("jpg")

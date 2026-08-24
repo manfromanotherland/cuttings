@@ -9,10 +9,12 @@ use anyhow::{bail, Result};
 use rusqlite::Connection;
 
 use crate::{
+    locking::lock_reading,
     parse_reading,
     reconcile::apply_diffs,
     scanner::{ScanDiff, ScannedReading},
-    write_reading, LibraryRoot,
+    writer::write_reading_under_lock,
+    LibraryRoot,
 };
 
 /// Mark a reading as read (`true`) or unread (`false`).
@@ -62,6 +64,7 @@ pub(crate) fn update_flag<F>(
 where
     F: FnOnce(&mut crate::Metadata),
 {
+    let lock = lock_reading(library, id)?;
     let path = library.article_path(id);
     if !path.is_file() {
         bail!("reading not found: {id}");
@@ -72,7 +75,7 @@ where
 
     apply(&mut reading.metadata);
 
-    let written = write_reading(library, reading.metadata, reading.body)?;
+    let written = write_reading_under_lock(library, reading.metadata, reading.body, &lock)?;
 
     // Re-read from disk so the ScannedReading reflects the actual file state.
     let updated_path = library.article_path(&written.metadata.id);
@@ -111,6 +114,7 @@ mod tests {
             format_version: 1,
             id: id.to_string(),
             kind: Default::default(),
+            lightweight: false,
             url: "https://example.com".to_string(),
             media_url: None,
             preview_asset: None,

@@ -7,7 +7,7 @@ import SwiftUI
 /// `ArticleDetailView.maxParseBytes` / `maxParseWords`). The full text is still
 /// available in the browser.
 struct OversizeNotice: View {
-    let url: String
+    let url: URL?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -18,13 +18,17 @@ struct OversizeNotice: View {
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Text("Open it in your browser to read the full text.")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-            if let link = URL(string: url) {
+            Text(
+                url == nil
+                    ? "The full text remains saved in your Cuttings library."
+                    : "Open it in your browser to read the full text."
+            )
+            .font(.callout)
+            .foregroundStyle(.tertiary)
+            .multilineTextAlignment(.center)
+            if let url {
                 Button("Open in Browser") {
-                    ReadingLink.open(link)
+                    ReadingLink.open(url)
                 }
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 4)

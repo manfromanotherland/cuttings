@@ -43,6 +43,11 @@ pub struct Metadata {
     /// Missing in older files, which are always articles.
     #[serde(default)]
     pub kind: ReadingKind,
+    /// A URL-only article created without captured page content. The browser
+    /// extension may replace this placeholder with a full capture later while
+    /// retaining the same URL-derived id and user-managed state.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub lightweight: bool,
     pub url: String,
     /// The clicked image/video URL. Articles and older files leave this unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -77,6 +82,10 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
     pub source_hash: String,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// A parsed article: its frontmatter metadata plus the Markdown body.

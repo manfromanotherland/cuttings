@@ -13,6 +13,9 @@ land them across all affected components in the same monorepo commit.
 
 ```
 <library-root>/
+  .cuttings-locks/            # persistent operational advisory-lock sidecars
+    <prefix>/                 # first 2 chars of SHA-256(reading id)
+      <sha256-id>.lock        # empty; one stable lock inode per reading id
   articles/
     <prefix>/                 # first 2 chars of the id — a fan-out bucket
       <id>/                   # one self-contained folder per reading
@@ -30,6 +33,11 @@ land them across all affected components in the same monorepo commit.
 - The per-device SQLite index lives **outside** this folder (e.g.
   `~/Library/Application Support/Cuttings/`) and is **never synced**.
 - Paths stored in the database must be **relative to the library root** — never absolute.
+- `.cuttings-locks/` contains empty advisory-lock sidecars used to serialize Cuttings writers that
+  share a library on one machine. They live outside reading folders so deleting a reading cannot
+  replace its lock inode while another process is waiting. Sidecars deliberately persist after an
+  operation or deletion, are not reading data, and are ignored by the scanner; syncing their empty
+  files does not carry a live OS lock to another device.
 
 ---
 
@@ -48,6 +56,7 @@ url: https://example.com/post/slug         # original URL as visited
 canonical_url: https://example.com/post/slug  # the page's own canonical URL when known (see § URL normalization)
 title: The Title of the Article            # required; extracted from page or og:title
 kind: article                              # article | image | video | quote; missing means article
+lightweight: true                          # optional; URL-only app save awaiting full capture
 media_url: https://cdn.example.com/image.jpg  # optional media identity; never the origin
 preview_asset: assets/3f4a1b8e....jpg      # optional local card preview written by the host
 author: Jane Doe                           # optional; extracted byline
@@ -70,15 +79,22 @@ source_hash: sha256:abc123...              # sha256 of the cleaned Markdown body
 `rating`, `tags`, `source_hash`.
 
 #### Optional fields
-`kind`, `media_url`, `preview_asset`, `author`, `site`, `read_at`, `excerpt`, `word_count`, `lang`.
+`kind`, `lightweight`, `media_url`, `preview_asset`, `author`, `site`, `read_at`, `excerpt`,
+`word_count`, `lang`.
 
 `kind` is written for every new card but remains optional in the parser for backwards compatibility;
-an older file without it is an `article`.
+an older file without it is an `article`. `lightweight` is omitted/false for ordinary captures and
+is true only for a URL-only paste/drop card.
 
 #### Rules
 - `saved_at` is set once at save time and **never updated**, even when metadata is edited.
-- `url`, `canonical_url`, `title`, and `site` describe the **origin page for every kind**. A media
-  card's asset identity belongs in `media_url`; it never replaces the origin.
+- For a web save, `url`, `canonical_url`, `title`, and `site` describe the **origin page**. A media
+  card's asset identity belongs in `media_url`; it never replaces the origin. A source-less local
+  text/image save uses a deterministic `cuttings://local/...` URL in the two required URL fields,
+  leaves `site` unset, and is presented as saved locally rather than as an openable web source.
+- `lightweight: true` means the app had only an HTTP(S) URL, so the body is a link rather than
+  cleaned page content. A later full browser capture at the same URL replaces the captured
+  metadata/body and clears this marker while preserving `saved_at`, state, rating, and tags.
 - `kind` is one of `article`, `image`, `video`, or `quote`.
 - `media_url` is meaningful only for `image` and `video` cards. It is normally a durable HTTP(S)
   direct URL. When a video only exposes a session-local `blob:`/`data:` source, the extension stores
@@ -107,6 +123,8 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
   session-local stream it links to the origin page instead. Video bytes are not downloaded.
 - A **quote** body contains the selected text as Markdown block quotes. Its `excerpt` may carry a
   bounded preview for the board, but the body remains the full selection.
+- A **lightweight article** body is one Markdown link to its HTTP(S) URL. It is intentionally
+  distinguishable from a full extension capture and may later be upgraded in place.
 
 ---
 
@@ -156,11 +174,11 @@ More content…
   `article.md`, and are linked from the body as `assets/<file>`.
 - Filename is the **lowercase hex SHA-256** of the file's raw bytes, with an extension chosen from
   the image's `Content-Type` (falling back to the URL): e.g. `3f4a1b8e....jpg`.
-- Article images, standalone images, and video posters are **captured by the browser extension**
-  (from the page's cache where possible) and sent
-  to the host, which only writes them — the host performs no network requests. An image the
-  extension couldn't capture is left as a remote URL in the Markdown and is never re-fetched; the
-  reader shows a labelled placeholder for it.
+- Article images and video posters are **captured by the browser extension** (from the page's cache
+  where possible) and sent to the host. Standalone images may also arrive from the app's paste/drop
+  path. Both adapters hand bytes to the same core writer; the core performs no network requests. An
+  image the extension couldn't capture is left as a remote URL in the Markdown and is never
+  re-fetched; the reader shows a labelled placeholder for it.
 - The original HTML snapshot is optional. If kept, it lives as `original.html` inside the reading's
   folder for future re-processing.
 
@@ -191,6 +209,11 @@ depends on the card kind:
 - **Image/video:** kind + normalized origin `url` + `media_url` identity (a durable direct URL or a
   stable opaque reference for a session-local video).
 - **Quote:** normalized origin `url` + normalized selected Markdown body.
+- **Source-less text:** a `cuttings://local/quote/<hash>` origin derived from whitespace-normalized
+  text, then the ordinary quote identity rule. Whitespace-only variations deduplicate.
+- **Source-less image:** a `cuttings://local/image/<hash>` origin/media identity derived from the
+  validated imported image bytes, then the ordinary image identity rule. File names do not affect
+  identity.
 
 This permits several media/quote cards from one origin while an exact repeat save deduplicates.
 
@@ -222,9 +245,11 @@ reading id is its SHA-256 (§ ID scheme). Apply these rules in order:
    them, but sort so their order can't produce two ids for one page.
 7. Remove a trailing `/` from the path **unless** the path is just `/`.
 
-The original origin-page `url` (pre-normalization) is always preserved for every card kind.
+The original origin-page `url` (pre-normalization) is preserved for browser captures.
 `canonical_url` stores the page's own `<link rel="canonical">`/`og:url` when known, for reference —
-it is not substituted with a CDN or direct media address. Two different normalized origin URLs for
+it is not substituted with a CDN or direct media address. The URL-only app path normalizes the URL
+before writing because no page metadata exists yet. Source-less local identities are already stable
+internal URLs and do not go through web URL normalization. Two different normalized web origins for
 the same content can still produce two readings — an accepted trade-off of origin-aware capture.
 
 ---
@@ -262,3 +287,4 @@ The macOS app's sidebar views are defined by frontmatter field values:
 | `articles/<prefix>/<id>/assets/*` | App preferences (theme, font, library path) |
 | `articles/<prefix>/<id>/highlights.md` | Native messaging host manifest |
 | `articles/<prefix>/<id>/original.html` (optional) | |
+| `.cuttings-locks/<prefix>/<sha256-id>.lock` (operational, empty) | |

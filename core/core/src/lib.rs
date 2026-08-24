@@ -9,7 +9,9 @@ pub mod highlights;
 mod id;
 mod images;
 pub mod index;
+mod ingest;
 pub mod list;
+mod locking;
 pub mod rating;
 pub mod reconcile;
 pub mod scanner;
@@ -29,6 +31,10 @@ pub use highlights::{
 pub use id::{media_id, new_id, quote_id, url_id};
 pub use images::{first_local_image_asset, write_images, ImageBytes};
 pub use index::open as open_index;
+pub use ingest::{
+    import_image, import_link, import_text, save_capture, SaveDisposition, SaveError, SaveInput,
+    SaveOutcome,
+};
 pub use list::{
     get_reading, list_readings, sidebar_counts, view_counts, CountScope, ListOptions, ReadingRow,
     SidebarCounts, SortField, View, ViewCounts,

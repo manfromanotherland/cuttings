@@ -10,7 +10,7 @@
 use anyhow::{bail, Result};
 use rusqlite::Connection;
 
-use crate::{reconcile::apply_diffs, scanner::ScanDiff, LibraryRoot};
+use crate::{locking::lock_reading, reconcile::apply_diffs, scanner::ScanDiff, LibraryRoot};
 
 /// Permanently delete the reading `id`: its whole folder and its index row.
 /// Errors if the reading does not exist.
@@ -35,6 +35,7 @@ pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Res
     if !is_valid_reading_id(id) {
         bail!("refusing to delete: invalid reading id {id:?}");
     }
+    let _lock = lock_reading(library, id)?;
 
     let dir = library.reading_dir(id);
     let article = library.article_path(id);
@@ -131,6 +132,7 @@ mod tests {
             format_version: 1,
             id: id.to_string(),
             kind: Default::default(),
+            lightweight: false,
             url: "https://example.com".to_string(),
             media_url: None,
             preview_asset: None,

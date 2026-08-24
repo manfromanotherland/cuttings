@@ -7,6 +7,7 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 
 use crate::frontmatter::{read_metadata, render_reading};
+use crate::locking::{lock_reading, ReadingLock};
 use crate::types::{LibraryRoot, Metadata, Reading, ReadingKind};
 
 /// Write a reading to the library atomically (temp-file + rename).
@@ -14,11 +15,21 @@ use crate::types::{LibraryRoot, Metadata, Reading, ReadingKind};
 /// Computes and sets `source_hash` from the body before writing.
 /// Creates the reading's self-contained folder `articles/<prefix>/<id>/` and its
 /// `assets/` sub-directory.
-pub fn write_reading(
+pub fn write_reading(library: &LibraryRoot, metadata: Metadata, body: String) -> Result<Reading> {
+    let lock = lock_reading(library, &metadata.id)?;
+    write_reading_under_lock(library, metadata, body, &lock)
+}
+
+/// Atomic writer for callers that already hold this reading's advisory lock.
+/// Keeping this separate avoids trying to acquire the same non-reentrant lock
+/// twice inside read-modify-write operations.
+pub(crate) fn write_reading_under_lock(
     library: &LibraryRoot,
     mut metadata: Metadata,
     body: String,
+    lock: &ReadingLock,
 ) -> Result<Reading> {
+    lock.ensure_protects(library, &metadata.id)?;
     metadata.source_hash = format!("sha256:{}", sha256_hex(body.as_bytes()));
 
     let reading = Reading { metadata, body };
@@ -134,6 +145,7 @@ mod tests {
             format_version: 1,
             id: crate::url_id(url).unwrap(),
             kind: Default::default(),
+            lightweight: false,
             url: url.to_string(),
             media_url: None,
             preview_asset: None,

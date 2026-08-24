@@ -66,6 +66,25 @@ actor CoreBridge {
         try database.getBody(id: id)
     }
 
+    // ── Imports ───────────────────────────────────────────────────────────
+
+    func importLink(url: String) throws -> FfiImportResult {
+        try database.importLink(libraryPath: libraryPath, url: url)
+    }
+
+    func importText(text: String, title: String?) throws -> FfiImportResult {
+        try database.importText(libraryPath: libraryPath, text: text, title: title)
+    }
+
+    func importImage(data: Data, contentType: String, title: String) throws -> FfiImportResult {
+        try database.importImage(
+            libraryPath: libraryPath,
+            bytes: data,
+            contentType: contentType,
+            title: title
+        )
+    }
+
     // ── Tags ──────────────────────────────────────────────────────────────
 
     func addTag(id: String, tag: String) throws {

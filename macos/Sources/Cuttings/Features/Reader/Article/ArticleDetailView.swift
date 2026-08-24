@@ -114,7 +114,7 @@ struct ArticleDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ArticleHeaderView(row: row, theme: theme)
-                    OversizeNotice(url: row.url)
+                    OversizeNotice(url: row.sourceURL)
                 }
             }
         } else if let articleDocument {

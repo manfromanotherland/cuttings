@@ -55,12 +55,12 @@ struct ArticleCommands: Commands {
 
                 Divider()
 
-                Button("Open in Browser") {
-                    if let url = URL(string: row.url) {
+                if let url = row.sourceURL {
+                    Button("Open in Browser") {
                         ReadingLink.open(url)
                     }
+                    .keyboardShortcut(ShortcutCatalog.openInBrowser)
                 }
-                .keyboardShortcut(ShortcutCatalog.openInBrowser)
             } else {
                 Text("No article selected")
                     .foregroundStyle(.secondary)
