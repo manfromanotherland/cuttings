@@ -2,6 +2,7 @@
 
 import { extractPage } from "./extraction.js";
 import { fetchImages } from "./images.js";
+import { extractQuote, extractStandaloneMedia, type StandaloneMediaKind } from "./media.js";
 import type { ImageData, SaveRequestMetadata } from "./protocol.js";
 
 /** An optional action button on a toast. Clicking it messages the background
@@ -33,6 +34,20 @@ export interface PageCapture {
   unresolved: string[];
 }
 
+interface CaptureMediaMessage {
+  action: "capture-media";
+  kind: StandaloneMediaKind;
+  mediaUrl: string;
+  /** The top-level tab URL remains the saved item's source URL. */
+  pageUrl: string;
+}
+
+interface CaptureQuoteMessage {
+  action: "capture-quote";
+  text: string;
+  pageUrl: string;
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.action === "extract") {
     void (async () => {
@@ -55,12 +70,52 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // keep the message channel open for the async sendResponse
   }
 
+  if (msg?.action === "capture-media") {
+    void (async () => {
+      const { kind, mediaUrl, pageUrl } = msg as CaptureMediaMessage;
+      if ((kind !== "image" && kind !== "video") || !mediaUrl || !pageUrl) {
+        sendResponse({ error: "The selected media could not be identified." });
+        return;
+      }
+
+      const result = extractStandaloneMedia(document, pageUrl, kind, mediaUrl);
+      // For an image save this captures the selected image. For a video save it
+      // captures only the poster; video bytes are never fetched or buffered.
+      const { images, unresolved } = await fetchImages(result.image_urls);
+      const capture: PageCapture = {
+        metadata: result.metadata,
+        markdown: result.markdown,
+        images,
+        unresolved,
+      };
+      sendResponse(capture);
+    })();
+    return true;
+  }
+
+  if (msg?.action === "capture-quote") {
+    const { text, pageUrl } = msg as CaptureQuoteMessage;
+    if (!text?.trim() || !pageUrl) {
+      sendResponse({ error: "The selected text could not be read." });
+      return;
+    }
+
+    const result = extractQuote(document, pageUrl, text);
+    const capture: PageCapture = {
+      metadata: result.metadata,
+      markdown: result.markdown,
+      images: [],
+      unresolved: [],
+    };
+    sendResponse(capture);
+  }
+
   if (msg?.action === "toast") {
     showToast(msg as ToastMessage);
   }
 });
 
-const TOAST_HOST_ID = "readcontrol-toast-host";
+const TOAST_HOST_ID = "cuttings-toast-host";
 
 /**
  * Show or update the toast. If a loading toast is already present and the new
@@ -80,7 +135,7 @@ export function showToast({ status, title, detail, cta }: ToastMessage): void {
   existingHost?.remove();
 
   const isLoading = status === "loading";
-  // ReadControl paper/ink palette (shared with the website); heart red for errors.
+  // Paper/ink palette inherited from the upstream extension; heart red for errors.
   const accent = status === "ok" ? "#22C55E" : isLoading ? "#17181A" : "#FF5F57";
   const icon = status === "ok" ? "✓" : "✕";
 

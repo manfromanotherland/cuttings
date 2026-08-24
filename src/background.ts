@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 
 import type { PageCapture, ToastMessage } from "./content.js";
+import { CONTEXT_MENU, CONTEXT_MENU_ID, contextCaptureTarget } from "./context-menus.js";
 import type { CheckRequest, CheckResponse, SaveRequest, SaveResponse } from "./protocol.js";
 import { PROTOCOL_VERSION } from "./protocol.js";
 import { capTotalBytes, fetchImages } from "./images.js";
 import { HOST_ID, isHostMissing } from "./host.js";
 import { log } from "./log.js";
+import { isSessionLocalVideoUrl } from "./media.js";
 
-const CONTEXT_MENU_ID = "save-page";
 const NOTIF_HOST_MISSING = "host-missing";
 
 /** Cap on the total decoded image bytes inlined into one save message. Images
@@ -72,11 +73,9 @@ async function checkAndSetIcon(tabId: number, rawUrl: string): Promise<void> {
 
 chrome.runtime.onInstalled.addListener(() => {
   void setIcon();
-  chrome.contextMenus.create({
-    id: CONTEXT_MENU_ID,
-    title: "Save to ReadControl",
-    contexts: ["page"],
-  });
+  // An update may leave the upstream menu registered. Rebuild our menu set so
+  // the user sees exactly one generic action for every supported context.
+  chrome.contextMenus.removeAll(() => chrome.contextMenus.create(CONTEXT_MENU));
 });
 
 chrome.runtime.onStartup.addListener(() => {
@@ -107,13 +106,46 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
  * message fails, inject the script programmatically (allowed by the `<all_urls>`
  * host permission) and retry once.
  */
-async function requestExtraction(tabId: number): Promise<PageCapture | { error: string }> {
+async function requestContentCapture(
+  tabId: number,
+  message: object,
+): Promise<PageCapture | { error: string }> {
   try {
-    return await chrome.tabs.sendMessage(tabId, { action: "extract" });
+    return await chrome.tabs.sendMessage(tabId, message);
   } catch {
     await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] });
-    return await chrome.tabs.sendMessage(tabId, { action: "extract" });
+    return await chrome.tabs.sendMessage(tabId, message);
   }
+}
+
+function requestExtraction(tabId: number): Promise<PageCapture | { error: string }> {
+  return requestContentCapture(tabId, { action: "extract" });
+}
+
+function requestMediaCapture(
+  tabId: number,
+  pageUrl: string,
+  kind: "image" | "video",
+  mediaUrl: string,
+): Promise<PageCapture | { error: string }> {
+  return requestContentCapture(tabId, {
+    action: "capture-media",
+    kind,
+    mediaUrl,
+    pageUrl,
+  });
+}
+
+function requestQuoteCapture(
+  tabId: number,
+  pageUrl: string,
+  text: string,
+): Promise<PageCapture | { error: string }> {
+  return requestContentCapture(tabId, {
+    action: "capture-quote",
+    pageUrl,
+    text,
+  });
 }
 
 async function savePage(tab: chrome.tabs.Tab): Promise<void> {
@@ -123,7 +155,7 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     return;
   }
 
-  await log("info", "Save triggered", { url: tab.url });
+  await log("info", "Save triggered", { kind: "article", url: tab.url });
   await showToast(tabId, "loading", "Saving…");
 
   let capture: PageCapture;
@@ -148,6 +180,106 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     return;
   }
 
+  await saveCapture(tab, capture);
+}
+
+async function saveMedia(
+  tab: chrome.tabs.Tab,
+  kind: "image" | "video",
+  mediaUrl: string,
+): Promise<void> {
+  const tabId = tab.id;
+  const loggedMediaUrl = loggableMediaUrl(kind, mediaUrl);
+  if (!tabId || !tab.url || !mediaUrl) {
+    await log("warn", `Save ${kind} ignored: missing tab or media URL`, {
+      tabId,
+      pageUrl: tab.url,
+      mediaUrl: loggedMediaUrl,
+    });
+    return;
+  }
+
+  await log("info", "Save triggered", { kind, url: tab.url, mediaUrl: loggedMediaUrl });
+  await showToast(tabId, "loading", `Saving ${kind}…`);
+
+  let capture: PageCapture;
+  try {
+    const result = await requestMediaCapture(tabId, tab.url, kind, mediaUrl);
+    if (result && "error" in result && result.error) {
+      await showBadge(tabId, "error");
+      await showToast(tabId, "error", `Couldn't save ${kind}`, result.error);
+      await log("error", "Media capture failed", {
+        kind,
+        mediaUrl: loggedMediaUrl,
+        error: result.error,
+      });
+      return;
+    }
+    capture = result as PageCapture;
+  } catch (err) {
+    await showBadge(tabId, "error");
+    await showToast(
+      tabId,
+      "error",
+      `Couldn't save ${kind}`,
+      "The selected media couldn't be read from this page.",
+    );
+    await log("error", "Could not reach content script for media capture", {
+      kind,
+      mediaUrl: loggedMediaUrl,
+      error: err,
+    });
+    return;
+  }
+
+  await saveCapture(tab, capture);
+}
+
+async function saveQuote(tab: chrome.tabs.Tab, text: string): Promise<void> {
+  const tabId = tab.id;
+  if (!tabId || !tab.url || !text.trim()) {
+    await log("warn", "Save quote ignored: missing tab, page URL, or selected text", {
+      tabId,
+      pageUrl: tab.url,
+    });
+    return;
+  }
+
+  await log("info", "Save triggered", { kind: "quote", url: tab.url });
+  await showToast(tabId, "loading", "Saving quote…");
+
+  let capture: PageCapture;
+  try {
+    const result = await requestQuoteCapture(tabId, tab.url, text);
+    if (result && "error" in result && result.error) {
+      await showBadge(tabId, "error");
+      await showToast(tabId, "error", "Couldn't save quote", result.error);
+      await log("error", "Quote capture failed", { url: tab.url, error: result.error });
+      return;
+    }
+    capture = result as PageCapture;
+  } catch (err) {
+    await showBadge(tabId, "error");
+    await showToast(
+      tabId,
+      "error",
+      "Couldn't save quote",
+      "The selected text couldn't be read from this page.",
+    );
+    await log("error", "Could not reach content script for quote capture", {
+      url: tab.url,
+      error: err,
+    });
+    return;
+  }
+
+  await saveCapture(tab, capture);
+}
+
+async function saveCapture(tab: chrome.tabs.Tab, capture: PageCapture): Promise<void> {
+  const tabId = tab.id!;
+  const item = capture.metadata.kind === "article" ? "page" : capture.metadata.kind;
+
   // The content script captured images it could read from the page cache. Images
   // it couldn't (cross-origin without CORS) are retried here in the background
   // worker, which can read them via host permissions. The host writes them all —
@@ -160,6 +292,48 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     sent: images.length,
     requested: capture.images.length + capture.unresolved.length,
   });
+
+  // A standalone image is only a successful save when the selected asset will
+  // actually be written into the reading's assets folder. Continuing with an
+  // empty (or size-capped) image list would leave a remote-only card while the
+  // UI claims it was saved for offline use.
+  if (
+    capture.metadata.kind === "image" &&
+    (!capture.metadata.media_url ||
+      !images.some((image) => image.url === capture.metadata.media_url))
+  ) {
+    await showBadge(tabId, "error");
+    await showToast(
+      tabId,
+      "error",
+      "Couldn't save image",
+      "The selected image couldn't be copied into your local library.",
+    );
+    await log("error", "Selected image bytes were unavailable", {
+      url: tab.url,
+      mediaUrl: capture.metadata.media_url,
+    });
+    return;
+  }
+
+  // Defense in depth at the native-messaging boundary. Extraction replaces
+  // these for videos, but a session-local URL must never reach disk even if a
+  // malformed capture response bypasses that normalization.
+  if (
+    capture.metadata.kind === "video" &&
+    capture.metadata.media_url &&
+    isSessionLocalVideoUrl(capture.metadata.media_url)
+  ) {
+    await showBadge(tabId, "error");
+    await showToast(
+      tabId,
+      "error",
+      "Couldn't save video",
+      "This video only has a temporary browser source.",
+    );
+    await log("error", "Session-local video URL rejected before native save", { url: tab.url });
+    return;
+  }
 
   const request: SaveRequest = {
     protocol_version: PROTOCOL_VERSION,
@@ -174,32 +348,41 @@ async function savePage(tab: chrome.tabs.Tab): Promise<void> {
     response = await sendNativeMessage<SaveRequest, SaveResponse>(request);
   } catch (err) {
     if (err instanceof Error && isHostMissing(err)) {
-      await log("warn", "ReadControl app not installed", { error: err });
+      await log("warn", "Cuttings app not installed", { error: err });
       await notifyHostMissing(tabId);
     } else {
       await showBadge(tabId, "error");
       await showToast(
         tabId,
         "error",
-        "Couldn't save page",
-        "The ReadControl app returned an error.",
+        `Couldn't save ${item}`,
+        "The Cuttings app returned an error.",
       );
-      await log("error", "ReadControl app error", { url: tab.url, error: err });
+      await log("error", "Cuttings app error", { url: tab.url, error: err });
     }
     return;
   }
 
   if (response.ok) {
-    await showToast(tabId, "ok", "Saved to ReadControl", capture.metadata.title);
-    markSaved(tabId, tab.url, capture.metadata.canonical_url);
-    await log("info", "Saved", { url: tab.url, title: capture.metadata.title });
+    await showToast(tabId, "ok", "Saved to Cuttings", capture.metadata.title);
+    if (capture.metadata.kind === "article") {
+      markSaved(tabId, tab.url!, capture.metadata.canonical_url);
+    }
+    await log("info", "Saved", {
+      kind: capture.metadata.kind,
+      url: tab.url,
+      mediaUrl: capture.metadata.media_url,
+      title: capture.metadata.title,
+    });
   } else if (response.error === "duplicate") {
-    await showToast(tabId, "ok", "Already in Reading List", capture.metadata.title);
-    markSaved(tabId, tab.url, capture.metadata.canonical_url);
+    await showToast(tabId, "ok", "Already in Cuttings", capture.metadata.title);
+    if (capture.metadata.kind === "article") {
+      markSaved(tabId, tab.url!, capture.metadata.canonical_url);
+    }
     await log("info", "Already saved (duplicate)", { url: tab.url });
   } else {
     await showBadge(tabId, "error");
-    await showToast(tabId, "error", "Couldn't save page", response.message || response.error);
+    await showToast(tabId, "error", `Couldn't save ${item}`, response.message || response.error);
     await log("error", "Save failed", {
       url: tab.url,
       error: response.error,
@@ -220,7 +403,16 @@ function markSaved(tabId: number, tabUrl: string, canonicalUrl: string): void {
 chrome.action.onClicked.addListener((tab) => void savePage(tab));
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === CONTEXT_MENU_ID && tab) void savePage(tab);
+  if (info.menuItemId !== CONTEXT_MENU_ID || !tab) return;
+
+  const target = contextCaptureTarget(info);
+  if (target.kind === "article") {
+    void savePage(tab);
+  } else if (target.kind === "quote") {
+    void saveQuote(tab, target.text);
+  } else if (target.mediaUrl) {
+    void saveMedia(tab, target.kind, target.mediaUrl);
+  }
 });
 
 chrome.commands.onCommand.addListener((command) => {
@@ -238,9 +430,9 @@ async function notifyHostMissing(tabId: number): Promise<void> {
   await showToast(
     tabId,
     "error",
-    "ReadControl isn't installed",
-    "You need the ReadControl app to save pages to your library.",
-    { label: "Download ReadControl", command: "open-install" },
+    "Cuttings isn't installed",
+    "You need the Cuttings app to save items to your library.",
+    { label: "Get Cuttings", command: "open-install" },
   );
   // A desktop notification is a fallback for pages where no toast can render
   // (chrome:// pages, the web store, PDFs — the content script can't run there).
@@ -248,8 +440,8 @@ async function notifyHostMissing(tabId: number): Promise<void> {
     await chrome.notifications.create(NOTIF_HOST_MISSING, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
-      title: "ReadControl isn't installed",
-      message: "You need the ReadControl app to save pages. Click here to download it.",
+      title: "Cuttings isn't installed",
+      message: "You need the Cuttings app to save items. Click here to learn how to install it.",
       requireInteraction: true,
     });
   } catch (err) {
@@ -313,4 +505,10 @@ async function showBadge(tabId: number, status: "ok" | "error"): Promise<void> {
   await chrome.action.setBadgeText({ text, tabId });
   await chrome.action.setBadgeBackgroundColor({ color, tabId });
   setTimeout(() => chrome.action.setBadgeText({ text: "", tabId }), 3000);
+}
+
+function loggableMediaUrl(kind: "image" | "video", mediaUrl: string): string {
+  return kind === "video" && isSessionLocalVideoUrl(mediaUrl)
+    ? "[session-local video source]"
+    : mediaUrl;
 }
