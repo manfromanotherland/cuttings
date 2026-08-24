@@ -31,7 +31,6 @@ extension AppState {
     /// immediate.
     func searchDidChange() {
         searchTask?.cancel()
-        isSearchPending = true
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
             guard let self, !Task.isCancelled else { return }
@@ -45,9 +44,6 @@ extension AppState {
             // The sidebar badges are faceted by the search, so a query change has
             // to recount them alongside the list.
             await loadSidebar()
-            // `readings` now answers for the current query. A cancelled run leaves
-            // this set: the keystroke that cancelled it has its own reload pending.
-            isSearchPending = false
         }
     }
 

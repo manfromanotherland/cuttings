@@ -185,8 +185,7 @@ struct ReadingListPage {
 
     // ── Sort ──────────────────────────────────────────────────────────────
 
-    /// The sort menu button. Only present when the list has rows — it's hidden
-    /// for every empty state (see `ReadingListView.toolbarItems`).
+    /// The native toolbar's sort menu button.
     var sortMenu: XCUIElement {
         app.byId(A11y.List.sortMenu)
     }

@@ -9,6 +9,7 @@ struct ArticleDetailView: View {
     // `private`. Treat it as private to this view and its loading extension;
     // nothing else in the module touches it.
     @Environment(AppState.self) var appState
+    var showsToolbar = true
     @AppStorage("readerFont", store: AppDefaults.store) private var readerFont: ReaderFont = .system
     @AppStorage("readerFontSize", store: AppDefaults.store) private var readerFontSize: ReaderFontSize = .medium
     @AppStorage("readerWidth", store: AppDefaults.store) private var readerWidth: ReaderWidth = .medium
@@ -93,23 +94,6 @@ struct ArticleDetailView: View {
         .inspector(isPresented: $appState.showHighlights) {
             HighlightsInspector(readingId: appState.selectedId)
                 .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
-        }
-        .sheet(isPresented: $appState.showTagSheet) {
-            if let row {
-                // Driven by the detail `row`, which add/removeTag update
-                // synchronously — so checkmarks flip the instant you toggle.
-                TagPickerSheet(
-                    applied: row.tags,
-                    allTags: appState.sidebar.tags.map(\.tag),
-                    onToggle: { tag, shouldApply in
-                        if shouldApply {
-                            addTag(tag, to: row.id)
-                        } else {
-                            removeTag(tag, from: row.id)
-                        }
-                    }
-                )
-            }
         }
     }
 
@@ -242,38 +226,8 @@ struct ArticleDetailView: View {
         // user can't see. Only these go: the search field, sort control and sidebar
         // toggle belong to the other columns, which the zoom never covers, so
         // hiding them was gratuitous.
-        if let row = currentRow, imageZoom.target == nil {
+        if showsToolbar, let row = currentRow, imageZoom.target == nil {
             ArticleToolbar(row: row, appState: appState)
-        }
-    }
-
-    // ── Tags ──────────────────────────────────────────────────────────────
-
-    /// Apply a tag to the article: optimistically show the chip now (exact-match
-    /// dedup + append mirror the core), then write through and reconcile.
-    private func addTag(_ tag: String, to id: String) {
-        let tag = tag.trimmingCharacters(in: .whitespaces)
-        guard !tag.isEmpty else { return }
-        if var optimistic = row, !optimistic.tags.contains(tag) {
-            optimistic.tags.append(tag)
-            row = optimistic
-        }
-        Task {
-            await appState.addTag(id: id, tag: tag)
-            row = await appState.reloadRow(id: id) ?? row
-        }
-    }
-
-    /// Remove a tag from the article: optimistically drop the chip, reconcile
-    /// after the write.
-    private func removeTag(_ tag: String, from id: String) {
-        if var optimistic = row {
-            optimistic.tags.removeAll { $0 == tag }
-            row = optimistic
-        }
-        Task {
-            await appState.removeTag(id: id, tag: tag)
-            row = await appState.reloadRow(id: id) ?? row
         }
     }
 }

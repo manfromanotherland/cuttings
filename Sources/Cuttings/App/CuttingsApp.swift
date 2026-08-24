@@ -31,7 +31,7 @@ struct CuttingsApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Cuttings") {
             ContentView()
                 .environment(appState)
                 .frame(minWidth: 900, minHeight: 600)
@@ -43,13 +43,7 @@ struct CuttingsApp: App {
         // restores the size the user left it at, so `.defaultSize` is ignored.
         .defaultSize(width: 1100, height: 720)
         .windowStyle(.titleBar)
-        // `showsTitle: false` drops the title from the titlebar entirely, so the
-        // reading list's toolbar section starts at the column's leading edge
-        // instead of behind a reserved (and empty) title region. Setting
-        // `NSWindow.titleVisibility` from AppKit doesn't hold: SwiftUI re-applies
-        // it every time `.navigationTitle` changes, which the reader does on each
-        // selection.
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
             CommandGroup(replacing: .newItem) {}
             UpdateCommands(updater: updaterController.updater)

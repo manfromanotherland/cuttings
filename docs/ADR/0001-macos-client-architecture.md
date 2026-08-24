@@ -6,8 +6,8 @@ Accepted.
 
 ## Context
 
-`macos` is the native SwiftUI client for **Cuttings**, a
-local-first read-later app. It embeds `core` through UniFFI.
+`macos` is the native SwiftUI client for **Cuttings**, a local-first visual
+library. It embeds `core` through UniFFI.
 
 The Rust core is the owner of the product domain:
 
@@ -42,7 +42,7 @@ The macOS app will be organized around these responsibilities:
 - Feature folders own SwiftUI rendering and small feature-local presentation
   helpers.
 - Platform folders own macOS APIs such as security-scoped bookmarks, FSEvents,
-  cuttings-native-host installation, and AppKit focus/editing integration.
+  native-host installation, and AppKit focus/editing integration.
 - Shared folders own reusable UI components, formatters, and per-device
   preferences.
 
@@ -182,7 +182,7 @@ Feature folders own views and feature-local presentation helpers:
 - `Reader`: article detail, article toolbar, rating footer, Markdown renderer.
 - `Tags`: tag picker and tag editing UI.
 - `Highlights`: highlights inspector and highlight UI.
-- `Settings`: appearance, typography, library, and cuttings-native-host settings.
+- `Settings`: appearance, typography, library, and native-host settings.
 - `Shortcuts`: keyboard shortcuts help UI.
 
 Features render state and send user intents back to `AppState`. They should not

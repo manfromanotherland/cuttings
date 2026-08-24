@@ -87,12 +87,6 @@ final class AppState {
     /// persisted sort. Not persisted — a fresh search starts on relevance.
     var searchSort: ReadingSort = .relevance
 
-    /// True between a search-field edit and its debounced reload landing. During
-    /// that window `readings` still describes the *previous* query, so UI keyed off
-    /// "does the list have rows" holds its shape rather than flickering on the
-    /// stale answer (see `ReadingListView.showsSortControl`).
-    var isSearchPending: Bool = false
-
     /// Pending debounced search reload. Each keystroke cancels the previous one
     /// so the core is queried once typing settles, not per character. Plumbing
     /// only — not part of the observable UI state.
@@ -263,8 +257,8 @@ final class AppState {
 
     // ── Search focus ──────────────────────────────────────────────────────────
 
-    /// Focus the reading-list search field (⌘K). SwiftUI exposes no focus binding
-    /// for it, so we reach the `NSSearchField` through AppKit (see `ListSearchField`).
+    /// Focus the native searchable field (⌘K). SwiftUI exposes no focus binding
+    /// for toolbar search on macOS, so reach its `NSSearchField` through AppKit.
     func focusSearchField() {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
         // The toolbar is hosted alongside `contentView`, not within it, so search
