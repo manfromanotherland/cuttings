@@ -75,7 +75,7 @@ The sandbox is a **Linux** microVM, so the macOS app cannot be built here:
 - No `xcodebuild` / `xcodegen` / Xcode, and no SwiftUI/AppKit — those are
   macOS-only. `make all`, `make dmg`, `make test` in `macos` need a
   real Mac.
-- The `core` XCFramework build (`scripts/build-xcframework.sh`,
+- The `core` XCFramework build (`core/scripts/build-xcframework.sh`,
   Apple-Darwin targets) also needs a Mac — it can't link against the Apple SDK on
   Linux.
 

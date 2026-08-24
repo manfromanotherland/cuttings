@@ -23,8 +23,6 @@
     "**/.swiftpm",
     "**/*.log",
     "**/*.tsbuildinfo",
-    "website/.next",
-    "website/out",
     "**/.env.local"
   ],
   "file_scan_inclusions": [
@@ -34,8 +32,6 @@
     "extension",
     "extension/**",
     "macos",
-    "macos/**",
-    "website",
-    "website/**"
+    "macos/**"
   ]
 }

@@ -76,6 +76,7 @@ quality command maps to the component's native tools:
 
 **Engine + native host (Rust) — `core`**
 ```bash
+cd core
 cargo build
 cargo test
 cargo clippy --all-targets --all-features -- -D warnings
@@ -84,6 +85,7 @@ cargo fmt --check
 
 **Browser extension (TypeScript) — `extension`**
 ```bash
+cd extension
 npm install
 npm run build        # bundle the MV3 extension
 npm test             # Vitest unit tests
@@ -92,6 +94,7 @@ npm run lint         # ESLint + Prettier + tsc --noEmit
 
 **macOS client (Swift) — `macos`**
 ```bash
+cd macos
 xcodebuild build
 xcodebuild test      # XCTest / XCUITest
 swiftlint            # + swiftformat

@@ -1,5 +1,5 @@
 # The template image copies nothing from the repo — it only installs toolchains.
 # Ignore everything so `docker build` sends a near-empty context to the daemon
-# instead of the nested repos, node_modules, Rust target dirs, and large assets.
+# instead of monorepo dependency outputs, Rust target dirs, and large assets.
 *
 !Dockerfile
