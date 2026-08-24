@@ -1,7 +1,7 @@
 {
-  "name": "readcontrol-extension",
+  "name": "cuttings-extension",
   "version": "0.1.0",
-  "description": "Browser extension for the ReadControl app.",
+  "description": "Browser extension for the Cuttings app.",
   "private": true,
   "type": "module",
   "scripts": {

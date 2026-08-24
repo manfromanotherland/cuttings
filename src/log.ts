@@ -29,9 +29,7 @@ export function log(level: LogEntry["level"], msg: string, data?: unknown): Prom
   if (data !== undefined) entry.data = serialize(data);
 
   const line =
-    entry.data !== undefined
-      ? `readcontrol: ${msg} — ${format(entry.data)}`
-      : `readcontrol: ${msg}`;
+    entry.data !== undefined ? `cuttings: ${msg} — ${format(entry.data)}` : `cuttings: ${msg}`;
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.info(line);

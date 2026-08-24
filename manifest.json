@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "ReadControl",
+  "name": "Cuttings",
   "version": "0.1.0",
-  "description": "Save any webpage to your computer, read anytime.",
+  "description": "Save articles, images, videos, and quotes to your local Cuttings library.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArlfbOXU8yQ8ZZf9A0IQh0T5q/6sofpKSMD5dJdsgdHiZj3+0LlAklYa/arxjxJ6yJGKj50HA7jQuMwZ5hw+rlxFxAa8p/nSKSxCXWSXAaJPd+wU2plEXXBTrP76LDFb8nWvHILKRRTR6GJNqFrNwtTtrYSgEoS6tMXqfzXJNbzuiHkWJAooOZKwrO5mZoPfq7CuoHpJc2K0QwQSq+XiM4Ak4Fsb/eYoYiu6UrJid17VK3I/0tVh8gpGWyRXQbbkw+J28HDNRgEEpByGqK+0u5Mq1VeZYJ0vOBXVo+Ec1V6Oy0hxib8hnf7/MmRwYvIOfZFVbEEDkID6BZb6evbHZGwIDAQAB",
   "browser_specific_settings": {
     "gecko": {
-      "id": "extension@readcontrol.app",
+      "id": "cuttings@edmundo.is",
       "strict_min_version": "115.0",
       "data_collection_permissions": {
         "required": ["none"]
@@ -39,7 +39,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Save to ReadControl",
+    "default_title": "Save page to Cuttings",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -57,7 +57,7 @@
         "default": "Alt+Shift+S",
         "mac": "MacCtrl+Shift+S"
       },
-      "description": "Save current page to ReadControl"
+      "description": "Save current page to Cuttings"
     }
   }
 }

@@ -2,7 +2,7 @@
 //
 // Run via `npm run package`, which builds first, then invokes this script. It
 // stages only what the manifest references — no src/, node_modules/, or signing
-// keys — into artifacts/readcontrol-extension-<version>.zip, ready to upload to
+// keys — into artifacts/cuttings-extension-<version>.zip, ready to upload to
 // the Chrome Web Store, Edge Add-ons, or AMO.
 //
 // The staged manifest drops the `key` field: it pins a stable extension ID for
@@ -75,7 +75,7 @@ writeFileSync(
   JSON.stringify(manifest, null, 2) + "\n",
 );
 
-const outFile = join(outDir, `readcontrol-extension-${version}.zip`);
+const outFile = join(outDir, `cuttings-extension-${version}.zip`);
 rmSync(outFile, { force: true }); // a stale zip would be merged into, not replaced
 
 // -r recurse, -X drop extra file attributes, -x skip cruft. Run from the stage

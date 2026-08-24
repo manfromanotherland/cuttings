@@ -2,7 +2,7 @@
 
 import { PROTOCOL_VERSION } from "./protocol.js";
 
-export const HOST_ID = "app.readcontrol.host";
+export const HOST_ID = "is.edmundo.cuttings.host";
 
 // Chrome and Firefox embed one of these phrases in lastError when the native
 // host binary is absent, its manifest isn't registered, or the extension isn't
