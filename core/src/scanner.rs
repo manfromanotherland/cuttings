@@ -104,24 +104,25 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
     Ok(results)
 }
 
-/// Diff two snapshots, using `source_hash` as the change signal.
+/// Diff two snapshots, using body hash and frontmatter metadata as change signals.
 ///
 /// Items present in `new` but absent in `old` → `Added`.
-/// Items present in both but with a differing `source_hash` → `Changed`.
+/// Items present in both but with differing body or metadata → `Changed`.
 /// Items present in `old` but absent in `new` → `Removed`.
 pub fn diff(old: &[ScannedReading], new: &[ScannedReading]) -> Vec<ScanDiff> {
-    let old_hashes: HashMap<&str, &str> = old
-        .iter()
-        .map(|r| (r.id.as_str(), r.source_hash.as_str()))
-        .collect();
+    let old_readings: HashMap<&str, &ScannedReading> =
+        old.iter().map(|r| (r.id.as_str(), r)).collect();
     let new_ids: std::collections::HashSet<&str> = new.iter().map(|r| r.id.as_str()).collect();
 
     let mut diffs = Vec::new();
 
     for reading in new {
-        match old_hashes.get(reading.id.as_str()) {
+        match old_readings.get(reading.id.as_str()) {
             None => diffs.push(ScanDiff::Added(reading.clone())),
-            Some(&old_hash) if old_hash != reading.source_hash => {
+            Some(old_reading)
+                if old_reading.source_hash != reading.source_hash
+                    || old_reading.metadata != reading.metadata =>
+            {
                 diffs.push(ScanDiff::Changed(reading.clone()))
             }
             _ => {}
@@ -333,5 +334,30 @@ mod tests {
         // Diff against itself — nothing should change.
         let diffs = diff(&scan, &scan);
         assert!(diffs.is_empty());
+    }
+
+    #[test]
+    fn diff_detects_media_metadata_change_without_body_change() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let id = new_id();
+        write_reading(
+            &lib,
+            sample_metadata(&id, "https://example.com/gallery"),
+            "same body".to_string(),
+        )
+        .unwrap();
+        let old_scan = scan_library(&lib).unwrap();
+
+        let mut metadata = sample_metadata(&id, "https://example.com/gallery");
+        metadata.kind = crate::ReadingKind::Image;
+        metadata.media_url = Some("https://cdn.example.com/photo.jpg".into());
+        metadata.preview_asset = Some("assets/photo.jpg".into());
+        write_reading(&lib, metadata, "same body".to_string()).unwrap();
+        let new_scan = scan_library(&lib).unwrap();
+
+        let diffs = diff(&old_scan, &new_scan);
+        assert_eq!(diffs.len(), 1);
+        assert!(matches!(diffs[0], ScanDiff::Changed(_)));
     }
 }
