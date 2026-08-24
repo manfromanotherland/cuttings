@@ -1,18 +1,19 @@
-# UBIQUITOUS_LANGUAGE.md - readcontrol
+# UBIQUITOUS_LANGUAGE.md - cuttings
 
-This glossary defines the shared product language for `readcontrol`. Use these
+This glossary defines the shared product language for `cuttings`. Use these
 terms in docs, code discussions, issue titles, UI architecture, and commit
 messages so the project stays consistent across the extension, core, native
-host, macOS app, and landing page (`website`).
+host, and macOS app.
 
 ## Naming Rules
 
-- Use **save** for the user action that adds a page to the library. Saving is
-  time-neutral: people save pages to read later *and* pages they already read
-  and want to keep. Do not use clip, download, or bookmark for this action.
-- Use **capture** for the extension's technical extraction step (live DOM →
-  cleaned Markdown, metadata, image bytes). The user saves; the extension
-  captures.
+- Use **save** for the user action that adds a page, image, video, or selected-text
+  quote to the library. Saving is time-neutral: people save things to revisit
+  *and* things they already consumed and want to keep. Do not use download or
+  bookmark for this action.
+- Use **capture** for the extension's technical extraction step (live DOM or
+  right-click context → Markdown, origin metadata, image bytes). The user saves;
+  the extension captures.
 - Use **reading** for the saved domain object the user browses, searches, reads,
   tags, rates, archives, or deletes.
 - Use **article file** only when talking about the on-disk `article.md` inside a
@@ -38,14 +39,20 @@ host, macOS app, and landing page (`website`).
 | Term | Definition |
 |------|------------|
 | App | The user-facing product as a whole. In implementation, this currently means the browser extension, native messaging host, Rust core, and macOS client. |
-| ReadControl | The product name shown to users ([readcontrol.app](https://readcontrol.app)). |
-| readcontrol | The internal project slug used for repos, packages, and file paths. Not shown to users. |
+| Cuttings | The product name shown to users. |
+| cuttings | The internal project slug used for repos, packages, and file paths. Not shown to users. |
 | Library | The folder chosen by the user that stores their synced, durable reading data. |
 | Library folder | Same as Library, used when emphasizing the on-disk directory. |
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |
-| Save | The user action that adds the current page to the library as a new reading. Time-neutral: it covers both "read this later" and "keep this now that I've read it". |
-| Capture | The extension's extraction step that turns the live page into cleaned Markdown, metadata, and image bytes before the save is written. Internal/technical term; users just "save". |
+| Save | The user action that adds the current page, clicked media, or selected text to the library as a new reading/card. |
+| Capture | The extension step that turns a page or right-click context into Markdown, universal origin metadata, and optional local image bytes before the save is written. Internal/technical term; users just "save". |
 | Reading | One saved item in the user's library. A reading is backed by an article file, optional assets, and optional highlights — all inside its reading folder. |
+| Card | User-facing visual representation of a reading on the macOS masonry board. Do not rename the internal `Reading` domain type merely to match presentation. |
+| Card kind | The reading's capture/rendering kind: `article`, `image`, `video`, or `quote`. A missing kind on an older file means `article`. |
+| Origin | The source page for every card kind: `url`, `canonical_url`, page title/site, and save date. For image/video cards this is deliberately distinct from `media_url`. |
+| Media URL | Optional media identity for an image/video card. Normally it is a durable direct URL. A session-local video instead uses an opaque stable capture reference. It supplements the origin and never replaces the page URL. |
+| Preview asset | Optional safe local `assets/<file>` reference used by the masonry card. The host derives it only after captured image/poster bytes have been written. |
+| Quote | A selected-text card whose full selection is stored as Markdown and whose origin is the page on which the text was selected. |
 | Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its `assets/`, and its `highlights.md`. Moving or deleting a reading operates on this one folder. |
 | Article file | The `article.md` file inside a reading folder (`articles/<prefix>/<id>/article.md`) that stores one reading's frontmatter and body. |
 | Frontmatter | YAML metadata at the top of an article file. It is the source of truth for reading metadata and state. |
@@ -54,10 +61,10 @@ host, macOS app, and landing page (`website`).
 | Original HTML | Optional raw HTML snapshot stored as `original.html` inside the reading folder for future reprocessing. |
 | Highlight | A saved selected text passage for one reading. Highlights are stored in the reading folder, separate from the article file. |
 | Highlight file | The `highlights.md` file inside a reading folder (`articles/<prefix>/<id>/highlights.md`) that stores that reading's saved highlights. |
-| Reading id | Content-addressed identifier for a reading: the lowercase-hex SHA-256 of its normalized source URL. It names the reading folder and is the frontmatter `id`. Deterministic, so the same URL always yields the same id (the dedup key). Not time-sortable — the reading list orders by `saved_at` via the index. |
-| Content-addressed id | See Reading id: an id derived from content (here, `SHA256(normalize(url))`) rather than assigned, so identical input yields an identical id with no coordinator. |
+| Reading id | Deterministic lowercase-hex SHA-256 content address. Articles hash the normalized origin URL; image/video cards hash kind + normalized origin + media identity; quote cards hash normalized origin + normalized selected Markdown. It names the reading folder and frontmatter `id`. |
+| Content-addressed id | An id derived from stable card identity rather than assigned, so identical input yields an identical id without a coordinator. |
 | ULID | Sortable id scheme (Crockford Base32). Used for highlight ids; reading ids are content-addressed (see Reading id), not ULIDs. |
-| Source URL | The original URL as visited by the user, stored as `url`. Its normalized form is hashed to produce the reading id. |
+| Source URL | The originating page URL stored as `url` for every card kind. For articles its normalized form is the whole identity; for media/quote it is one component of identity. |
 | Canonical URL | The page's own canonical URL when known, stored as `canonical_url` for reference. Dedup keys on the reading id (from the normalized *visited* URL), not this field. |
 | Source hash | Hash of cleaned content used to detect stale index rows and content changes. |
 | Format version | Integer frontmatter version for the library file contract. |
@@ -72,8 +79,9 @@ host, macOS app, and landing page (`website`).
 | Favorite | Boolean state meaning the user marked the reading as important or worth returning to. Stored in frontmatter. |
 | Rating | Integer star rating from 0 to 5, where 0 means unrated. Stored in frontmatter. |
 | Tag | User-defined label stored in a reading's frontmatter. Tags organize readings and power tag filters. |
-| Smart view | Built-in sidebar filter derived from frontmatter fields. One is always active (`All` is the base); it composes with an optional tag filter and rating filter. |
-| Composed filter | The active view, tag, and rating (plus the search box) applied together as an intersection to scope the reading list and counts. At most one of each; a tag or rating toggles off when reselected. |
+| Kind filter | Optional card-kind axis (`article`, `image`, `video`, `quote`) composed with smart view, rating, tag, and search in the core query. |
+| Smart view | Built-in navigation-rail filter derived from frontmatter fields. One is always active (`All` is the base); it composes with optional kind, tag, and rating filters. |
+| Composed filter | The active view, kind, tag, and rating (plus search) applied as an intersection to scope the board and counts. At most one value from each axis. |
 | All | Smart view for non-archived readings. |
 | Unread | Smart view for non-archived readings where `read == false`. |
 | Read (smart view) | Smart view for non-archived readings where `read == true`. |
@@ -102,7 +110,7 @@ host, macOS app, and landing page (`website`).
 
 | Term | Definition |
 |------|------------|
-| Extension | Browser extension that captures the current page, cleans it, converts it to Markdown, and sends it to the native host. |
+| Extension | Browser extension that captures a cleaned page, clicked image/video, or selected-text quote and sends Markdown, universal origin metadata, and optional image bytes to the native host. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |
 | Core | Rust engine that owns the library format, file parsing/writing, indexing, search, tags, states, ratings, highlights, and UniFFI surface. |
@@ -117,7 +125,8 @@ host, macOS app, and landing page (`website`).
 | Term | Definition |
 |------|------------|
 | Reader | Main article reading surface in the macOS app. It renders Markdown natively and supports local assets, text selection, highlights, and typography settings. |
-| Reading list | List of reading rows for the active smart view, tag, rating, search query, and sort. |
+| Card board | Mixed masonry presentation of reading rows for the active smart view, kind, tag, rating, search query, and sort. |
+| Reading list | Legacy name for the old row-based macOS presentation and for the core listing API; the current user-facing home is the card board. |
 | Sidebar | Navigation area containing smart views, ratings, tags, and settings. |
 | Search | Full-text query over indexed reading title, content, and tags. |
 | Sort | User-selected order for the reading list: relevance, date saved, date read, rating, or time to read. |
@@ -135,7 +144,7 @@ paragraphs, and the welcome article.
 
 | Term | Definition |
 |------|------------|
-| Read-later app | The product category, used so people recognize what ReadControl is (the Pocket/Instapaper category). Category label only — never imply the library holds only unread things. |
+| Read-later app | The product category, used so people recognize what Cuttings is (the Pocket/Instapaper category). Category label only — never imply the library holds only unread things. |
 | Reading library | Preferred description of what the user builds: a permanent, file-based library of the articles they save and own. Use it to balance "read-later" positioning ("a read-later app that builds a reading library you own"). |
 | Local-first | Marketing shorthand for the no-accounts, no-servers, files-on-your-disk principles. |
 | Save | The only user-facing verb for adding a page, in marketing as elsewhere (matches Pocket "Save to Pocket", Instapaper "Save Anything. Read Anywhere.", GoodLinks "Save. Read. Anywhere."). |
@@ -152,7 +161,7 @@ paragraphs, and the welcome article.
 | Starred | Favorite or rating | Favorite is boolean; rating is 0 to 5 stars. |
 | Clip | Save | "Clip" is note-clipper vocabulary (Evernote, Notion, Obsidian Web Clipper) and suggests snipping fragments into a notes app. Read-later products say save. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
-| Bookmark (user action) | Save | A bookmark is a link, not content. ReadControl stores the cleaned article itself. The bookmark glyph as brand iconography is fine; the verb is not. |
+| Bookmark (user action) | Save | A bookmark is a link, not content. Cuttings stores the cleaned article itself. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |
 | Read-it-later system | Read-later app | One category phrase everywhere; "system" is architecture-speak. |
 | Preferences | Settings | macOS renamed Preferences to Settings; the app's UI says Settings. |

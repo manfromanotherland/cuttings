@@ -1,10 +1,11 @@
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "action": "save",
   "metadata": {
     "url": "https://blog.example.com/posts/local-first?utm_source=hn",
     "canonical_url": "https://blog.example.com/posts/local-first",
     "title": "Local-First Software",
+    "kind": "article",
     "author": "Martin Kleppmann",
     "site": "blog.example.com",
     "lang": "en",

@@ -3,7 +3,7 @@
 **Version:** `1`  
 **Status:** implemented — the contract the shipped components (`core`, `extension`, `macos`) conform to.
 
-This document is the **shared contract** between all ReadControl components. Every component that
+This document is the **shared contract** between all Cuttings components. Every component that
 reads or writes library files must conform to it. Treat breaking changes as a major version bump;
 announce them in all three repos.
 
@@ -28,7 +28,7 @@ announce them in all three repos.
   bucket so no directory grows unbounded. Everything for the reading lives inside it, so moving or
   deleting a reading is a single folder operation.
 - The per-device SQLite index lives **outside** this folder (e.g.
-  `~/Library/Application Support/ReadControl/`) and is **never synced**.
+  `~/Library/Application Support/Cuttings/`) and is **never synced**.
 - Paths stored in the database must be **relative to the library root** — never absolute.
 
 ---
@@ -47,6 +47,9 @@ id: 1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199  # content-
 url: https://example.com/post/slug         # original URL as visited
 canonical_url: https://example.com/post/slug  # the page's own canonical URL when known (see § URL normalization)
 title: The Title of the Article            # required; extracted from page or og:title
+kind: article                              # article | image | video | quote; missing means article
+media_url: https://cdn.example.com/image.jpg  # optional media identity; never the origin
+preview_asset: assets/3f4a1b8e....jpg      # optional local card preview written by the host
 author: Jane Doe                           # optional; extracted byline
 site: example.com                          # eTLD+1 of canonical_url
 saved_at: 2026-06-13T15:00:00Z            # ISO-8601 UTC; set once at save time; never updated
@@ -67,10 +70,21 @@ source_hash: sha256:abc123...              # sha256 of the cleaned Markdown body
 `rating`, `tags`, `source_hash`.
 
 #### Optional fields
-`author`, `site`, `read_at`, `excerpt`, `word_count`, `lang`.
+`kind`, `media_url`, `preview_asset`, `author`, `site`, `read_at`, `excerpt`, `word_count`, `lang`.
+
+`kind` is written for every new card but remains optional in the parser for backwards compatibility;
+an older file without it is an `article`.
 
 #### Rules
 - `saved_at` is set once at save time and **never updated**, even when metadata is edited.
+- `url`, `canonical_url`, `title`, and `site` describe the **origin page for every kind**. A media
+  card's asset identity belongs in `media_url`; it never replaces the origin.
+- `kind` is one of `article`, `image`, `video`, or `quote`.
+- `media_url` is meaningful only for `image` and `video` cards. It is normally a durable HTTP(S)
+  direct URL. When a video only exposes a session-local `blob:`/`data:` source, the extension stores
+  a compact opaque `cuttings-video:` reference instead; raw transient URLs are never persisted.
+- `preview_asset`, when present, must be the safe single-file shape `assets/<filename>`. It is
+  derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
 - **Read state is the presence of `read_at`**: a timestamp means read (its value is when it was
   last marked read); an absent field means unread. There is no separate `read` boolean.
 - `archived`, `favorite`, and `rating` are the source of truth for those states — the DB mirrors them.
@@ -88,6 +102,11 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
 - Image references use **relative paths** into the reading's own `assets/` folder: `assets/<file>`
   (the article file and its `assets/` folder are siblings), e.g. `![alt](assets/3f4a1b.jpg)`.
 - Do not embed images as base64.
+- An **image** body is a Markdown image whose captured source is rewritten to the local asset.
+- A **video** body may contain its local poster plus a link to the durable media URL. For a
+  session-local stream it links to the origin page instead. Video bytes are not downloaded.
+- A **quote** body contains the selected text as Markdown block quotes. Its `excerpt` may carry a
+  bounded preview for the board, but the body remains the full selection.
 
 ---
 
@@ -104,6 +123,7 @@ id: 1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199
 url: https://blog.example.com/posts/local-first?utm_source=hn
 canonical_url: https://blog.example.com/posts/local-first
 title: Local-First Software
+kind: article
 author: Martin Kleppmann
 site: blog.example.com
 saved_at: 2026-06-13T15:00:00Z
@@ -136,7 +156,8 @@ More content…
   `article.md`, and are linked from the body as `assets/<file>`.
 - Filename is the **lowercase hex SHA-256** of the file's raw bytes, with an extension chosen from
   the image's `Content-Type` (falling back to the URL): e.g. `3f4a1b8e....jpg`.
-- Images are **captured by the browser extension** (from the page's cache where possible) and sent
+- Article images, standalone images, and video posters are **captured by the browser extension**
+  (from the page's cache where possible) and sent
   to the host, which only writes them — the host performs no network requests. An image the
   extension couldn't capture is left as a remote URL in the Markdown and is never re-fetched; the
   reader shows a labelled placeholder for it.
@@ -163,13 +184,20 @@ are never mistaken for readings.
 
 ## ID scheme
 
-A **reading id** is **content-addressed**: the lowercase-hex SHA-256 of the reading's normalized
-source URL (see § URL normalization & identity).
+A **reading id** is a deterministic lowercase-hex SHA-256 content address. The identity input
+depends on the card kind:
+
+- **Article:** normalized origin `url` (the existing `url_id` behavior).
+- **Image/video:** kind + normalized origin `url` + `media_url` identity (a durable direct URL or a
+  stable opaque reference for a session-local video).
+- **Quote:** normalized origin `url` + normalized selected Markdown body.
+
+This permits several media/quote cards from one origin while an exact repeat save deduplicates.
 
 - 64 hex characters, e.g. `1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199`.
-- **Deterministic** — the same URL always yields the same id, so the id doubles as the dedup key: to
-  check whether a page is already saved, hash its URL and stat the folder it would live in
-  (`articles/<prefix>/<id>/`), with no scan and no index.
+- **Deterministic** — the same kind-specific identity input yields the same id, so the id doubles as
+  the dedup key. The host hashes the input and stats the one folder it would occupy, with no scan or
+  index lookup.
 - The id is the **reading-folder name** (under its `<prefix>` bucket) and the frontmatter `id`
   field. They must match — a folder whose name disagrees with its `article.md`'s `id` is ignored.
 - Not time-sortable: the reading list orders by `saved_at` via the index, not by id.
@@ -194,10 +222,10 @@ reading id is its SHA-256 (§ ID scheme). Apply these rules in order:
    them, but sort so their order can't produce two ids for one page.
 7. Remove a trailing `/` from the path **unless** the path is just `/`.
 
-The original `url` (pre-normalization) is always preserved. `canonical_url` stores the page's own
-`<link rel="canonical">`/`og:url` when known, for reference — it is **not** the identity key. (So
-two different normalized URLs for the same content can produce two readings — an accepted trade-off
-of address-bar-only capture.)
+The original origin-page `url` (pre-normalization) is always preserved for every card kind.
+`canonical_url` stores the page's own `<link rel="canonical">`/`og:url` when known, for reference —
+it is not substituted with a CDN or direct media address. Two different normalized origin URLs for
+the same content can still produce two readings — an accepted trade-off of origin-aware capture.
 
 ---
 
@@ -231,7 +259,7 @@ The macOS app's sidebar views are defined by frontmatter field values:
 
 | Belongs in library (synced) | Belongs outside library (per-device, never synced) |
 |-----------------------------|----------------------------------------------------|
-| `articles/<prefix>/<id>/article.md` | SQLite index (`~/Library/Application Support/ReadControl/`) |
+| `articles/<prefix>/<id>/article.md` | SQLite index (`~/Library/Application Support/Cuttings/`) |
 | `articles/<prefix>/<id>/assets/*` | App preferences (theme, font, library path) |
 | `articles/<prefix>/<id>/highlights.md` | Native messaging host manifest |
 | `articles/<prefix>/<id>/original.html` (optional) | |

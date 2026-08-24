@@ -1,0 +1,16 @@
+{
+  "protocol_version": 2,
+  "action": "save",
+  "metadata": {
+    "url": "https://example.com/design-history",
+    "canonical_url": "https://example.com/design-history",
+    "title": "A Short History of Useful Things",
+    "kind": "quote",
+    "site": "example.com",
+    "excerpt": "We shape the things around us, and then they quietly shape us.",
+    "word_count": 12,
+    "saved_at": "2026-08-23T12:00:00Z"
+  },
+  "markdown": "> We shape the things around us, and then they quietly shape us.\n",
+  "images": []
+}

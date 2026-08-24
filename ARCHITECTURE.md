@@ -1,16 +1,17 @@
 # Architecture
 
-ReadControl is three apps that share one data format and one Rust core: a browser **extension**
-captures and cleans pages, a **native messaging host** writes them into a plain-file library, and
-the **macOS app** (embedding the core) reads and indexes that library. Files are the source of
-truth; the index is a disposable, per-device cache.
+Cuttings is three apps that share one data format and one Rust core: a browser **extension**
+captures cleaned articles, standalone media, and selected-text quotes; a **native messaging host**
+writes them into a plain-file library; and the **macOS app** (embedding the core) indexes and shows
+them as a visual card board. Files are the source of truth; the index is a disposable, per-device
+cache.
 
 ## How it works
 
 ```
  ┌─────────────────┐   cleaned MD + assets    ┌──────────────────────────┐
- │ Browser plugin  │ ───────────────────────▶ │ Native messaging host    │
- │ (extract+clean) │   (native messaging)     │ (wraps core)             │
+ │ Browser ext.    │ ───────────────────────▶ │ Native messaging host    │
+ │ (capture cards) │   (native messaging)     │ (wraps core)             │
  └─────────────────┘                          └───────────┬──────────────┘
                                                            │ writes files only
                                                            ▼
@@ -28,25 +29,36 @@ truth; the index is a disposable, per-device cache.
                                               SQLite + FTS5 (per-device, NOT synced)
 ```
 
-The plugin extracts and cleans the page (it has the live DOM), then hands the cleaned Markdown and
-the captured assets to a small native host that writes them into your library folder. The macOS
-app watches that folder and indexes new files for listing, full-text search, and tags — so a page
-you saved and a file delivered by sync are handled by the same code path.
+The extension either extracts and cleans the current page, captures the right-clicked image, records
+a right-clicked video plus its poster, or turns selected text into a quote. It hands Markdown,
+metadata, and captured image bytes to a small native host that writes them into the library folder.
+The macOS app watches that folder and indexes new files for the masonry board, full-text search,
+type filters, and tags — so a browser save and a file delivered by sync use the same code path.
+
+Every card kind records its origin page in `url`/`canonical_url` plus its page title/site and save
+date. `media_url` stores a durable image/video address in addition to that origin. If a video only
+exposes a session-local `blob:`/`data:` source, the extension stores a compact opaque capture
+reference for identity and links playback back to the origin page. It never substitutes a
+CDN/media address for the origin page.
 
 ## Components
 
 The system is a **polyrepo** — three components in their own repositories, sharing one library
 format and one Rust core.
 
-### Browser plugin (`extension`)
-- **Responsibility:** extract the readable content of the current page, remove clutter (nav,
-  banners, ads, popups, comments), convert to Markdown, and save it into the library.
+### Browser extension (`extension`)
+- **Responsibility:** extract readable page content; capture a selected image; record a selected
+  video and poster; or capture selected text as a quote. Every path produces Markdown plus origin
+  metadata and any local image bytes needed by the card.
 - **Why cleanup happens here:** the extension has the *live, rendered DOM*, so it sees JS-rendered
   content and pages the user is logged into. The engine never sees the page.
 - **Stack:** Manifest V3, TypeScript (Readability-style extraction + HTML→Markdown).
 - **Hard constraint:** MV3 extensions can't write files to disk, so saving goes through a **native
   messaging host** — a small native binary (a thin wrapper over `core`) that receives the cleaned
   Markdown + assets and writes them into the library.
+- **Video boundary:** direct video files and streams are not downloaded into the library. The card
+  stores the page origin, a durable media URL when available (otherwise an identity-only capture
+  reference), and a locally captured poster when available.
 
 ### Engine (`core`, Rust)
 - **Responsibility:** owns the library format and all logic — scan & index the library, full-text
@@ -56,13 +68,17 @@ format and one Rust core.
 - **Index:** local SQLite database with FTS5. Rebuildable; per-device; never synced.
 
 ### macOS client (`macos`, Swift)
-- **Responsibility:** the native UI — browse (All/Unread/Archive/Favorites), read, search, tag, and
-  set read/favorite/archive/rating state; appearance settings.
+- **Responsibility:** the native UI — browse a mixed masonry board, filter by card kind and smart
+  view, read articles, inspect images/videos/quotes, search, tag, and set
+  read/favorite/archive/rating state; appearance settings.
 - **Stack:** Swift / SwiftUI, embedding `core` via **UniFFI**-generated bindings.
 - **Native rendering only — never a WebView.** The reader renders article Markdown as a native
   SwiftUI view tree via Apple's [`swift-markdown`](https://github.com/apple/swift-markdown) parser —
   proper macOS typography, text selection, Light/Dark, and accessibility with no web engine and no
   script-execution surface. The UI is specified in [DESIGN.md](./DESIGN.md).
+- Card detail is a full-window native overlay: the existing Markdown reader handles articles and
+  quote bodies; image/video cards use local preview assets and source/media actions. Every detail
+  inspector exposes the origin page consistently.
 - Owns the local index and watches the library folder for changes (including files arriving via
   sync), reindexing incrementally.
 
@@ -75,9 +91,8 @@ format and one Rust core.
 ## Data model — the library
 
 Each reading is a **self-contained folder** under a **library folder** the user chooses and syncs.
-The folder is named by the reading's **content-addressed id** — `SHA256(normalize(url))` — under a
-two-character fan-out bucket so no directory grows unbounded, and it holds everything for that
-reading:
+The folder is named by a deterministic content-addressed id under a two-character fan-out bucket so
+no directory grows unbounded, and it holds everything for that reading:
 
 ```
 <library-root>/
@@ -91,10 +106,20 @@ reading:
 ```
 
 Keeping a reading in one folder makes image links trivially relative (`assets/<file>`, no `../`),
-makes a reading one movable unit, and makes deletion a single guarded folder removal. The id is
-content-addressed, so hashing a URL locates its folder in O(1) — dedup and the extension's "already
-saved?" check are a hash plus a single `stat`, no directory scan. Identity is the normalized
-*visited* URL (the `canonical_url` is stored as metadata but not used as the key).
+makes a reading one movable unit, and makes deletion a single guarded folder removal. Article
+identity remains the normalized visited URL. Image/video identity combines the kind, normalized
+origin page, and media identity. That identity is the durable media URL or, for session-local video
+streams, a stable page-and-element reference. Quote identity combines the normalized origin page
+and normalized selected Markdown. Exact repeat saves therefore deduplicate while multiple clips
+from one page can coexist.
+
+The card metadata is additive and backwards compatible:
+
+- `kind`: `article`, `image`, `video`, or `quote` (missing means `article`).
+- `media_url`: optional image/video identity: normally a durable direct address, or an opaque stable
+  reference for a session-local video stream. The page origin remains in `url`.
+- `preview_asset`: optional safe `assets/<file>` path derived after the host writes captured image
+  bytes. It drives the board thumbnail and is never a remote URL.
 
 - **Frontmatter is the source of truth** for metadata (title, tags, read/archive/favorite/rating
   state, …). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the

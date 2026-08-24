@@ -1,6 +1,6 @@
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "ok": false,
   "error": "library_not_configured",
-  "message": "No library folder has been set. Open the ReadControl app to configure one."
+  "message": "No library folder has been set. Open the Cuttings app to configure one."
 }

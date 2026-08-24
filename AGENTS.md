@@ -1,4 +1,4 @@
-# AGENTS.md — ReadControl
+# AGENTS.md — Cuttings
 
 > Guidance for humans and AI agents working in this repository.
 > This file is the project's north star: it explains **what we are building, why, and the
@@ -7,12 +7,13 @@
 
 ## What this is
 
-**ReadControl** is a local-first, single-user "save it now, read it later" system.
+**Cuttings** is a local-first, single-user "save it now, keep it forever" system.
 
-You save a web page from your browser; it is stripped of clutter and stored as a **Markdown
-file on your own disk**. A native app lets you browse, read, search, and tag your saved
-readings. There are no accounts, no servers, no logins, no telemetry. Your readings are plain
-files that you own and can read with any text editor forever.
+You save a web page, a right-clicked image or video, or selected text from your browser. Each save
+becomes a **Markdown file plus local assets on your own disk**. A native app lets you browse the
+result as a mixed visual board, read articles, inspect media and quotes, search, tag, and rate every
+card. There are no accounts, no servers, no logins, no telemetry. The files remain usable without
+this app.
 
 ## Core principles
 
@@ -36,7 +37,7 @@ These are load-bearing. Most architectural questions resolve by appealing to one
    is *derived* from the files and can be rebuilt from scratch by re-scanning the library.
    - Never store anything in the DB that cannot be recovered from the files.
    - **Never put the DB inside the synced library folder, and never sync it.** It lives
-     per-device (e.g. `~/Library/Application Support/ReadControl/`).
+     per-device (e.g. `~/Library/Application Support/Cuttings/`).
    - Store **relative** paths (from the library root), never absolute paths — they differ per
      device.
 
@@ -46,8 +47,10 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 
 ## Features (the product)
 
-- **Save to read later** — browser plugin. Capture and clean the current page, save it locally.
-- **List of readings** — native app. Browse the library, organized by smart views:
+- **Save from the browser** — browser extension. Capture a cleaned article, right-clicked image or
+  video, or selected-text quote and save it locally with its origin.
+- **Visual card board** — native app. Browse articles, images, videos, and quotes in a mixed
+  masonry layout, organized by smart views:
   **All**, **Unread**, **Archive**, **Favorites**.
 - **Search** — native app. Full-text search over readings (title, content, tags) via SQLite
   FTS5. Word-occurrence lookup and word meanings are noted as future ideas, not v1 scope.
@@ -55,42 +58,59 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   macOS mockup's "Lists" section is implemented as **Tags** — manual Lists are not planned.)
 - **Item states** — native app. Mark readings **read/unread**, **favorite**, and **archive**
   (stored in frontmatter).
+- **Card kind** — every reading is an **article**, **image**, **video**, or **quote**. Older files
+  without a kind remain articles.
+- **Origin** — every kind retains the originating page URL, canonical URL, page title/site, and
+  save date. Image/video `media_url` is additional and never replaces the page origin.
 - **Appearance** — native app. Light/Dark/System theme and adjustable reader typography
   (font, size, width, line height), stored as per-device preferences (not synced).
 
 > The macOS UI is specified in [DESIGN.md](./DESIGN.md). An in-app **"Add Link"** (paste a URL)
-> appears in the mockup but is **deferred** — page capture stays in the browser plugin for now.
+> appears in the mockup but is **deferred** — page capture stays in the browser extension for now.
 
 ## Decisions already made
 
 - Markdown + YAML frontmatter as the storage format; files are the source of truth.
-- HTML cleanup runs in the plugin (it has the live DOM).
+- HTML cleanup runs in the extension (it has the live DOM).
 - All logic in a Rust core crate; native UIs are thin and share it.
 - The index is SQLite + FTS5, rebuildable, per-device, never synced.
-- Use a **content-addressed id** — `SHA256(normalize(url))` — as the reading-folder name and
-  frontmatter id; it doubles as the O(1) dedup key (hash the URL, stat the folder). Normalize URLs
-  (strip `utm_*`, `fbclid`, etc.); `canonical_url` is stored as metadata, not the identity key.
+- Use a deterministic **content-addressed id** as the reading-folder name and frontmatter id; it
+  doubles as the O(1) dedup key. Articles hash the normalized origin URL. Media hash kind + origin
+  + media identity; quotes hash origin + normalized selected Markdown. `canonical_url` is origin
+  metadata, not a substitute identity key.
 - Start native clients with macOS / Swift (SwiftUI) via UniFFI.
 - **Search (v1) is full-text over readings** (title, content, tags) using SQLite FTS5. Design
   the schema so word-occurrence lookup and a vector column can be added later without migration
   pain — but they are not v1 scope.
-- **The plugin saves via a native messaging host** (thin wrapper over `core`), not
+- **The extension saves via a native messaging host** (thin wrapper over `core`), not
   the Downloads API.
 - **Images are captured by the extension and written into the library** in each reading's own
   `assets/` folder (`articles/<prefix>/<id>/assets/`) with relative `assets/<file>` links, so saved
   readings stay readable offline and survive the source going away. The
   extension fetches each image (reusing the browser's cache) and sends the bytes; the host writes
   them and never makes network requests of its own.
+- **Standalone media and quotes are first-class saves.** Articles retain their URL-derived id.
+  Image/video ids derive from kind + origin page + media identity; quote ids derive from origin
+  page + selected Markdown. This lets several cards coexist from one page while exact re-saves
+  deduplicate deterministically.
+- **Video capture records rather than downloads.** The extension stores the direct video URL and,
+  when available, captures its poster as a local preview asset. Session-local streams get a stable
+  opaque capture reference and link back to the source page. The extension does not buffer
+  arbitrary video files into native-messaging JSON.
+- **The macOS home is a search-first masonry board.** The old three-column sidebar/list shell is
+  superseded in this fork. Articles still use the existing native Markdown reader in the card
+  detail overlay; no WebView is introduced.
 - **The organizing model is Tags** (labels in frontmatter), not manual Lists. Smart views
   **All / Unread / Archive / Favorites** are backed by the frontmatter fields `read`,
   `archived`, and `favorite`.
 - **UI preferences** (theme, reader font/size/width/line height) are per-device app
   preferences — not stored in the library and not synced.
-- **In-app "Add Link" is deferred.** Page capture stays in the browser plugin; there is no
+- **In-app "Add Link" is deferred.** Page capture stays in the browser extension; there is no
   engine-side fetch/extraction for now. See [DESIGN.md](./DESIGN.md).
-- **Name:** the product is **ReadControl** (readcontrol.app); shown to end users as "ReadControl".
+- **Name:** the product name is **Cuttings** and the internal slug is **cuttings**. Product-facing,
+  repository, bundle, Rust, and native-host identifiers use this name consistently.
 - **License / openness:** the project is **open source, multi-licensed by component**. The
-  **browser plugin, engine (`core`), and native
+  **browser extension, engine (`core`), and native
   host are MIT** — as permissive as possible to drive adoption and let anyone embed them. The
   **macOS client is GPL-3.0-or-later** — public, but anyone distributing a modified client must
   share their changes. MIT is GPL-compatible, so the GPL client can embed the MIT engine while
@@ -159,7 +179,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>  ← AI co-author traile
   *then* letting the row jump on the later refresh reads as a two-stage stutter; one motion (the
   Mail model) does not. Membership *ordering* still settles on the refresh.
 - Keep everything offline-capable; no network calls are required for core features.
-- This is a **polyrepo**: plugin, engine+host, and client are separate repos. The library format
+- This is a **polyrepo**: extension, engine+host, and client are separate repos. The library format
   and the native-messaging message contract are the cross-repo contracts — change them in
   lockstep across repos.
 - Each sub-project (`core/`, `extension/`, `macos/`) is an

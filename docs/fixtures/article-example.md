@@ -4,6 +4,7 @@ id: 1146c9a93631d1991af3252dbc49ecd8043ab354a4386e397d555d1ca21a7199
 url: https://blog.example.com/posts/local-first?utm_source=hn
 canonical_url: https://blog.example.com/posts/local-first
 title: Local-First Software
+kind: article
 author: Martin Kleppmann
 site: blog.example.com
 saved_at: 2026-06-13T15:00:00Z
