@@ -51,7 +51,7 @@ make test       # runs the unit suite (CuttingsTests) then the UI suite (Cutting
 Both are dependency-free (Xcode + the macOS SDK only). Run one suite or test while iterating:
 
 ```bash
-xcodebuild test -scheme Cuttings -only-testing:CuttingsTests
+xcodebuild test -project Cuttings.xcodeproj -scheme Cuttings -only-testing:CuttingsTests
 ```
 
 ## Format & lint

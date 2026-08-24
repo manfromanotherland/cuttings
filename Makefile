@@ -1,4 +1,4 @@
-# Build helpers for the cuttings macOS app.
+# Build helpers for the Cuttings macOS app.
 # Run these on macOS from the macos/ directory.
 #
 # Prerequisites:
@@ -41,7 +41,7 @@ xcodegen:
 ## (CuttingsTests) before the UI suite, so logic regressions surface first.
 ## Assumes `make all` has generated the framework, bindings, and project.
 test:
-	xcodebuild test -scheme Cuttings
+	xcodebuild test -project Cuttings.xcodeproj -scheme Cuttings
 
 ## Build a Release .app and wrap it in a distributable .dmg (dist/Cuttings.dmg).
 ## Ad-hoc signed only (local testing) — for a shippable build use `make release`.

@@ -51,7 +51,10 @@ targets:
           set -e
           # Xcode runs build phases with a sanitized PATH that omits ~/.cargo/bin,
           # so make cargo discoverable before invoking it.
-          source "$HOME/.cargo/env" 2>/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
+          if [ -f "$HOME/.cargo/env" ]; then
+            . "$HOME/.cargo/env"
+          fi
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/rustup/bin:$PATH"
           CORE="${SRCROOT}/../core"
           cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin cuttings-native-host
           SRC="${CORE}/target/release/cuttings-native-host"
