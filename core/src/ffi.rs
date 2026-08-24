@@ -15,7 +15,7 @@ use std::{
 use crate::{
     list::{CountScope, ListOptions, SortField, View},
     scanner::ScannedReading,
-    LibraryRoot,
+    LibraryRoot, ReadingKind,
 };
 
 // ── Error ────────────────────────────────────────────────────────────────────
@@ -37,7 +37,10 @@ fn e(err: impl std::fmt::Display) -> CoreError {
 pub struct FfiReadingRow {
     pub id: String,
     pub title: String,
+    pub kind: FfiReadingKind,
     pub url: String,
+    pub media_url: Option<String>,
+    pub preview_asset: Option<String>,
     pub canonical_url: String,
     pub author: Option<String>,
     pub site: Option<String>,
@@ -89,6 +92,14 @@ pub struct FfiHighlight {
 }
 
 #[derive(uniffi::Enum)]
+pub enum FfiReadingKind {
+    Article,
+    Image,
+    Video,
+    Quote,
+}
+
+#[derive(uniffi::Enum)]
 pub enum FfiView {
     All,
     Unread,
@@ -114,6 +125,7 @@ pub struct FfiListOptions {
     pub ascending: bool,
     pub tag: Option<String>,
     pub rating: Option<u8>,
+    pub kind: Option<FfiReadingKind>,
     pub since: Option<String>,
     pub until: Option<String>,
     pub query: Option<String>,
@@ -121,16 +133,17 @@ pub struct FfiListOptions {
     pub offset: u32,
 }
 
-/// The active sidebar filters behind the faceted counts. All four compose as an
-/// intersection — the current search, the selected smart view, the selected tag,
-/// and the selected rating (at most one of each, any may be unset; `view`
-/// defaults to `All`). Each count query ignores its own axis — see
-/// [`crate::list::CountScope`].
+/// The active sidebar filters behind the faceted counts. All five compose as an
+/// intersection — the current search, selected smart view, selected tag,
+/// selected rating, and selected content kind (at most one of each, any may be
+/// unset; `view` defaults to `All`). Each count query ignores its own facet axis
+/// while kind always composes — see [`crate::list::CountScope`].
 #[derive(uniffi::Record)]
 pub struct FfiCountScope {
     pub view: FfiView,
     pub tag: Option<String>,
     pub rating: Option<u8>,
+    pub kind: Option<FfiReadingKind>,
     pub query: Option<String>,
 }
 
@@ -141,7 +154,10 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
         Self {
             id: r.id,
             title: r.title,
+            kind: r.kind.into(),
             url: r.url,
+            media_url: r.media_url,
+            preview_asset: r.preview_asset,
             canonical_url: r.canonical_url,
             author: r.author,
             site: r.site,
@@ -154,6 +170,28 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             word_count: r.word_count,
             lang: r.lang,
             tags: r.tags,
+        }
+    }
+}
+
+impl From<ReadingKind> for FfiReadingKind {
+    fn from(kind: ReadingKind) -> Self {
+        match kind {
+            ReadingKind::Article => Self::Article,
+            ReadingKind::Image => Self::Image,
+            ReadingKind::Video => Self::Video,
+            ReadingKind::Quote => Self::Quote,
+        }
+    }
+}
+
+impl From<FfiReadingKind> for ReadingKind {
+    fn from(kind: FfiReadingKind) -> Self {
+        match kind {
+            FfiReadingKind::Article => Self::Article,
+            FfiReadingKind::Image => Self::Image,
+            FfiReadingKind::Video => Self::Video,
+            FfiReadingKind::Quote => Self::Quote,
         }
     }
 }
@@ -215,6 +253,7 @@ impl From<FfiCountScope> for CountScope {
             view: s.view.into(),
             tag: s.tag,
             rating: s.rating,
+            kind: s.kind.map(Into::into),
             query: s.query,
         }
     }
@@ -234,6 +273,7 @@ impl From<FfiListOptions> for ListOptions {
             ascending: o.ascending,
             tag: o.tag,
             rating: o.rating,
+            kind: o.kind.map(Into::into),
             since: o.since,
             until: o.until,
             query: o.query,

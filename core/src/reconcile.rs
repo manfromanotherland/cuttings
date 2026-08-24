@@ -50,13 +50,16 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
     conn.execute(
         "INSERT OR REPLACE INTO readings
-         (id, url, canonical_url, title, author, site, saved_at,
+         (id, kind, url, media_url, preview_asset, canonical_url, title, author, site, saved_at,
           read_at, archived, favorite, rating, source_hash, excerpt, word_count,
           lang, tags_json, body_text)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)",
         params![
             r.metadata.id,
+            r.metadata.kind.as_str(),
             r.metadata.url,
+            r.metadata.media_url,
+            r.metadata.preview_asset,
             r.metadata.canonical_url,
             r.metadata.title,
             r.metadata.author,
@@ -81,14 +84,17 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
     conn.execute(
         "UPDATE readings SET
-         url=?2, canonical_url=?3, title=?4, author=?5, site=?6,
-         saved_at=?7, read_at=?8, archived=?9, favorite=?10, rating=?11,
-         source_hash=?12, excerpt=?13, word_count=?14, lang=?15,
-         tags_json=?16, body_text=?17
+         kind=?2, url=?3, media_url=?4, preview_asset=?5, canonical_url=?6,
+         title=?7, author=?8, site=?9, saved_at=?10, read_at=?11,
+         archived=?12, favorite=?13, rating=?14, source_hash=?15,
+         excerpt=?16, word_count=?17, lang=?18, tags_json=?19, body_text=?20
          WHERE id=?1",
         params![
             r.metadata.id,
+            r.metadata.kind.as_str(),
             r.metadata.url,
+            r.metadata.media_url,
+            r.metadata.preview_asset,
             r.metadata.canonical_url,
             r.metadata.title,
             r.metadata.author,
@@ -197,6 +203,37 @@ mod tests {
         rebuild(&conn, &lib).unwrap();
         rebuild(&conn, &lib).unwrap();
         assert_eq!(row_count(&conn), 1);
+    }
+
+    #[test]
+    fn rebuild_indexes_media_metadata() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let conn = open(&dir.path().join("index.db")).unwrap();
+        let id = new_id();
+        let mut metadata = sample_meta(&id, "https://example.com/gallery");
+        metadata.kind = crate::ReadingKind::Image;
+        metadata.media_url = Some("https://cdn.example.com/photo.jpg".into());
+        metadata.preview_asset = Some("assets/photo.jpg".into());
+        write_reading(&lib, metadata, "![Photo](assets/photo.jpg)".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let values: (String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT kind, media_url, preview_asset FROM readings WHERE id = ?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            values,
+            (
+                "image".into(),
+                Some("https://cdn.example.com/photo.jpg".into()),
+                Some("assets/photo.jpg".into())
+            )
+        );
     }
 
     #[test]

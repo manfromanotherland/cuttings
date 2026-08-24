@@ -3,6 +3,8 @@
 use anyhow::Result;
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 
+use crate::ReadingKind;
+
 /// Smart-view filter applied when listing readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -52,6 +54,8 @@ pub struct ListOptions {
     pub tag: Option<String>,
     /// Restrict to readings with this exact star rating, 1–5. `None` = no filter.
     pub rating: Option<u8>,
+    /// Restrict to one persisted content kind. `None` includes every kind.
+    pub kind: Option<ReadingKind>,
     /// ISO-8601 lower bound on `saved_at` (inclusive).
     pub since: Option<String>,
     /// ISO-8601 upper bound on `saved_at` (inclusive).
@@ -71,6 +75,7 @@ impl Default for ListOptions {
             ascending: false,
             tag: None,
             rating: None,
+            kind: None,
             since: None,
             until: None,
             query: None,
@@ -85,7 +90,10 @@ impl Default for ListOptions {
 pub struct ReadingRow {
     pub id: String,
     pub title: String,
+    pub kind: ReadingKind,
     pub url: String,
+    pub media_url: Option<String>,
+    pub preview_asset: Option<String>,
     pub canonical_url: String,
     pub author: Option<String>,
     pub site: Option<String>,
@@ -139,9 +147,10 @@ pub struct SidebarCounts {
     pub ratings: Vec<(u8, u64)>,
 }
 
-/// The active sidebar filters that scope the faceted counts. All four fields
+/// The active sidebar filters that scope the faceted counts. All five fields
 /// compose as an intersection — the current search, the selected smart view, the
-/// selected tag, and the selected rating (`View ∩ Tag ∩ Rating ∩ Search`). The UI
+/// selected tag, selected rating, and selected kind
+/// (`View ∩ Tag ∩ Rating ∩ Kind ∩ Search`). The UI
 /// lets at most one of each be active at a time, and any may be unset (`view`
 /// defaults to `All`, the unfiltered base; the rest to `None`).
 ///
@@ -162,6 +171,8 @@ pub struct CountScope {
     /// The selected rating, if one is active. Constrains the view and tag counts;
     /// ignored by [`list_ratings`].
     pub rating: Option<u8>,
+    /// The selected content kind. It composes with every sidebar count section.
+    pub kind: Option<ReadingKind>,
     /// The active full-text query. Composes with every facet. `None` means no
     /// search; a present-but-unmatchable query scopes every count to zero,
     /// mirroring [`list_readings`].
@@ -174,6 +185,7 @@ impl Default for CountScope {
             view: View::All,
             tag: None,
             rating: None,
+            kind: None,
             query: None,
         }
     }
@@ -259,6 +271,11 @@ pub(crate) fn count_where(
         }
     }
 
+    if let Some(kind) = scope.kind {
+        vals.push(Value::Text(kind.as_str().to_string()));
+        clauses.push(format!("readings.kind = ?{}", vals.len()));
+    }
+
     // A search composes with every facet; the caller resolved it once so counts
     // and results always agree. An unmatchable search means the whole count is
     // empty.
@@ -338,6 +355,11 @@ pub(crate) fn pinned_count_filter(
         Facet::View => unreachable!("view is the presence axis, never a sibling"),
     }
 
+    if let Some(kind) = scope.kind {
+        vals.push(Value::Text(kind.as_str().to_string()));
+        conds.push(format!("readings.kind = ?{}", vals.len()));
+    }
+
     conds.join(" AND ")
 }
 
@@ -406,7 +428,7 @@ pub fn sidebar_counts(conn: &Connection, scope: &CountScope) -> Result<SidebarCo
 /// List readings from the index according to `opts`.
 ///
 /// When `opts.query` is set, rows are filtered through the full-text index
-/// (composing with the view/tag/rating/date filters) and rank by BM25 under
+/// (composing with the view/tag/rating/kind/date filters) and rank by BM25 under
 /// `SortField::Relevance`. Otherwise this is a plain listing over the `readings`
 /// table.
 pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
@@ -436,17 +458,18 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     };
 
     // Optional filters use sentinel values (empty string / 0) so the SQL is
-    // always static with exactly 6 bound parameters — no dynamic param count.
+    // always static with exactly 7 bound parameters — no dynamic param count.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, read_at
+                rating, read_at, kind, media_url, preview_asset
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
            AND (?4 = '' OR saved_at >= ?4)
            AND (?5 = '' OR saved_at <= ?5)
            AND (?6 = 0 OR rating = ?6)
+           AND (?7 = '' OR kind = ?7)
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -457,6 +480,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let since_val = opts.since.as_deref().unwrap_or("");
     let until_val = opts.until.as_deref().unwrap_or("");
     let rating_val = opts.rating.unwrap_or(0) as i64;
+    let kind_val = opts.kind.map(ReadingKind::as_str).unwrap_or("");
 
     let rows = stmt.query_map(
         params![
@@ -465,7 +489,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
             tag_val,
             since_val,
             until_val,
-            rating_val
+            rating_val,
+            kind_val
         ],
         parse_row,
     )?;
@@ -480,13 +505,13 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
     let mut stmt = conn.prepare(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, read_at, body_text
+                rating, read_at, kind, media_url, preview_asset, body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(16)?;
+        let body: String = row.get(19)?;
         Ok((row_data, body))
     })?;
 
@@ -498,7 +523,7 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
 
 /// Full-text variant of [`list_readings`]: filter rows through the FTS index
 /// with `match_query` and rank by BM25 (`SortField::Relevance`) or the requested
-/// field — all while honouring the view/tag/rating/date filters and pagination.
+/// field — all while honouring the view/tag/rating/kind/date filters and pagination.
 fn list_readings_fts(
     conn: &Connection,
     opts: &ListOptions,
@@ -521,15 +546,16 @@ fn list_readings_fts(
     let sql = format!(
         "SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
                 (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
-                r.lang, r.tags_json, r.rating, r.read_at
+                r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset
          FROM readings_fts
          JOIN readings r ON r.rowid = readings_fts.rowid
-         WHERE readings_fts MATCH ?7
+         WHERE readings_fts MATCH ?8
            AND {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
            AND (?4 = '' OR r.saved_at >= ?4)
            AND (?5 = '' OR r.saved_at <= ?5)
            AND (?6 = 0 OR r.rating = ?6)
+           AND (?7 = '' OR r.kind = ?7)
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -539,6 +565,7 @@ fn list_readings_fts(
     let since_val = opts.since.as_deref().unwrap_or("");
     let until_val = opts.until.as_deref().unwrap_or("");
     let rating_val = opts.rating.unwrap_or(0) as i64;
+    let kind_val = opts.kind.map(ReadingKind::as_str).unwrap_or("");
 
     let rows = stmt.query_map(
         params![
@@ -548,6 +575,7 @@ fn list_readings_fts(
             since_val,
             until_val,
             rating_val,
+            kind_val,
             match_query
         ],
         parse_row,
@@ -562,7 +590,10 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
     Ok(ReadingRow {
         id: row.get(0)?,
         title: row.get(1)?,
+        kind: parse_kind(row.get::<_, String>(16)?.as_str())?,
         url: row.get(2)?,
+        media_url: row.get(17)?,
+        preview_asset: row.get(18)?,
         canonical_url: row.get(3)?,
         author: row.get(4)?,
         site: row.get(5)?,
@@ -577,6 +608,23 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         rating: row.get::<_, i32>(14)? as u8,
         read_at: row.get(15)?,
     })
+}
+
+fn parse_kind(value: &str) -> rusqlite::Result<ReadingKind> {
+    match value {
+        "article" => Ok(ReadingKind::Article),
+        "image" => Ok(ReadingKind::Image),
+        "video" => Ok(ReadingKind::Video),
+        "quote" => Ok(ReadingKind::Quote),
+        other => Err(rusqlite::Error::FromSqlConversionFailure(
+            16,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid reading kind: {other}"),
+            )),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -1345,6 +1393,130 @@ mod tests {
         let (row, body) = result.unwrap();
         assert_eq!(row.title, "My Article");
         assert!(body.contains("hello world"));
+    }
+
+    #[test]
+    fn list_row_carries_media_metadata() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let id = new_id();
+        let mut metadata = meta(&id, "https://example.com/gallery", "Photo");
+        metadata.kind = ReadingKind::Image;
+        metadata.media_url = Some("https://cdn.example.com/photo.jpg".into());
+        metadata.preview_asset = Some("assets/photo.jpg".into());
+        write_reading(&lib, metadata, "![Photo](assets/photo.jpg)".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let row = list_readings(&conn, &ListOptions::default())
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(row.kind, ReadingKind::Image);
+        assert_eq!(
+            row.media_url.as_deref(),
+            Some("https://cdn.example.com/photo.jpg")
+        );
+        assert_eq!(row.preview_asset.as_deref(), Some("assets/photo.jpg"));
+    }
+
+    #[test]
+    fn kind_filter_is_applied_before_pagination() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        for (title, kind) in [
+            ("Article", ReadingKind::Article),
+            ("Image A", ReadingKind::Image),
+            ("Quote", ReadingKind::Quote),
+            ("Image B", ReadingKind::Image),
+        ] {
+            let id = new_id();
+            let mut metadata = meta(&id, &format!("https://example.com/{id}"), title);
+            metadata.kind = kind;
+            write_reading(&lib, metadata, "shared body".into()).unwrap();
+        }
+        rebuild(&conn, &lib).unwrap();
+
+        let page = |offset| {
+            list_readings(
+                &conn,
+                &ListOptions {
+                    kind: Some(ReadingKind::Image),
+                    limit: 1,
+                    offset,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        };
+        let first = page(0);
+        let second = page(1);
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert!(page(2).is_empty());
+        assert_eq!(first[0].kind, ReadingKind::Image);
+        assert_eq!(second[0].kind, ReadingKind::Image);
+        assert_ne!(first[0].id, second[0].id);
+    }
+
+    #[test]
+    fn quote_kind_filter_composes_with_full_text_search() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        for (title, kind) in [
+            ("Article", ReadingKind::Article),
+            ("Saved quote", ReadingKind::Quote),
+        ] {
+            let id = new_id();
+            let mut metadata = meta(&id, &format!("https://example.com/{id}"), title);
+            metadata.kind = kind;
+            write_reading(&lib, metadata, "shared searchable phrase".into()).unwrap();
+        }
+        rebuild(&conn, &lib).unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                kind: Some(ReadingKind::Quote),
+                query: Some("searchable".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, ReadingKind::Quote);
+    }
+
+    #[test]
+    fn sidebar_counts_compose_with_kind() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        for (title, kind, tag, rating) in [
+            ("Photo", ReadingKind::Image, "visual", 5),
+            ("Quote", ReadingKind::Quote, "words", 4),
+            ("Article", ReadingKind::Article, "visual", 5),
+        ] {
+            let id = new_id();
+            let mut metadata = meta(&id, &format!("https://example.com/{id}"), title);
+            metadata.kind = kind;
+            metadata.tags = vec![tag.into()];
+            metadata.rating = rating;
+            write_reading(&lib, metadata, "body".into()).unwrap();
+        }
+        rebuild(&conn, &lib).unwrap();
+
+        let counts = sidebar_counts(
+            &conn,
+            &CountScope {
+                kind: Some(ReadingKind::Image),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(counts.views.all, 1);
+        assert_eq!(counts.views.unread, 1);
+        assert_eq!(counts.tags, vec![("visual".into(), 1), ("words".into(), 0)]);
+        assert_eq!(counts.ratings, vec![(5, 1), (4, 0)]);
     }
 
     #[test]

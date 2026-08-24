@@ -40,10 +40,9 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 1 {
         migrate_v1(conn)?;
     }
-    // Future schema changes append here as new, monotonically-numbered steps —
-    // never edit `migrate_v1`, add `if version < 2 { migrate_v2(conn)?; }` and a
-    // matching `migrate_v2` that alters the schema forward and stamps
-    // `PRAGMA user_version = 2`.
+    if version < 2 {
+        migrate_v2(conn)?;
+    }
     Ok(())
 }
 
@@ -117,6 +116,30 @@ fn migrate_v1(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v2: distinguish articles, images, videos, and quotes and expose local previews.
+///
+/// Existing rows become articles; media and preview paths remain absent. The
+/// columns are derived from frontmatter and therefore remain disposable cache
+/// data like the rest of the index.
+fn migrate_v2(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings
+            ADD COLUMN kind TEXT NOT NULL DEFAULT 'article'
+            CHECK (kind IN ('article', 'image', 'video', 'quote'));
+        ALTER TABLE readings ADD COLUMN media_url TEXT;
+        ALTER TABLE readings ADD COLUMN preview_asset TEXT;
+
+        PRAGMA user_version = 2;
+
+        COMMIT;
+        ",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,7 +158,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
 
         // readings table exists
         let count: i64 = conn
@@ -248,7 +271,10 @@ mod tests {
 
         for col in &[
             "id",
+            "kind",
             "url",
+            "media_url",
+            "preview_asset",
             "canonical_url",
             "title",
             "read_at",
@@ -267,5 +293,45 @@ mod tests {
             !columns.contains(&"read".to_string()),
             "legacy `read` column should be dropped"
         );
+    }
+
+    #[test]
+    fn v2_migrates_existing_rows_to_article_defaults() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            migrate_v1(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO readings
+                 (id, url, canonical_url, title, saved_at, source_hash)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![
+                    "legacy-id",
+                    "https://example.com/legacy",
+                    "https://example.com/legacy",
+                    "Legacy",
+                    "2026-06-13T15:00:00Z",
+                    "sha256:abc"
+                ],
+            )
+            .unwrap();
+        }
+
+        let conn = open(&db_path).unwrap();
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+
+        let values: (String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT kind, media_url, preview_asset FROM readings WHERE id = 'legacy-id'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(values, ("article".into(), None, None));
     }
 }
