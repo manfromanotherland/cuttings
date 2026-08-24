@@ -50,6 +50,7 @@ mkdir -p "$(dirname "$UNIVERSAL_LIB")"
 lipo -create "$ARM_LIB" "$X86_LIB" -output "$UNIVERSAL_LIB"
 
 echo "==> Generating Swift bindings"
+rm -rf "$SWIFT_DIR"
 mkdir -p "$SWIFT_DIR"
 cargo run \
     --manifest-path "$WORKSPACE_DIR/Cargo.toml" \
