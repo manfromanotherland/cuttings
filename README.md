@@ -66,13 +66,10 @@ make lint       # swiftlint lint — reports remaining violations
 
 ## Software updates (Sparkle)
 
-The app ships in-app updates via [Sparkle](https://sparkle-project.org), added as a Swift Package.
-A **Check for Updates…** item sits in the app menu below *About Cuttings*. Sparkle reads two
-keys from `Sources/Cuttings/App/Info.plist`:
-
-- `SUFeedURL` — the appcast feed, set to `https://www.cuttings.app/appcast.xml`.
-- `SUPublicEDKey` — your Sparkle EdDSA public key (currently a placeholder; set it before your
-  first public release, as it's baked into every shipped build).
+The project includes [Sparkle](https://sparkle-project.org), but update checks are deliberately
+dormant until Cuttings has an official appcast URL and signing key. Before the first public release,
+add `SUFeedURL` and `SUPublicEDKey` to `Sources/Cuttings/App/Info.plist`, start the updater, and add
+`UpdateCommands` to `CuttingsApp`'s command group.
 
 ### Shipping a release
 
@@ -87,8 +84,8 @@ make release
 ```
 
 It needs a Developer ID Application certificate and a notarytool profile (created once with
-`xcrun notarytool store-credentials`). Then upload the `.dmg` to GitHub Releases and add an
-`<item>` to `appcast.xml` in the `website` repo.
+`xcrun notarytool store-credentials`). Then upload the `.dmg` and add an `<item>` to the official
+appcast once that feed exists.
 
 `make dmg` is the ad-hoc, local-testing path only (not notarized).
 

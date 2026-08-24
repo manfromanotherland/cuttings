@@ -4,7 +4,7 @@ import Sparkle
 import SwiftUI
 
 /// The "Check for Updates…" item, placed in the app menu just below "About
-/// Cuttings".
+/// Cuttings" once an official Cuttings appcast is available.
 ///
 /// It is always enabled. Sparkle's `SPUUpdater.canCheckForUpdates` — which would
 /// let us grey the item out while a check is in flight — is `@MainActor`-isolated,

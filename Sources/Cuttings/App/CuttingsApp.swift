@@ -9,9 +9,8 @@ struct CuttingsApp: App {
     @State private var appState = AppState()
     @AppStorage("appearanceMode", store: AppDefaults.store) private var appearanceMode: AppearanceMode = .system
 
-    /// Sparkle's updater. It reads its feed URL and EdDSA public key from
-    /// Info.plist (`SUFeedURL` / `SUPublicEDKey`), so there is nothing to wire up
-    /// here beyond owning it and exposing the "Check for Updates…" command.
+    /// Sparkle remains bundled for the release pipeline, but stays dormant until
+    /// Cuttings has an official appcast URL and signing key.
     private let updaterController: SPUStandardUpdaterController
 
     init() {
@@ -19,12 +18,10 @@ struct CuttingsApp: App {
         // "New Tab", "Show Tab Bar", and "Move Tab to New Window" items never appear.
         NSWindow.allowsAutomaticWindowTabbing = false
 
-        // Keep the updater dormant under UI testing: the XCUITest suite runs
-        // against a throwaway library and must stay offline and non-interactive,
-        // so we never start background checks that could fire a "new version
-        // available" dialog and steal focus mid-test.
+        // There is no public Cuttings update feed yet, so background checks and
+        // the manual update command remain disabled in every build.
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: !TestHooks.isUITesting,
+            startingUpdater: false,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
@@ -46,7 +43,6 @@ struct CuttingsApp: App {
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
             CommandGroup(replacing: .newItem) {}
-            UpdateCommands(updater: updaterController.updater)
             ArticleCommands(appState: appState)
             TypographyCommands()
             AppearanceCommands(appearanceMode: $appearanceMode)

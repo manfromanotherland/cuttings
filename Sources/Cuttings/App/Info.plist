@@ -26,9 +26,5 @@
     <string>Local-first Cuttings app.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
-    <key>SUFeedURL</key>
-    <string>https://www.cuttings.app/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>fT6DkWgi8AWRySFcpI1iEnoLuijq1WIYg9sGpvzruro=</string>
 </dict>
 </plist>
