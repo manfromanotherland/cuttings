@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: MIT
+
+use serde::{Deserialize, Serialize};
+
+use cuttings_core::ReadingKind;
+
+/// The wire protocol version shared with the browser extension.
+pub const PROTOCOL_VERSION: u32 = 2;
+
+/// Incoming save request from the browser extension.
+#[derive(Debug, Deserialize)]
+pub struct SaveRequest {
+    pub protocol_version: u32,
+    pub action: String,
+    pub metadata: RequestMetadata,
+    pub markdown: String,
+    /// Image bytes captured by the extension. The host writes these to disk; it
+    /// never downloads anything itself.
+    pub images: Vec<RequestImage>,
+}
+
+/// One image, captured and base64-encoded by the extension.
+#[derive(Debug, Deserialize)]
+pub struct RequestImage {
+    /// The URL exactly as it appears in `markdown`, used to rewrite the link.
+    pub url: String,
+    /// The `Content-Type` the browser saw, used to pick a file extension.
+    #[serde(default)]
+    pub content_type: String,
+    /// Standard base64 of the raw image bytes.
+    pub data_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestMetadata {
+    #[serde(default)]
+    pub kind: ReadingKind,
+    pub url: String,
+    #[serde(default)]
+    pub media_url: Option<String>,
+    pub canonical_url: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub site: Option<String>,
+    pub lang: Option<String>,
+    pub excerpt: Option<String>,
+    pub word_count: Option<u32>,
+    pub saved_at: String,
+}
+
+/// Incoming check request — asks whether a URL is already in the library.
+#[derive(Debug, Deserialize)]
+pub struct CheckRequest {
+    pub protocol_version: u32,
+    pub url: String,
+}
+
+/// Outgoing response to the browser extension (shared by save and check actions).
+#[derive(Debug, Serialize)]
+pub struct SaveResponse {
+    pub protocol_version: u32,
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Present only in responses to a `check` action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saved: Option<bool>,
+}
+
+impl SaveResponse {
+    pub fn success(id: String, path: String) -> Self {
+        Self {
+            protocol_version: PROTOCOL_VERSION,
+            ok: true,
+            id: Some(id),
+            path: Some(path),
+            error: None,
+            message: None,
+            saved: None,
+        }
+    }
+
+    pub fn error(code: &str, msg: &str) -> Self {
+        Self {
+            protocol_version: PROTOCOL_VERSION,
+            ok: false,
+            id: None,
+            path: None,
+            error: Some(code.to_string()),
+            message: Some(msg.to_string()),
+            saved: None,
+        }
+    }
+
+    pub fn check(is_saved: bool, id: Option<String>) -> Self {
+        Self {
+            protocol_version: PROTOCOL_VERSION,
+            ok: true,
+            saved: Some(is_saved),
+            id,
+            path: None,
+            error: None,
+            message: None,
+        }
+    }
+}

@@ -1,0 +1,27 @@
+[package]
+name = "cuttings-core"
+description = "Engine library for Cuttings."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+ulid = "1"
+url = "2"
+sha2 = "0.10"
+hex = "0.4"
+anyhow = "1"
+rusqlite = { version = "0.32", features = ["bundled", "trace"] }
+thiserror = "1"
+uniffi = "0.29"
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
