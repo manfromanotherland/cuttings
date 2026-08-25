@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 use std::collections::HashSet;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write as _;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 
 use crate::locking::{lock_reading, ReadingLock};
 use crate::types::LibraryRoot;
@@ -57,7 +58,7 @@ pub(crate) fn write_images_under_lock(
             continue;
         }
         let hash = sha256_hex(&image.bytes);
-        let ext = ext_for(&image.content_type, &image.url);
+        let ext = image_extension(&image.content_type, &image.url);
         let filename = format!("{hash}.{ext}");
         if fs::write(assets_dir.join(&filename), &image.bytes).is_ok() {
             // The article file (article.md) and its assets/ folder are siblings
@@ -67,6 +68,87 @@ pub(crate) fn write_images_under_lock(
         }
     }
     Ok(result)
+}
+
+/// Write every supplied import image atomically or fail the whole operation.
+///
+/// Browser captures intentionally use [`write_images_under_lock`] because one
+/// unavailable page image should not discard an otherwise useful article. An
+/// imported image is the reading itself, so committing `article.md` without its
+/// required local asset would create a permanently broken card.
+pub(crate) fn write_images_required_under_lock(
+    library: &LibraryRoot,
+    id: &str,
+    markdown: &str,
+    images: &[ImageBytes],
+    lock: &ReadingLock,
+) -> Result<String> {
+    lock.ensure_protects(library, id)?;
+    let assets_dir = library.assets_dir(id);
+    fs::create_dir_all(&assets_dir)?;
+
+    let mut result = markdown.to_string();
+    let mut seen = HashSet::new();
+    for image in images {
+        if !seen.insert(image.url.as_str()) {
+            continue;
+        }
+        let hash = sha256_hex(&image.bytes);
+        let ext = image_extension(&image.content_type, &image.url);
+        let filename = format!("{hash}.{ext}");
+        write_required_asset(&assets_dir, &filename, &hash, &image.bytes)?;
+        result = result.replace(image.url.as_str(), &format!("assets/{filename}"));
+    }
+    Ok(result)
+}
+
+fn write_required_asset(
+    assets_dir: &std::path::Path,
+    filename: &str,
+    expected_hash: &str,
+    bytes: &[u8],
+) -> Result<()> {
+    let destination = assets_dir.join(filename);
+    match fs::symlink_metadata(&destination) {
+        Ok(metadata) if metadata.file_type().is_file() => {
+            let existing = fs::read(&destination)?;
+            if sha256_hex(&existing) == expected_hash {
+                return Ok(());
+            }
+            bail!(
+                "existing imported image asset has unexpected contents: {}",
+                destination.display()
+            );
+        }
+        Ok(_) => bail!(
+            "imported image asset path is not a regular file: {}",
+            destination.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    let temp_path = assets_dir.join(format!(".asset.{}.tmp", crate::new_id()));
+    // Do not clean this path if exclusive creation itself fails: in that case
+    // it is not our temporary file. Once creation succeeds, every error path
+    // below removes only this unique sibling and never the final destination.
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .with_context(|| format!("could not create image asset temporary file for {filename}"))?;
+    let write_result = (|| -> Result<()> {
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, &destination)?;
+        Ok(())
+    })();
+
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    write_result.with_context(|| format!("could not save required image asset {filename}"))
 }
 
 /// Return the first local image target in rewritten Markdown.
@@ -103,7 +185,7 @@ fn is_local_asset_path(path: &str) -> bool {
 
 /// Choose a file extension from the `Content-Type`, falling back to the URL's
 /// own extension, then `bin`.
-fn ext_for(content_type: &str, url: &str) -> String {
+pub(crate) fn image_extension(content_type: &str, url: &str) -> String {
     content_type_to_ext(content_type)
         .map(str::to_string)
         .or_else(|| url_ext(url))
@@ -193,10 +275,10 @@ mod tests {
 
     #[test]
     fn ext_prefers_content_type_then_url_then_bin() {
-        assert_eq!(ext_for("image/png", "https://e.com/x"), "png");
-        assert_eq!(ext_for("", "https://e.com/x.gif"), "gif");
+        assert_eq!(image_extension("image/png", "https://e.com/x"), "png");
+        assert_eq!(image_extension("", "https://e.com/x.gif"), "gif");
         assert_eq!(
-            ext_for("application/octet-stream", "https://e.com/x"),
+            image_extension("application/octet-stream", "https://e.com/x"),
             "bin"
         );
     }

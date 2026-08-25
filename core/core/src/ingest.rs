@@ -20,8 +20,10 @@ use crate::{
     sha256_hex, url_id, ImageBytes, LibraryRoot, Metadata, ReadingKind,
 };
 use crate::{
-    images::write_images_under_lock,
+    images::{image_extension, write_images_required_under_lock, write_images_under_lock},
     locking::{lock_reading, ReadingLock},
+    notes::set_note_under_lock,
+    tags::validate_imported_tag,
     writer::write_reading_under_lock,
 };
 
@@ -55,6 +57,26 @@ pub struct SaveInput {
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
     pub lang: Option<String>,
+}
+
+/// User-controlled state supplied when migrating an existing library item.
+///
+/// This state is initial state only: it is applied to a newly saved reading,
+/// never merged into a duplicate, and never allowed to replace the current
+/// state or note during a lightweight-link upgrade.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ImportedReadingState {
+    pub favorite: bool,
+    pub tags: Vec<String>,
+    pub note_markdown: Option<String>,
+}
+
+/// Optional source metadata and state shared by the convenience import APIs.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ImportOptions {
+    pub title: Option<String>,
+    pub saved_at: Option<String>,
+    pub state: ImportedReadingState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,17 +118,72 @@ impl From<std::io::Error> for SaveError {
 /// controlled by the user after import; captured page metadata and content are
 /// replaced by the richer browser result.
 pub fn save_capture(library: &LibraryRoot, input: SaveInput) -> Result<SaveOutcome, SaveError> {
+    save_with_imported_state(
+        library,
+        input,
+        ImportedReadingState::default(),
+        ImageWritePolicy::BestEffort,
+    )
+}
+
+/// Import a fully described reading with initial user-controlled state.
+///
+/// A missing or whitespace-only `saved_at` falls back to the current UTC time.
+/// This leniency is exclusive to migrations; browser captures continue to pass
+/// through [`save_capture`] and retain their required timestamp unchanged.
+pub fn import_reading(
+    library: &LibraryRoot,
+    mut input: SaveInput,
+    state: ImportedReadingState,
+) -> Result<SaveOutcome, SaveError> {
+    if input.saved_at.trim().is_empty() {
+        input.saved_at = crate::time::now_utc_iso();
+    }
+    save_with_imported_state(library, input, state, ImageWritePolicy::Required)
+}
+
+#[derive(Clone, Copy)]
+enum ImageWritePolicy {
+    BestEffort,
+    Required,
+}
+
+fn save_with_imported_state(
+    library: &LibraryRoot,
+    input: SaveInput,
+    state: ImportedReadingState,
+    image_write_policy: ImageWritePolicy,
+) -> Result<SaveOutcome, SaveError> {
     let id = capture_id(&input)?;
     // Identity is known before touching disk. Hold its cross-process lock from
     // the duplicate/placeholder read through asset writes and atomic rename.
     let lock = lock_reading(library, &id)?;
-    save_capture_under_lock(library, input, id, &lock)
+    save_capture_under_lock_with_state(library, input, id, state, image_write_policy, &lock)
 }
 
+#[cfg(test)]
 fn save_capture_under_lock(
     library: &LibraryRoot,
     input: SaveInput,
     id: String,
+    lock: &ReadingLock,
+) -> Result<SaveOutcome, SaveError> {
+    save_capture_under_lock_with_state(
+        library,
+        input,
+        id,
+        ImportedReadingState::default(),
+        ImageWritePolicy::BestEffort,
+        lock,
+    )
+}
+
+fn save_capture_under_lock_with_state(
+    library: &LibraryRoot,
+    input: SaveInput,
+    id: String,
+    imported_state: ImportedReadingState,
+    image_write_policy: ImageWritePolicy,
     lock: &ReadingLock,
 ) -> Result<SaveOutcome, SaveError> {
     lock.ensure_protects(library, &id)?;
@@ -129,7 +206,23 @@ fn save_capture_under_lock(
         }
     }
 
-    let markdown = write_images_under_lock(library, &id, &input.markdown, &input.images, lock)?;
+    // Imported state is strictly an initializer for a new reading. An upgrade
+    // keeps every user-controlled field already stored in Cuttings, and a
+    // duplicate returned above performs no validation or writes at all.
+    let imported_state = if upgrading {
+        ImportedReadingState::default()
+    } else {
+        validate_imported_state(imported_state)?
+    };
+
+    let markdown = match image_write_policy {
+        ImageWritePolicy::BestEffort => {
+            write_images_under_lock(library, &id, &input.markdown, &input.images, lock)?
+        }
+        ImageWritePolicy::Required => {
+            write_images_required_under_lock(library, &id, &input.markdown, &input.images, lock)?
+        }
+    };
     let preview_asset = first_local_image_asset(&markdown);
 
     let mut metadata = Metadata {
@@ -147,9 +240,9 @@ fn save_capture_under_lock(
         saved_at: input.saved_at,
         read_at: None,
         archived: false,
-        favorite: false,
+        favorite: imported_state.favorite,
         rating: 0,
-        tags: vec![],
+        tags: imported_state.tags,
         excerpt: input.excerpt,
         word_count: input.word_count,
         lang: input.lang,
@@ -163,6 +256,16 @@ fn save_capture_under_lock(
         metadata.favorite = previous.favorite;
         metadata.rating = previous.rating;
         metadata.tags = previous.tags;
+    }
+
+    if !upgrading {
+        if let Some(note_markdown) = imported_state.note_markdown.as_deref() {
+            // The article is the commit marker for a reading. Store an explicit
+            // imported note first so a successful article commit includes it.
+            // None is intentionally non-destructive: an external sync process
+            // may already have placed a pre-article sidecar in this folder.
+            set_note_under_lock(library, &id, note_markdown, lock)?;
+        }
     }
 
     write_reading_under_lock(library, metadata, markdown, lock)?;
@@ -180,11 +283,25 @@ fn save_capture_under_lock(
 /// Import an HTTP(S) URL without fetching it. The placeholder deliberately uses
 /// the normal article id so a later browser capture upgrades this same reading.
 pub fn import_link(library: &LibraryRoot, url: &str) -> Result<SaveOutcome, SaveError> {
+    import_link_with_options(library, url, ImportOptions::default())
+}
+
+/// Import an HTTP(S) URL with source metadata and initial user state.
+pub fn import_link_with_options(
+    library: &LibraryRoot,
+    url: &str,
+    options: ImportOptions,
+) -> Result<SaveOutcome, SaveError> {
     let normalized = normalize_http_url(url)?;
     let parsed = Url::parse(&normalized).map_err(invalid)?;
     let site = parsed.host_str().map(str::to_string);
+    let ImportOptions {
+        title,
+        saved_at,
+        state,
+    } = options;
 
-    save_capture(
+    import_reading(
         library,
         SaveInput {
             quote_identity_markdown: None,
@@ -193,16 +310,17 @@ pub fn import_link(library: &LibraryRoot, url: &str) -> Result<SaveOutcome, Save
             url: normalized.clone(),
             media_url: None,
             canonical_url: normalized.clone(),
-            title: normalized.clone(),
+            title: import_title(title.as_deref(), &normalized),
             author: None,
             site,
-            saved_at: crate::time::now_utc_iso(),
+            saved_at: imported_saved_at(saved_at),
             markdown: format!("[Open link](<{normalized}>)"),
             images: vec![],
             excerpt: None,
             word_count: None,
             lang: None,
         },
+        state,
     )
 }
 
@@ -212,6 +330,22 @@ pub fn import_text(
     library: &LibraryRoot,
     text: &str,
     title: Option<&str>,
+) -> Result<SaveOutcome, SaveError> {
+    import_text_with_options(
+        library,
+        text,
+        ImportOptions {
+            title: title.map(str::to_string),
+            ..ImportOptions::default()
+        },
+    )
+}
+
+/// Import source-less text with source metadata and initial user state.
+pub fn import_text_with_options(
+    library: &LibraryRoot,
+    text: &str,
+    options: ImportOptions,
 ) -> Result<SaveOutcome, SaveError> {
     let text = text.replace("\r\n", "\n").replace('\r', "\n");
     let trimmed = text.trim();
@@ -224,10 +358,12 @@ pub fn import_text(
 
     let content_hash = sha256_hex(format!("quote\0{identity_text}").as_bytes());
     let origin = format!("{LOCAL_ORIGIN_SCHEME}/quote/{content_hash}");
-    let title = title
-        .map(str::trim)
-        .filter(|title| !title.is_empty())
-        .unwrap_or("Saved quote");
+    let ImportOptions {
+        title,
+        saved_at,
+        state,
+    } = options;
+    let title = import_title(title.as_deref(), "Saved quote");
     let markdown = trimmed
         .split('\n')
         .map(|line| {
@@ -240,7 +376,7 @@ pub fn import_text(
         .collect::<Vec<_>>()
         .join("\n");
 
-    save_capture(
+    import_reading(
         library,
         SaveInput {
             quote_identity_markdown: Some(identity_text.clone()),
@@ -249,16 +385,17 @@ pub fn import_text(
             url: origin.clone(),
             media_url: None,
             canonical_url: origin,
-            title: title.to_string(),
+            title,
             author: None,
             site: None,
-            saved_at: crate::time::now_utc_iso(),
+            saved_at: imported_saved_at(saved_at),
             markdown,
             images: vec![],
             excerpt: Some(truncate_chars(&identity_text, QUOTE_EXCERPT_CHARACTERS)),
             word_count: Some(identity_text.split_whitespace().count() as u32),
             lang: None,
         },
+        state,
     )
 }
 
@@ -271,6 +408,24 @@ pub fn import_image(
     content_type: &str,
     title: &str,
 ) -> Result<SaveOutcome, SaveError> {
+    import_image_with_options(
+        library,
+        bytes,
+        content_type,
+        ImportOptions {
+            title: Some(title.to_string()),
+            ..ImportOptions::default()
+        },
+    )
+}
+
+/// Import source-less image bytes with source metadata and initial user state.
+pub fn import_image_with_options(
+    library: &LibraryRoot,
+    bytes: Vec<u8>,
+    content_type: &str,
+    options: ImportOptions,
+) -> Result<SaveOutcome, SaveError> {
     if bytes.is_empty() {
         return Err(SaveError::InvalidRequest(
             "image import requires non-empty bytes".to_string(),
@@ -279,12 +434,14 @@ pub fn import_image(
 
     let content_hash = sha256_hex(&bytes);
     let origin = format!("{LOCAL_ORIGIN_SCHEME}/image/{content_hash}");
-    let title = match title.trim() {
-        "" => "Imported image",
-        title => title,
-    };
+    let ImportOptions {
+        title,
+        saved_at,
+        state,
+    } = options;
+    let title = import_title(title.as_deref(), "Imported image");
 
-    save_capture(
+    import_reading(
         library,
         SaveInput {
             quote_identity_markdown: None,
@@ -293,10 +450,10 @@ pub fn import_image(
             url: origin.clone(),
             media_url: Some(origin.clone()),
             canonical_url: origin.clone(),
-            title: title.to_string(),
+            title,
             author: None,
             site: None,
-            saved_at: crate::time::now_utc_iso(),
+            saved_at: imported_saved_at(saved_at),
             markdown: format!("![Imported image]({origin})"),
             images: vec![ImageBytes {
                 url: origin,
@@ -307,6 +464,66 @@ pub fn import_image(
             word_count: None,
             lang: None,
         },
+        state,
+    )
+}
+
+/// Import image bytes captured from an HTTP(S) origin page.
+///
+/// The page remains the reading's origin while `media_url` is a stable local
+/// reference derived from the copied bytes. This gives identical bytes from
+/// different pages distinct reading ids without leaking an importer file path.
+pub fn import_image_from_origin_with_options(
+    library: &LibraryRoot,
+    bytes: Vec<u8>,
+    content_type: &str,
+    origin_url: &str,
+    options: ImportOptions,
+) -> Result<SaveOutcome, SaveError> {
+    if bytes.is_empty() {
+        return Err(SaveError::InvalidRequest(
+            "image import requires non-empty bytes".to_string(),
+        ));
+    }
+
+    let origin = normalize_http_url(origin_url)?;
+    let parsed = Url::parse(&origin).map_err(invalid)?;
+    let content_hash = sha256_hex(&bytes);
+    // The origin is a page URL, not an image filename. Unknown media types use
+    // `.bin` rather than borrowing a potentially misleading page extension.
+    let extension = image_extension(content_type, "");
+    let relative_asset = format!("assets/{content_hash}.{extension}");
+    let media_reference = format!("{LOCAL_ASSET_SCHEME}{relative_asset}");
+    let ImportOptions {
+        title,
+        saved_at,
+        state,
+    } = options;
+
+    import_reading(
+        library,
+        SaveInput {
+            quote_identity_markdown: None,
+            kind: ReadingKind::Image,
+            lightweight: false,
+            url: origin.clone(),
+            media_url: Some(media_reference.clone()),
+            canonical_url: origin,
+            title: import_title(title.as_deref(), "Imported image"),
+            author: None,
+            site: parsed.host_str().map(str::to_string),
+            saved_at: imported_saved_at(saved_at),
+            markdown: format!("![Imported image]({media_reference})"),
+            images: vec![ImageBytes {
+                url: media_reference,
+                content_type: content_type.trim().to_string(),
+                bytes,
+            }],
+            excerpt: None,
+            word_count: None,
+            lang: None,
+        },
+        state,
     )
 }
 
@@ -322,14 +539,91 @@ pub fn import_video_file(
     content_type: &str,
     title: &str,
 ) -> Result<SaveOutcome, SaveError> {
+    import_video_file_with_options(
+        library,
+        file_path,
+        content_type,
+        ImportOptions {
+            title: Some(title.to_string()),
+            ..ImportOptions::default()
+        },
+    )
+}
+
+/// Import a source-less local video with source metadata and initial user
+/// state, without materializing the video in memory.
+pub fn import_video_file_with_options(
+    library: &LibraryRoot,
+    file_path: &Path,
+    content_type: &str,
+    options: ImportOptions,
+) -> Result<SaveOutcome, SaveError> {
     let extension = video_extension(content_type)?;
-    let mut staged = stage_video(library, file_path)?;
+    let staged = stage_video(library, file_path)?;
+    save_staged_video(
+        library,
+        staged,
+        extension,
+        options,
+        |content_hash, _media_reference| {
+            Ok(VideoImportIdentity {
+                id: local_video_id(content_hash),
+                origin: format!("{LOCAL_ORIGIN_SCHEME}/video/{content_hash}"),
+                site: None,
+            })
+        },
+    )
+}
+
+/// Import a local video copied from an HTTP(S) origin page.
+///
+/// The copied asset supplies the media identity and playback reference, while
+/// the normalized page URL remains the origin. The caller's source path is used
+/// only for the streamed copy and is never persisted.
+pub fn import_video_file_from_origin_with_options(
+    library: &LibraryRoot,
+    file_path: &Path,
+    content_type: &str,
+    origin_url: &str,
+    options: ImportOptions,
+) -> Result<SaveOutcome, SaveError> {
+    let origin = normalize_http_url(origin_url)?;
+    let parsed = Url::parse(&origin).map_err(invalid)?;
+    let site = parsed.host_str().map(str::to_string);
+    let extension = video_extension(content_type)?;
+    let staged = stage_video(library, file_path)?;
+    save_staged_video(
+        library,
+        staged,
+        extension,
+        options,
+        move |_content_hash, media_reference| {
+            let id = media_id(ReadingKind::Video, &origin, media_reference).map_err(|error| {
+                SaveError::InvalidRequest(format!("could not derive reading id: {error}"))
+            })?;
+            Ok(VideoImportIdentity { id, origin, site })
+        },
+    )
+}
+
+struct VideoImportIdentity {
+    id: String,
+    origin: String,
+    site: Option<String>,
+}
+
+fn save_staged_video(
+    library: &LibraryRoot,
+    mut staged: StagedVideo,
+    extension: &str,
+    options: ImportOptions,
+    identity: impl FnOnce(&str, &str) -> Result<VideoImportIdentity, SaveError>,
+) -> Result<SaveOutcome, SaveError> {
     let content_hash = staged.content_hash.clone();
-    let origin = format!("{LOCAL_ORIGIN_SCHEME}/video/{content_hash}");
-    let id = local_video_id(&content_hash);
     let filename = format!("{content_hash}.{extension}");
     let relative_asset = format!("assets/{filename}");
     let media_reference = format!("{LOCAL_ASSET_SCHEME}{relative_asset}");
+    let VideoImportIdentity { id, origin, site } = identity(&content_hash, &media_reference)?;
 
     // Hashing must finish before the content-addressed lock is known. Hold it
     // from the duplicate check through the asset move and article rename so two
@@ -338,6 +632,13 @@ pub fn import_video_file(
     if library.article_path(&id).is_file() {
         return Ok(outcome(library, SaveDisposition::Duplicate, id));
     }
+
+    let ImportOptions {
+        title,
+        saved_at,
+        state,
+    } = options;
+    let imported_state = validate_imported_state(state)?;
 
     let assets_dir = library.assets_dir(&id);
     fs::create_dir_all(&assets_dir)?;
@@ -353,18 +654,15 @@ pub fn import_video_file(
         media_url: Some(media_reference),
         preview_asset: None,
         canonical_url: origin,
-        title: match title.trim() {
-            "" => "Imported video".to_string(),
-            title => title.to_string(),
-        },
+        title: import_title(title.as_deref(), "Imported video"),
         author: None,
-        site: None,
-        saved_at: crate::time::now_utc_iso(),
+        site,
+        saved_at: imported_saved_at(saved_at),
         read_at: None,
         archived: false,
-        favorite: false,
+        favorite: imported_state.favorite,
         rating: 0,
-        tags: vec![],
+        tags: imported_state.tags,
         excerpt: None,
         word_count: None,
         lang: None,
@@ -372,14 +670,53 @@ pub fn import_video_file(
     };
     let body = format!("[Play video]({relative_asset})");
 
-    if let Err(error) = write_reading_under_lock(library, metadata, body, &lock) {
-        // The article is the reading's commit marker. Do not leave a newly moved
-        // asset behind when that atomic article write reports an ordinary error.
-        let _ = fs::remove_file(&asset_path);
-        return Err(error.into());
+    if let Some(note_markdown) = imported_state.note_markdown.as_deref() {
+        set_note_under_lock(library, &id, note_markdown, &lock)?;
     }
 
+    // The final content-addressed asset may have arrived from external sync;
+    // never remove it when a later note or article commit fails. Without
+    // article.md the orphan stays invisible and a retry can safely reuse it.
+    write_reading_under_lock(library, metadata, body, &lock)?;
+
     Ok(outcome(library, SaveDisposition::Saved, id))
+}
+
+fn import_title(title: Option<&str>, fallback: &str) -> String {
+    title
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn imported_saved_at(saved_at: Option<String>) -> String {
+    saved_at
+        .filter(|saved_at| !saved_at.trim().is_empty())
+        .unwrap_or_else(crate::time::now_utc_iso)
+}
+
+fn validate_imported_state(
+    mut state: ImportedReadingState,
+) -> Result<ImportedReadingState, SaveError> {
+    let mut tags = Vec::with_capacity(state.tags.len());
+    for raw_tag in state.tags {
+        let tag = validate_imported_tag(&raw_tag).map_err(|error| {
+            SaveError::InvalidRequest(format!("invalid imported tag {raw_tag:?}: {error}"))
+        })?;
+        if !tags.contains(&tag) {
+            tags.push(tag);
+        }
+    }
+    state.tags = tags;
+    if state
+        .note_markdown
+        .as_ref()
+        .is_some_and(|markdown| markdown.trim().is_empty())
+    {
+        state.note_markdown = None;
+    }
+    Ok(state)
 }
 
 /// A source-less video's id depends only on its kind and raw content hash. The
@@ -591,7 +928,8 @@ fn truncate_chars(text: &str, max: usize) -> String {
 mod tests {
     use super::*;
     use crate::{
-        parse_reading, set_favorite, set_rating, set_read, writer::write_reading_under_lock,
+        get_note, parse_reading, set_favorite, set_rating, set_read,
+        writer::write_reading_under_lock,
     };
     use std::{fs, sync::mpsc};
 
@@ -649,6 +987,137 @@ mod tests {
     }
 
     #[test]
+    fn import_options_preserve_title_saved_at_tags_favorite_and_note() {
+        let (_dir, library) = library();
+        let saved_at = "2020-01-02T03:04:05.000Z";
+        let note = "## Why I saved this\n\nA durable personal note.";
+
+        let result = import_text_with_options(
+            &library,
+            "A selected passage.",
+            ImportOptions {
+                title: Some("  Original title  ".to_string()),
+                saved_at: Some(saved_at.to_string()),
+                state: ImportedReadingState {
+                    favorite: true,
+                    tags: vec!["  inspiration  ".to_string(), "local-first".to_string()],
+                    note_markdown: Some(note.to_string()),
+                },
+            },
+        )
+        .unwrap();
+        let reading = read_metadata(&library.article_path(&result.id)).unwrap();
+
+        assert_eq!(result.disposition, SaveDisposition::Saved);
+        assert_eq!(reading.title, "Original title");
+        assert_eq!(reading.saved_at, saved_at);
+        assert!(reading.favorite);
+        assert_eq!(reading.tags, vec!["inspiration", "local-first"]);
+        assert_eq!(
+            get_note(&library, &result.id).unwrap().as_deref(),
+            Some(note)
+        );
+    }
+
+    #[test]
+    fn duplicate_import_does_not_validate_or_replace_existing_state() {
+        let (_dir, library) = library();
+        let first = import_text_with_options(
+            &library,
+            "The same quote.",
+            ImportOptions {
+                title: Some("First title".to_string()),
+                saved_at: Some("2020-01-02T03:04:05.000Z".to_string()),
+                state: ImportedReadingState {
+                    favorite: true,
+                    tags: vec!["kept".to_string()],
+                    note_markdown: Some("kept note".to_string()),
+                },
+            },
+        )
+        .unwrap();
+
+        let duplicate = import_text_with_options(
+            &library,
+            "The  same quote.",
+            ImportOptions {
+                title: Some("Replacement title".to_string()),
+                saved_at: Some("2030-01-02T03:04:05.000Z".to_string()),
+                state: ImportedReadingState {
+                    favorite: false,
+                    // Deliberately invalid: duplicate detection must return
+                    // before imported state is validated or written.
+                    tags: vec!["Must Not Replace".to_string()],
+                    note_markdown: Some("replacement note".to_string()),
+                },
+            },
+        )
+        .unwrap();
+        let reading = read_metadata(&library.article_path(&first.id)).unwrap();
+
+        assert_eq!(duplicate.disposition, SaveDisposition::Duplicate);
+        assert_eq!(reading.title, "First title");
+        assert_eq!(reading.saved_at, "2020-01-02T03:04:05.000Z");
+        assert!(reading.favorite);
+        assert_eq!(reading.tags, vec!["kept"]);
+        assert_eq!(
+            get_note(&library, &first.id).unwrap().as_deref(),
+            Some("kept note")
+        );
+    }
+
+    #[test]
+    fn invalid_imported_tags_fail_before_creating_a_reading() {
+        let (_dir, library) = library();
+        let input = full_capture("https://example.com/invalid-imported-tag");
+        let id = url_id(&input.url).unwrap();
+
+        let result = import_reading(
+            &library,
+            input,
+            ImportedReadingState {
+                tags: vec!["Not Valid".to_string()],
+                ..ImportedReadingState::default()
+            },
+        );
+
+        assert!(matches!(result, Err(SaveError::InvalidRequest(_))));
+        assert!(!library.article_path(&id).exists());
+        assert!(!library.reading_dir(&id).exists());
+    }
+
+    #[test]
+    fn import_reading_falls_back_from_a_blank_saved_at() {
+        let (_dir, library) = library();
+        let mut input = full_capture("https://example.com/missing-import-date");
+        input.saved_at = " \n\t ".to_string();
+
+        let result = import_reading(&library, input, ImportedReadingState::default()).unwrap();
+        let reading = read_metadata(&library.article_path(&result.id)).unwrap();
+
+        assert!(!reading.saved_at.trim().is_empty());
+        assert_ne!(reading.saved_at, " \n\t ");
+    }
+
+    #[test]
+    fn import_without_a_note_preserves_a_preexisting_precommit_note() {
+        let (_dir, library) = library();
+        let input = full_capture("https://example.com/retried-import");
+        let id = url_id(&input.url).unwrap();
+        fs::create_dir_all(library.assets_dir(&id)).unwrap();
+        let preexisting = "note supplied by external sync";
+        fs::write(library.note_path(&id), preexisting).unwrap();
+
+        let result = import_reading(&library, input, ImportedReadingState::default()).unwrap();
+
+        assert_eq!(result.disposition, SaveDisposition::Saved);
+        assert_eq!(
+            get_note(&library, &id).unwrap().as_deref(),
+            Some(preexisting)
+        );
+    }
+
+    #[test]
     fn full_capture_upgrades_link_and_preserves_user_state() {
         let (_dir, library) = library();
         let url = "https://example.com/post";
@@ -675,6 +1144,51 @@ mod tests {
         assert_eq!(reading.metadata.tags, vec!["later"]);
         assert_eq!(reading.metadata.title, "Captured title");
         assert_eq!(reading.body, "# Captured title\n\nFull body.\n");
+    }
+
+    #[test]
+    fn imported_state_cannot_replace_state_or_note_during_upgrade() {
+        let (_dir, library) = library();
+        let url = "https://example.com/imported-upgrade";
+        let original_saved_at = "2020-01-02T03:04:05.000Z";
+        let imported = import_link_with_options(
+            &library,
+            url,
+            ImportOptions {
+                title: Some("Original lightweight title".to_string()),
+                saved_at: Some(original_saved_at.to_string()),
+                state: ImportedReadingState {
+                    favorite: true,
+                    tags: vec!["original".to_string()],
+                    note_markdown: Some("original note".to_string()),
+                },
+            },
+        )
+        .unwrap();
+
+        let result = import_reading(
+            &library,
+            full_capture(url),
+            ImportedReadingState {
+                favorite: false,
+                // Invalid state is ignored entirely on an upgrade.
+                tags: vec!["Must Not Replace".to_string()],
+                note_markdown: Some("replacement note".to_string()),
+            },
+        )
+        .unwrap();
+        let reading = read_metadata(&library.article_path(&result.id)).unwrap();
+
+        assert_eq!(result.disposition, SaveDisposition::Upgraded);
+        assert_eq!(result.id, imported.id);
+        assert_eq!(reading.saved_at, original_saved_at);
+        assert!(reading.favorite);
+        assert_eq!(reading.tags, vec!["original"]);
+        assert_eq!(reading.title, "Captured title");
+        assert_eq!(
+            get_note(&library, &result.id).unwrap().as_deref(),
+            Some("original note")
+        );
     }
 
     #[test]
@@ -722,6 +1236,170 @@ mod tests {
     }
 
     #[test]
+    fn imported_image_asset_failure_does_not_commit_the_reading() {
+        let (_dir, library) = library();
+        let bytes = b"required image bytes".to_vec();
+        let content_hash = sha256_hex(&bytes);
+        let origin = format!("cuttings://local/image/{content_hash}");
+        let id = media_id(ReadingKind::Image, &origin, &origin).unwrap();
+        let blocked_asset = library.assets_dir(&id).join(format!("{content_hash}.png"));
+        fs::create_dir_all(&blocked_asset).unwrap();
+
+        let result = import_image(&library, bytes, "image/png", "Required image");
+
+        assert!(matches!(result, Err(SaveError::Storage(_))));
+        assert!(!library.article_path(&id).exists());
+        assert!(
+            blocked_asset.is_dir(),
+            "the existing path must be untouched"
+        );
+        assert!(fs::read_dir(library.assets_dir(&id)).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".asset.")
+        }));
+    }
+
+    #[test]
+    fn browser_capture_keeps_best_effort_image_handling() {
+        let (_dir, library) = library();
+        let url = "https://example.com/browser-image-failure";
+        let image_url = "https://example.com/image.png";
+        let bytes = b"browser image bytes".to_vec();
+        let content_hash = sha256_hex(&bytes);
+        let id = url_id(url).unwrap();
+        let blocked_asset = library.assets_dir(&id).join(format!("{content_hash}.png"));
+        fs::create_dir_all(&blocked_asset).unwrap();
+        let mut input = full_capture(url);
+        input.markdown = format!("![Browser image]({image_url})");
+        input.images = vec![ImageBytes {
+            url: image_url.to_string(),
+            content_type: "image/png".to_string(),
+            bytes,
+        }];
+
+        let result = save_capture(&library, input).unwrap();
+        let reading =
+            parse_reading(&fs::read_to_string(library.article_path(&id)).unwrap()).unwrap();
+
+        assert_eq!(result.disposition, SaveDisposition::Saved);
+        assert!(reading.body.contains(image_url));
+        assert_eq!(reading.metadata.preview_asset, None);
+        assert!(blocked_asset.is_dir());
+    }
+
+    #[test]
+    fn origin_image_import_preserves_origin_and_uses_a_local_asset_identity() {
+        let (_dir, library) = library();
+        let bytes = b"origin-aware image bytes".to_vec();
+        let content_hash = sha256_hex(&bytes);
+        let relative_asset = format!("assets/{content_hash}.png");
+        let media_reference = format!("cuttings-asset:{relative_asset}");
+
+        let imported = import_image_from_origin_with_options(
+            &library,
+            bytes.clone(),
+            "image/png",
+            "https://www.example.com/gallery/photo.png?utm_source=export",
+            ImportOptions {
+                title: Some("Exported image".to_string()),
+                ..ImportOptions::default()
+            },
+        )
+        .unwrap();
+        let article = fs::read_to_string(library.article_path(&imported.id)).unwrap();
+        let reading = parse_reading(&article).unwrap();
+
+        assert_eq!(imported.disposition, SaveDisposition::Saved);
+        assert_eq!(
+            imported.id,
+            media_id(
+                ReadingKind::Image,
+                "https://example.com/gallery/photo.png",
+                &media_reference
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            reading.metadata.url,
+            "https://example.com/gallery/photo.png"
+        );
+        assert_eq!(reading.metadata.canonical_url, reading.metadata.url);
+        assert_eq!(reading.metadata.site.as_deref(), Some("example.com"));
+        assert_eq!(
+            reading.metadata.media_url.as_deref(),
+            Some(media_reference.as_str())
+        );
+        assert_eq!(
+            reading.metadata.preview_asset.as_deref(),
+            Some(relative_asset.as_str())
+        );
+        assert_eq!(
+            reading.body,
+            format!("![Imported image]({relative_asset})\n")
+        );
+        assert_eq!(
+            fs::read(library.reading_dir(&imported.id).join(&relative_asset)).unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
+    fn origin_image_identity_combines_normalized_origin_and_bytes() {
+        let (_dir, library) = library();
+        let bytes = b"shared image bytes".to_vec();
+
+        let first = import_image_from_origin_with_options(
+            &library,
+            bytes.clone(),
+            "image/jpeg",
+            "https://www.example.com/board?utm_source=one",
+            ImportOptions::default(),
+        )
+        .unwrap();
+        let duplicate = import_image_from_origin_with_options(
+            &library,
+            bytes.clone(),
+            "image/jpeg",
+            "https://example.com/board",
+            ImportOptions::default(),
+        )
+        .unwrap();
+        let other_origin = import_image_from_origin_with_options(
+            &library,
+            bytes,
+            "image/jpeg",
+            "https://elsewhere.example/board",
+            ImportOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(duplicate.disposition, SaveDisposition::Duplicate);
+        assert_eq!(duplicate.id, first.id);
+        assert_eq!(other_origin.disposition, SaveDisposition::Saved);
+        assert_ne!(other_origin.id, first.id);
+    }
+
+    #[test]
+    fn origin_image_does_not_borrow_the_page_extension() {
+        let (_dir, library) = library();
+        let imported = import_image_from_origin_with_options(
+            &library,
+            b"unknown image representation".to_vec(),
+            "application/octet-stream",
+            "https://example.com/gallery/page.html",
+            ImportOptions::default(),
+        )
+        .unwrap();
+        let metadata = read_metadata(&library.article_path(&imported.id)).unwrap();
+
+        assert!(metadata.media_url.unwrap().ends_with(".bin"));
+        assert!(metadata.preview_asset.unwrap().ends_with(".bin"));
+    }
+
+    #[test]
     fn video_import_streams_to_a_content_addressed_local_asset() {
         let (_dir, library) = library();
         let source_dir = tempfile::TempDir::new().unwrap();
@@ -765,6 +1443,79 @@ mod tests {
             !article.contains(source.to_string_lossy().as_ref()),
             "the caller's source path must never be persisted"
         );
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn origin_video_import_preserves_origin_asset_and_scoped_identity() {
+        let (_dir, library) = library();
+        let source_dir = tempfile::TempDir::new().unwrap();
+        let source = source_dir.path().join("private-export-name.mov");
+        let bytes = b"origin-aware local video bytes";
+        fs::write(&source, bytes).unwrap();
+        let content_hash = sha256_hex(bytes);
+        let relative_asset = format!("assets/{content_hash}.mov");
+        let media_reference = format!("cuttings-asset:{relative_asset}");
+
+        let imported = import_video_file_from_origin_with_options(
+            &library,
+            &source,
+            "video/quicktime",
+            "https://www.example.com/clips/one?utm_source=export",
+            ImportOptions {
+                title: Some("Exported video".to_string()),
+                ..ImportOptions::default()
+            },
+        )
+        .unwrap();
+        let article = fs::read_to_string(library.article_path(&imported.id)).unwrap();
+        let reading = parse_reading(&article).unwrap();
+
+        assert_eq!(imported.disposition, SaveDisposition::Saved);
+        assert_eq!(
+            imported.id,
+            media_id(
+                ReadingKind::Video,
+                "https://example.com/clips/one",
+                &media_reference
+            )
+            .unwrap()
+        );
+        assert_eq!(reading.metadata.url, "https://example.com/clips/one");
+        assert_eq!(reading.metadata.canonical_url, reading.metadata.url);
+        assert_eq!(reading.metadata.site.as_deref(), Some("example.com"));
+        assert_eq!(
+            reading.metadata.media_url.as_deref(),
+            Some(media_reference.as_str())
+        );
+        assert_eq!(reading.body, format!("[Play video]({relative_asset})\n"));
+        assert_eq!(
+            fs::read(library.reading_dir(&imported.id).join(&relative_asset)).unwrap(),
+            bytes
+        );
+        assert!(!article.contains(source.to_string_lossy().as_ref()));
+
+        let duplicate = import_video_file_from_origin_with_options(
+            &library,
+            &source,
+            "video/mp4",
+            "https://example.com/clips/one",
+            ImportOptions::default(),
+        )
+        .unwrap();
+        let other_origin = import_video_file_from_origin_with_options(
+            &library,
+            &source,
+            "video/quicktime",
+            "https://elsewhere.example/clips/one",
+            ImportOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(duplicate.disposition, SaveDisposition::Duplicate);
+        assert_eq!(duplicate.id, imported.id);
+        assert_eq!(other_origin.disposition, SaveDisposition::Saved);
+        assert_ne!(other_origin.id, imported.id);
         assert_staging_empty(&library);
     }
 
@@ -858,6 +1609,71 @@ mod tests {
     }
 
     #[test]
+    fn video_keeps_final_asset_when_note_or_article_commit_fails() {
+        let source_dir = tempfile::TempDir::new().unwrap();
+
+        let (_note_dir, note_library) = library();
+        let note_bytes = b"video surviving note failure";
+        let note_source = source_dir.path().join("note-failure.mp4");
+        fs::write(&note_source, note_bytes).unwrap();
+        let note_hash = sha256_hex(note_bytes);
+        let note_id = local_video_id(&note_hash);
+        fs::create_dir_all(note_library.note_path(&note_id)).unwrap();
+
+        let note_result = import_video_file_with_options(
+            &note_library,
+            &note_source,
+            "video/mp4",
+            ImportOptions {
+                state: ImportedReadingState {
+                    note_markdown: Some("imported note".to_string()),
+                    ..ImportedReadingState::default()
+                },
+                ..ImportOptions::default()
+            },
+        );
+
+        assert!(matches!(note_result, Err(SaveError::Storage(_))));
+        assert!(!note_library.article_path(&note_id).is_file());
+        assert_eq!(
+            fs::read(
+                note_library
+                    .assets_dir(&note_id)
+                    .join(format!("{note_hash}.mp4"))
+            )
+            .unwrap(),
+            note_bytes
+        );
+
+        let (_article_dir, article_library) = library();
+        let article_bytes = b"video surviving article failure";
+        let article_source = source_dir.path().join("article-failure.mp4");
+        fs::write(&article_source, article_bytes).unwrap();
+        let article_hash = sha256_hex(article_bytes);
+        let article_id = local_video_id(&article_hash);
+        fs::create_dir_all(article_library.article_path(&article_id)).unwrap();
+
+        let article_result = import_video_file(
+            &article_library,
+            &article_source,
+            "video/mp4",
+            "Failed article",
+        );
+
+        assert!(matches!(article_result, Err(SaveError::Storage(_))));
+        assert!(!article_library.article_path(&article_id).is_file());
+        assert_eq!(
+            fs::read(
+                article_library
+                    .assets_dir(&article_id)
+                    .join(format!("{article_hash}.mp4"))
+            )
+            .unwrap(),
+            article_bytes
+        );
+    }
+
+    #[test]
     fn video_content_types_map_to_safe_canonical_extensions() {
         assert_eq!(video_extension("video/mp4").unwrap(), "mp4");
         assert_eq!(
@@ -883,6 +1699,16 @@ mod tests {
         ));
         assert!(matches!(
             import_image(&library, vec![], "image/png", ""),
+            Err(SaveError::InvalidRequest(_))
+        ));
+        assert!(matches!(
+            import_image_from_origin_with_options(
+                &library,
+                b"bytes".to_vec(),
+                "image/png",
+                "file:///tmp/source-page",
+                ImportOptions::default(),
+            ),
             Err(SaveError::InvalidRequest(_))
         ));
     }

@@ -46,7 +46,7 @@ host, and macOS app.
 | Card | User-facing visual representation of a reading on the macOS masonry board. Do not rename the internal `Reading` domain type merely to match presentation. |
 | Card kind | The reading's capture/rendering kind: `article`, `image`, `video`, or `quote`. A missing kind on an older file means `article`. |
 | Origin | The source page for a web card: `url`, `canonical_url`, page title/site, and save date. For image/video cards this is deliberately distinct from `media_url`. Source-less app saves instead carry a private local identity. |
-| Media URL | Optional media identity for an image/video card. Normally it is a durable direct URL. A session-local video instead uses an opaque stable capture reference. It supplements the origin and never replaces the page URL. |
+| Media URL | Optional media identity for an image/video card. Normally it is a durable direct URL. A session-local video uses an opaque stable capture reference, while source-less saves and offline migrations may use a content-derived local asset reference. It supplements the origin and never replaces the page URL. |
 | Preview asset | Optional safe local `assets/<file>` reference used by the masonry card. The host derives it only after captured image/poster bytes have been written. |
 | Quote | A text card whose full text is stored as Markdown. Browser selections retain their page origin; source-less paste/drop text uses a private local identity. |
 | Lightweight link | An article card created by pasting or dropping only an HTTP(S) URL. It is explicitly marked `lightweight: true`; a later full browser capture upgrades the same reading in place. |

@@ -12,7 +12,10 @@ use anyhow::{bail, Context, Result};
 use rustix::fs::{AtFlags, Mode, OFlags};
 use rustix::io::Errno;
 
-use crate::{locking::lock_reading, LibraryRoot};
+use crate::{
+    locking::{lock_reading, ReadingLock},
+    LibraryRoot,
+};
 
 /// Read the personal note attached to `reading_id`.
 ///
@@ -59,9 +62,37 @@ pub fn set_note(library: &LibraryRoot, reading_id: &str, markdown: &str) -> Resu
     lock.ensure_protects(library, reading_id)?;
     let reading_dir = open_reading_dir(library, reading_id)?;
 
+    write_note_to_dir(&reading_dir, reading_id, markdown)
+}
+
+/// Write a note while the caller holds this reading's lock, including before
+/// `article.md` has been committed for a brand-new import.
+///
+/// Unlike [`set_note`], this helper deliberately does not require an existing
+/// article. It is crate-private so only save orchestration that has already
+/// derived a safe id, created the reading folder, and acquired its lock can use
+/// the pre-commit behavior. The public API retains its full article/id check.
+pub(crate) fn set_note_under_lock(
+    library: &LibraryRoot,
+    reading_id: &str,
+    markdown: &str,
+    lock: &ReadingLock,
+) -> Result<()> {
+    validate_reading_id(reading_id)?;
+    lock.ensure_protects(library, reading_id)?;
+    let reading_dir = open_reading_dir_components(library, reading_id)?;
+
+    write_note_to_dir(&reading_dir, reading_id, markdown)
+}
+
+fn write_note_to_dir(
+    reading_dir: &rustix::fd::OwnedFd,
+    reading_id: &str,
+    markdown: &str,
+) -> Result<()> {
     if markdown.trim().is_empty() {
-        match rustix::fs::unlinkat(&reading_dir, "note.md", AtFlags::empty()) {
-            Ok(()) => rustix::fs::fsync(&reading_dir)?,
+        match rustix::fs::unlinkat(reading_dir, "note.md", AtFlags::empty()) {
+            Ok(()) => rustix::fs::fsync(reading_dir)?,
             Err(Errno::NOENT) => {}
             Err(error) => {
                 return Err(error).with_context(|| format!("could not clear note for {reading_id}"))
@@ -77,7 +108,7 @@ pub fn set_note(library: &LibraryRoot, reading_id: &str, markdown: &str) -> Resu
     let temp_name = format!(".note.{}.tmp", crate::new_id());
     let write_result = (|| -> Result<()> {
         let temp_fd = rustix::fs::openat(
-            &reading_dir,
+            reading_dir,
             temp_name.as_str(),
             OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::CLOEXEC | OFlags::NOFOLLOW,
             Mode::RUSR | Mode::WUSR | Mode::RGRP | Mode::WGRP | Mode::ROTH | Mode::WOTH,
@@ -86,13 +117,13 @@ pub fn set_note(library: &LibraryRoot, reading_id: &str, markdown: &str) -> Resu
         file.write_all(markdown.as_bytes())?;
         file.sync_all()?;
         drop(file);
-        rustix::fs::renameat(&reading_dir, temp_name.as_str(), &reading_dir, "note.md")?;
-        rustix::fs::fsync(&reading_dir)?;
+        rustix::fs::renameat(reading_dir, temp_name.as_str(), reading_dir, "note.md")?;
+        rustix::fs::fsync(reading_dir)?;
         Ok(())
     })();
 
     if write_result.is_err() {
-        let _ = rustix::fs::unlinkat(&reading_dir, temp_name.as_str(), AtFlags::empty());
+        let _ = rustix::fs::unlinkat(reading_dir, temp_name.as_str(), AtFlags::empty());
     }
     write_result.with_context(|| format!("could not save note for {reading_id}"))
 }
@@ -103,19 +134,7 @@ pub fn set_note(library: &LibraryRoot, reading_id: &str, markdown: &str) -> Resu
 fn open_reading_dir(library: &LibraryRoot, reading_id: &str) -> Result<rustix::fd::OwnedFd> {
     validate_reading_id(reading_id)?;
 
-    let directory_flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC | OFlags::NOFOLLOW;
-    // The chosen library root itself may intentionally be a symlink, so follow
-    // that one path once. Every library-owned child is opened with NOFOLLOW.
-    let root = rustix::fs::open(
-        library.path(),
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
-        Mode::empty(),
-    )?;
-    let articles = rustix::fs::openat(&root, "articles", directory_flags, Mode::empty())?;
-    let prefix = reading_id.get(..2).unwrap_or(reading_id);
-    let bucket = rustix::fs::openat(&articles, prefix, directory_flags, Mode::empty())?;
-    let reading_dir = rustix::fs::openat(&bucket, reading_id, directory_flags, Mode::empty())
-        .with_context(|| format!("reading not found: {reading_id}"))?;
+    let reading_dir = open_reading_dir_components(library, reading_id)?;
 
     let article_fd = rustix::fs::openat(
         &reading_dir,
@@ -141,6 +160,32 @@ fn open_reading_dir(library: &LibraryRoot, reading_id: &str) -> Result<rustix::f
             metadata.id
         );
     }
+
+    Ok(reading_dir)
+}
+
+/// Open and pin a reading directory without requiring its article commit
+/// marker. Callers must validate the article separately unless they are in the
+/// narrow pre-commit import path.
+fn open_reading_dir_components(
+    library: &LibraryRoot,
+    reading_id: &str,
+) -> Result<rustix::fd::OwnedFd> {
+    validate_reading_id(reading_id)?;
+
+    let directory_flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC | OFlags::NOFOLLOW;
+    // The chosen library root itself may intentionally be a symlink, so follow
+    // that one path once. Every library-owned child is opened with NOFOLLOW.
+    let root = rustix::fs::open(
+        library.path(),
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )?;
+    let articles = rustix::fs::openat(&root, "articles", directory_flags, Mode::empty())?;
+    let prefix = reading_id.get(..2).unwrap_or(reading_id);
+    let bucket = rustix::fs::openat(&articles, prefix, directory_flags, Mode::empty())?;
+    let reading_dir = rustix::fs::openat(&bucket, reading_id, directory_flags, Mode::empty())
+        .with_context(|| format!("reading not found: {reading_id}"))?;
 
     Ok(reading_dir)
 }

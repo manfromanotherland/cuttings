@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "native-host", "uniffi-bindgen"]
+members = ["core", "mymind-import", "native-host", "uniffi-bindgen"]
 resolver = "2"
 
 [workspace.package]

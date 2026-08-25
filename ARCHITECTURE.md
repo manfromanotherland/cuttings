@@ -42,8 +42,9 @@ delivered by sync reconcile through the same index path.
 Every card kind records its origin page in `url`/`canonical_url` plus its page title/site and save
 date. `media_url` stores a durable image/video address in addition to that origin. If a video only
 exposes a session-local `blob:`/`data:` source, the extension stores a compact opaque capture
-reference for identity and links playback back to the origin page. It never substitutes a
-CDN/media address for the origin page.
+reference for identity and links playback back to the origin page. An offline migration can use a
+content-derived local asset reference while preserving the exported HTTP(S) origin. Neither path
+substitutes a CDN/media address or machine-local file path for the origin page.
 
 ## Components
 

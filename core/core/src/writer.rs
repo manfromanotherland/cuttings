@@ -314,4 +314,24 @@ mod tests {
             .unwrap()
             .is_none());
     }
+
+    #[test]
+    fn find_by_media_matches_local_asset_hash_across_extensions() {
+        let (_dir, lib) = tmp_library();
+        let source = "https://example.com/watch";
+        let hash = "ab".repeat(32);
+        let stored = format!("cuttings-asset:assets/{hash}.mov");
+        let equivalent = format!("cuttings-asset:assets/{hash}.mp4");
+        let mut metadata = metadata_for(source);
+        metadata.kind = ReadingKind::Video;
+        metadata.media_url = Some(stored.clone());
+        metadata.id = crate::media_id(metadata.kind, source, &stored).unwrap();
+        let id = metadata.id.clone();
+        write_reading(&lib, metadata, "[Play](assets/video.mov)".into()).unwrap();
+
+        assert_eq!(
+            find_by_media(&lib, ReadingKind::Video, source, &equivalent).unwrap(),
+            Some(id)
+        );
+    }
 }

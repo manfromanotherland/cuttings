@@ -68,6 +68,10 @@ fn normalized_media_identity(media_url: &str) -> anyhow::Result<String> {
         bail!("media_id requires a non-empty media URL");
     }
 
+    if let Some(content_hash) = local_asset_content_hash(media_url) {
+        return Ok(format!("cuttings-asset:sha256:{content_hash}"));
+    }
+
     let is_http = url::Url::parse(media_url)
         .map(|url| matches!(url.scheme(), "http" | "https"))
         .unwrap_or(false);
@@ -76,6 +80,26 @@ fn normalized_media_identity(media_url: &str) -> anyhow::Result<String> {
     } else {
         Ok(media_url.to_string())
     }
+}
+
+/// Extract the content address from the constrained local-media reference.
+///
+/// The extension describes the stored representation but is not part of its
+/// identity. This lets the same bytes from one origin deduplicate when two
+/// import sources report equivalent or conflicting MIME aliases.
+fn local_asset_content_hash(media_url: &str) -> Option<String> {
+    let filename = media_url.strip_prefix("cuttings-asset:assets/")?;
+    let (hash, extension) = filename.split_once('.')?;
+    if hash.len() != 64
+        || !hash.chars().all(|character| character.is_ascii_hexdigit())
+        || extension.is_empty()
+        || !extension
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    Some(hash.to_ascii_lowercase())
 }
 
 /// Content-addressed id for a selected quote saved from a page.
@@ -205,6 +229,42 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn media_id_uses_local_asset_content_hash_not_extension() {
+        let source = "https://example.com/watch";
+        let hash = "ab".repeat(32);
+
+        assert_eq!(
+            media_id(
+                ReadingKind::Video,
+                source,
+                &format!("cuttings-asset:assets/{hash}.mp4")
+            )
+            .unwrap(),
+            media_id(
+                ReadingKind::Video,
+                source,
+                &format!("cuttings-asset:assets/{hash}.mov")
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn local_asset_content_hash_shape_is_strict() {
+        let hash = "ab".repeat(32);
+        assert_eq!(
+            local_asset_content_hash(&format!("cuttings-asset:assets/{hash}.webm")),
+            Some(hash)
+        );
+        assert!(local_asset_content_hash("cuttings-asset:assets/short.mp4").is_none());
+        assert!(local_asset_content_hash(&format!(
+            "cuttings-asset:assets/{}.tar.gz",
+            "ab".repeat(32)
+        ))
+        .is_none());
     }
 
     #[test]

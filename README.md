@@ -127,6 +127,7 @@ extension, and macOS lint/format. See [SANDBOX.md](./SANDBOX.md) for details.
 - [docs/library-format.md](./docs/library-format.md) — **versioned library-format spec** (the cross-component contract).
 - [docs/native-messaging.md](./docs/native-messaging.md) — native messaging protocol (extension ↔ host).
 - [docs/fixtures/](./docs/fixtures/) — sample article file, save request/response JSON.
+- [core/mymind-import/README.md](./core/mymind-import/README.md) — preview and import a mymind export folder.
 
 ## Releases
 

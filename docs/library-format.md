@@ -106,7 +106,9 @@ is true only for a URL-only paste/drop card.
   direct URL. When a browser video only exposes a session-local `blob:`/`data:` source, the
   extension stores a compact opaque `cuttings-video:` reference instead; raw transient URLs are
   never persisted. A source-less video uses `cuttings-asset:assets/<filename>` to identify the
-  copied file inside its own reading folder without persisting the original machine path.
+  copied file inside its own reading folder without persisting the original machine path. An
+  offline migration may use the same local-asset reference while retaining an HTTP(S) origin in
+  `url`; the content-derived asset reference is then the media identity.
 - `preview_asset`, when present, must be the safe single-file shape `assets/<filename>`. It is
   derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
 - `read_at`, `archived`, `favorite`, and `rating` remain part of the format-v1 compatibility
@@ -128,7 +130,8 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
 - Do not embed images as base64.
 - An **image** body is a Markdown image whose captured source is rewritten to the local asset.
 - A **video** body may contain its local poster plus a link to the durable media URL. For a
-  session-local stream it links to the origin page instead. Video bytes are not downloaded.
+  session-local stream it links to the origin page instead. Browser captures do not download video
+  bytes; source-less saves and offline migrations may link to a copied local asset.
 - A **quote** body contains the selected text as Markdown block quotes. Its `excerpt` may carry a
   bounded preview for the board, but the body remains the full selection.
 - A **lightweight article** body is one Markdown link to its HTTP(S) URL. It is intentionally
@@ -238,6 +241,9 @@ depends on the card kind:
 - **Source-less video:** a `cuttings://local/video/<hash>` origin derived while streaming a copy of
   the selected file into the library. Its `cuttings-asset:` media reference points at that copy;
   the original path and file name do not affect identity.
+- **Migrated web image/video:** normalized origin `url` plus a content-derived `cuttings-asset:`
+  media reference for the copied bytes. The source export path never participates in identity or
+  persists in the library; identical bytes from different origins remain distinct readings.
 
 This permits several media/quote cards from one origin while an exact repeat save deduplicates.
 

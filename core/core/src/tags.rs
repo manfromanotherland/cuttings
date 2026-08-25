@@ -18,6 +18,31 @@ use crate::{
 /// surface the error before it reaches the core.
 pub const MAX_TAG_LEN: usize = 20;
 
+/// Validate and normalize an imported tag according to the library format.
+///
+/// Interactive tag entry retains its established behavior in [`add_tag`]. A
+/// migration crosses a stricter trust boundary, so imported state must already
+/// be lowercase and whitespace-free after surrounding whitespace is trimmed.
+pub(crate) fn validate_imported_tag(tag: &str) -> Result<String> {
+    let tag = tag.trim();
+    if tag.is_empty() {
+        bail!("tag must not be empty");
+    }
+
+    let len = tag.chars().count();
+    if len > MAX_TAG_LEN {
+        bail!("tag is too long: {len} characters (max {MAX_TAG_LEN})");
+    }
+    if tag.chars().any(char::is_whitespace) {
+        bail!("tag must not contain whitespace: {tag:?}");
+    }
+    if tag.to_lowercase() != tag {
+        bail!("tag must be lowercase: {tag:?}");
+    }
+
+    Ok(tag.to_string())
+}
+
 /// Add `tag` to the reading identified by `id`.
 ///
 /// No-ops if the tag is already present. Rejects a tag longer than
@@ -299,6 +324,21 @@ mod tests {
 
         let tags = list_tags(&conn, &CountScope::default()).unwrap();
         assert_eq!(tags, vec![("a".repeat(MAX_TAG_LEN), 1)]);
+    }
+
+    #[test]
+    fn imported_tag_validation_enforces_the_library_format() {
+        assert_eq!(
+            validate_imported_tag("  local-first  ").unwrap(),
+            "local-first"
+        );
+        assert!(validate_imported_tag("").is_err());
+        assert!(validate_imported_tag("   ").is_err());
+        assert!(validate_imported_tag("Local-first").is_err());
+        assert!(validate_imported_tag("local first").is_err());
+        assert!(validate_imported_tag("local\tfirst").is_err());
+        assert!(validate_imported_tag(&"a".repeat(MAX_TAG_LEN + 1)).is_err());
+        assert!(validate_imported_tag(&"é".repeat(MAX_TAG_LEN)).is_ok());
     }
 
     #[test]
