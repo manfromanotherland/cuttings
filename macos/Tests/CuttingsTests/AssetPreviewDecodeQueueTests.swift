@@ -1,6 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import XCTest
+
+final class AssetImageLoaderTests: XCTestCase {
+    func testSVGAssetsDecodeThroughAssetLoader() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cuttings-svg-asset-\(UUID().uuidString).svg")
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" viewBox="0 0 64 32">
+          <rect width="64" height="32" fill="#ff00aa"/>
+        </svg>
+        """
+        try svg.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertNotNil(NSImage(contentsOf: url), "The SVG fixture must be valid to AppKit")
+
+        let decoded = AssetImageLoader.downsampledImage(at: url, maxPixel: 800)
+        guard let image = decoded?.image else {
+            XCTFail("A valid local SVG must produce a board preview")
+            return
+        }
+
+        var proposedRect = NSRect(x: 0, y: 0, width: 128, height: 64)
+        XCTAssertNotNil(
+            image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil),
+            "The decoded SVG must render through AppKit"
+        )
+    }
+}
 
 final class AssetPreviewDecodeQueueTests: XCTestCase {
     func testCancelledWaitersLeaveTheQueueImmediately() async {

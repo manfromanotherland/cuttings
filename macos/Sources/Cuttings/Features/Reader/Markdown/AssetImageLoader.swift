@@ -5,11 +5,12 @@ import AVFoundation
 import ImageIO
 
 /// Resolves and decodes local visual assets. Article figures and their lightbox
-/// share image path resolution and ImageIO downsampling; video cards reuse the
-/// same safe path resolution before deriving a first-frame thumbnail.
+/// share image path resolution, ImageIO downsampling for raster images, and an
+/// AppKit fallback for SVGs; video cards reuse the same safe path resolution
+/// before deriving a first-frame thumbnail.
 enum AssetImageLoader {
     /// Wraps an `NSImage` so a background decode can cross the actor boundary
-    /// back to the main actor. Safe because the image is fully built before it
+    /// back to the main actor. Safe because the image is created before it
     /// crosses and is never mutated afterward.
     struct Decoded: @unchecked Sendable {
         let image: NSImage
@@ -61,24 +62,36 @@ enum AssetImageLoader {
     }
 
     /// Decode `url` into an image whose largest dimension is at most `maxPixel`
-    /// device pixels, using ImageIO so the full-resolution bitmap is never
-    /// materialized. Smaller source images are left as-is (no upscaling).
-    /// Returns `nil` if the file can't be read or decoded.
+    /// device pixels. Raster images use ImageIO so the full-resolution bitmap is
+    /// never materialized; SVGs retain AppKit's scalable vector representation
+    /// because ImageIO does not support them. Smaller raster images are left
+    /// as-is (no upscaling). Returns `nil` if the file can't be read or decoded.
     nonisolated static func downsampledImage(at url: URL, maxPixel: CGFloat) -> Decoded? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            return nil
-        }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel.rounded())
         ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        {
+            let size = NSSize(width: cgImage.width, height: cgImage.height)
+            return Decoded(image: NSImage(cgImage: cgImage, size: size))
         }
-        let size = NSSize(width: cgImage.width, height: cgImage.height)
-        return Decoded(image: NSImage(cgImage: cgImage, size: size))
+
+        return svgImage(at: url)
+    }
+
+    /// ImageIO can create a source for an SVG but cannot decode an image from
+    /// it. AppKit's registered SVG representation can, while keeping the asset
+    /// vector-backed rather than materializing an unbounded raster bitmap.
+    private nonisolated static func svgImage(at url: URL) -> Decoded? {
+        guard url.pathExtension.caseInsensitiveCompare("svg") == .orderedSame,
+              let data = try? Data(contentsOf: url),
+              let image = NSImage(data: data)
+        else { return nil }
+        return Decoded(image: image)
     }
 
     /// Decode a display-oriented first frame for a locally saved video without
