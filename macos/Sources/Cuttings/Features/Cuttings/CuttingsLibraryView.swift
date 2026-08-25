@@ -288,7 +288,9 @@ extension CuttingsLibraryView {
                             : .smooth(duration: 0.3, extraBounce: 0),
                         value: cardSize
                     )
-                    .padding(Self.boardSpacing)
+                    .padding(.horizontal, Self.boardSpacing)
+                    .padding(.bottom, Self.boardSpacing)
+                    .padding(.top, Self.boardTopSpacing)
                 }
                 .accessibilityIdentifier(A11y.List.table)
             }
@@ -437,6 +439,7 @@ extension CuttingsLibraryView {
     }
 
     private static let boardSpacing: CGFloat = 18
+    private static let boardTopSpacing: CGFloat = 12
 
     private var tagTargetRow: ReadingRow? {
         let id = tagTargetID ?? (appState.showTagSheet ? appState.selectedId : nil)
