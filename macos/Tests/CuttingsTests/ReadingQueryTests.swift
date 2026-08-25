@@ -5,19 +5,17 @@ import XCTest
 final class ReadingQueryTests: XCTestCase {
     func testSearchKeepsEverySelectedKindScope() {
         for scope in LibraryScope.allCases {
-            let query = ReadingQuery.board(
+            let query = ReadingQuery.boardSnapshot(
                 scope: scope,
                 search: "texture",
-                semanticCandidateIDs: ["first", "second"],
-                limit: 60,
-                offset: 120
+                semanticCandidateIDs: ["first", "second"]
             )
 
             XCTAssertEqual(query.scope, scope)
             XCTAssertEqual(query.search, "texture")
             XCTAssertEqual(query.semanticCandidateIDs, ["first", "second"])
-            XCTAssertEqual(query.limit, 60)
-            XCTAssertEqual(query.offset, 120)
+            XCTAssertEqual(query.limit, .max)
+            XCTAssertEqual(query.offset, 0)
             XCTAssertFalse(query.ascending)
             XCTAssertNil(query.kind)
             XCTAssertNil(query.tag)
@@ -28,12 +26,10 @@ final class ReadingQueryTests: XCTestCase {
     }
 
     func testBrowsingUsesNewestFirstOrdering() {
-        let query = ReadingQuery.board(
+        let query = ReadingQuery.boardSnapshot(
             scope: .media,
             search: nil,
-            semanticCandidateIDs: [],
-            limit: 60,
-            offset: 0
+            semanticCandidateIDs: []
         )
 
         XCTAssertEqual(query.scope, .media)

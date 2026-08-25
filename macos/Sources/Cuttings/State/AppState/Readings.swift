@@ -2,10 +2,9 @@
 
 import Foundation
 
-/// One immutable first-page search snapshot. Later pages reuse its complete
-/// Spotlight candidate ranking instead of running a fresh semantic query at a
-/// different offset.
-struct ReadingPageContext {
+/// One immutable board snapshot. Scope, search, and Spotlight ranking remain
+/// coherent while the complete matching result is loaded.
+private struct ReadingSnapshotContext {
     let generation: UInt64
     let scope: LibraryScope
     let search: String?
@@ -13,7 +12,7 @@ struct ReadingPageContext {
 }
 
 // ── Reading list ─────────────────────────────────────────────────────────────
-// Loading and paginating the list, debounced search, and tag metadata.
+// Loading the list, debounced search, and tag metadata.
 
 extension AppState {
     // ── Refresh (list + filters) ──────────────────────────────────────────
@@ -54,25 +53,22 @@ extension AppState {
         return query.isEmpty ? nil : query
     }
 
-    /// One page of readings for an immutable scope/search snapshot at `offset`.
+    /// Every reading in one immutable scope/search snapshot. LazyLayoutKit
+    /// virtualizes card views, so the app never waits for a trailing page.
     private func fetchReadings(
         _ core: any CoreBridging,
-        context: ReadingPageContext,
-        offset: UInt32
+        context: ReadingSnapshotContext
     ) async throws -> [ReadingRow] {
-        let query = ReadingQuery.board(
+        let query = ReadingQuery.boardSnapshot(
             scope: context.scope,
             search: context.search,
-            semanticCandidateIDs: context.semanticCandidateIDs,
-            limit: pageSize,
-            offset: offset
+            semanticCandidateIDs: context.semanticCandidateIDs
         )
         return try await core.listReadings(query).map { ReadingRow($0) }
     }
 
-    private func makePageContext() async -> ReadingPageContext? {
+    private func makeSnapshotContext() async -> ReadingSnapshotContext? {
         readingLoadGeneration &+= 1
-        isLoadingMore = false
         let generation = readingLoadGeneration
         let scope = activeScope
         let search = activeQuery
@@ -94,7 +90,7 @@ extension AppState {
               scope == activeScope,
               search == activeQuery,
               !Task.isCancelled else { return nil }
-        return ReadingPageContext(
+        return ReadingSnapshotContext(
             generation: generation,
             scope: scope,
             search: search,
@@ -110,7 +106,7 @@ extension AppState {
         )
     }
 
-    private func isCurrent(_ context: ReadingPageContext) -> Bool {
+    private func isCurrent(_ context: ReadingSnapshotContext) -> Bool {
         context.generation == readingLoadGeneration
             && context.scope == activeScope
             && context.search == activeQuery
@@ -119,8 +115,6 @@ extension AppState {
 
     private func invalidatePendingReadingLoads() {
         readingLoadGeneration &+= 1
-        readingPageContext = nil
-        isLoadingMore = false
     }
 
     /// `resetSelectionIfMissing` controls what happens when the current
@@ -131,13 +125,11 @@ extension AppState {
     /// the first row either way.
     func loadReadings(resetSelectionIfMissing: Bool = true) async {
         guard let core else { return }
-        guard let context = await makePageContext() else { return }
+        guard let context = await makeSnapshotContext() else { return }
         do {
-            let rows = try await fetchReadings(core, context: context, offset: 0)
+            let rows = try await fetchReadings(core, context: context)
             guard isCurrent(context) else { return }
             readings = rows
-            hasMoreReadings = rows.count == Int(pageSize)
-            readingPageContext = context
 
             // Open the first reading by default so selection-dependent UI is
             // available without an extra click. A missing selection is re-homed
@@ -149,32 +141,6 @@ extension AppState {
             {
                 selectedId = readings.first?.id
             }
-        } catch {
-            if isCurrent(context) {
-                self.error = error.localizedDescription
-            }
-        }
-    }
-
-    func loadMoreReadings() async {
-        guard hasMoreReadings,
-              !isLoadingMore,
-              let core,
-              let context = readingPageContext,
-              isCurrent(context) else { return }
-        isLoadingMore = true
-        let offset = readings.count
-        defer {
-            if context.generation == readingLoadGeneration {
-                isLoadingMore = false
-            }
-        }
-        do {
-            let rows = try await fetchReadings(core, context: context, offset: UInt32(offset))
-            guard isCurrent(context), readings.count == offset else { return }
-            let existingIDs = Set(readings.map(\.id))
-            readings.append(contentsOf: rows.filter { !existingIDs.contains($0.id) })
-            hasMoreReadings = rows.count == Int(pageSize)
         } catch {
             if isCurrent(context) {
                 self.error = error.localizedDescription

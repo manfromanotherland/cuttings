@@ -63,11 +63,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
     private let spacing: CGFloat
     private let contentInsets: EdgeInsets
     private let configurationID: AnyHashable
-    private let hasMore: Bool
-    private let isLoadingMore: Bool
-    private let loadMoreIDs: Set<ID>
     private let estimatedHeight: (Element, CGFloat) -> CGFloat
-    private let onLoadMore: () -> Void
     private let content: (Element) -> AnyView
 
     init<Data>(
@@ -77,10 +73,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         spacing: CGFloat = 18,
         contentInsets: EdgeInsets = .init(),
         configurationID: AnyHashable = 0,
-        hasMore: Bool = false,
-        isLoadingMore: Bool = false,
         estimatedHeight: @escaping (Element, CGFloat) -> CGFloat = { _, _ in 180 },
-        onLoadMore: @escaping () -> Void = {},
         @ViewBuilder content: @escaping (Element) -> some View
     ) where Data: RandomAccessCollection, Data.Element == Element {
         let elements = Array(data)
@@ -90,11 +83,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         self.spacing = spacing
         self.contentInsets = contentInsets
         self.configurationID = configurationID
-        self.hasMore = hasMore
-        self.isLoadingMore = isLoadingMore
-        loadMoreIDs = Set(elements.suffix(12).map { $0[keyPath: id] })
         self.estimatedHeight = estimatedHeight
-        self.onLoadMore = onLoadMore
         self.content = { AnyView(content($0)) }
     }
 
@@ -125,13 +114,6 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
             )
         } content: { element in
             content(element)
-                .onAppear {
-                    guard hasMore,
-                          !isLoadingMore,
-                          loadMoreIDs.contains(element[keyPath: id])
-                    else { return }
-                    onLoadMore()
-                }
         }
     }
 

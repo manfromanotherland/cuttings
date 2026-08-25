@@ -189,8 +189,7 @@ extension CuttingsLibraryView {
     @ViewBuilder
     private var board: some View {
         if appState.isLoading {
-            ProgressView()
-                .controlSize(.large)
+            Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if appState.readings.isEmpty {
             emptyState
@@ -216,12 +215,7 @@ extension CuttingsLibraryView {
                         trailing: Self.boardSpacing
                     ),
                     configurationID: configurationID,
-                    hasMore: appState.hasMoreReadings,
-                    isLoadingMore: appState.isLoadingMore,
                     estimatedHeight: estimatedCardHeight,
-                    onLoadMore: {
-                        Task { await appState.loadMoreReadings() }
-                    },
                     content: { row in
                         CuttingsCardView(
                             row: row,
@@ -239,14 +233,6 @@ extension CuttingsLibraryView {
                     }
                 )
                 .accessibilityIdentifier(A11y.List.table)
-                .overlay(alignment: .bottom) {
-                    if appState.isLoadingMore {
-                        ProgressView()
-                            .padding(Self.boardSpacing)
-                            .background(.regularMaterial, in: Capsule())
-                            .padding(Self.boardSpacing)
-                    }
-                }
             }
         }
     }

@@ -76,7 +76,6 @@ final class AppState {
     @ObservationIgnored var saveNoticeTask: Task<Void, Never>?
     @ObservationIgnored var visualSearchTask: Task<Void, Never>?
     @ObservationIgnored var readingLoadGeneration: UInt64 = 0
-    @ObservationIgnored var readingPageContext: ReadingPageContext?
 
     /// The active library scope. Always exactly one; `.all` is the unfiltered
     /// base. Persisted under a new key so legacy unread/read/archive selections
@@ -117,8 +116,6 @@ final class AppState {
 
     // ── Status ────────────────────────────────────────────────────────────
     var isLoading: Bool = false
-    var isLoadingMore: Bool = false
-    var hasMoreReadings: Bool = false
     var error: String?
 
     /// Short, non-modal acknowledgement for paste/drop saves. Errors that stop
@@ -139,9 +136,6 @@ final class AppState {
 
     // Internal rather than private so the sibling extension files in this
     // folder can reach them — Swift's `private` is file-scoped.
-    // Fetch a bounded number of cards at a time so the first render and each
-    // subsequent append do not trigger an unbounded decode burst.
-    let pageSize: UInt32 = 60
     let semanticCandidateLimit = 2000
     var core: (any CoreBridging)?
     var accessedURL: URL?
