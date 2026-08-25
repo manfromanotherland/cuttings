@@ -65,9 +65,7 @@ struct ContentView: View {
 
 private struct RestoringView: View {
     var body: some View {
-        ProgressView()
-            .controlSize(.large)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        OnboardingBackdrop()
     }
 }
 
