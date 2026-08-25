@@ -39,7 +39,7 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings
         PRODUCT_NAME: Cuttings
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: Cuttings
         INFOPLIST_FILE: Sources/Cuttings/App/Info.plist
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
