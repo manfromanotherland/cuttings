@@ -2,10 +2,16 @@
 
 Checked **2026-08-25** against Apple's public AppKit, SwiftUI, PhotoKit, Image I/O,
 Quick Look, and AVFoundation documentation, plus the source repositories of the relevant
-open-source packages. Cuttings currently targets macOS 14 in
+open-source packages. Cuttings currently targets macOS 15 in
 [`macos/project.yml`](../macos/project.yml).
 
-## Decision
+> **Status:** The option analysis below predates the adopted implementation.
+> Cuttings now uses LazyLayoutKit 0.3.0 for one complete, stable-ID masonry
+> snapshot whose card views are materialized only around the viewport. The board
+> has no user-visible pagination or loading row, and its layout metrics never wait
+> for asset decoding or rendered-view measurement.
+
+## Earlier decision analysis
 
 Use one native **`NSCollectionView`** with a diffable data source, recycled items, prefetching, and
 a derived thumbnail store. Do not paginate the view and do not block presenting item identifiers

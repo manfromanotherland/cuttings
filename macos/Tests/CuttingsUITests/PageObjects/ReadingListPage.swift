@@ -129,7 +129,7 @@ struct ReadingListPage {
 
     // ── Scrolling ───────────────────────────────────────────────────────────
 
-    /// Scroll the list down (loads the next page for large corpora).
+    /// Scroll the virtualized board down through a large corpus.
     func scrollDown() {
         table.swipeUp()
     }

@@ -113,8 +113,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   link placeholders; Links means lightweight URL saves. A separate toolbar menu and searchable
   sheet handle exact tag filtering.
 - The selected board scope and search query compose as an intersection. Filtering is performed in
-  the Rust core, not on the currently loaded Swift page, so pagination remains correct. Board order
-  is fixed: newest saved first when browsing and relevance when searching.
+  the Rust core, not on a Swift-side subset, so the complete board snapshot remains correct. Board
+  order is fixed: newest saved first when browsing and relevance when searching.
 
 ### Masonry cards
 
@@ -160,7 +160,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 ### Content states
 
 - **Empty state:** quiet browser-extension guidance for saving a page, media item, or selection.
-- **Board:** the masonry result for the active board scope and search query, with incremental pagination.
+- **Board:** the complete masonry result for the active board scope and search query. Card views are
+  materialized only around the visible viewport; the board has no pagination control or loading row.
 - **No results:** identifies the active search/filter and offers to clear that axis.
 
 ### Settings / appearance

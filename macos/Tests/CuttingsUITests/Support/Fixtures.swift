@@ -139,7 +139,6 @@ enum Fixtures {
             ("archived-tag", 1), ("markdown", 1), ("programming", 3),
             ("rust", 3), ("swift", 2), ("unicode", 1)
         ]
-
     }
 
     /// ── Search terms ────────────────────────────────────────────────────────
@@ -170,7 +169,7 @@ enum Fixtures {
 
     // ── Large / edge corpora ────────────────────────────────────────────────
 
-    /// A large corpus for pagination (default 120 > the 60-row first page).
+    /// A large corpus for complete-snapshot and virtualization checks.
     static func bulkCorpus(count: Int = 120) -> [ArticleFixture] {
         (0 ..< count).map { index in
             ArticleFixture(
@@ -185,17 +184,16 @@ enum Fixtures {
         }
     }
 
-    /// A page plus one card for proving pagination continues the existing
-    /// masonry columns. The oldest card in the first page is deliberately tall;
-    /// the next page's card should tuck beneath a shorter neighbouring column,
-    /// rather than starting a new horizontal band below it.
-    static func masonryPaginationCorpus() -> [ArticleFixture] {
+    /// A deliberately tall card plus later cards for proving one complete
+    /// snapshot continues the existing masonry columns rather than creating
+    /// horizontal bands.
+    static func continuousMasonryCorpus() -> [ArticleFixture] {
         var corpus = bulkCorpus(count: 61)
         corpus[1].title = String(
-            repeating: "A deliberately tall first-page card ", count: 8
+            repeating: "A deliberately tall masonry card ", count: 8
         )
         corpus[1].excerpt = String(
-            repeating: "Its height exposes a page boundary in the masonry layout. ", count: 12
+            repeating: "Its height exposes a horizontal band in the masonry layout. ", count: 12
         )
         return corpus
     }

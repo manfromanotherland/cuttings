@@ -3,7 +3,7 @@
 import XCTest
 
 final class ReadingQueryTests: XCTestCase {
-    func testSearchKeepsEverySelectedKindScope() {
+    func testSearchKeepsEverySelectedBoardScope() {
         for scope in LibraryScope.allCases {
             let query = ReadingQuery.boardSnapshot(
                 scope: scope,

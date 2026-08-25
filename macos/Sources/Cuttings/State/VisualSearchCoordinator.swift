@@ -133,8 +133,8 @@ actor VisualSearchCoordinator {
     }
 
     /// Best-first semantic candidates for one complete Rust query. Results are
-    /// cached independently of page offsets, so every page uses one stable
-    /// Spotlight ranking until the donated asset generation changes.
+    /// cached by normalized query, so one board snapshot uses a stable Spotlight
+    /// ranking until the donated asset generation changes.
     func candidates(for query: String, limit: Int) async throws -> [String] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = CandidateCacheKey(query: Self.normalizedQuery(trimmed), limit: limit)

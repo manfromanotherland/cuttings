@@ -22,7 +22,7 @@ struct ReadingQuery {
 
 extension ReadingQuery {
     /// The board always composes its selected scope and optional search into
-    /// one core query. Search changes ordering, never the active kind scope.
+    /// one core query. Search changes ordering, never the active board scope.
     static func boardSnapshot(
         scope: LibraryScope,
         search: String?,

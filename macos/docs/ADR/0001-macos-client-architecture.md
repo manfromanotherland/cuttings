@@ -37,7 +37,7 @@ The macOS app will be organized around these responsibilities:
 - `core` owns durable domain entities and business rules.
 - `CoreBridge` owns the async Swift boundary to Rust.
 - `AppState` owns UI orchestration: selected reading, active filters, search,
-  pagination, optimistic mutations, sidebar counts, refreshes, sheets, and
+  complete board snapshots, optimistic mutations, sidebar counts, refreshes, sheets, and
   inspectors.
 - Feature folders own SwiftUI rendering and small feature-local presentation
   helpers.
@@ -178,7 +178,7 @@ Feature folders own views and feature-local presentation helpers:
   composition, app-wide sheets/dialogs/inspectors.
 - `Sidebar`: smart views (All, Unread, Read, Archive, Favorites), ratings,
   tags, counts, sidebar navigation.
-- `ReadingList`: reading rows, pagination triggers, empty list states.
+- `ReadingList`: reading rows, board snapshot loading, empty list states.
 - `Reader`: article detail, article toolbar, rating footer, Markdown renderer.
 - `Tags`: tag picker and tag editing UI.
 - `Highlights`: highlights inspector and highlight UI.
