@@ -2,10 +2,10 @@
 
 import AppKit
 
-/// Numeric masonry layout for the virtualized board. Every card arrives with
-/// final geometry, and column membership stays stable until the data or card
-/// density explicitly changes. Per-column indices keep viewport queries
-/// independent of the total library size.
+/// Numeric masonry layout for the virtualized board. Column membership stays
+/// stable after assignment, so a decoded image only shifts the cards below it
+/// in that column. Per-column indices keep viewport queries independent of the
+/// total library size.
 @MainActor
 final class MasonryCollectionViewLayout: NSCollectionViewLayout {
     var minimumColumnWidth: CGFloat = 220 {
@@ -89,17 +89,6 @@ final class MasonryCollectionViewLayout: NSCollectionViewLayout {
 
         let width = collectionView.enclosingScrollView?.contentSize.width
             ?? collectionView.bounds.width
-        prepareItems(
-            count: collectionView.numberOfItems(inSection: 0),
-            width: width
-        )
-    }
-
-    func prepareSnapshot(itemCount: Int, containerWidth: CGFloat) {
-        prepareItems(count: itemCount, width: containerWidth)
-    }
-
-    private func prepareItems(count: Int, width: CGFloat) {
         let availableWidth = max(
             1,
             width - contentInsets.left - contentInsets.right
@@ -110,6 +99,7 @@ final class MasonryCollectionViewLayout: NSCollectionViewLayout {
             spacing: spacing,
             maximum: Int.max
         )
+        let count = collectionView.numberOfItems(inSection: 0)
         let widthChanged = preparedWidth.map { abs($0 - width) >= 0.5 } ?? true
         let columnsChanged = preparedColumnCount != columnCount
         let countChanged = attributes.count != count

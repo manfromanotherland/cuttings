@@ -18,146 +18,6 @@ final class MasonryGeometryTests: XCTestCase {
     }
 
     @MainActor
-    func testRedundantVisibilityUpdatesDoNotInvalidateHostedCard() {
-        let item = MasonryHostingItem()
-        _ = item.view
-        MasonryHostingItem.resetVisibilityMutationCount()
-
-        item.setVisible(true)
-        let mutationsAfterFirstUpdate = MasonryHostingItem.visibilityMutationCount
-        for _ in 0 ..< 120 {
-            item.setVisible(true)
-        }
-
-        XCTAssertEqual(
-            MasonryHostingItem.visibilityMutationCount,
-            mutationsAfterFirstUpdate
-        )
-        item.setVisible(false)
-        XCTAssertEqual(
-            MasonryHostingItem.visibilityMutationCount,
-            mutationsAfterFirstUpdate + 1
-        )
-    }
-
-    @MainActor
-    func testScrollingDoesNotRelayoutCardsAsTheyEnterViewport() throws {
-        let corpus = MasonryTestCorpus()
-        corpus.count = 90
-        let board = MasonryFrameStabilityHarness(corpus: corpus)
-        let host = NSHostingView(rootView: AnyView(board))
-        host.frame = CGRect(x: 0, y: 0, width: 900, height: 700)
-        let window = NSWindow(
-            contentRect: host.frame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentView = host
-        Self.retainedPerformanceWindow = window
-
-        host.layoutSubtreeIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        host.layoutSubtreeIfNeeded()
-
-        let scrollView = try XCTUnwrap(firstScrollView(in: host))
-        let collectionView = try XCTUnwrap(scrollView.documentView as? NSCollectionView)
-        let layout = try XCTUnwrap(
-            collectionView.collectionViewLayout as? MasonryCollectionViewLayout
-        )
-        let target = try XCTUnwrap(
-            layout.layoutAttributesForItem(at: IndexPath(item: 45, section: 0))
-        )
-
-        scrollView.contentView.scroll(to: NSPoint(x: 0, y: target.frame.minY))
-        scrollView.reflectScrolledClipView(scrollView.contentView)
-        collectionView.layoutSubtreeIfNeeded()
-        let framesAtScroll = masonryFrames(layout: layout, count: corpus.count)
-
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        collectionView.layoutSubtreeIfNeeded()
-        let framesAfterMaterializing = masonryFrames(layout: layout, count: corpus.count)
-        let moved = framesAtScroll.indices.filter {
-            framesAtScroll[$0] != framesAfterMaterializing[$0]
-        }
-
-        XCTAssertTrue(
-            moved.isEmpty,
-            "Entering the viewport must not change masonry geometry; moved cards: \(moved.prefix(12))"
-        )
-    }
-
-    @MainActor
-    func testCardSizeChangePreservesViewportAnchorAndSettlesOnce() throws {
-        guard let context = makePerformanceContext() else { return }
-        context.corpus.count = 180
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        context.host.layoutSubtreeIfNeeded()
-
-        let anchorIndex = 90
-        let beforeLayout = try XCTUnwrap(
-            context.collectionView.collectionViewLayout as? MasonryCollectionViewLayout
-        )
-        let beforeFrame = try XCTUnwrap(
-            beforeLayout.layoutAttributesForItem(
-                at: IndexPath(item: anchorIndex, section: 0)
-            )?.frame
-        )
-        context.scrollView.contentView.scroll(
-            to: NSPoint(x: 0, y: beforeFrame.minY - 24)
-        )
-        context.scrollView.reflectScrolledClipView(context.scrollView.contentView)
-        let beforeOffset = beforeFrame.minY - context.collectionView.visibleRect.minY
-
-        context.corpus.minimumColumnWidth = 300
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
-        context.host.layoutSubtreeIfNeeded()
-
-        let afterLayout = try XCTUnwrap(
-            context.collectionView.collectionViewLayout as? MasonryCollectionViewLayout
-        )
-        let afterFrame = try XCTUnwrap(
-            afterLayout.layoutAttributesForItem(
-                at: IndexPath(item: anchorIndex, section: 0)
-            )?.frame
-        )
-        let afterOffset = afterFrame.minY - context.collectionView.visibleRect.minY
-        XCTAssertEqual(afterOffset, beforeOffset, accuracy: 1)
-
-        let settledFrames = masonryFrames(layout: afterLayout, count: context.corpus.count)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        let laterFrames = masonryFrames(layout: afterLayout, count: context.corpus.count)
-        XCTAssertEqual(settledFrames, laterFrames)
-    }
-
-    @MainActor
-    func testHeightGenerationRebuildsFramesWithIdenticalItems() throws {
-        guard let context = makePerformanceContext() else { return }
-        let indexPath = IndexPath(item: 12, section: 0)
-        let beforeLayout = try XCTUnwrap(
-            context.collectionView.collectionViewLayout as? MasonryCollectionViewLayout
-        )
-        XCTAssertEqual(
-            beforeLayout.layoutAttributesForItem(at: indexPath)?.frame.height,
-            180
-        )
-
-        context.corpus.cardHeight = 240
-        context.corpus.heightGeometryGeneration += 1
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
-        context.host.layoutSubtreeIfNeeded()
-
-        let afterLayout = try XCTUnwrap(
-            context.collectionView.collectionViewLayout as? MasonryCollectionViewLayout
-        )
-        XCTAssertFalse(afterLayout === beforeLayout)
-        XCTAssertEqual(
-            afterLayout.layoutAttributesForItem(at: indexPath)?.frame.height,
-            240
-        )
-    }
-
-    @MainActor
     private func makePerformanceContext() -> MasonryPerformanceContext? {
         MasonryHostingItem.resetAllocationCount()
         let corpus = MasonryTestCorpus()
@@ -254,18 +114,8 @@ final class MasonryGeometryTests: XCTestCase {
         XCTAssertLessThanOrEqual(
             context.layout.lastPreparedItemCount,
             1,
-            "An explicit item-height change must not rebuild the entire board"
+            "A late height correction must not rebuild the entire board"
         )
-    }
-
-    @MainActor
-    private func masonryFrames(
-        layout: MasonryCollectionViewLayout,
-        count: Int
-    ) -> [CGRect] {
-        (0 ..< count).compactMap {
-            layout.layoutAttributesForItem(at: IndexPath(item: $0, section: 0))?.frame
-        }
     }
 
     func testSmallCardSizePreservesExistingColumnWidth() {
@@ -326,16 +176,6 @@ final class MasonryGeometryTests: XCTestCase {
     func testCardPreviewDecodeHasSafeBounds() {
         XCTAssertEqual(CardSize.small.previewMaxPixel(displayScale: .nan), 512)
         XCTAssertEqual(CardSize.large.previewMaxPixel(displayScale: 4), 1024)
-    }
-
-    func testPreviewAssetParticipatesInCardGeometryIdentity() {
-        var row = makeReadingRow()
-        let withoutPreview = MasonryCardGeometryIdentity(row: row)
-        row.previewAsset = "assets/social.jpg"
-        let withPreview = MasonryCardGeometryIdentity(row: row)
-
-        XCTAssertNotEqual(withoutPreview, withPreview)
-        XCTAssertEqual(withPreview, MasonryCardGeometryIdentity(row: row))
     }
 
     func testResolvedWidthFallsBackForUnboundedProposals() {
@@ -424,9 +264,6 @@ private struct MasonryPerformanceContext {
 @Observable
 private final class MasonryTestCorpus {
     var count = 60
-    var minimumColumnWidth: CGFloat = 220
-    var cardHeight: CGFloat = 180
-    var heightGeometryGeneration = 0
 }
 
 @MainActor
@@ -455,34 +292,13 @@ private struct MasonryPerformanceHarness: View {
             Array(0 ..< corpus.count),
             id: \.self,
             width: 900,
-            minimumColumnWidth: corpus.minimumColumnWidth,
-            spacing: 18,
-            geometryID: corpus.heightGeometryGeneration,
-            cardHeight: { _, _ in corpus.cardHeight }
+            minimumColumnWidth: 220,
+            spacing: 18
         ) { id in
             Color.clear
                 .frame(height: 180)
                 .onAppear { counter.appear(id) }
                 .onDisappear { counter.disappear(id) }
-        }
-        .frame(width: 900, height: 700)
-    }
-}
-
-private struct MasonryFrameStabilityHarness: View {
-    @Bindable var corpus: MasonryTestCorpus
-
-    var body: some View {
-        MasonryBoard(
-            Array(0 ..< corpus.count),
-            id: \.self,
-            width: 900,
-            minimumColumnWidth: 220,
-            spacing: 18,
-            cardHeight: { _, _ in 180 }
-        ) { id in
-            Color.clear
-                .frame(height: id.isMultiple(of: 2) ? 320 : 120)
         }
         .frame(width: 900, height: 700)
     }

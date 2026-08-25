@@ -1,32 +1,152 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
-import QuartzCore
 import SwiftUI
+
+/// Small, deterministic geometry helpers shared by the layout and its unit
+/// tests. Cards are always assigned to the currently shortest column, preserving
+/// source order while producing a true masonry silhouette.
+enum MasonryGeometry {
+    static func resolvedWidth(
+        proposedWidth: CGFloat?, minimumColumnWidth: CGFloat
+    ) -> CGFloat {
+        let fallback = minimumColumnWidth.isFinite && minimumColumnWidth > 0
+            ? minimumColumnWidth : 1
+        guard let proposedWidth, proposedWidth.isFinite else { return fallback }
+        return max(fallback, proposedWidth)
+    }
+
+    static func columnCount(
+        width: CGFloat, minimumColumnWidth: CGFloat, spacing: CGFloat, maximum: Int
+    ) -> Int {
+        guard width.isFinite, width > 0 else { return 1 }
+        let divisor = minimumColumnWidth + spacing
+        guard divisor.isFinite, divisor > 0 else { return 1 }
+        let rawCount = (width + spacing) / divisor
+        guard rawCount.isFinite else { return 1 }
+        let count = Int(rawCount)
+        return min(max(1, maximum), max(1, count))
+    }
+
+    static func columnWidth(width: CGFloat, columns: Int, spacing: CGFloat) -> CGFloat {
+        let gaps = CGFloat(max(0, columns - 1)) * spacing
+        return max(0, (width - gaps) / CGFloat(max(1, columns)))
+    }
+
+    static func shortestColumn(in heights: [CGFloat]) -> Int {
+        heights.enumerated().min { lhs, rhs in
+            lhs.element == rhs.element ? lhs.offset < rhs.offset : lhs.element < rhs.element
+        }?.offset ?? 0
+    }
+}
+
+/// A virtualized bridge around AppKit's reusable collection-view items. SwiftUI
+/// custom `Layout` containers must measure every child; `NSCollectionView`
+/// instead asks for views only around the viewport and recycles them while the
+/// lightweight masonry frame model can still span thousands of cards.
+struct MasonryBoard<Element: Equatable, ID: Hashable>: NSViewRepresentable {
+    private let elements: [Element]
+    private let id: KeyPath<Element, ID>
+    private let width: CGFloat
+    private let minimumColumnWidth: CGFloat
+    private let spacing: CGFloat
+    private let contentInsets: NSEdgeInsets
+    private let configurationID: AnyHashable
+    private let hasMore: Bool
+    private let isLoadingMore: Bool
+    private let estimatedHeight: (Element, CGFloat) -> CGFloat
+    private let onLoadMore: () -> Void
+    private let content: (Element) -> AnyView
+
+    init<Data>(
+        _ data: Data,
+        id: KeyPath<Element, ID>,
+        width: CGFloat,
+        minimumColumnWidth: CGFloat = 220,
+        spacing: CGFloat = 18,
+        contentInsets: NSEdgeInsets = .init(),
+        configurationID: AnyHashable = 0,
+        hasMore: Bool = false,
+        isLoadingMore: Bool = false,
+        estimatedHeight: @escaping (Element, CGFloat) -> CGFloat = { _, _ in 180 },
+        onLoadMore: @escaping () -> Void = {},
+        @ViewBuilder content: @escaping (Element) -> some View
+    ) where Data: RandomAccessCollection, Data.Element == Element {
+        elements = Array(data)
+        self.id = id
+        self.width = width
+        self.minimumColumnWidth = minimumColumnWidth
+        self.spacing = spacing
+        self.contentInsets = contentInsets
+        self.configurationID = configurationID
+        self.hasMore = hasMore
+        self.isLoadingMore = isLoadingMore
+        self.estimatedHeight = estimatedHeight
+        self.onLoadMore = onLoadMore
+        self.content = { AnyView(content($0)) }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let layout = MasonryCollectionViewLayout()
+        let collectionView = NSCollectionView()
+        collectionView.collectionViewLayout = layout
+        collectionView.dataSource = context.coordinator
+        collectionView.delegate = context.coordinator
+        collectionView.isSelectable = false
+        collectionView.backgroundColors = [.clear]
+        collectionView.register(
+            MasonryHostingItem.self,
+            forItemWithIdentifier: MasonryHostingItem.reuseIdentifier
+        )
+
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.hasVerticalScroller = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.documentView = collectionView
+        collectionView.frame = NSRect(origin: .zero, size: scrollView.contentSize)
+        collectionView.autoresizingMask = [.width]
+
+        context.coordinator.attach(
+            collectionView: collectionView,
+            layout: layout,
+            scrollView: scrollView
+        )
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.update(from: self, scrollView: scrollView)
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.detach(from: scrollView)
+    }
+}
 
 extension MasonryBoard {
     @MainActor
-    // swiftlint:disable:next type_body_length
-    final class Coordinator: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate,
-        NSCollectionViewPrefetching
-    {
+    final class Coordinator: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate {
         private weak var collectionView: NSCollectionView?
         private weak var layout: MasonryCollectionViewLayout?
         private var elements: [Element] = []
         private var ids: [ID] = []
+        private var indexByID: [ID: Int] = [:]
+        private var measuredHeights: [ID: Measurement] = [:]
+        private var pendingMeasurements: [ID: Measurement] = [:]
+        private var isApplyingMeasurements = false
         private var content: ((Element) -> AnyView)?
-        private var cardHeight: ((Element, CGFloat) -> CGFloat)?
+        private var estimatedHeight: ((Element, CGFloat) -> CGFloat)?
         private var configurationID: AnyHashable?
-        private var geometryID: AnyHashable?
         private var hasMore = false
         private var isLoadingMore = false
         private var lastRequestedCount: Int?
         private var onLoadMore: (() -> Void)?
-        private var onPrefetch: (([Element]) -> Void)?
-        private var onCancelPrefetch: (([Element]) -> Void)?
-        private var layoutAnimationGeneration = 0
-        private var isAnimatingLayoutChange = false
-        private var hasDeferredConfigurationReload = false
 
         func attach(
             collectionView: NSCollectionView,
@@ -59,24 +179,22 @@ extension MasonryBoard {
         }
 
         func update(from board: MasonryBoard, scrollView: NSScrollView) {
-            guard let collectionView, let currentLayout = layout else { return }
+            guard let collectionView, let layout else { return }
 
             let oldElements = elements
             let oldIDs = ids
             let newIDs = board.elements.map { $0[keyPath: board.id] }
             let configurationChanged = configurationID != board.configurationID
-            let heightGeometryChanged = geometryID != board.geometryID
             let wasLoadingMore = isLoadingMore
             let appended = oldIDs.count < newIDs.count
                 && Array(newIDs.prefix(oldIDs.count)) == oldIDs
             let sameIDs = oldIDs == newIDs
 
-            let activeLayout = applyConfiguration(
+            applyConfiguration(
                 from: board,
                 collectionView: collectionView,
-                layout: currentLayout,
-                scrollView: scrollView,
-                heightGeometryChanged: heightGeometryChanged
+                layout: layout,
+                scrollView: scrollView
             )
             install(board.elements, ids: newIDs)
             reconcileItems(
@@ -86,7 +204,7 @@ extension MasonryBoard {
                 sameIDs: sameIDs,
                 configurationChanged: configurationChanged,
                 collectionView: collectionView,
-                layout: activeLayout
+                layout: layout
             )
 
             if !sameIDs || newIDs.count != oldIDs.count
@@ -101,90 +219,18 @@ extension MasonryBoard {
             from board: MasonryBoard,
             collectionView: NSCollectionView,
             layout: MasonryCollectionViewLayout,
-            scrollView: NSScrollView,
-            heightGeometryChanged: Bool
-        ) -> MasonryCollectionViewLayout {
-            applyContentConfiguration(from: board)
-            let geometryChanged = heightGeometryChanged
-                || layoutGeometryDiffers(layout, from: board)
-            let viewportAnchor = geometryChanged ? captureViewportAnchor(using: layout) : nil
-            let activeLayout: MasonryCollectionViewLayout
-            if geometryChanged, !elements.isEmpty {
-                let replacement = MasonryCollectionViewLayout()
-                replacement.heightProvider = { [weak self] index, width in
-                    self?.height(at: index, width: width) ?? 180
-                }
-                configure(
-                    replacement,
-                    minimumColumnWidth: board.minimumColumnWidth,
-                    spacing: board.spacing,
-                    contentInsets: board.contentInsets
-                )
-                let containerWidth = scrollView.contentSize.width > 0
-                    ? scrollView.contentSize.width : board.width
-                replacement.prepareSnapshot(
-                    itemCount: elements.count,
-                    containerWidth: containerWidth
-                )
-                self.layout = replacement
-                activeLayout = replacement
-
-                if board.animatesLayoutChanges {
-                    animateLayoutChange(
-                        collectionView: collectionView,
-                        scrollView: scrollView,
-                        replacement: replacement,
-                        anchor: viewportAnchor
-                    )
-                } else {
-                    cancelPendingLayoutAnimation()
-                    collectionView.collectionViewLayout = replacement
-                    restoreViewportAnchor(
-                        viewportAnchor,
-                        using: replacement,
-                        in: scrollView
-                    )
-                }
-            } else {
-                configure(
-                    layout,
-                    minimumColumnWidth: board.minimumColumnWidth,
-                    spacing: board.spacing,
-                    contentInsets: board.contentInsets
-                )
-                activeLayout = layout
-            }
-
-            updateCollectionWidth(collectionView, from: board, in: scrollView)
-            return activeLayout
-        }
-
-        private func applyContentConfiguration(from board: MasonryBoard) {
+            scrollView: NSScrollView
+        ) {
             content = board.content
-            cardHeight = board.cardHeight
+            estimatedHeight = board.estimatedHeight
             configurationID = board.configurationID
-            geometryID = board.geometryID
             hasMore = board.hasMore
             isLoadingMore = board.isLoadingMore
             onLoadMore = board.onLoadMore
-            onPrefetch = board.onPrefetch
-            onCancelPrefetch = board.onCancelPrefetch
-        }
 
-        private func layoutGeometryDiffers(
-            _ layout: MasonryCollectionViewLayout,
-            from board: MasonryBoard
-        ) -> Bool {
-            layout.minimumColumnWidth != board.minimumColumnWidth
-                || layout.spacing != board.spacing
-                || !sameInsets(layout.contentInsets, board.contentInsets)
-        }
-
-        private func updateCollectionWidth(
-            _ collectionView: NSCollectionView,
-            from board: MasonryBoard,
-            in scrollView: NSScrollView
-        ) {
+            layout.minimumColumnWidth = board.minimumColumnWidth
+            layout.spacing = board.spacing
+            layout.contentInsets = board.contentInsets
             if scrollView.contentSize.width > 0 {
                 collectionView.frame.size.width = scrollView.contentSize.width
             } else if board.width.isFinite, board.width > 0 {
@@ -192,134 +238,14 @@ extension MasonryBoard {
             }
         }
 
-        private func configure(
-            _ layout: MasonryCollectionViewLayout,
-            minimumColumnWidth: CGFloat,
-            spacing: CGFloat,
-            contentInsets: NSEdgeInsets
-        ) {
-            layout.minimumColumnWidth = minimumColumnWidth
-            layout.spacing = spacing
-            layout.contentInsets = contentInsets
-        }
-
-        private func sameInsets(_ lhs: NSEdgeInsets, _ rhs: NSEdgeInsets) -> Bool {
-            lhs.top == rhs.top
-                && lhs.left == rhs.left
-                && lhs.bottom == rhs.bottom
-                && lhs.right == rhs.right
-        }
-
-        private func animateLayoutChange(
-            collectionView: NSCollectionView,
-            scrollView: NSScrollView,
-            replacement: MasonryCollectionViewLayout,
-            anchor: ViewportAnchor?
-        ) {
-            layoutAnimationGeneration += 1
-            let generation = layoutAnimationGeneration
-            isAnimatingLayoutChange = true
-            let targetOrigin = scrollOrigin(
-                preserving: anchor,
-                using: replacement,
-                in: scrollView
-            )
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.28
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                collectionView.animator().collectionViewLayout = replacement
-                if let targetOrigin {
-                    scrollView.contentView.animator().setBoundsOrigin(targetOrigin)
-                }
-            }
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard let self, layoutAnimationGeneration == generation else { return }
-                isAnimatingLayoutChange = false
-                reloadDeferredConfigurationIfNeeded()
-            }
-        }
-
-        private func cancelPendingLayoutAnimation() {
-            layoutAnimationGeneration += 1
-            isAnimatingLayoutChange = false
-            hasDeferredConfigurationReload = false
-        }
-
-        private func reloadDeferredConfigurationIfNeeded() {
-            guard hasDeferredConfigurationReload, let collectionView else { return }
-            hasDeferredConfigurationReload = false
-            let visible = Set(collectionView.visibleItems().compactMap {
-                collectionView.indexPath(for: $0)
-            })
-            guard !visible.isEmpty else { return }
-            collectionView.reloadItems(at: visible)
-        }
-
-        private func captureViewportAnchor(
-            using layout: MasonryCollectionViewLayout
-        ) -> ViewportAnchor? {
-            guard let collectionView else { return nil }
-            let visibleRect = collectionView.visibleRect
-            return layout.layoutAttributesForElements(in: visibleRect)
-                .compactMap { attributes -> ViewportAnchor? in
-                    guard let index = attributes.indexPath?.item,
-                          ids.indices.contains(index)
-                    else { return nil }
-                    return ViewportAnchor(
-                        id: ids[index],
-                        offsetFromViewportTop: attributes.frame.minY - visibleRect.minY
-                    )
-                }
-                .min {
-                    abs($0.offsetFromViewportTop) < abs($1.offsetFromViewportTop)
-                }
-        }
-
-        private func restoreViewportAnchor(
-            _ anchor: ViewportAnchor?,
-            using layout: MasonryCollectionViewLayout,
-            in scrollView: NSScrollView
-        ) {
-            guard let origin = scrollOrigin(
-                preserving: anchor,
-                using: layout,
-                in: scrollView
-            ) else { return }
-            scrollView.contentView.scroll(to: origin)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
-        }
-
-        private func scrollOrigin(
-            preserving anchor: ViewportAnchor?,
-            using layout: MasonryCollectionViewLayout,
-            in scrollView: NSScrollView
-        ) -> NSPoint? {
-            guard let anchor,
-                  let index = ids.firstIndex(of: anchor.id),
-                  let frame = layout.layoutAttributesForItem(
-                      at: IndexPath(item: index, section: 0)
-                  )?.frame
-            else { return nil }
-            let clipView = scrollView.contentView
-            let maximumY = max(
-                0,
-                layout.collectionViewContentSize.height - clipView.bounds.height
-            )
-            return NSPoint(
-                x: clipView.bounds.minX,
-                y: min(maximumY, max(0, frame.minY - anchor.offsetFromViewportTop))
-            )
-        }
-
-        private struct ViewportAnchor {
-            let id: ID
-            let offsetFromViewportTop: CGFloat
-        }
-
         private func install(_ newElements: [Element], ids newIDs: [ID]) {
             elements = newElements
             ids = newIDs
+            indexByID = Dictionary(
+                uniqueKeysWithValues: newIDs.enumerated().map { ($0.element, $0.offset) }
+            )
+            let newIDSet = Set(newIDs)
+            measuredHeights = measuredHeights.filter { newIDSet.contains($0.key) }
         }
 
         private func reconcileItems(
@@ -359,24 +285,24 @@ extension MasonryBoard {
             collectionView: NSCollectionView,
             layout: MasonryCollectionViewLayout
         ) {
-            let contentChanged = Set(oldElements.indices.compactMap { index in
+            var changed = Set(oldElements.indices.compactMap { index in
                 oldElements[index] == elements[index]
                     ? nil : IndexPath(item: index, section: 0)
             })
-            var changed = contentChanged
             if configurationChanged {
-                if isAnimatingLayoutChange {
-                    hasDeferredConfigurationReload = true
-                } else {
-                    changed.formUnion(collectionView.visibleItems().compactMap {
-                        collectionView.indexPath(for: $0)
-                    })
-                }
+                changed.formUnion(collectionView.visibleItems().compactMap {
+                    collectionView.indexPath(for: $0)
+                })
             }
             guard !changed.isEmpty else { return }
 
+            let changedIndices = Set(changed.map(\.item))
+            for index in changedIndices where ids.indices.contains(index) {
+                measuredHeights.removeValue(forKey: ids[index])
+                pendingMeasurements.removeValue(forKey: ids[index])
+            }
             collectionView.reloadItems(at: changed)
-            layout.invalidateHeights(at: Set(contentChanged.map(\.item)))
+            layout.invalidateHeights(at: changedIndices)
         }
 
         func numberOfSections(in _: NSCollectionView) -> Int {
@@ -402,14 +328,17 @@ extension MasonryBoard {
 
             let element = elements[indexPath.item]
             let id = ids[indexPath.item]
-            let height = layout.layoutAttributesForItem(at: indexPath)?.size.height
-                ?? height(at: indexPath.item, width: layout.itemWidth)
             item.configure(
                 identity: AnyHashable(id),
                 width: layout.itemWidth,
-                height: height,
                 content: AnyView(content(element).id(id))
-            )
+            ) { [weak self] measuredWidth, measuredHeight in
+                self?.record(
+                    height: measuredHeight,
+                    width: measuredWidth,
+                    for: id
+                )
+            }
             return item
         }
 
@@ -438,28 +367,43 @@ extension MasonryBoard {
             (item as? MasonryHostingItem)?.endDisplaying()
         }
 
-        func collectionView(
-            _: NSCollectionView,
-            prefetchItemsAt indexPaths: [IndexPath]
-        ) {
-            onPrefetch?(indexPaths.compactMap { indexPath in
-                elements.indices.contains(indexPath.item) ? elements[indexPath.item] : nil
-            })
-        }
-
-        func collectionView(
-            _: NSCollectionView,
-            cancelPrefetchingForItemsAt indexPaths: [IndexPath]
-        ) {
-            onCancelPrefetch?(indexPaths.compactMap { indexPath in
-                elements.indices.contains(indexPath.item) ? elements[indexPath.item] : nil
-            })
-        }
-
         private func height(at index: Int, width: CGFloat) -> CGFloat {
             guard elements.indices.contains(index) else { return 180 }
-            let height = cardHeight?(elements[index], width) ?? 180
-            return height.isFinite && height > 0 ? height : 180
+            let id = ids[index]
+            if let measurement = measuredHeights[id],
+               abs(measurement.width - width) < 0.5
+            {
+                return measurement.height
+            }
+            let estimate = estimatedHeight?(elements[index], width) ?? 180
+            return estimate.isFinite && estimate > 0 ? estimate : 180
+        }
+
+        private func record(height: CGFloat, width: CGFloat, for id: ID) {
+            guard height.isFinite, height > 0, width.isFinite, width > 0 else { return }
+            let measurement = Measurement(width: width, height: ceil(height))
+            if let current = measuredHeights[id],
+               abs(current.width - measurement.width) < 0.5,
+               abs(current.height - measurement.height) < 0.5
+            {
+                return
+            }
+            pendingMeasurements[id] = measurement
+            guard !isApplyingMeasurements else { return }
+            isApplyingMeasurements = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                let scrollAnchor = captureScrollAnchor()
+                let applicable = pendingMeasurements.filter { indexByID[$0.key] != nil }
+                let changedIndices = Set(applicable.keys.compactMap { indexByID[$0] })
+                measuredHeights.merge(applicable) { _, new in new }
+                pendingMeasurements.removeAll(keepingCapacity: true)
+                isApplyingMeasurements = false
+                layout?.invalidateHeights(at: changedIndices)
+                layout?.prepare()
+                restoreScrollAnchor(scrollAnchor)
+                updateVisibility()
+            }
         }
 
         @objc private func clipViewBoundsDidChange(_: Notification) {
@@ -481,6 +425,59 @@ extension MasonryBoard {
                   let frame = layout?.layoutAttributesForItem(at: indexPath)?.frame
             else { return false }
             return frame.intersects(collectionView.visibleRect)
+        }
+
+        private func captureScrollAnchor() -> ScrollAnchor? {
+            guard let collectionView else { return nil }
+            let visibleRect = collectionView.visibleRect
+            let candidates = collectionView.visibleItems().compactMap { item -> ScrollAnchor? in
+                guard let indexPath = collectionView.indexPath(for: item),
+                      ids.indices.contains(indexPath.item),
+                      let frame = layout?.layoutAttributesForItem(at: indexPath)?.frame,
+                      frame.intersects(visibleRect)
+                else { return nil }
+                return ScrollAnchor(
+                    id: ids[indexPath.item],
+                    offsetFromViewportTop: frame.minY - visibleRect.minY
+                )
+            }
+            return candidates.min {
+                abs($0.offsetFromViewportTop) < abs($1.offsetFromViewportTop)
+            }
+        }
+
+        private func restoreScrollAnchor(_ anchor: ScrollAnchor?) {
+            guard let anchor,
+                  let collectionView,
+                  let scrollView = collectionView.enclosingScrollView,
+                  let index = indexByID[anchor.id],
+                  let frame = layout?.layoutAttributesForItem(
+                      at: IndexPath(item: index, section: 0)
+                  )?.frame
+            else { return }
+
+            let clipView = scrollView.contentView
+            let maximumY = max(
+                0,
+                (layout?.collectionViewContentSize.height ?? 0) - clipView.bounds.height
+            )
+            let targetY = min(
+                maximumY,
+                max(0, frame.minY - anchor.offsetFromViewportTop)
+            )
+            guard abs(clipView.bounds.minY - targetY) >= 0.5 else { return }
+            clipView.scroll(to: NSPoint(x: clipView.bounds.minX, y: targetY))
+            scrollView.reflectScrolledClipView(clipView)
+        }
+
+        private struct Measurement {
+            let width: CGFloat
+            let height: CGFloat
+        }
+
+        private struct ScrollAnchor {
+            let id: ID
+            let offsetFromViewportTop: CGFloat
         }
     }
 }
