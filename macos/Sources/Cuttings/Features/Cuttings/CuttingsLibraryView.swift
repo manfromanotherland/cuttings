@@ -192,8 +192,7 @@ extension CuttingsLibraryView {
                     LazyVStack(spacing: Self.boardSpacing) {
                         MasonryLayout(
                             minimumColumnWidth: cardSize.minimumColumnWidth,
-                            spacing: Self.boardSpacing,
-                            maximumColumns: 6
+                            spacing: Self.boardSpacing
                         ) {
                             ForEach(appState.readings) { row in
                                 CuttingsCardView(

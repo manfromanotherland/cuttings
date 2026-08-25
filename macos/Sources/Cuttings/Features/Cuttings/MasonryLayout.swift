@@ -42,7 +42,9 @@ enum MasonryGeometry {
 struct MasonryLayout: Layout {
     var minimumColumnWidth: CGFloat = 220
     var spacing: CGFloat = 18
-    var maximumColumns = 6
+    /// Let the selected card width determine density on wide boards. A global
+    /// ceiling collapses several zoom stops into identical rendered widths.
+    var maximumColumns = Int.max
 
     func sizeThatFits(
         proposal: ProposedViewSize, subviews: Subviews, cache _: inout Void

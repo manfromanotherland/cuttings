@@ -31,6 +31,27 @@ final class MasonryGeometryTests: XCTestCase {
         XCTAssertEqual(columnCounts, [5, 4, 3, 2, 1])
     }
 
+    func testFiveCardSizesRemainDistinctOnWideBoard() {
+        let width: CGFloat = 2_524
+        let renderedWidths = CardSize.allCases.map { size in
+            let columns = MasonryGeometry.columnCount(
+                width: width,
+                minimumColumnWidth: size.minimumColumnWidth,
+                spacing: 18,
+                maximum: MasonryLayout().maximumColumns
+            )
+            return MasonryGeometry.columnWidth(
+                width: width,
+                columns: columns,
+                spacing: 18
+            )
+        }
+
+        for (smaller, larger) in zip(renderedWidths, renderedWidths.dropFirst()) {
+            XCTAssertLessThan(smaller, larger)
+        }
+    }
+
     func testResolvedWidthFallsBackForUnboundedProposals() {
         for proposedWidth: CGFloat? in [nil, .infinity, -.infinity, .nan] {
             XCTAssertEqual(
