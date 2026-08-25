@@ -14,6 +14,8 @@ pub struct ScannedReading {
     pub source_hash: String,
     pub modified_at: SystemTime,
     pub metadata: Metadata,
+    /// Whether the reading folder contains a regular personal-note sidecar.
+    pub has_note: bool,
     /// Raw Markdown body (after stripping frontmatter), stored for FTS indexing.
     pub body: String,
 }
@@ -95,6 +97,7 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                 source_hash: reading.metadata.source_hash.clone(),
                 modified_at,
                 path,
+                has_note: note_file_exists(library, &reading.metadata.id),
                 metadata: reading.metadata,
                 body: reading.body,
             });
@@ -104,7 +107,8 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
     Ok(results)
 }
 
-/// Diff two snapshots, using body hash and frontmatter metadata as change signals.
+/// Diff two snapshots, using body hash, frontmatter metadata, and note presence
+/// as change signals.
 ///
 /// Items present in `new` but absent in `old` → `Added`.
 /// Items present in both but with differing body or metadata → `Changed`.
@@ -121,7 +125,8 @@ pub fn diff(old: &[ScannedReading], new: &[ScannedReading]) -> Vec<ScanDiff> {
             None => diffs.push(ScanDiff::Added(reading.clone())),
             Some(old_reading)
                 if old_reading.source_hash != reading.source_hash
-                    || old_reading.metadata != reading.metadata =>
+                    || old_reading.metadata != reading.metadata
+                    || old_reading.has_note != reading.has_note =>
             {
                 diffs.push(ScanDiff::Changed(reading.clone()))
             }
@@ -136,6 +141,23 @@ pub fn diff(old: &[ScannedReading], new: &[ScannedReading]) -> Vec<ScanDiff> {
     }
 
     diffs
+}
+
+/// Whether a reading has a valid note sidecar for indexing purposes.
+///
+/// The public note API refuses symlinks, so the derived cache must not advertise
+/// one as a personal note either. Other metadata errors are treated as absence;
+/// a later filesystem event will retry the scan.
+pub(crate) fn note_file_exists(library: &LibraryRoot, reading_id: &str) -> bool {
+    let path = library.note_path(reading_id);
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata.file_type().is_file(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => {
+            eprintln!("scanner: could not inspect {}: {error}", path.display());
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -360,5 +382,37 @@ mod tests {
         let diffs = diff(&old_scan, &new_scan);
         assert_eq!(diffs.len(), 1);
         assert!(matches!(diffs[0], ScanDiff::Changed(_)));
+    }
+
+    #[test]
+    fn scan_and_diff_track_personal_note_presence() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let id = new_id();
+        write_reading(
+            &lib,
+            sample_metadata(&id, "https://example.com/noted"),
+            "same body".to_string(),
+        )
+        .unwrap();
+
+        let without_note = scan_library(&lib).unwrap();
+        assert!(!without_note[0].has_note);
+
+        fs::write(lib.note_path(&id), "A personal note").unwrap();
+        let with_note = scan_library(&lib).unwrap();
+        assert!(with_note[0].has_note);
+        assert!(matches!(
+            diff(&without_note, &with_note)[..],
+            [ScanDiff::Changed(_)]
+        ));
+
+        fs::remove_file(lib.note_path(&id)).unwrap();
+        let removed_note = scan_library(&lib).unwrap();
+        assert!(!removed_note[0].has_note);
+        assert!(matches!(
+            diff(&with_note, &removed_note)[..],
+            [ScanDiff::Changed(_)]
+        ));
     }
 }

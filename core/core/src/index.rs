@@ -43,6 +43,9 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 2 {
         migrate_v2(conn)?;
     }
+    if version < 3 {
+        migrate_v3(conn)?;
+    }
     Ok(())
 }
 
@@ -140,6 +143,70 @@ fn migrate_v2(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v3: index lightweight links, personal-note presence, and searchable tags.
+///
+/// All three columns remain disposable cache data derived from the reading
+/// folder. Recreate the external-content FTS table so tag text participates in
+/// the same title/body/site search without changing the Markdown contract.
+fn migrate_v3(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings ADD COLUMN lightweight INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE readings ADD COLUMN has_note INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE readings ADD COLUMN tags_text TEXT NOT NULL DEFAULT '';
+
+        UPDATE readings
+        SET tags_text = COALESCE(
+            (SELECT group_concat(value, ' ') FROM json_each(readings.tags_json)),
+            ''
+        );
+
+        DROP TRIGGER IF EXISTS readings_ai;
+        DROP TRIGGER IF EXISTS readings_ad;
+        DROP TRIGGER IF EXISTS readings_au;
+        DROP TABLE readings_fts;
+
+        CREATE VIRTUAL TABLE readings_fts USING fts5(
+            title,
+            body_text,
+            site,
+            tags_text,
+            content=readings,
+            content_rowid=rowid
+        );
+
+        CREATE TRIGGER readings_ai
+        AFTER INSERT ON readings BEGIN
+            INSERT INTO readings_fts(rowid, title, body_text, site, tags_text)
+            VALUES (new.rowid, new.title, new.body_text, new.site, new.tags_text);
+        END;
+
+        CREATE TRIGGER readings_ad
+        AFTER DELETE ON readings BEGIN
+            INSERT INTO readings_fts(readings_fts, rowid, title, body_text, site, tags_text)
+            VALUES ('delete', old.rowid, old.title, old.body_text, old.site, old.tags_text);
+        END;
+
+        CREATE TRIGGER readings_au
+        AFTER UPDATE ON readings BEGIN
+            INSERT INTO readings_fts(readings_fts, rowid, title, body_text, site, tags_text)
+            VALUES ('delete', old.rowid, old.title, old.body_text, old.site, old.tags_text);
+            INSERT INTO readings_fts(rowid, title, body_text, site, tags_text)
+            VALUES (new.rowid, new.title, new.body_text, new.site, new.tags_text);
+        END;
+
+        INSERT INTO readings_fts(readings_fts) VALUES ('rebuild');
+
+        PRAGMA user_version = 3;
+
+        COMMIT;
+        ",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,7 +225,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
 
         // readings table exists
         let count: i64 = conn
@@ -272,6 +339,8 @@ mod tests {
         for col in &[
             "id",
             "kind",
+            "lightweight",
+            "has_note",
             "url",
             "media_url",
             "preview_asset",
@@ -283,6 +352,7 @@ mod tests {
             "rating",
             "source_hash",
             "tags_json",
+            "tags_text",
             "body_text",
         ] {
             assert!(columns.contains(&col.to_string()), "missing column: {col}");
@@ -323,7 +393,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -333,5 +403,56 @@ mod tests {
             )
             .unwrap();
         assert_eq!(values, ("article".into(), None, None));
+    }
+
+    #[test]
+    fn v3_derives_searchable_tags_and_filter_flags_for_existing_rows() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            migrate_v1(&conn).unwrap();
+            migrate_v2(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO readings
+                 (id, url, canonical_url, title, saved_at, source_hash, tags_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                rusqlite::params![
+                    "existing-id",
+                    "https://example.com/existing",
+                    "https://example.com/existing",
+                    "Existing",
+                    "2026-06-13T15:00:00Z",
+                    "sha256:abc",
+                    r#"["local-first","design"]"#
+                ],
+            )
+            .unwrap();
+        }
+
+        let conn = open(&db_path).unwrap();
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 3);
+
+        let values: (i64, i64, String) = conn
+            .query_row(
+                "SELECT lightweight, has_note, tags_text FROM readings WHERE id = 'existing-id'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(values, (0, 0, "local-first design".into()));
+
+        let matches: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM readings_fts WHERE readings_fts MATCH 'local'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(matches, 1);
     }
 }

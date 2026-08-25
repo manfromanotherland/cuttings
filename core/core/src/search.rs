@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
 use anyhow::Result;
-use rusqlite::{params, Connection};
 
 /// Split user text into word tokens, dropping all punctuation/operators.
 ///
@@ -46,11 +45,13 @@ fn and_query(tokens: &[String]) -> String {
 }
 
 /// Build the FTS5 `MATCH` string for `query`, preferring an exact phrase and
-/// falling back to all-words-AND when the phrase matches nothing. Returns
-/// `None` when there's nothing searchable (blank / pure punctuation).
+/// falling back to all-words-AND when the phrase matches nothing in the
+/// caller's active scope. Returns `None` when there's nothing searchable
+/// (blank / pure punctuation).
 ///
-/// This is the single place user text becomes an FTS query; `list_readings`'
-/// full-text branch runs the result so search stays consistent with the list.
+/// This is the single place user text becomes an FTS query; callers provide the
+/// phrase-existence probe so fallback is resolved against the same filters as
+/// the eventual result set rather than against the whole library.
 ///
 /// `query` is plain user text. It is first matched as an exact contiguous
 /// phrase; if that finds nothing, it falls back to requiring all the words to
@@ -59,21 +60,20 @@ fn and_query(tokens: &[String]) -> String {
 /// *between* the visible words — pasted rendered prose rarely lines up as a
 /// literal phrase, but every word is still present.
 ///
-/// The FTS index spans the title, body, *and* source site, so a query like
+/// The FTS index spans the title, body, source site, *and tags*, so a query like
 /// "nytimes" surfaces articles from nytimes.com even when the term appears
 /// nowhere in their text — site tokens match (and prefix-match) just like any
-/// other word.
-pub(crate) fn match_query(conn: &Connection, query: &str) -> Result<Option<String>> {
+/// other word. Tag values use the same plain-text matching behavior.
+pub(crate) fn match_query(
+    query: &str,
+    phrase_exists: impl FnOnce(&str) -> Result<bool>,
+) -> Result<Option<String>> {
     let tokens = tokenize(query);
     if tokens.is_empty() {
         return Ok(None);
     }
     let phrase = phrase_query(&tokens);
-    let phrase_matches: bool = conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM readings_fts WHERE readings_fts MATCH ?1)",
-        params![phrase],
-        |row| row.get(0),
-    )?;
+    let phrase_matches = phrase_exists(&phrase)?;
     Ok(Some(if phrase_matches {
         phrase
     } else {
@@ -85,6 +85,7 @@ pub(crate) fn match_query(conn: &Connection, query: &str) -> Result<Option<Strin
 mod tests {
     use std::fs;
 
+    use rusqlite::{params, Connection};
     use tempfile::TempDir;
 
     use super::*;
@@ -138,7 +139,15 @@ mod tests {
     /// index — the same string `list_readings` runs — minus the list's
     /// view/tag/rating filters and pagination.
     fn matches(conn: &Connection, query: &str) -> Vec<String> {
-        let Some(m) = match_query(conn, query).unwrap() else {
+        let Some(m) = match_query(query, |phrase| {
+            conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM readings_fts WHERE readings_fts MATCH ?1)",
+                params![phrase],
+                |row| row.get(0),
+            )
+            .map_err(Into::into)
+        })
+        .unwrap() else {
             return vec![];
         };
         let mut stmt = conn
@@ -160,7 +169,7 @@ mod tests {
         let (_dir, conn) = setup();
         // A present-but-untokenizable query produces no MATCH at all — the
         // caller treats that as "search matching nothing", not a full listing.
-        assert!(match_query(&conn, "").unwrap().is_none());
+        assert!(match_query("", |_| Ok(false)).unwrap().is_none());
         assert!(matches(&conn, "").is_empty());
     }
 
@@ -349,6 +358,21 @@ mod tests {
 
         // The term appears nowhere in title/body — only in the site column.
         assert_eq!(matches(&conn, "nytimes"), vec![id]);
+    }
+
+    #[test]
+    fn finds_match_by_tag() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let id = new_id();
+        let mut metadata = meta(&id, "https://example.com/tagged", "No matching words");
+        metadata.tags = vec!["local-first".into(), "inspiration".into()];
+        write_reading(&lib, metadata, "Body without the search term.".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        assert_eq!(matches(&conn, "inspiration"), vec![id.clone()]);
+        assert_eq!(matches(&conn, "local"), vec![id]);
     }
 
     #[test]

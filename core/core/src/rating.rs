@@ -37,7 +37,7 @@ pub fn set_rating(library: &LibraryRoot, conn: &Connection, id: &str, rating: u8
 /// archived readings shows a 0, and every other bucket its plain non-archived
 /// count.
 pub fn list_ratings(conn: &Connection, scope: &CountScope) -> Result<Vec<(u8, u64)>> {
-    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    let search = ResolvedSearch::resolve_scoped(conn, scope)?;
     list_ratings_with(conn, scope, &search)
 }
 

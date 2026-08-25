@@ -8,7 +8,7 @@ use crate::ReadingKind;
 /// Smart-view filter applied when listing readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
-    /// All non-archived readings.
+    /// Every reading, including legacy archived rows.
     All,
     /// Non-archived readings that have not been read.
     Unread,
@@ -18,6 +18,16 @@ pub enum View {
     Archive,
     /// Readings marked as favorite (regardless of archived state).
     Favorites,
+    /// Image and video readings.
+    Media,
+    /// Fully captured articles, excluding lightweight link placeholders.
+    Articles,
+    /// Readings with a personal `note.md` sidecar, regardless of card kind.
+    Notes,
+    /// Lightweight article placeholders created from URL-only saves.
+    Links,
+    /// Selected-text and source-less text cards.
+    Quotes,
 }
 
 /// Field to sort a listing by. Direction is controlled separately by
@@ -91,6 +101,8 @@ pub struct ReadingRow {
     pub id: String,
     pub title: String,
     pub kind: ReadingKind,
+    pub lightweight: bool,
+    pub has_note: bool,
     pub url: String,
     pub media_url: Option<String>,
     pub preview_asset: Option<String>,
@@ -121,6 +133,11 @@ pub(crate) fn view_clause(view: View) -> &'static str {
         View::Read => "archived = 0 AND read_at IS NOT NULL",
         View::Archive => "archived = 1",
         View::Favorites => "favorite = 1",
+        View::Media => "kind IN ('image', 'video')",
+        View::Articles => "kind = 'article' AND lightweight = 0",
+        View::Notes => "has_note = 1",
+        View::Links => "kind = 'article' AND lightweight = 1",
+        View::Quotes => "kind = 'quote'",
     }
 }
 
@@ -215,20 +232,56 @@ pub(crate) enum ResolvedSearch {
 }
 
 impl ResolvedSearch {
-    /// Resolve `query` against the FTS index once. `None` query is
-    /// [`Unfiltered`](Self::Unfiltered); a present query becomes
-    /// [`Fts`](Self::Fts) or, when it tokenizes/matches to nothing,
-    /// [`Unmatchable`](Self::Unmatchable) — mirroring how `list_readings` treats
-    /// an unmatchable search as "no results".
-    pub(crate) fn resolve(conn: &Connection, query: Option<&str>) -> Result<Self> {
-        Ok(match query {
+    /// Resolve a search against the complete active count scope. The selected
+    /// view and sibling facets determine phrase fallback, while the later count
+    /// queries may still ignore their own facet axis when presenting choices.
+    pub(crate) fn resolve_scoped(conn: &Connection, scope: &CountScope) -> Result<Self> {
+        Ok(match scope.query.as_deref() {
             None => Self::Unfiltered,
-            Some(q) => match crate::search::match_query(conn, q)? {
+            Some(q) => match crate::search::match_query(q, |phrase| {
+                phrase_exists_in_count_scope(conn, scope, phrase)
+            })? {
                 None => Self::Unmatchable,
                 Some(m) => Self::Fts(m),
             },
         })
     }
+}
+
+/// Whether an exact phrase matches anywhere in the active count scope. This
+/// probe intentionally has no pagination: phrase-vs-AND semantics belong to the
+/// filtered result set as a whole, not whichever page happens to be requested.
+fn phrase_exists_in_count_scope(
+    conn: &Connection,
+    scope: &CountScope,
+    phrase: &str,
+) -> Result<bool> {
+    let view_clause = view_clause(scope.view);
+    let sql = format!(
+        "SELECT EXISTS(
+             SELECT 1
+             FROM readings_fts
+             JOIN readings r ON r.rowid = readings_fts.rowid
+             WHERE readings_fts MATCH ?1
+               AND {view_clause}
+               AND (?2 IS NULL OR EXISTS (
+                    SELECT 1 FROM json_each(r.tags_json) WHERE value = ?2
+               ))
+               AND (?3 IS NULL OR r.rating = ?3)
+               AND (?4 IS NULL OR r.kind = ?4)
+         )"
+    );
+    conn.query_row(
+        &sql,
+        params![
+            phrase,
+            scope.tag.as_deref(),
+            scope.rating.map(i64::from),
+            scope.kind.map(ReadingKind::as_str)
+        ],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
 }
 
 /// Build the shared `WHERE` fragment (and its positional bind values) for a
@@ -375,7 +428,7 @@ pub(crate) fn pinned_count_filter(
 /// SQLite >= 3.30 (satisfied by the bundled build) and yields 0 rather than NULL
 /// for an empty view.
 pub fn view_counts(conn: &Connection, scope: &CountScope) -> Result<ViewCounts> {
-    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    let search = ResolvedSearch::resolve_scoped(conn, scope)?;
     view_counts_with(conn, scope, &search)
 }
 
@@ -417,7 +470,7 @@ pub(crate) fn view_counts_with(
 /// recounts all three together on a settled search or facet change, so gathering
 /// them here plans the query once and returns them in a single pass.
 pub fn sidebar_counts(conn: &Connection, scope: &CountScope) -> Result<SidebarCounts> {
-    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    let search = ResolvedSearch::resolve_scoped(conn, scope)?;
     Ok(SidebarCounts {
         views: view_counts_with(conn, scope, &search)?,
         tags: crate::tags::list_tags_with(conn, scope, &search)?,
@@ -435,7 +488,9 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     // A present query means "search" — even whitespace/punctuation-only input,
     // which matches nothing rather than falling back to the full listing.
     if let Some(query) = opts.query.as_deref() {
-        return match crate::search::match_query(conn, query)? {
+        return match crate::search::match_query(query, |phrase| {
+            phrase_exists_in_list_scope(conn, opts, phrase)
+        })? {
             Some(match_query) => list_readings_fts(conn, opts, &match_query),
             None => Ok(Vec::new()),
         };
@@ -462,7 +517,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, read_at, kind, media_url, preview_asset
+                rating, read_at, kind, media_url, preview_asset, lightweight, has_note
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
@@ -498,6 +553,46 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     rows.map(|r| r.map_err(Into::into)).collect()
 }
 
+/// Whether an exact phrase matches anywhere in the fully filtered list scope.
+/// `limit` and `offset` are deliberately absent so moving between pages can
+/// never change the chosen phrase-vs-AND search semantics.
+fn phrase_exists_in_list_scope(
+    conn: &Connection,
+    opts: &ListOptions,
+    phrase: &str,
+) -> Result<bool> {
+    let view_clause = view_clause(opts.view);
+    let sql = format!(
+        "SELECT EXISTS(
+             SELECT 1
+             FROM readings_fts
+             JOIN readings r ON r.rowid = readings_fts.rowid
+             WHERE readings_fts MATCH ?1
+               AND {view_clause}
+               AND (?2 = '' OR EXISTS (
+                    SELECT 1 FROM json_each(r.tags_json) WHERE value = ?2
+               ))
+               AND (?3 = '' OR r.saved_at >= ?3)
+               AND (?4 = '' OR r.saved_at <= ?4)
+               AND (?5 = 0 OR r.rating = ?5)
+               AND (?6 = '' OR r.kind = ?6)
+         )"
+    );
+    conn.query_row(
+        &sql,
+        params![
+            phrase,
+            opts.tag.as_deref().unwrap_or(""),
+            opts.since.as_deref().unwrap_or(""),
+            opts.until.as_deref().unwrap_or(""),
+            opts.rating.unwrap_or(0) as i64,
+            opts.kind.map(ReadingKind::as_str).unwrap_or("")
+        ],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
 /// Fetch the full content (metadata + body) of a single reading by id.
 ///
 /// Returns `None` if the id is not in the index.
@@ -505,13 +600,13 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
     let mut stmt = conn.prepare(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, read_at, kind, media_url, preview_asset, body_text
+                rating, read_at, kind, media_url, preview_asset, lightweight, has_note, body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(19)?;
+        let body: String = row.get(21)?;
         Ok((row_data, body))
     })?;
 
@@ -546,7 +641,8 @@ fn list_readings_fts(
     let sql = format!(
         "SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
                 (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
-                r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset
+                r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset,
+                r.lightweight, r.has_note
          FROM readings_fts
          JOIN readings r ON r.rowid = readings_fts.rowid
          WHERE readings_fts MATCH ?8
@@ -591,6 +687,8 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         id: row.get(0)?,
         title: row.get(1)?,
         kind: parse_kind(row.get::<_, String>(16)?.as_str())?,
+        lightweight: row.get::<_, i32>(19)? != 0,
+        has_note: row.get::<_, i32>(20)? != 0,
         url: row.get(2)?,
         media_url: row.get(17)?,
         preview_asset: row.get(18)?,
@@ -1490,6 +1588,110 @@ mod tests {
     }
 
     #[test]
+    fn phrase_fallback_is_resolved_inside_the_active_view() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let image_id = new_id();
+        let mut image = meta(&image_id, "https://example.com/exact-image", "Exact image");
+        image.kind = ReadingKind::Image;
+        image.tags = vec!["visual".into()];
+        image.rating = 5;
+        write_reading(&lib, image, "alpha beta appears together".into()).unwrap();
+
+        let quote_id = new_id();
+        let mut quote = meta(
+            &quote_id,
+            "https://example.com/separated-quote",
+            "Separated quote",
+        );
+        quote.kind = ReadingKind::Quote;
+        quote.tags = vec!["words".into()];
+        quote.rating = 4;
+        write_reading(&lib, quote, "alpha appears far before beta".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        // The image is an exact phrase hit, but it is outside Quotes. Search
+        // therefore falls back to all-words-AND inside the active view and keeps
+        // the non-contiguous quote visible.
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Quotes,
+                query: Some("alpha beta".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, quote_id);
+
+        // Batched toolbar counts resolve the same scoped fallback as the list.
+        let counts = sidebar_counts(
+            &conn,
+            &CountScope {
+                view: View::Quotes,
+                query: Some("alpha beta".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(counts.tags, vec![("visual".into(), 0), ("words".into(), 1)]);
+        assert_eq!(counts.ratings, vec![(5, 0), (4, 1)]);
+    }
+
+    #[test]
+    fn pagination_does_not_influence_phrase_fallback() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let exact_id = new_id();
+        let mut exact = meta(&exact_id, "https://example.com/exact", "Exact quote");
+        exact.kind = ReadingKind::Quote;
+        write_reading(&lib, exact, "alpha beta appears together".into()).unwrap();
+
+        let separated_id = new_id();
+        let mut separated = meta(
+            &separated_id,
+            "https://example.com/separated",
+            "Separated quote",
+        );
+        separated.kind = ReadingKind::Quote;
+        write_reading(&lib, separated, "alpha appears far before beta".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let all_matches = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Quotes,
+                query: Some("alpha beta".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(all_matches.len(), 1);
+        assert_eq!(all_matches[0].id, exact_id);
+
+        // The scoped result set has only one phrase hit. Page two must therefore
+        // stay empty instead of switching to AND merely because the phrase hit
+        // was consumed by the first page.
+        let second_page = list_readings(
+            &conn,
+            &ListOptions {
+                view: View::Quotes,
+                query: Some("alpha beta".into()),
+                limit: 1,
+                offset: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(second_page.is_empty());
+    }
+
+    #[test]
     fn sidebar_counts_compose_with_kind() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);
@@ -1519,6 +1721,91 @@ mod tests {
         assert_eq!(counts.views.unread, 1);
         assert_eq!(counts.tags, vec![("visual".into(), 1), ("words".into(), 0)]);
         assert_eq!(counts.ratings, vec![(5, 1), (4, 0)]);
+    }
+
+    #[test]
+    fn board_views_filter_derived_card_categories_before_pagination() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let article_id = new_id();
+        write_reading(
+            &lib,
+            meta(&article_id, "https://example.com/article", "Article"),
+            "article body".into(),
+        )
+        .unwrap();
+
+        let link_id = new_id();
+        let mut link = meta(&link_id, "https://example.com/link", "Link");
+        link.lightweight = true;
+        write_reading(&lib, link, "[Open link](https://example.com/link)".into()).unwrap();
+
+        let image_id = new_id();
+        let mut image = meta(&image_id, "https://example.com/image", "Image");
+        image.kind = ReadingKind::Image;
+        write_reading(&lib, image, "image body".into()).unwrap();
+        fs::write(lib.note_path(&image_id), "Why this image matters").unwrap();
+
+        let video_id = new_id();
+        let mut video = meta(&video_id, "https://example.com/video", "Video");
+        video.kind = ReadingKind::Video;
+        write_reading(&lib, video, "video body".into()).unwrap();
+
+        let quote_id = new_id();
+        let mut quote = meta(&quote_id, "https://example.com/quote", "Quote");
+        quote.kind = ReadingKind::Quote;
+        quote.favorite = true;
+        write_reading(&lib, quote, "> quoted text".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+
+        let titles = |view| {
+            list_readings(
+                &conn,
+                &ListOptions {
+                    view,
+                    limit: 20,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .into_iter()
+            .map(|row| row.title)
+            .collect::<std::collections::BTreeSet<_>>()
+        };
+
+        assert_eq!(titles(View::All).len(), 5);
+        assert_eq!(titles(View::Favorites), ["Quote".into()].into());
+        assert_eq!(titles(View::Media), ["Image".into(), "Video".into()].into());
+        assert_eq!(titles(View::Articles), ["Article".into()].into());
+        assert_eq!(titles(View::Notes), ["Image".into()].into());
+        assert_eq!(titles(View::Links), ["Link".into()].into());
+        assert_eq!(titles(View::Quotes), ["Quote".into()].into());
+
+        let media_page = |offset| {
+            list_readings(
+                &conn,
+                &ListOptions {
+                    view: View::Media,
+                    limit: 1,
+                    offset,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        };
+        assert_eq!(media_page(0).len(), 1);
+        assert_eq!(media_page(1).len(), 1);
+        assert!(media_page(2).is_empty());
+
+        let rows = list_readings(&conn, &ListOptions::default()).unwrap();
+        let link_row = rows.iter().find(|row| row.id == link_id).unwrap();
+        assert!(link_row.lightweight);
+        assert!(!link_row.has_note);
+        let image_row = rows.iter().find(|row| row.id == image_id).unwrap();
+        assert!(!image_row.lightweight);
+        assert!(image_row.has_note);
     }
 
     #[test]

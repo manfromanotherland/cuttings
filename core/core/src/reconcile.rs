@@ -48,15 +48,18 @@ pub fn rebuild(conn: &Connection, library: &LibraryRoot) -> Result<()> {
 
 fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
+    let tags_text = r.metadata.tags.join(" ");
     conn.execute(
         "INSERT OR REPLACE INTO readings
-         (id, kind, url, media_url, preview_asset, canonical_url, title, author, site, saved_at,
-          read_at, archived, favorite, rating, source_hash, excerpt, word_count,
-          lang, tags_json, body_text)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)",
+         (id, kind, lightweight, has_note, url, media_url, preview_asset, canonical_url, title,
+          author, site, saved_at, read_at, archived, favorite, rating, source_hash, excerpt,
+          word_count, lang, tags_json, tags_text, body_text)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)",
         params![
             r.metadata.id,
             r.metadata.kind.as_str(),
+            r.metadata.lightweight as i32,
+            r.has_note as i32,
             r.metadata.url,
             r.metadata.media_url,
             r.metadata.preview_asset,
@@ -74,6 +77,7 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.word_count,
             r.metadata.lang,
             tags,
+            tags_text,
             r.body,
         ],
     )?;
@@ -82,16 +86,19 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
 
 fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
+    let tags_text = r.metadata.tags.join(" ");
     conn.execute(
         "UPDATE readings SET
-         kind=?2, url=?3, media_url=?4, preview_asset=?5, canonical_url=?6,
-         title=?7, author=?8, site=?9, saved_at=?10, read_at=?11,
-         archived=?12, favorite=?13, rating=?14, source_hash=?15,
-         excerpt=?16, word_count=?17, lang=?18, tags_json=?19, body_text=?20
+         kind=?2, lightweight=?3, has_note=?4, url=?5, media_url=?6, preview_asset=?7,
+         canonical_url=?8, title=?9, author=?10, site=?11, saved_at=?12, read_at=?13,
+         archived=?14, favorite=?15, rating=?16, source_hash=?17, excerpt=?18,
+         word_count=?19, lang=?20, tags_json=?21, tags_text=?22, body_text=?23
          WHERE id=?1",
         params![
             r.metadata.id,
             r.metadata.kind.as_str(),
+            r.metadata.lightweight as i32,
+            r.has_note as i32,
             r.metadata.url,
             r.metadata.media_url,
             r.metadata.preview_asset,
@@ -109,6 +116,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.word_count,
             r.metadata.lang,
             tags,
+            tags_text,
             r.body,
         ],
     )?;

@@ -38,6 +38,8 @@ pub struct FfiReadingRow {
     pub id: String,
     pub title: String,
     pub kind: FfiReadingKind,
+    pub lightweight: bool,
+    pub has_note: bool,
     pub url: String,
     pub media_url: Option<String>,
     pub preview_asset: Option<String>,
@@ -123,6 +125,11 @@ pub enum FfiView {
     Read,
     Archive,
     Favorites,
+    Media,
+    Articles,
+    Notes,
+    Links,
+    Quotes,
 }
 
 #[derive(uniffi::Enum)]
@@ -172,6 +179,8 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             id: r.id,
             title: r.title,
             kind: r.kind.into(),
+            lightweight: r.lightweight,
+            has_note: r.has_note,
             url: r.url,
             media_url: r.media_url,
             preview_asset: r.preview_asset,
@@ -274,6 +283,11 @@ impl From<FfiView> for View {
             FfiView::Read => View::Read,
             FfiView::Archive => View::Archive,
             FfiView::Favorites => View::Favorites,
+            FfiView::Media => View::Media,
+            FfiView::Articles => View::Articles,
+            FfiView::Notes => View::Notes,
+            FfiView::Links => View::Links,
+            FfiView::Quotes => View::Quotes,
         }
     }
 }
@@ -487,7 +501,9 @@ impl Database {
         markdown: String,
     ) -> Result<(), CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
-        crate::set_note(&lib, &reading_id, &markdown).map_err(e)
+        crate::set_note(&lib, &reading_id, &markdown).map_err(e)?;
+        self.sync(library_path)?;
+        Ok(())
     }
 
     // ── Tags ──────────────────────────────────────────────────────────────
@@ -621,6 +637,22 @@ impl Database {
 mod tests {
     use super::*;
 
+    fn list_options(view: FfiView) -> FfiListOptions {
+        FfiListOptions {
+            view,
+            sort: FfiSortField::SavedAt,
+            ascending: false,
+            tag: None,
+            rating: None,
+            kind: None,
+            since: None,
+            until: None,
+            query: None,
+            limit: 50,
+            offset: 0,
+        }
+    }
+
     #[test]
     fn path_based_video_import_is_indexed_without_a_byte_buffer() {
         let library_dir = tempfile::TempDir::new().unwrap();
@@ -647,5 +679,70 @@ mod tests {
             .media_url
             .as_deref()
             .is_some_and(|url| url.starts_with("cuttings-asset:assets/") && url.ends_with(".mp4")));
+    }
+
+    #[test]
+    fn new_board_views_cross_the_ffi_boundary() {
+        for (ffi, expected) in [
+            (FfiView::Media, View::Media),
+            (FfiView::Articles, View::Articles),
+            (FfiView::Notes, View::Notes),
+            (FfiView::Links, View::Links),
+            (FfiView::Quotes, View::Quotes),
+        ] {
+            assert_eq!(View::from(ffi), expected);
+        }
+    }
+
+    #[test]
+    fn note_and_lightweight_flags_are_queryable_through_ffi() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+
+        let imported = database
+            .import_link(library_path.clone(), "https://example.com/link".into())
+            .unwrap();
+        let initial = database
+            .get_reading_row(imported.id.clone())
+            .unwrap()
+            .unwrap();
+        assert!(initial.lightweight);
+        assert!(!initial.has_note);
+        assert!(database
+            .list_readings(list_options(FfiView::Notes))
+            .unwrap()
+            .is_empty());
+
+        database
+            .set_note(
+                library_path.clone(),
+                imported.id.clone(),
+                "A personal note".into(),
+            )
+            .unwrap();
+        let noted = database
+            .get_reading_row(imported.id.clone())
+            .unwrap()
+            .unwrap();
+        assert!(noted.lightweight);
+        assert!(noted.has_note);
+        assert_eq!(
+            database
+                .list_readings(list_options(FfiView::Notes))
+                .unwrap()
+                .len(),
+            1
+        );
+
+        database
+            .set_note(library_path, imported.id, "  \n".into())
+            .unwrap();
+        assert!(database
+            .list_readings(list_options(FfiView::Notes))
+            .unwrap()
+            .is_empty());
     }
 }

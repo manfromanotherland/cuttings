@@ -90,7 +90,7 @@ pub fn remove_tag(library: &LibraryRoot, conn: &Connection, id: &str, tag: &str)
 /// while keeping its tile. With the default scope (`view = All`) an archived-only
 /// tag therefore shows a 0, and every other tag its plain non-archived count.
 pub fn list_tags(conn: &Connection, scope: &CountScope) -> Result<Vec<(String, u64)>> {
-    let search = ResolvedSearch::resolve(conn, scope.query.as_deref())?;
+    let search = ResolvedSearch::resolve_scoped(conn, scope)?;
     list_tags_with(conn, scope, &search)
 }
 
@@ -133,6 +133,7 @@ fn sync_index(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> 
         source_hash: reading.metadata.source_hash.clone(),
         modified_at,
         path,
+        has_note: crate::scanner::note_file_exists(library, &reading.metadata.id),
         body: reading.body,
         metadata: reading.metadata,
     };

@@ -88,6 +88,7 @@ where
         source_hash: updated.metadata.source_hash.clone(),
         modified_at,
         path: updated_path,
+        has_note: crate::scanner::note_file_exists(library, &updated.metadata.id),
         body: updated.body,
         metadata: updated.metadata,
     };
