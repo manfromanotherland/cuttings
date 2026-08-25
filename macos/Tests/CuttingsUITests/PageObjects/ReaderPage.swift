@@ -217,7 +217,14 @@ struct ReaderPage {
     }
 
     func openTagPicker() {
-        app.buttons["Edit tags…"].clickWhenReady()
+        app.byId(A11y.Toolbar.tags).clickWhenReady()
+    }
+
+    func showInspector() {
+        let button = app.buttons["Show Inspector"]
+        if button.exists {
+            button.clickWhenReady()
+        }
     }
 
     /// Highlight the reader's current text selection. With nothing selected this
@@ -232,6 +239,7 @@ struct ReaderPage {
     }
 
     func delete() {
-        app.buttons["Delete"].firstMatch.clickWhenReady()
+        app.menuButtons["More"].clickWhenReady()
+        app.menuItems["Delete"].clickWhenReady()
     }
 }

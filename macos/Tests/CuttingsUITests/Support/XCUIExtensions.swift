@@ -18,7 +18,14 @@ extension XCUIApplication {
     /// `confirmationDialog` surfaces on macOS as a sheet on the key window; fall
     /// back to a top-level dialog or plain button if the sheet query misses.
     func tapDialogButton(_ title: String, timeout: TimeInterval = 8) {
-        let candidates = [sheets.buttons[title], dialogs.buttons[title], buttons[title]]
+        let matchingLabel = NSPredicate(format: "label == %@", title)
+        let alertSheet = sheets.matching(NSPredicate(format: "label == 'alert'"))
+        let candidates = [
+            alertSheet.buttons.matching(matchingLabel).firstMatch,
+            dialogs.buttons.matching(matchingLabel).firstMatch,
+            sheets.buttons.matching(matchingLabel).firstMatch,
+            buttons.matching(matchingLabel).firstMatch,
+        ]
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
             if let hit = candidates.first(where: { $0.exists }) {
@@ -75,5 +82,16 @@ extension XCUIElement {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
         click()
+    }
+
+    /// The same readiness guard, but clicks a stable point inside a composite
+    /// element instead of whichever child currently represents it to AppKit.
+    func clickWhenReady(at normalizedOffset: CGVector, timeout: TimeInterval = 8) {
+        XCTAssertTrue(waitForExistence(timeout: timeout), "Element '\(identifier)' never appeared to click.")
+        let deadline = Date().addingTimeInterval(timeout)
+        while !isHittable, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        coordinate(withNormalizedOffset: normalizedOffset).click()
     }
 }

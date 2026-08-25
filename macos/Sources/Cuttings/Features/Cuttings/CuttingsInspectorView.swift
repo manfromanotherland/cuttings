@@ -1,211 +1,166 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Foundation
 import SwiftUI
 
+/// Optional metadata inspector for the Finder-style gallery detail. The gallery
+/// remains the primary interface; this pane uses the platform's compact form
+/// hierarchy when someone asks for more information.
 struct CuttingsInspectorView: View {
-    @Environment(AppState.self) private var appState
-
-    @Binding var row: ReadingRow
+    let row: ReadingRow
     var onEditTags: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                heading
-                sourceSection
-                noteSection
-                tagsSection
-                actionsSection
-            }
-            .padding(.horizontal, 26)
-            .padding(.top, 72)
-            .padding(.bottom, 30)
+        VStack(spacing: 0) {
+            heading
+            Divider()
+            detailsForm
         }
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(row.kind.singularLabel, systemImage: row.kind.symbol)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
+        VStack(alignment: .leading, spacing: 7) {
             Text(row.displayTitle)
-                .font(.system(size: 22, weight: .semibold, design: .serif))
-                .lineLimit(5)
+                .font(.title2.weight(.semibold))
+                .lineLimit(4)
                 .textSelection(.enabled)
 
             HStack(spacing: 6) {
-                if let site = row.displaySite {
-                    Text(site)
-                }
-                if !savedDate.isEmpty {
-                    if row.displaySite != nil {
-                        Text("·")
-                    }
-                    Text(savedDate)
-                }
+                Label(row.kind.singularLabel, systemImage: row.kind.symbol)
+                Text("·")
+                Text(savedDate)
             }
-            .font(.caption)
+            .font(.subheadline)
             .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
     }
 
-    private var sourceSection: some View {
-        inspectorSection("Source") {
-            if let url = row.sourceURL {
-                Button {
-                    ReadingLink.open(url)
-                } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(row.title.isEmpty ? (row.displaySite ?? "Originating page") : row.title)
-                            .font(.callout.weight(.medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        Text(row.url)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
+    private var detailsForm: some View {
+        Form {
+            LabeledContent("Source") {
+                sourceValue
+            }
+
+            LabeledContent("Tags") {
+                tagsValue
+            }
+
+            LabeledContent("Note") {
+                ReadingNoteControl(readingID: row.id)
+                    .id(row.id)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-            } else {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label("Saved locally", systemImage: "internaldrive")
-                        .font(.callout.weight(.medium))
-                    Text("Added from the clipboard or a local file.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
             }
 
             if !row.canonicalUrl.isEmpty, row.canonicalUrl != row.url {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Canonical URL")
-                        .font(.caption.weight(.medium))
-                    Text(row.canonicalUrl)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
+                LabeledContent("Canonical URL") {
+                    selectableValue(row.canonicalUrl)
                 }
-                .padding(.top, 6)
             }
 
             if row.sourceURL != nil,
                let mediaURL = row.mediaUrl,
                row.kind == .image || row.kind == .video
             {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(mediaURL.hasPrefix("cuttings-video:") ? "Playback" : "Direct media")
-                        .font(.caption.weight(.medium))
+                LabeledContent(mediaURL.hasPrefix("cuttings-video:") ? "Playback" : "Media") {
                     if mediaURL.hasPrefix("cuttings-video:") {
-                        Text("This video uses a temporary browser stream. Open its source page to play it.")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        Text("Open the source page to play this browser stream.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        Text(mediaURL)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(2)
-                            .textSelection(.enabled)
+                        selectableValue(mediaURL)
                     }
                 }
-                .padding(.top, 6)
             }
         }
+        .formStyle(.grouped)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var noteSection: some View {
-        inspectorSection("Note") {
-            ReadingNoteControl(readingID: row.id)
-                .id(row.id)
+    @ViewBuilder
+    private var sourceValue: some View {
+        if let url = row.sourceURL {
+            VStack(alignment: .leading, spacing: 5) {
+                Button {
+                    ReadingLink.open(url)
+                } label: {
+                    Label(row.displaySite ?? "Open Source", systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(.link)
+
+                Text(row.url)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Saved locally", systemImage: "internaldrive")
+                Text("Clipboard or local file")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var tagsSection: some View {
-        inspectorSection("Tags") {
+    private var tagsValue: some View {
+        VStack(alignment: .leading, spacing: 8) {
             if row.tags.isEmpty {
-                Text("No tags")
-                    .font(.callout)
+                Text("None")
                     .foregroundStyle(.secondary)
             } else {
                 FlowLayout(spacing: 6) {
                     ForEach(row.tags, id: \.self) { tag in
                         Text("#\(tag)")
                             .font(.caption.weight(.medium))
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(Color.primary.opacity(0.06), in: Capsule())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary, in: Capsule())
                     }
                 }
             }
-            Button("Edit tags…", action: onEditTags)
-                .buttonStyle(.plain)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.tint)
-                .padding(.top, 4)
-        }
-    }
 
-    private var actionsSection: some View {
-        inspectorSection("Actions") {
-            VStack(spacing: 3) {
-                actionButton(
-                    row.favorite ? "Remove from favorites" : "Add to favorites",
-                    symbol: row.favorite ? "heart.slash" : "heart"
-                ) { toggleFavorite() }
-                actionButton("Delete", symbol: "trash", role: .destructive) {
-                    appState.pendingDelete = row
-                }
+            Button(action: onEditTags) {
+                Label("Edit tags…", systemImage: "tag")
             }
-        }
-    }
-
-    private func inspectorSection(
-        _ title: String, @ViewBuilder content: () -> some View
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.tertiary)
-                .tracking(0.8)
-            content()
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func actionButton(
-        _ title: String, symbol: String, role: ButtonRole? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(role: role, action: action) {
-            Label(title, systemImage: symbol)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 7)
-    }
-
-    private func toggleFavorite() {
-        let old = row
-        row.favorite.toggle()
-        Task {
-            await appState.toggleFavorite(old)
-            row = await appState.reloadRow(id: old.id) ?? row
-        }
+    private func selectableValue(_ value: String) -> some View {
+        Text(value)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+            .truncationMode(.middle)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var savedDate: String {
-        guard let date = ISO8601DateFormatter().date(from: row.savedAt) else { return row.savedAt }
+        guard let date = Self.parseISO8601(row.savedAt) else { return row.savedAt }
         return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private static func parseISO8601(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return standard.date(from: value)
     }
 }

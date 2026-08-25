@@ -143,16 +143,20 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ### Card detail
 
-- Single-click opens a full-window overlay and dims the board behind it. Escape closes; left/right
-  moves to adjacent cards.
-- Roughly 70% of the overlay is content and 320–380 pt is a fixed inspector.
+- Single-click opens a full-window Gallery detail while preserving the board behind the navigation
+  destination. Escape or Back returns to the board; left/right and J/K move through the frozen
+  current board order.
+- The selected preview fills the available space above a persistent horizontal filmstrip. Clicking
+  a filmstrip thumbnail selects it, and keyboard navigation keeps the selected thumbnail visible.
 - Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.
   Videos show the local poster and source/media actions without silently downloading a stream.
   Quotes show the full selected text natively.
-- The inspector consistently shows origin, saved date, tags, favorite state, a personal note, and
-  relevant local/direct-media paths. The note opens in a focused raw-Markdown
-  editor sheet; saving blank content removes it. If sync changes the note while that sheet is open,
-  the user chooses whether to load the latest file or explicitly replace it with the draft.
+- Metadata lives in an optional trailing Inspector toggled from the standard toolbar, not a
+  permanent sidebar. It uses a compact native form for origin, saved date, tags, a personal note,
+  and relevant local/direct-media paths. Favorite, tags, origin, and delete actions live in the
+  toolbar and its More menu. The note opens in a focused raw-Markdown editor sheet; saving blank
+  content removes it. If sync changes the note while that sheet is open, the user chooses whether
+  to load the latest file or explicitly replace it with the draft.
 
 ### Content states
 

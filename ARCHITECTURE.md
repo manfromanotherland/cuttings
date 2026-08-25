@@ -82,10 +82,11 @@ every affected component.
   SwiftUI view tree via Apple's [`swift-markdown`](https://github.com/apple/swift-markdown) parser —
   proper macOS typography, text selection, Light/Dark, and accessibility with no web engine and no
   script-execution surface. The UI is specified in [DESIGN.md](./DESIGN.md).
-- Card detail is a full-window native overlay: the existing Markdown reader handles articles and
-  quote bodies; image/video cards use local preview assets and source/media actions. Every detail
-  inspector exposes the origin page when one exists, identifies source-less cards as saved locally,
-  and can edit that reading's personal Markdown note.
+- Card detail is a full-window native Gallery destination: the existing Markdown reader handles
+  articles and quote bodies; image/video cards use local preview assets and source/media actions.
+  A persistent filmstrip navigates the current board order, while an optional trailing Inspector
+  exposes the origin page when one exists, identifies source-less cards as saved locally, and can
+  edit that reading's personal Markdown note.
 - Owns the local index and watches the library folder for changes (including files arriving via
   sync), reindexing incrementally.
 

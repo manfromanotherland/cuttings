@@ -11,6 +11,7 @@ final class NotesJourney: UITestCase {
         let markdown = "## Follow up\n\n- Ask about the **details**."
 
         list.open(id)
+        reader.showInspector()
         noteEditor.add()
         noteEditor.type(markdown)
         noteEditor.save()
@@ -23,8 +24,12 @@ final class NotesJourney: UITestCase {
         keyboard.escape()
         XCTAssertTrue(noteEditor.editButton.waitDisappears(), "reading overlay closed")
         list.open(id)
+        reader.showInspector()
         noteEditor.edit()
-        XCTAssertTrue(noteEditor.editorText.contains("## Follow up"), "saved Markdown reopened")
+        XCTAssertTrue(
+            wait { self.noteEditor.editorText.contains("## Follow up") },
+            "saved Markdown reopened"
+        )
 
         noteEditor.type("\n\nUnsaved change")
         keyboard.escape()
@@ -45,11 +50,15 @@ final class NotesJourney: UITestCase {
         let newer = "# Newer synced note\n\nChanged on another device."
 
         list.open(id)
+        reader.showInspector()
         try library.writeNote(articleId: id, markdown: first)
         XCTAssertTrue(noteEditor.editButton.waitExists(), "external note appeared in the inspector")
 
         noteEditor.edit()
-        XCTAssertTrue(noteEditor.editorText.contains("# Synced note"), "external Markdown loaded")
+        XCTAssertTrue(
+            wait { self.noteEditor.editorText.contains("# Synced note") },
+            "external Markdown loaded"
+        )
         noteEditor.type("\n\nMy draft")
 
         try library.writeNote(articleId: id, markdown: newer)

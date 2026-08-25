@@ -37,11 +37,15 @@ struct ReadingNoteControl: View {
                         .accessibilityIdentifier(A11y.Note.preview)
                 }
 
-                Button(hasNote ? "Edit note…" : "Add note…", action: openEditor)
-                    .buttonStyle(.plain)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.tint)
-                    .accessibilityIdentifier(hasNote ? A11y.Note.edit : A11y.Note.add)
+                Button(action: openEditor) {
+                    Label(
+                        hasNote ? "Edit note…" : "Add note…",
+                        systemImage: hasNote ? "square.and.pencil" : "plus"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier(hasNote ? A11y.Note.edit : A11y.Note.add)
             }
         }
         .task(id: NoteLoadKey(readingID: readingID, revision: appState.noteRevision)) {

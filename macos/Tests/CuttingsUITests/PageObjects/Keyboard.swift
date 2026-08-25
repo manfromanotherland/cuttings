@@ -33,6 +33,22 @@ struct Keyboard {
         app.typeKey("r", modifierFlags: [.command, .shift])
     } // ⌘⇧R
 
+    func previousItem() {
+        app.typeKey("k", modifierFlags: [])
+    } // K
+
+    func nextItem() {
+        app.typeKey("j", modifierFlags: [])
+    } // J
+
+    func arrowLeft() {
+        app.typeKey(.leftArrow, modifierFlags: [])
+    }
+
+    func arrowRight() {
+        app.typeKey(.rightArrow, modifierFlags: [])
+    }
+
     /// ── Reading ────────────────────────────────────────────────────────────
     func increaseFontSize() {
         app.typeKey("+", modifierFlags: .command)

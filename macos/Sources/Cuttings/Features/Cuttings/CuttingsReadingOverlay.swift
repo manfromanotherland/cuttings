@@ -6,52 +6,159 @@ struct CuttingsReadingOverlay: View {
     @Environment(AppState.self) private var appState
 
     @Binding var row: ReadingRow
+    let rows: [ReadingRow]
     var onClose: () -> Void
     var onMove: (Int) -> Void
+    var onSelect: (ReadingRow) -> Void
+    var canMovePrevious: Bool
+    var canMoveNext: Bool
     var onEditTags: () -> Void
 
-    @FocusState private var receivesKeys: Bool
+    @State private var showsInspector = false
 
     var body: some View {
-        GeometryReader { proxy in
-            let inspectorWidth = min(380, max(320, proxy.size.width * 0.28))
-            HStack(spacing: 0) {
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        HSplitView {
+            gallery
 
-                Rectangle()
-                    .fill(CuttingsTheme.border)
-                    .frame(width: 1)
-
-                CuttingsInspectorView(row: $row, onEditTags: onEditTags)
-                    .frame(width: inspectorWidth)
+            if showsInspector {
+                CuttingsInspectorView(row: row, onEditTags: onEditTags)
+                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 420)
             }
-            .background(Color(nsColor: .windowBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(CuttingsTheme.border, lineWidth: 1)
-            }
-            .overlay(alignment: .topLeading) { closeButton }
-            .overlay(alignment: .top) { navigationButtons }
         }
-        .focusable()
-        .focused($receivesKeys)
-        .onAppear { receivesKeys = true }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .navigationTitle(row.displayTitle)
+        .navigationBarBackButtonHidden(true)
+        .toolbar { detailToolbar }
+        .focusedSceneValue(\.detailNavigationActions, detailNavigationActions)
         .onExitCommand {
             guard !appState.isEditingText else { return }
             onClose()
         }
-        .onKeyPress(.leftArrow) {
-            guard !appState.isEditingText, !row.hasLocalVideoAsset else { return .ignored }
-            onMove(-1)
-            return .handled
+    }
+
+    private var gallery: some View {
+        VStack(spacing: 0) {
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            CuttingsGalleryStrip(
+                rows: rows,
+                selectedID: row.id,
+                onSelect: onSelect
+            )
         }
-        .onKeyPress(.rightArrow) {
-            guard !appState.isEditingText, !row.hasLocalVideoAsset else { return .ignored }
-            onMove(1)
-            return .handled
+    }
+
+    @ToolbarContentBuilder
+    private var detailToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button(action: onClose) {
+                Label("Back to Library", systemImage: "chevron.backward")
+            }
+            .help("Back to library (Escape)")
+            .accessibilityIdentifier(A11y.Detail.close)
+            .keyboardShortcut(.cancelAction)
+
+            Button { onMove(-1) } label: {
+                Label("Previous item", systemImage: "chevron.left")
+            }
+            .help("Previous item (Left Arrow or K)")
+            .accessibilityIdentifier(A11y.Detail.previous)
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            .disabled(!canMovePrevious || appState.isEditingText)
+
+            Button { onMove(1) } label: {
+                Label("Next item", systemImage: "chevron.right")
+            }
+            .help("Next item (Right Arrow or J)")
+            .accessibilityIdentifier(A11y.Detail.next)
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            .disabled(!canMoveNext || appState.isEditingText)
         }
+
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button(action: toggleFavorite) {
+                Label(
+                    row.favorite ? "Remove from favorites" : "Add to favorites",
+                    systemImage: row.favorite ? "heart.fill" : "heart"
+                )
+            }
+            .help(row.favorite ? "Remove from favorites" : "Add to favorites")
+            .accessibilityIdentifier(A11y.Toolbar.favorite)
+
+            Button(action: onEditTags) {
+                Label("Edit Tags", systemImage: "tag")
+            }
+            .help("Edit tags")
+            .accessibilityIdentifier(A11y.Toolbar.tags)
+
+            Menu {
+                if let url = row.sourceURL {
+                    Button {
+                        ReadingLink.open(url)
+                    } label: {
+                        Label("Open Source", systemImage: "safari")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    appState.pendingDelete = row
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .help("More actions")
+
+            Button {
+                showsInspector.toggle()
+            } label: {
+                Label(
+                    showsInspector ? "Hide Inspector" : "Show Inspector",
+                    systemImage: "sidebar.trailing"
+                )
+            }
+            .help(showsInspector ? "Hide inspector" : "Show inspector")
+        }
+    }
+
+    private var detailNavigationActions: DetailNavigationActions {
+        DetailNavigationActions(
+            canMovePrevious: canMovePrevious,
+            canMoveNext: canMoveNext,
+            showsInspector: showsInspector,
+            movePrevious: { onMove(-1) },
+            moveNext: { onMove(1) },
+            toggleInspector: { showsInspector.toggle() }
+        )
+    }
+
+    private func toggleFavorite() {
+        let old = row
+        if appState.activeScope == .favorites, old.favorite {
+            if let adjacent = adjacentRowAfterRemovingCurrent {
+                onSelect(adjacent)
+            } else {
+                onClose()
+            }
+        } else {
+            row.favorite.toggle()
+        }
+        Task {
+            await appState.toggleFavorite(old)
+        }
+    }
+
+    private var adjacentRowAfterRemovingCurrent: ReadingRow? {
+        guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return nil }
+        if rows.indices.contains(index + 1) {
+            return rows[index + 1]
+        }
+        if rows.indices.contains(index - 1) {
+            return rows[index - 1]
+        }
+        return nil
     }
 
     @ViewBuilder
@@ -117,41 +224,6 @@ struct CuttingsReadingOverlay: View {
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }
-    }
-
-    private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.system(size: 12, weight: .bold))
-                .frame(width: 30, height: 30)
-                .background(.regularMaterial, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Close")
-        .accessibilityIdentifier(A11y.Detail.close)
-        .help("Close")
-        .keyboardShortcut(.cancelAction)
-        .padding(14)
-    }
-
-    private var navigationButtons: some View {
-        HStack(spacing: 4) {
-            Button { onMove(-1) } label: {
-                Image(systemName: "chevron.left")
-                    .frame(width: 28, height: 28)
-            }
-            .accessibilityLabel("Previous item")
-            .accessibilityIdentifier(A11y.Detail.previous)
-            Button { onMove(1) } label: {
-                Image(systemName: "chevron.right")
-                    .frame(width: 28, height: 28)
-            }
-            .accessibilityLabel("Next item")
-            .accessibilityIdentifier(A11y.Detail.next)
-        }
-        .buttonStyle(.plain)
-        .background(.regularMaterial, in: Capsule())
-        .padding(14)
     }
 }
 

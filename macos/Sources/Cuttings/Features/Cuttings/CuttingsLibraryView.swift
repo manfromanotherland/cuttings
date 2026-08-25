@@ -13,12 +13,17 @@ struct CuttingsLibraryView: View {
     @State private var isDropTargeted = false
 
     var body: some View {
-        deletionSurface
-            .alert("Cuttings couldn’t complete that action", isPresented: errorAlertPresented) {
-                Button("OK") { appState.error = nil }
-            } message: {
-                Text(appState.error ?? "An unknown error occurred.")
-            }
+        NavigationStack {
+            deletionSurface
+                .navigationDestination(isPresented: detailPresented) {
+                    overlay
+                }
+        }
+        .alert("Cuttings couldn’t complete that action", isPresented: errorAlertPresented) {
+            Button("OK") { appState.error = nil }
+        } message: {
+            Text(appState.error ?? "An unknown error occurred.")
+        }
     }
 }
 
@@ -26,17 +31,6 @@ extension CuttingsLibraryView {
     private var layeredSurface: some View {
         ZStack {
             librarySurface
-
-            if presentedReading != nil {
-                Color.black.opacity(0.38)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .onTapGesture(perform: closeOverlay)
-
-                overlay
-                    .padding(18)
-                    .transition(.scale(scale: 0.985).combined(with: .opacity))
-            }
 
             if isDropTargeted {
                 dropPrompt
@@ -134,11 +128,13 @@ extension CuttingsLibraryView {
 
     @ToolbarContentBuilder
     private var boardToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            favoritesToggle
-            filterMenu
-            cardSizePicker
-            sortMenu
+        if presentedReading == nil {
+            ToolbarItemGroup(placement: .primaryAction) {
+                favoritesToggle
+                filterMenu
+                cardSizePicker
+                sortMenu
+            }
         }
     }
 
@@ -288,8 +284,12 @@ extension CuttingsLibraryView {
                     get: { presentedReading ?? row },
                     set: { presentedReading = $0 }
                 ),
+                rows: presentationRows,
                 onClose: closeOverlay,
                 onMove: moveOverlay,
+                onSelect: open,
+                canMovePrevious: canMoveOverlay(-1),
+                canMoveNext: canMoveOverlay(1),
                 onEditTags: { tagTargetID = row.id }
             )
         }
@@ -326,6 +326,17 @@ extension CuttingsLibraryView {
                 if !showing {
                     tagTargetID = nil
                     appState.showTagSheet = false
+                }
+            }
+        )
+    }
+
+    private var detailPresented: Binding<Bool> {
+        Binding(
+            get: { presentedReading != nil },
+            set: { isPresented in
+                if !isPresented {
+                    closeOverlay()
                 }
             }
         )
@@ -413,6 +424,18 @@ extension CuttingsLibraryView {
             ?? (presentedReading?.id == id ? presentedReading : nil)
     }
 
+    private var presentationRows: [ReadingRow] {
+        let rowsByID = appState.readings.reduce(into: [String: ReadingRow]()) { result, row in
+            result[row.id] = row
+        }
+        return presentationOrder.compactMap { id in
+            if presentedReading?.id == id {
+                return presentedReading
+            }
+            return rowsByID[id]
+        }
+    }
+
     private func finiteBoardWidth(for proposedWidth: CGFloat) -> CGFloat {
         let horizontalPadding: CGFloat = 60
         guard proposedWidth.isFinite, proposedWidth > horizontalPadding else { return 220 }
@@ -446,6 +469,19 @@ extension CuttingsLibraryView {
         }
     }
 
+    private func canMoveOverlay(_ direction: Int) -> Bool {
+        guard let id = presentedReading?.id,
+              let index = presentationOrder.firstIndex(of: id) else { return false }
+        var next = index + direction
+        while presentationOrder.indices.contains(next) {
+            if appState.readings.contains(where: { $0.id == presentationOrder[next] }) {
+                return true
+            }
+            next += direction
+        }
+        return false
+    }
+
     private func updatePresentedReading(_ updated: ReadingRow) {
         if presentedReading?.id == updated.id {
             presentedReading = updated
@@ -453,7 +489,15 @@ extension CuttingsLibraryView {
     }
 
     private func updateTag(_ tag: String, applies: Bool, to row: ReadingRow) {
-        if var presented = presentedReading, presented.id == row.id {
+        let removesPresentedRowFromActiveTag = !applies
+            && appState.selectedTag == tag
+            && presentedReading?.id == row.id
+
+        if removesPresentedRowFromActiveTag {
+            tagTargetID = nil
+            appState.showTagSheet = false
+            advanceOverlayPastCurrent()
+        } else if var presented = presentedReading, presented.id == row.id {
             if applies, !presented.tags.contains(tag) {
                 presented.tags.append(tag)
             } else if !applies {
@@ -470,6 +514,16 @@ extension CuttingsLibraryView {
             if presentedReading?.id == row.id {
                 presentedReading = await appState.reloadRow(id: row.id) ?? presentedReading
             }
+        }
+    }
+
+    private func advanceOverlayPastCurrent() {
+        if canMoveOverlay(1) {
+            moveOverlay(1)
+        } else if canMoveOverlay(-1) {
+            moveOverlay(-1)
+        } else {
+            closeOverlay()
         }
     }
 
