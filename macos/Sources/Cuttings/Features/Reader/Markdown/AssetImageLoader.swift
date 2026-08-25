@@ -98,3 +98,56 @@ enum AssetImageLoader {
         }
     }
 }
+
+/// Bounds board preview work so opening a page cannot decode dozens of large
+/// images simultaneously. A permit is handed directly to the next waiter,
+/// keeping at most four ImageIO/AVFoundation decodes live at once.
+actor AssetPreviewDecodeQueue {
+    static let shared = AssetPreviewDecodeQueue(limit: 4)
+
+    private let limit: Int
+    private var active = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) {
+        self.limit = max(1, limit)
+    }
+
+    func image(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
+        await acquire()
+        defer { release() }
+        guard !Task.isCancelled else { return nil }
+
+        let decoded = await Task.detached(priority: .utility) {
+            AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
+        }.value
+        return Task.isCancelled ? nil : decoded
+    }
+
+    func videoThumbnail(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
+        await acquire()
+        defer { release() }
+        guard !Task.isCancelled else { return nil }
+
+        let decoded = await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
+        return Task.isCancelled ? nil : decoded
+    }
+
+    private func acquire() async {
+        if active < limit {
+            active += 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            active -= 1
+        } else {
+            waiters.removeFirst().resume()
+        }
+    }
+}

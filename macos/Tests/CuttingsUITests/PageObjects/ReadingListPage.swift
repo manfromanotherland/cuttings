@@ -30,12 +30,16 @@ struct ReadingListPage {
 
     func selectTagFilter(_ tag: String) {
         filterMenu.clickWhenReady()
-        let identified = app.byId(A11y.Filter.tag(tag))
-        if identified.exists {
-            identified.clickWhenReady()
+        let chooseTag = app.byId(A11y.Filter.chooseTag)
+        if chooseTag.exists {
+            chooseTag.clickWhenReady()
         } else {
-            app.menuItems["#\(tag)"].clickWhenReady()
+            app.menuItems["Choose Tag…"].clickWhenReady()
         }
+        let search = app.byId(A11y.Filter.tagSearch)
+        search.clickWhenReady()
+        search.typeText(tag)
+        app.byId(A11y.Filter.tag(tag)).clickWhenReady()
     }
 
     // ── Rows ────────────────────────────────────────────────────────────────

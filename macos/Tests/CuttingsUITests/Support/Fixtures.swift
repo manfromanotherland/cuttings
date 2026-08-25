@@ -170,7 +170,7 @@ enum Fixtures {
 
     // ── Large / edge corpora ────────────────────────────────────────────────
 
-    /// A large corpus for pagination (default 120 > the 100-row first page).
+    /// A large corpus for pagination (default 120 > the 60-row first page).
     static func bulkCorpus(count: Int = 120) -> [ArticleFixture] {
         (0 ..< count).map { index in
             ArticleFixture(

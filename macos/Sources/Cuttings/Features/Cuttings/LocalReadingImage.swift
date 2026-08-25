@@ -11,7 +11,7 @@ struct LocalReadingImage: View {
     let row: ReadingRow
     let libraryURL: URL?
     var fallbackAspectRatio: CGFloat = 4 / 3
-    var maxPixel: CGFloat = 1600
+    var maxPixel: CGFloat = 800
     var contentMode: ContentMode = .fit
 
     @State private var image: NSImage?
@@ -31,6 +31,9 @@ struct LocalReadingImage: View {
         }
         .task(id: loadKey) {
             await load()
+        }
+        .onDisappear {
+            image = nil
         }
     }
 
@@ -65,17 +68,16 @@ struct LocalReadingImage: View {
                 failed = true
                 return
             }
-            let target = maxPixel
-            decoded = await Task.detached {
-                AssetImageLoader.downsampledImage(at: url, maxPixel: target)
-            }.value
+            decoded = await AssetPreviewDecodeQueue.shared.image(at: url, maxPixel: maxPixel)
         } else if let source = row.localVideoAssetReference {
             guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
                 image = nil
                 failed = true
                 return
             }
-            decoded = await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
+            decoded = await AssetPreviewDecodeQueue.shared.videoThumbnail(
+                at: url, maxPixel: maxPixel
+            )
         } else {
             image = nil
             return

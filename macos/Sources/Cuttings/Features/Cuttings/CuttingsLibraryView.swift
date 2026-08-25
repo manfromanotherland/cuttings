@@ -6,12 +6,14 @@ import UniformTypeIdentifiers
 struct CuttingsLibraryView: View {
     @Environment(AppState.self) var appState
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.displayScale) private var displayScale
     @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
 
     @State private var presentedReading: ReadingRow?
     @State private var presentationOrder: [String] = []
     @State private var tagTargetID: String?
     @State private var isDropTargeted = false
+    @State private var videoPlaybackPositions = VideoPlaybackPositionStore()
 
     var body: some View {
         NavigationStack {
@@ -193,17 +195,26 @@ extension CuttingsLibraryView {
 
                 ScrollView {
                     LazyVStack(spacing: Self.boardSpacing) {
-                        MasonryLayout(
-                            minimumColumnWidth: cardSize.minimumColumnWidth,
-                            spacing: Self.boardSpacing
-                        ) {
-                            ForEach(appState.readings) { row in
-                                CuttingsCardView(
-                                    row: row,
-                                    onOpen: { open(row) },
-                                    onEditTags: { tagTargetID = row.id }
-                                )
-                                .accessibilityIdentifier(A11y.List.row(row.id))
+                        ForEach(masonryChunkStarts, id: \.self) { start in
+                            let end = min(start + Self.masonryChunkSize, appState.readings.count)
+                            MasonryLayout(
+                                minimumColumnWidth: cardSize.minimumColumnWidth,
+                                spacing: Self.boardSpacing
+                            ) {
+                                ForEach(appState.readings[start ..< end]) { row in
+                                    CuttingsCardView(
+                                        row: row,
+                                        playbackPositions: videoPlaybackPositions,
+                                        viewportSize: proxy.size,
+                                        previewMaxPixel: cardSize.previewMaxPixel(
+                                            displayScale: displayScale
+                                        ),
+                                        autoplayEnabled: presentedReading == nil,
+                                        onOpen: { open(row) },
+                                        onEditTags: { tagTargetID = row.id }
+                                    )
+                                    .accessibilityIdentifier(A11y.List.row(row.id))
+                                }
                             }
                         }
 
@@ -335,6 +346,11 @@ extension CuttingsLibraryView {
 
     private static let boardSpacing: CGFloat = 18
     private static let boardTopSpacing: CGFloat = 12
+    private static let masonryChunkSize = 60
+
+    private var masonryChunkStarts: [Int] {
+        Array(stride(from: 0, to: appState.readings.count, by: Self.masonryChunkSize))
+    }
 
     private var tagTargetRow: ReadingRow? {
         let id = tagTargetID ?? (appState.showTagSheet ? appState.selectedId : nil)

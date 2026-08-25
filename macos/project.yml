@@ -95,6 +95,7 @@ targets:
       - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
       - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryLayout.swift
+      - path: Sources/Cuttings/Features/Cuttings/VideoCardViewport.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/Cuttings/Bridge/Mappers/HighlightRow.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarItem+FFI.swift

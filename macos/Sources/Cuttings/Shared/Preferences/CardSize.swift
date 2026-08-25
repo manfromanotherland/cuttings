@@ -36,6 +36,14 @@ enum CardSize: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Device-pixel ceiling for board previews. Cards do not benefit from the
+    /// reader's much larger decode: matching the column width to the display
+    /// scale keeps raster memory proportional to what can actually be shown.
+    func previewMaxPixel(displayScale: CGFloat) -> CGFloat {
+        let scale = displayScale.isFinite && displayScale > 0 ? displayScale : 1
+        return min(1_024, max(512, minimumColumnWidth * scale))
+    }
+
     var smaller: Self? {
         switch self {
         case .extraLarge: .large

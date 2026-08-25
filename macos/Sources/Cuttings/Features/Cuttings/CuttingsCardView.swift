@@ -6,6 +6,10 @@ struct CuttingsCardView: View {
     @Environment(AppState.self) private var appState
 
     let row: ReadingRow
+    let playbackPositions: VideoPlaybackPositionStore
+    var viewportSize: CGSize = .zero
+    var previewMaxPixel: CGFloat = 800
+    var autoplayEnabled = true
     var onOpen: () -> Void
     var onEditTags: () -> Void
 
@@ -13,7 +17,7 @@ struct CuttingsCardView: View {
 
     var body: some View {
         cardContent
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(CuttingsTheme.card)
             .clipShape(cardShape)
             .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
@@ -53,28 +57,19 @@ struct CuttingsCardView: View {
     private var imageCard: some View {
         LocalReadingImage(
             row: row, libraryURL: appState.libraryURL,
-            fallbackAspectRatio: 4 / 3, contentMode: .fit
+            fallbackAspectRatio: 4 / 3, maxPixel: previewMaxPixel, contentMode: .fit
         )
     }
 
     private var videoCard: some View {
-        LocalReadingImage(
-            row: row, libraryURL: appState.libraryURL,
-            fallbackAspectRatio: 16 / 9, contentMode: .fill
+        AutoplayVideoCard(
+            row: row,
+            libraryURL: appState.libraryURL,
+            viewportSize: viewportSize,
+            playbackPositions: playbackPositions,
+            maxPixel: previewMaxPixel,
+            autoplayEnabled: autoplayEnabled
         )
-        .overlay {
-            Circle()
-                .fill(.black.opacity(0.56))
-                .frame(width: 52, height: 52)
-                .overlay {
-                    Image(systemName: "play.fill")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .offset(x: 2)
-                }
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-                .accessibilityHidden(true)
-        }
     }
 
     @ViewBuilder
@@ -83,14 +78,14 @@ struct CuttingsCardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 LocalReadingImage(
                     row: row, libraryURL: appState.libraryURL,
-                    fallbackAspectRatio: 3 / 2, contentMode: .fill
+                    fallbackAspectRatio: 3 / 2, maxPixel: previewMaxPixel, contentMode: .fill
                 )
                 articleText
             }
         } else {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(row.displayTitle)
-                    .font(.title2.weight(.medium))
+                    .font(.title2.weight(.semibold))
                     .lineLimit(5)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -104,7 +99,8 @@ struct CuttingsCardView: View {
 
                 sourceLine(onDark: false)
             }
-            .padding(20)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(CuttingsTheme.cardTint(for: row.id))
         }
     }
@@ -126,29 +122,27 @@ struct CuttingsCardView: View {
             sourceLine(onDark: false)
         }
         .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(CuttingsTheme.cardTint(for: row.id))
     }
 
     private var articleText: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(row.displayTitle)
-                .font(.headline)
+                .font(.headline.weight(.semibold))
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
             sourceLine(onDark: false)
         }
         .padding(15)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func sourceLine(onDark: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: row.kind.symbol)
-                .font(.system(size: 9, weight: .medium))
-            Text(row.displaySite ?? "Saved locally")
-                .lineLimit(1)
-        }
-        .font(.caption2.weight(.medium))
-        .foregroundStyle(onDark ? Color.white.opacity(0.82) : Color.secondary)
+        Text(row.displaySite ?? "Saved locally")
+            .lineLimit(1)
+            .font(.caption2.weight(.regular))
+            .foregroundStyle(onDark ? Color.white.opacity(0.82) : Color.secondary)
     }
 
     private var hoverMenu: some View {
@@ -187,6 +181,6 @@ struct CuttingsCardView: View {
     }
 
     private var cardShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
     }
 }

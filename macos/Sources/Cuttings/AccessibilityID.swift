@@ -36,6 +36,9 @@ enum A11y {
     enum Filter {
         static let group = "filter.group"
         static let menu = "filter.menu"
+        static let chooseTag = "filter.chooseTag"
+        static let tagSheet = "filter.tagSheet"
+        static let tagSearch = "filter.tagSearch"
 
         /// A tag option in the toolbar Filter menu, keyed by tag name.
         static func tag(_ tag: String) -> String {

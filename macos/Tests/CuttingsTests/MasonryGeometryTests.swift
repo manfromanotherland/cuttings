@@ -52,6 +52,17 @@ final class MasonryGeometryTests: XCTestCase {
         }
     }
 
+    func testCardPreviewDecodeTracksRenderedBackingSize() {
+        XCTAssertEqual(CardSize.small.previewMaxPixel(displayScale: 2), 512)
+        XCTAssertEqual(CardSize.medium.previewMaxPixel(displayScale: 2), 600)
+        XCTAssertEqual(CardSize.large.previewMaxPixel(displayScale: 2), 800)
+    }
+
+    func testCardPreviewDecodeHasSafeBounds() {
+        XCTAssertEqual(CardSize.small.previewMaxPixel(displayScale: .nan), 512)
+        XCTAssertEqual(CardSize.large.previewMaxPixel(displayScale: 4), 1_024)
+    }
+
     func testResolvedWidthFallsBackForUnboundedProposals() {
         for proposedWidth: CGFloat? in [nil, .infinity, -.infinity, .nan] {
             XCTAssertEqual(

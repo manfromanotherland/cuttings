@@ -46,21 +46,40 @@ struct MasonryLayout: Layout {
     /// ceiling collapses several zoom stops into identical rendered widths.
     var maximumColumns = Int.max
 
+    func makeCache(subviews _: Subviews) -> Cache {
+        Cache()
+    }
+
+    func updateCache(_ cache: inout Cache, subviews _: Subviews) {
+        cache = Cache()
+    }
+
     func sizeThatFits(
-        proposal: ProposedViewSize, subviews: Subviews, cache _: inout Void
+        proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache
     ) -> CGSize {
         let width = MasonryGeometry.resolvedWidth(
             proposedWidth: proposal.width, minimumColumnWidth: minimumColumnWidth
         )
         let result = measure(subviews: subviews, width: width)
+        cache.width = width
+        cache.measurement = result
         return CGSize(width: width, height: result.height)
     }
 
     func placeSubviews(
         in bounds: CGRect, proposal _: ProposedViewSize,
-        subviews: Subviews, cache _: inout Void
+        subviews: Subviews, cache: inout Cache
     ) {
-        let measurement = measure(subviews: subviews, width: bounds.width)
+        let measurement: Measurement
+        if cache.width == bounds.width,
+           cache.measurement?.placements.count == subviews.count,
+           let cached = cache.measurement {
+            measurement = cached
+        } else {
+            measurement = measure(subviews: subviews, width: bounds.width)
+            cache.width = bounds.width
+            cache.measurement = measurement
+        }
         for (index, subview) in subviews.enumerated() {
             let placement = measurement.placements[index]
             subview.place(
@@ -102,8 +121,13 @@ struct MasonryLayout: Layout {
         return Measurement(height: height, placements: placements)
     }
 
-    private struct Measurement {
+    fileprivate struct Measurement {
         var height: CGFloat
         var placements: [CGRect]
+    }
+
+    struct Cache {
+        var width: CGFloat?
+        fileprivate var measurement: Measurement?
     }
 }

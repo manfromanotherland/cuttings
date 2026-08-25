@@ -2,7 +2,7 @@
 
 import XCTest
 
-/// Capability check: the list pages past its 100-row window. `bulkCorpus(120)`
+/// Capability check: the list pages past its 60-row window. `bulkCorpus(120)`
 /// exceeds one page, so the oldest article (row 120) is only reachable once
 /// `loadMore` has fetched the second page — a pager that stopped at the first
 /// page would never surface it.
@@ -17,7 +17,7 @@ final class PaginationCheck: UITestCase {
         XCTAssertTrue(list.row(Fixtures.id(119)).waitExists(), "newest article heads the list")
 
         // The oldest article (row 120) is only present once loadMore has paged past
-        // the 100-row first page.
+        // the 60-row first page.
         XCTAssertTrue(list.scrollToRow(Fixtures.id(0)), "loadMore pages through to the oldest article")
     }
 }
