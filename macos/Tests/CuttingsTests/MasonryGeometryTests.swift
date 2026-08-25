@@ -8,8 +8,27 @@ final class MasonryGeometryTests: XCTestCase {
     }
 
     func testCardSizesProduceIncreasingColumnWidths() {
+        XCTAssertLessThan(
+            CardSize.extraSmall.minimumColumnWidth, CardSize.small.minimumColumnWidth
+        )
         XCTAssertLessThan(CardSize.small.minimumColumnWidth, CardSize.medium.minimumColumnWidth)
         XCTAssertLessThan(CardSize.medium.minimumColumnWidth, CardSize.large.minimumColumnWidth)
+        XCTAssertLessThan(
+            CardSize.large.minimumColumnWidth, CardSize.extraLarge.minimumColumnWidth
+        )
+    }
+
+    func testFiveCardSizesProduceDistinctDefaultWindowDensities() {
+        let columnCounts = CardSize.allCases.map { size in
+            MasonryGeometry.columnCount(
+                width: 1_064,
+                minimumColumnWidth: size.minimumColumnWidth,
+                spacing: 18,
+                maximum: 6
+            )
+        }
+
+        XCTAssertEqual(columnCounts, [5, 4, 3, 2, 1])
     }
 
     func testResolvedWidthFallsBackForUnboundedProposals() {
@@ -63,13 +82,23 @@ final class MasonryGeometryTests: XCTestCase {
     }
 
     func testCardSizesStepInPersistedSizeOrder() {
-        XCTAssertEqual(CardSize.allCases, [.small, .medium, .large])
-        XCTAssertEqual(CardSize.allCases.map(\.rawValue), ["small", "medium", "large"])
-        XCTAssertNil(CardSize.small.smaller)
+        XCTAssertEqual(
+            CardSize.allCases,
+            [.extraSmall, .small, .medium, .large, .extraLarge]
+        )
+        XCTAssertEqual(
+            CardSize.allCases.map(\.rawValue),
+            ["extraSmall", "small", "medium", "large", "extraLarge"]
+        )
+        XCTAssertNil(CardSize.extraSmall.smaller)
+        XCTAssertEqual(CardSize.extraSmall.larger, .small)
+        XCTAssertEqual(CardSize.small.smaller, .extraSmall)
         XCTAssertEqual(CardSize.small.larger, .medium)
         XCTAssertEqual(CardSize.medium.smaller, .small)
         XCTAssertEqual(CardSize.medium.larger, .large)
         XCTAssertEqual(CardSize.large.smaller, .medium)
-        XCTAssertNil(CardSize.large.larger)
+        XCTAssertEqual(CardSize.large.larger, .extraLarge)
+        XCTAssertEqual(CardSize.extraLarge.smaller, .large)
+        XCTAssertNil(CardSize.extraLarge.larger)
     }
 }
