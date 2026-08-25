@@ -91,3 +91,21 @@ extension ReadingRow {
         themeColor = row.themeColor
     }
 }
+
+extension ReadingRow {
+    private static let localVideoAssetPrefix = "cuttings-asset:"
+
+    var localVideoAssetReference: String? {
+        guard kind == .video,
+              let mediaUrl,
+              mediaUrl.hasPrefix(Self.localVideoAssetPrefix)
+        else {
+            return nil
+        }
+        return String(mediaUrl.dropFirst(Self.localVideoAssetPrefix.count))
+    }
+
+    var hasLocalVideoAsset: Bool {
+        localVideoAssetReference != nil
+    }
+}
