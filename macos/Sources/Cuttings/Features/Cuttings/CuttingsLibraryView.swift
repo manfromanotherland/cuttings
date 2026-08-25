@@ -204,17 +204,16 @@ extension CuttingsLibraryView {
                     String(accessibilityReduceMotion),
                     String(describing: scenePhase)
                 ].joined(separator: ":")
-                MasonryBoard(
+                LazyMasonryBoard(
                     appState.readings,
                     id: \.id,
-                    width: proxy.size.width,
                     minimumColumnWidth: cardSize.minimumColumnWidth,
                     spacing: Self.boardSpacing,
-                    contentInsets: NSEdgeInsets(
+                    contentInsets: EdgeInsets(
                         top: Self.boardTopSpacing,
-                        left: Self.boardSpacing,
+                        leading: Self.boardSpacing,
                         bottom: Self.boardSpacing,
-                        right: Self.boardSpacing
+                        trailing: Self.boardSpacing
                     ),
                     configurationID: configurationID,
                     hasMore: appState.hasMoreReadings,

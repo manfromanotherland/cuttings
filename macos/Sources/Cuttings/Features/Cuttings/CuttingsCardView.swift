@@ -19,7 +19,7 @@ struct CuttingsCardView: View {
 
     var body: some View {
         cardContent
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(CuttingsTheme.cardBackground(for: row))
             .clipShape(cardShape)
             .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
