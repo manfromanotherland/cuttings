@@ -107,47 +107,108 @@ actor AssetPreviewDecodeQueue {
 
     private let limit: Int
     private var active = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var nextWaiterID = 0
+    private var waiters: [Int: CheckedContinuation<Bool, Never>] = [:]
+    private var waiterOrder: [Int] = []
+    private var waiterHead = 0
 
     init(limit: Int) {
         self.limit = max(1, limit)
     }
 
     func image(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
-        await acquire()
-        defer { release() }
-        guard !Task.isCancelled else { return nil }
-
-        let decoded = await Task.detached(priority: .utility) {
-            AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
-        }.value
-        return Task.isCancelled ? nil : decoded
+        guard let decoded = await withPermit({
+            await Task.detached(priority: .utility) {
+                AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
+            }.value
+        }) else { return nil }
+        return decoded
     }
 
     func videoThumbnail(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
-        await acquire()
-        defer { release() }
-        guard !Task.isCancelled else { return nil }
-
-        let decoded = await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
-        return Task.isCancelled ? nil : decoded
+        guard let decoded = await withPermit({
+            await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
+        }) else { return nil }
+        return decoded
     }
 
-    private func acquire() async {
+    func state() -> State {
+        let queuedSlots = waiterOrder.count - waiterHead
+        return State(
+            active: active,
+            waiting: waiters.count,
+            queuedSlots: queuedSlots
+        )
+    }
+
+    func withPermit<T: Sendable>(
+        _ operation: @Sendable () async -> T
+    ) async -> T? {
+        guard await acquire() else { return nil }
+        defer { release() }
+        guard !Task.isCancelled else { return nil }
+        let result = await operation()
+        return Task.isCancelled ? nil : result
+    }
+
+    private func acquire() async -> Bool {
+        guard !Task.isCancelled else { return false }
         if active < limit {
             active += 1
-            return
+            return true
         }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
+
+        let id = nextWaiterID
+        nextWaiterID += 1
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                waiters[id] = continuation
+                waiterOrder.append(id)
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id) }
         }
     }
 
     private func release() {
-        if waiters.isEmpty {
-            active -= 1
-        } else {
-            waiters.removeFirst().resume()
+        while waiterHead < waiterOrder.count {
+            let id = waiterOrder[waiterHead]
+            waiterHead += 1
+            guard let continuation = waiters.removeValue(forKey: id) else { continue }
+            continuation.resume(returning: true)
+            compactWaiterOrderIfNeeded()
+            return
         }
+        active = max(0, active - 1)
+        compactWaiterOrderIfNeeded()
+    }
+
+    private func cancelWaiter(_ id: Int) {
+        waiters.removeValue(forKey: id)?.resume(returning: false)
+        compactWaiterOrderIfNeeded()
+    }
+
+    private func compactWaiterOrderIfNeeded() {
+        let queuedSlots = waiterOrder.count - waiterHead
+        let tombstones = queuedSlots - waiters.count
+        guard waiters.isEmpty || (queuedSlots >= 64 && tombstones * 2 >= queuedSlots)
+        else { return }
+
+        if waiters.isEmpty {
+            waiterOrder.removeAll(keepingCapacity: true)
+        } else {
+            waiterOrder = waiterOrder[waiterHead...].filter { waiters[$0] != nil }
+        }
+        waiterHead = 0
+    }
+
+    struct State: Sendable {
+        let active: Int
+        let waiting: Int
+        let queuedSlots: Int
     }
 }

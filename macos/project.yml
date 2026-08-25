@@ -68,12 +68,14 @@ targets:
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/cuttings-native-host
 
-  # Fast, hostless unit tests for pure app logic: library-scope membership,
+  # Fast unit tests for app logic and the in-process virtualized board host:
+  # library-scope membership,
   # content-length formatting, and the FFI-to-presentation ReadingRow mapper. It
   # compiles the specific files under test directly — the same way
   # CuttingsUITests shares AccessibilityID.swift — rather than hosting in the
-  # app, so the suite never launches the app, opens a window, or touches the
-  # dev's real library or defaults. The generated bindings and the static core
+  # app. The board performance regression uses an isolated borderless test
+  # window; the suite never launches Cuttings or touches the dev's real library
+  # or defaults. The generated bindings and the static core
   # framework are linked because the code under test still meets the FFI
   # boundary: the mapper takes an `FfiReadingRow` and `LibraryScope.ffiView`
   # returns an `FfiView`.
@@ -95,7 +97,10 @@ targets:
       - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
       - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryLayout.swift
+      - path: Sources/Cuttings/Features/Cuttings/MasonryCollectionViewLayout.swift
+      - path: Sources/Cuttings/Features/Cuttings/MasonryHostingItem.swift
       - path: Sources/Cuttings/Features/Cuttings/VideoCardViewport.swift
+      - path: Sources/Cuttings/Features/Reader/Markdown/AssetImageLoader.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/Cuttings/Bridge/Mappers/HighlightRow.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarItem+FFI.swift

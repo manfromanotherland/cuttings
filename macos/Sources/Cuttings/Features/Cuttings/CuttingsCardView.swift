@@ -10,6 +10,8 @@ struct CuttingsCardView: View {
     var viewportSize: CGSize = .zero
     var previewMaxPixel: CGFloat = 800
     var autoplayEnabled = true
+    var reduceMotion = false
+    var scenePhase: ScenePhase = .active
     var onOpen: () -> Void
     var onEditTags: () -> Void
 
@@ -68,7 +70,9 @@ struct CuttingsCardView: View {
             viewportSize: viewportSize,
             playbackPositions: playbackPositions,
             maxPixel: previewMaxPixel,
-            autoplayEnabled: autoplayEnabled
+            autoplayEnabled: autoplayEnabled,
+            reduceMotion: reduceMotion,
+            scenePhase: scenePhase
         )
     }
 

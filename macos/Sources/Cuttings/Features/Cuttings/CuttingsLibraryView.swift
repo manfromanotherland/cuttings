@@ -7,6 +7,7 @@ struct CuttingsLibraryView: View {
     @Environment(AppState.self) var appState
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
 
     @State private var presentedReading: ReadingRow?
@@ -60,7 +61,11 @@ extension CuttingsLibraryView {
                 },
                 perform: save
             )
-            .background { rowsProbe }
+            .background {
+                if TestHooks.isUITesting {
+                    rowsProbe
+                }
+            }
             .task { await appState.loadReadings() }
     }
 
@@ -191,53 +196,58 @@ extension CuttingsLibraryView {
             emptyState
         } else {
             GeometryReader { proxy in
-                let contentWidth = finiteBoardWidth(for: proxy.size.width)
-
-                ScrollView {
-                    LazyVStack(spacing: Self.boardSpacing) {
-                        ForEach(masonryChunkStarts, id: \.self) { start in
-                            let end = min(start + Self.masonryChunkSize, appState.readings.count)
-                            MasonryLayout(
-                                minimumColumnWidth: cardSize.minimumColumnWidth,
-                                spacing: Self.boardSpacing
-                            ) {
-                                ForEach(appState.readings[start ..< end]) { row in
-                                    CuttingsCardView(
-                                        row: row,
-                                        playbackPositions: videoPlaybackPositions,
-                                        viewportSize: proxy.size,
-                                        previewMaxPixel: cardSize.previewMaxPixel(
-                                            displayScale: displayScale
-                                        ),
-                                        autoplayEnabled: presentedReading == nil,
-                                        onOpen: { open(row) },
-                                        onEditTags: { tagTargetID = row.id }
-                                    )
-                                    .accessibilityIdentifier(A11y.List.row(row.id))
-                                }
-                            }
-                        }
-
-                        if appState.hasMoreReadings {
-                            ProgressView()
-                                .padding(.vertical, Self.boardSpacing)
-                                .onAppear {
-                                    Task { await appState.loadMoreReadings() }
-                                }
-                        }
+                let previewMaxPixel = cardSize.previewMaxPixel(displayScale: displayScale)
+                let configurationID = [
+                    appState.libraryURL?.path ?? "",
+                    String(Int(previewMaxPixel)),
+                    String(presentedReading == nil),
+                    String(accessibilityReduceMotion),
+                    String(describing: scenePhase)
+                ].joined(separator: ":")
+                MasonryBoard(
+                    appState.readings,
+                    id: \.id,
+                    width: proxy.size.width,
+                    minimumColumnWidth: cardSize.minimumColumnWidth,
+                    spacing: Self.boardSpacing,
+                    contentInsets: NSEdgeInsets(
+                        top: Self.boardTopSpacing,
+                        left: Self.boardSpacing,
+                        bottom: Self.boardSpacing,
+                        right: Self.boardSpacing
+                    ),
+                    configurationID: configurationID,
+                    hasMore: appState.hasMoreReadings,
+                    isLoadingMore: appState.isLoadingMore,
+                    estimatedHeight: estimatedCardHeight,
+                    onLoadMore: {
+                        Task { await appState.loadMoreReadings() }
+                    },
+                    content: { row in
+                        CuttingsCardView(
+                            row: row,
+                            playbackPositions: videoPlaybackPositions,
+                            viewportSize: proxy.size,
+                            previewMaxPixel: previewMaxPixel,
+                            autoplayEnabled: presentedReading == nil,
+                            reduceMotion: accessibilityReduceMotion,
+                            scenePhase: scenePhase,
+                            onOpen: { open(row) },
+                            onEditTags: { tagTargetID = row.id }
+                        )
+                        .environment(appState)
+                        .accessibilityIdentifier(A11y.List.row(row.id))
                     }
-                    .frame(width: contentWidth)
-                    .animation(
-                        accessibilityReduceMotion
-                            ? nil
-                            : .smooth(duration: 0.3, extraBounce: 0),
-                        value: cardSize
-                    )
-                    .padding(.horizontal, Self.boardSpacing)
-                    .padding(.bottom, Self.boardSpacing)
-                    .padding(.top, Self.boardTopSpacing)
-                }
+                )
                 .accessibilityIdentifier(A11y.List.table)
+                .overlay(alignment: .bottom) {
+                    if appState.isLoadingMore {
+                        ProgressView()
+                            .padding(Self.boardSpacing)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(Self.boardSpacing)
+                    }
+                }
             }
         }
     }
@@ -346,11 +356,6 @@ extension CuttingsLibraryView {
 
     private static let boardSpacing: CGFloat = 18
     private static let boardTopSpacing: CGFloat = 12
-    private static let masonryChunkSize = 60
-
-    private var masonryChunkStarts: [Int] {
-        Array(stride(from: 0, to: appState.readings.count, by: Self.masonryChunkSize))
-    }
 
     private var tagTargetRow: ReadingRow? {
         let id = tagTargetID ?? (appState.showTagSheet ? appState.selectedId : nil)
@@ -371,10 +376,25 @@ extension CuttingsLibraryView {
         }
     }
 
-    private func finiteBoardWidth(for proposedWidth: CGFloat) -> CGFloat {
-        let horizontalPadding = Self.boardSpacing * 2
-        guard proposedWidth.isFinite, proposedWidth > horizontalPadding else { return 220 }
-        return max(220, proposedWidth - horizontalPadding)
+    private func estimatedCardHeight(_ row: ReadingRow, width: CGFloat) -> CGFloat {
+        switch row.kind {
+        case .image:
+            return width * 3 / 4
+        case .video:
+            return width * 9 / 16
+        case .quote:
+            let text = row.excerpt.flatMap { $0.isEmpty ? nil : $0 } ?? row.displayTitle
+            let charactersPerLine = max(12, Int(width / 11))
+            let lines = min(12, max(1, Int(ceil(Double(text.count) / Double(charactersPerLine)))))
+            return 22 + 24 + 18 + CGFloat(lines * 30) + 18 + 16 + 22
+        case .article:
+            if row.previewAsset != nil {
+                return width * 2 / 3 + 76
+            }
+            let titleLines = min(5, max(1, Int(ceil(Double(row.displayTitle.count) / 24))))
+            let excerptLines = min(6, max(0, Int(ceil(Double(row.excerpt?.count ?? 0) / 34))))
+            return 32 + CGFloat(titleLines * 29 + excerptLines * 20) + 32
+        }
     }
 
     private func open(_ row: ReadingRow) {

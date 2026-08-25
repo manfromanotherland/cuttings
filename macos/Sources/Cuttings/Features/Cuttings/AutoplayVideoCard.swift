@@ -5,11 +5,10 @@ import AVFoundation
 import SwiftUI
 
 /// A video card that keeps its local poster in the layout while playing muted
-/// video above it. The player is prepared on first entry, paused offscreen, and
-/// retained so returning to the card resumes at the same playback position.
+/// video above it. The player is prepared on first entry, released offscreen,
+/// and recreated at its saved playback position when the card returns.
 struct AutoplayVideoCard: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.masonryCardIsVisible) private var masonryCardIsVisible
 
     let row: ReadingRow
     let libraryURL: URL?
@@ -17,6 +16,8 @@ struct AutoplayVideoCard: View {
     let playbackPositions: VideoPlaybackPositionStore
     var maxPixel: CGFloat = 800
     var autoplayEnabled = true
+    var reduceMotion = false
+    var scenePhase: ScenePhase = .active
 
     @State private var isInViewport = false
     @State private var loadedMediaKey: String?
@@ -56,7 +57,10 @@ struct AutoplayVideoCard: View {
     }
 
     private var shouldAutoplay: Bool {
-        autoplayEnabled && isInViewport && !reduceMotion && scenePhase == .active
+        autoplayEnabled
+            && (masonryCardIsVisible ?? isInViewport)
+            && !reduceMotion
+            && scenePhase == .active
     }
 
     private var playbackTaskID: String {
@@ -78,6 +82,7 @@ struct AutoplayVideoCard: View {
 
         guard shouldAutoplay else {
             pausePlayback()
+            releasePlayback()
             return
         }
 
