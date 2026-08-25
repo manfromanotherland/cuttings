@@ -74,13 +74,13 @@ host, and macOS app.
 | Term | Definition |
 |------|------------|
 | Favorite | Boolean state meaning the user marked the reading as important or worth returning to. Stored in frontmatter. |
-| Tag | User-defined label stored in a reading's frontmatter. Tags organize readings and power tag filters. |
-| Kind filter | Optional card-kind axis (`article`, `image`, `video`, `quote`) composed with favorites, tag, and search in the core query. |
-| Board filter | The optional favorites, kind, and tag selections plus search, applied as an intersection to the board. |
+| Tag | User-defined label stored in a reading's frontmatter. Tags organize readings and are indexed by search. |
+| Board scope | Exactly one toolbar selection: All, Favourites, Media, Articles, Notes, Links, or Quotes. Media combines image and video readings; Articles excludes lightweight links; Notes selects readings with a personal note sidecar; Links selects lightweight article placeholders. |
+| Board filter | The selected board scope and optional search query, applied as an intersection to the board. |
 | All | The unfiltered board scope. It includes every saved item, including files carrying a legacy `archived: true` value. |
-| Favorites | Board scope for readings where `favorite == true`. |
+| Favourites | Board scope for readings where `favorite == true`. |
 | Legacy state field | `read_at`, `archived`, or `rating` in a format-v1 file. The core preserves these for compatibility; the current macOS app does not display or mutate them. |
-| Selection | The currently open reading in the macOS app. It may remain open even when it no longer appears in the active filtered list. |
+| Selection | The currently open reading in the macOS app. When an optimistic edit removes it from the active board scope, selection advances to an adjacent matching reading in the same render tick. |
 
 ## Storage And Sync
 
@@ -116,7 +116,7 @@ host, and macOS app.
 | Term | Definition |
 |------|------------|
 | Reader | Main article reading surface in the macOS app. It renders Markdown natively and supports local assets, text selection, highlights, and typography settings. |
-| Card board | Full-width mixed masonry presentation of reading rows for the active favorites, kind, tag, and search query. |
+| Card board | Full-width mixed masonry presentation of reading rows for the active board scope and search query. |
 | Note editor | The raw-Markdown sheet opened from a card's inspector to add, replace, or delete that reading's personal note. |
 | Reading list | Legacy name for the old row-based macOS presentation and for the core listing API; the current user-facing home is the card board. |
 | Search | Full-text query over indexed reading title, content, and tags. |

@@ -29,7 +29,7 @@ final class EnumBridgeMapperTests: XCTestCase {
             LibraryScope.allCases.map(\.icon),
             [
                 "asterisk", "heart", "photo.on.rectangle", "newspaper",
-                "heart.text.square", "link", "quote.opening",
+                "heart.text.square", "link", "quote.opening"
             ]
         )
     }

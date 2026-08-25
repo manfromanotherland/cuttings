@@ -119,6 +119,7 @@ extension AppState {
     }
 
     // ── Filter selection ──────────────────────────────────────────────────
+
     /// Switch to one exact board scope.
     func selectScope(_ scope: LibraryScope) {
         guard activeScope != scope else { return }

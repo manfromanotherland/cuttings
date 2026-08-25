@@ -135,7 +135,7 @@ extension CuttingsLibraryView {
         Picker("Filter", selection: scopeSelection) {
             ForEach(LibraryScope.allCases) { scope in
                 Label(scope.label, systemImage: scope.icon)
-                    .labelStyle(.iconOnly)
+                    .labelStyle(.titleAndIcon)
                     .help(scope.label)
                     .accessibilityLabel(scope.label)
                     .tag(scope)

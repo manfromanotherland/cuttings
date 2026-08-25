@@ -95,7 +95,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Cuttings      [Favorites] [Filter] [Size]       [ Search ]      │
+│ Cuttings      [Labeled board filters] [− +]   [ Search ]      │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────┐ ┌───────┐ ┌─────────┐ ┌──────────┐                │
 │  │ quote   │ │ image │ │ video   │ │ article  │                │
@@ -110,11 +110,13 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   from the toolbar by the same 30 pt used at the board's horizontal edges.
 - Put the native search field in the unified window toolbar using `.searchable`, with the prompt
   *"Search Cuttings"*. Do not create a bespoke `NSSearchField` or oversized page header.
-- Keep **Favorites** as a visible heart control in the toolbar. Put card kind and tag in one
-  standard toolbar **Filter** menu, with card size in a compact segmented control. Board order is
-  fixed: newest saved first when browsing and relevance when searching.
-- Search, favorites, kind, and tag remain intersections. Filtering is performed in the Rust
-  core, not on the currently loaded Swift page, so pagination remains correct.
+- Use one native labeled segmented picker for the board scope, in this order: **All, Favourites,
+  Media, Articles, Notes, Links, Quotes**. Media combines image and video cards; Articles excludes
+  lightweight link placeholders; Notes means any reading with a `note.md` sidecar; Links means
+  lightweight URL saves. Tags have no toolbar filter because the search field already indexes them.
+- The selected board scope and search query compose as an intersection. Filtering is performed in
+  the Rust core, not on the currently loaded Swift page, so pagination remains correct. Board order
+  is fixed: newest saved first when browsing and relevance when searching.
 
 ### Masonry cards
 
@@ -162,7 +164,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 ### Content states
 
 - **Empty state:** quiet browser-extension guidance for saving a page, media item, or selection.
-- **Board:** the masonry result for the active favorites/kind/tag filters, with incremental pagination.
+- **Board:** the masonry result for the active board scope and search query, with incremental pagination.
 - **No results:** identifies the active search/filter and offers to clear that axis.
 
 ### Settings / appearance
@@ -403,8 +405,8 @@ The visible organizing model is deliberately small:
 
 | Curation | Frontmatter field | Notes |
 |----------|-------------------|-------|
-| Favorite | `favorite: bool` | powers the toolbar Favorites filter |
-| Tags | `tags: [..]` | labels; power the toolbar tag filter |
+| Favorite | `favorite: bool` | powers the toolbar Favourites scope |
+| Tags | `tags: [..]` | labels indexed by the global search field |
 
 The main board includes every saved item. The format-v1 `read_at`, `archived`, and `rating`
 fields remain readable and round-trippable for compatibility with existing libraries and older
@@ -417,20 +419,17 @@ The user clicks, the heart or tag flips on the next frame, and the
 core write + index refresh run behind it. Because the markdown file is the source of truth and the
 refresh re-reads from it, a failed write simply reconciles back — no spinners, no manual undo.
 
-**One motion, not two.** When an action moves a card out of the filter you're looking at — removing
-it from Favorites or removing the selected tag — the row slides out **and** selection advances to
-the neighbouring card in the same beat.
+**One motion, not two.** When an action moves a card out of the scope you're looking at — removing
+it from Favourites or clearing its personal note while viewing Notes — the row slides out **and**
+selection advances to the neighbouring card in the same beat.
 The reader follows to the next item. (Flipping the icon in place and letting the row jump a moment
 later, on the async refresh, reads as a stutter; this avoids it.) Row *re-ordering* after an edit
 still settles on the background refresh — only removal/advance is immediate.
 
-**Selection can sit off-list.** A card stays selected and shown in the detail overlay even after
-an edit drops it from the visible board — for example, removing its favorite while viewing only
-Favorites. The
-list simply shows no highlight, and the toolbar reads from the open reading rather than the (now
-absent) list row. This keeps the reader and the list from disagreeing, and a post-edit refresh
-never re-homes the selection out from under you (only direct reloads — filter switch, search,
-first load — pick a default row).
+When the open card leaves the active scope, the detail overlay advances with the board to that same
+neighbour (or closes when no card remains). A post-edit refresh then reconciles ordering without a
+second selection jump. Direct reloads — scope switch, search, and first load — may pick the first
+matching card.
 
 ## Paste and drop
 
