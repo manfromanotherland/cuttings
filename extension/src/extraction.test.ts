@@ -121,6 +121,24 @@ describe("extractPage", () => {
     expect(result!.markdown).toMatch(/^##\s+.*First section/m);
     expect(result!.markdown).toMatch(/^##\s+.*Second section/m);
   });
+
+  it("captures social preview and favicon roles without adding them to article Markdown", () => {
+    const doc = buildDoc(article);
+    doc.head.insertAdjacentHTML(
+      "beforeend",
+      [
+        '<meta property="og:image" content="https://cdn.example.com/social.png">',
+        '<link rel="icon" href="https://example.com/favicon.ico" sizes="32x32">',
+      ].join(""),
+    );
+
+    const result = extractPage(doc, "https://example.com/post")!;
+
+    expect(result.preview_candidates).toEqual(["https://cdn.example.com/social.png"]);
+    expect(result.favicon_candidates).toEqual(["https://example.com/favicon.ico"]);
+    expect(result.markdown).not.toContain("social.png");
+    expect(result.markdown).not.toContain("favicon.ico");
+  });
 });
 
 describe("countWords", () => {

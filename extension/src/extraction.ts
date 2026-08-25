@@ -3,6 +3,7 @@
 import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
 
+import { extractPageMetadata, firstText } from "./page-metadata.js";
 import type { SaveRequestMetadata } from "./protocol.js";
 import { applySiteAdapters } from "./site-adapters/index.js";
 
@@ -10,6 +11,8 @@ export interface ExtractionResult {
   metadata: SaveRequestMetadata;
   markdown: string;
   image_urls: string[];
+  preview_candidates: string[];
+  favicon_candidates: string[];
 }
 
 /**
@@ -24,17 +27,18 @@ export function extractPage(doc: Document, pageUrl: string): ExtractionResult | 
   if (!article?.content) return null;
 
   const { markdown, imageUrls } = htmlToMarkdown(article.content);
+  const page = extractPageMetadata(doc, pageUrl);
 
-  const author = article.byline ?? undefined;
-  const site = article.siteName || new URL(pageUrl).hostname;
-  const lang = article.lang || doc.documentElement.lang || undefined;
-  const excerpt = article.excerpt ?? undefined;
+  const author = firstText(article.byline, page.author);
+  const site = firstText(article.siteName, page.site);
+  const lang = firstText(article.lang, page.lang);
+  const excerpt = firstText(article.excerpt, page.excerpt);
 
   const metadata: SaveRequestMetadata = {
     kind: "article",
     url: pageUrl,
-    canonical_url: getCanonicalUrl(doc, pageUrl),
-    title: article.title || doc.title,
+    canonical_url: page.canonicalUrl,
+    title: firstText(article.title, page.title) ?? new URL(pageUrl).hostname,
     saved_at: new Date().toISOString(),
     ...(author ? { author } : {}),
     site,
@@ -43,7 +47,13 @@ export function extractPage(doc: Document, pageUrl: string): ExtractionResult | 
     word_count: countWords(article.textContent ?? ""),
   };
 
-  return { metadata, markdown, image_urls: imageUrls };
+  return {
+    metadata,
+    markdown,
+    image_urls: imageUrls,
+    preview_candidates: page.socialImageUrls,
+    favicon_candidates: page.faviconUrls,
+  };
 }
 
 /**
@@ -118,12 +128,4 @@ export function htmlToMarkdown(html: string): { markdown: string; imageUrls: str
 /** Count whitespace-delimited words in a plain-text string. */
 export function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function getCanonicalUrl(doc: Document, fallback: string): string {
-  return (
-    doc.querySelector<HTMLLinkElement>("link[rel='canonical']")?.href ||
-    doc.querySelector<HTMLMetaElement>("meta[property='og:url']")?.content ||
-    fallback
-  );
 }

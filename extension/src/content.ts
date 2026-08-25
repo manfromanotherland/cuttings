@@ -3,7 +3,14 @@
 import { extractPage } from "./extraction.js";
 import { fetchImages } from "./images.js";
 import { extractQuote, extractStandaloneMedia, type StandaloneMediaKind } from "./media.js";
-import type { ImageData, SaveRequestMetadata } from "./protocol.js";
+import { extractPageMetadata } from "./page-metadata.js";
+import type {
+  ImageData,
+  SaveRequestMetadata,
+  SaveResponse,
+  VideoImportMetadata,
+} from "./protocol.js";
+import { importVideo, type VideoImportOptions, VideoImportError } from "./video-import.js";
 
 /** An optional action button on a toast. Clicking it messages the background
  *  worker (which alone can open extension pages) and dismisses the toast. */
@@ -32,15 +39,46 @@ export interface PageCapture {
   markdown: string;
   images: ImageData[];
   unresolved: string[];
+  /** Social/meta image URL selected as the card preview, when present. */
+  preview_url?: string;
+  /** Declared (or conventional) page favicon URL, when present. */
+  favicon_url?: string;
+  /** Ordered social/meta image candidates; the worker picks the first captured one. */
+  preview_candidates?: string[];
+  /** Ordered favicon candidates; the worker picks the first captured one. */
+  favicon_candidates?: string[];
+  /** URLs that are part of the visible Markdown body, not only head metadata. */
+  content_image_urls?: string[];
 }
 
-interface CaptureMediaMessage {
+interface CaptureLinkMessage {
+  action: "capture-link";
+  pageUrl: string;
+}
+
+export interface CaptureMediaMessage {
   action: "capture-media";
   kind: StandaloneMediaKind;
   mediaUrl: string;
   /** The top-level tab URL remains the saved item's source URL. */
   pageUrl: string;
 }
+
+export interface ImportedVideoCapture {
+  video_import: true;
+  metadata: VideoImportMetadata;
+  response: SaveResponse;
+}
+
+export type StandaloneMediaCaptureResponse =
+  | PageCapture
+  | ImportedVideoCapture
+  | { error: string; error_code?: string };
+
+type VideoImporter = (options: VideoImportOptions) => Promise<{
+  metadata: VideoImportMetadata;
+  response: SaveResponse;
+}>;
 
 interface CaptureQuoteMessage {
   action: "capture-quote";
@@ -58,37 +96,64 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       // Fetch images here first: in the page's context these reuse the browser's
       // cache, so images the browser already loaded need no network request.
-      const { images, unresolved } = await fetchImages(result.image_urls);
+      const { images, unresolved } = await fetchImages(
+        captureImageUrls(result.preview_candidates, result.favicon_candidates, result.image_urls),
+      );
       const capture: PageCapture = {
         metadata: result.metadata,
         markdown: result.markdown,
         images,
         unresolved,
+        preview_candidates: result.preview_candidates,
+        favicon_candidates: result.favicon_candidates,
+        content_image_urls: result.image_urls,
       };
       sendResponse(capture);
     })();
     return true; // keep the message channel open for the async sendResponse
   }
 
-  if (msg?.action === "capture-media") {
+  if (msg?.action === "capture-link") {
     void (async () => {
-      const { kind, mediaUrl, pageUrl } = msg as CaptureMediaMessage;
-      if ((kind !== "image" && kind !== "video") || !mediaUrl || !pageUrl) {
-        sendResponse({ error: "The selected media could not be identified." });
+      const { pageUrl } = msg as CaptureLinkMessage;
+      if (!pageUrl) {
+        sendResponse({ error: "The current page link could not be read." });
         return;
       }
 
-      const result = extractStandaloneMedia(document, pageUrl, kind, mediaUrl);
-      // For an image save this captures the selected image. For a video save it
-      // captures only the poster; video bytes are never fetched or buffered.
-      const { images, unresolved } = await fetchImages(result.image_urls);
+      const page = extractPageMetadata(document, pageUrl);
+      const title = page.title ?? new URL(pageUrl).hostname;
+      const { images, unresolved } = await fetchImages(
+        captureImageUrls(page.socialImageUrls, page.faviconUrls),
+      );
       const capture: PageCapture = {
-        metadata: result.metadata,
-        markdown: result.markdown,
+        metadata: {
+          kind: "article",
+          url: pageUrl,
+          canonical_url: page.canonicalUrl,
+          title,
+          saved_at: new Date().toISOString(),
+          ...(page.author ? { author: page.author } : {}),
+          ...(page.site ? { site: page.site } : {}),
+          ...(page.lang ? { lang: page.lang } : {}),
+          ...(page.excerpt ? { excerpt: page.excerpt } : {}),
+        },
+        markdown: "",
         images,
         unresolved,
+        preview_candidates: page.socialImageUrls,
+        favicon_candidates: page.faviconUrls,
       };
       sendResponse(capture);
+    })();
+    return true;
+  }
+
+  if (msg?.action === "capture-media") {
+    void (async () => {
+      sendResponse(
+        await captureStandaloneMediaRequest(document, msg as CaptureMediaMessage, importVideo),
+      );
     })();
     return true;
   }
@@ -114,6 +179,43 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     showToast(msg as ToastMessage);
   }
 });
+
+/** Handle the public capture-media request. Every video is imported over the
+ * streaming port so a successful save always contains a local movie asset;
+ * videos never fall through to the poster-only ordinary save path. */
+export async function captureStandaloneMediaRequest(
+  doc: Document,
+  message: CaptureMediaMessage,
+  importSelectedVideo: VideoImporter = importVideo,
+): Promise<StandaloneMediaCaptureResponse> {
+  const { kind, mediaUrl, pageUrl } = message;
+  if ((kind !== "image" && kind !== "video") || !mediaUrl || !pageUrl) {
+    return { error: "The selected media could not be identified." };
+  }
+
+  if (kind === "video") {
+    try {
+      const imported = await importSelectedVideo({ doc, pageUrl, mediaUrl });
+      return { video_import: true, ...imported };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "The temporary video could not be saved.",
+        ...(error instanceof VideoImportError ? { error_code: error.code } : {}),
+      };
+    }
+  }
+
+  const result = extractStandaloneMedia(doc, pageUrl, kind, mediaUrl);
+  // Only images reach the ordinary save path; every video returned above from
+  // the local streaming import.
+  const { images, unresolved } = await fetchImages(result.image_urls);
+  return {
+    metadata: result.metadata,
+    markdown: result.markdown,
+    images,
+    unresolved,
+  };
+}
 
 const TOAST_HOST_ID = "cuttings-toast-host";
 
@@ -292,4 +394,12 @@ function scheduleDismiss(host: HTMLElement): void {
     toast.addEventListener("animationend", dismiss, { once: true });
     setTimeout(dismiss, 400); // fallback in case animationend doesn't fire
   }, 3200);
+}
+
+function captureImageUrls(
+  previewUrls: string[],
+  faviconUrls: string[],
+  contentUrls: string[] = [],
+): string[] {
+  return [...new Set([...previewUrls, ...faviconUrls, ...contentUrls])];
 }

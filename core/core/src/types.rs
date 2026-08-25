@@ -55,6 +55,9 @@ pub struct Metadata {
     /// Relative path to the first locally captured preview image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview_asset: Option<String>,
+    /// Relative path to the locally captured page favicon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favicon_asset: Option<String>,
     pub canonical_url: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]

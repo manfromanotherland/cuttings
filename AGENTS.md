@@ -101,10 +101,14 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   Image/video ids derive from kind + origin page + media identity; quote ids derive from origin
   page + selected Markdown. This lets several cards coexist from one page while exact re-saves
   deduplicate deterministically.
-- **Video capture records rather than downloads.** The extension stores the direct video URL and,
-  when available, captures its poster as a local preview asset. Session-local streams get a stable
-  opaque capture reference and link back to the source page. The extension does not buffer
-  arbitrary video files into native-messaging JSON.
+- **Every successful browser video save contains a local movie asset.** The extension streams a
+  readable HTTP(S), `data:`, or document-scoped `blob:` source; when bytes cannot be fetched, it
+  records one loop of the exact rendered element as an explicitly compatible H.264 MP4. Every
+  source uses native-messaging protocol v4 with acknowledged chunks of at most 256 KiB decoded
+  bytes. The core caps the complete video at 1 GiB, hashes it into a local `cuttings-asset:` file,
+  and removes incomplete staging on abort, disconnect, or error. A poster-only capture is never a
+  successful video save, ordinary save messages never contain video bytes, and the host never
+  fetches media from the network.
 - **The macOS home is a search-first, sidebar-free masonry board.** Articles still use the
   existing native Markdown reader in the card detail overlay; no WebView is introduced.
 - **The organizing model is Tags**, not manual Lists, favorites, read/unread queues, ratings, or an

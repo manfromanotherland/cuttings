@@ -136,6 +136,7 @@ mod tests {
             url: "https://example.com".to_string(),
             media_url: None,
             preview_asset: None,
+            favicon_asset: None,
             canonical_url: "https://example.com".to_string(),
             title: "Test".to_string(),
             author: None,

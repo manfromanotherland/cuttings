@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { SaveKind, SaveRequestMetadata } from "./protocol.js";
+import { absoluteUrl, extractPageMetadata, firstText } from "./page-metadata.js";
 
 export type StandaloneMediaKind = Extract<SaveKind, "image" | "video">;
 
@@ -15,22 +16,14 @@ export interface MediaExtractionResult {
   image_urls: string[];
 }
 
-interface OriginMetadata {
-  title?: string;
-  canonicalUrl: string;
-  site?: string;
-  author?: string;
-  lang?: string;
-  excerpt?: string;
-}
-
 /**
  * Build a standalone image/video save from the live page DOM.
  *
- * Video bytes are deliberately never requested: only an optional poster is
- * returned in `image_urls`. Durable HTTP(S) media URLs are stored directly.
- * Session-local blob/data sources instead get a stable page-based identity and
- * link back to the origin page.
+ * This pure metadata extractor never requests video bytes: only an optional
+ * poster is returned in `image_urls`. It retains durable or opaque source
+ * metadata for extraction and legacy callers, while the production content
+ * script intercepts every video and streams its bytes before an ordinary save
+ * can persist a poster-only card.
  */
 export function extractStandaloneMedia(
   doc: Document,
@@ -40,7 +33,7 @@ export function extractStandaloneMedia(
   savedAt = new Date().toISOString(),
 ): MediaExtractionResult {
   const element = findMediaElement(doc, pageUrl, kind, mediaUrl);
-  const origin = originMetadata(doc, pageUrl);
+  const origin = extractPageMetadata(doc, pageUrl);
   const caption = element ? figureCaption(element) : undefined;
   const video = element instanceof HTMLVideoElement ? element : undefined;
   const videoDestination =
@@ -60,8 +53,9 @@ export function extractStandaloneMedia(
       ? firstText(element.getAttribute("alt"))
       : undefined;
   // `title` always describes the source page when the page provides one. The
-  // media-specific description stays in the Markdown alt text. A video's
-  // media_url is either its durable direct asset or an opaque stable identity.
+  // media-specific description stays in the Markdown alt text. A direct URL
+  // remains useful extraction metadata; protocol-v4 imports remove it before
+  // the begin message reaches the native host.
   const title = firstText(
     origin.title,
     caption,
@@ -102,7 +96,7 @@ export function extractStandaloneMedia(
 
   const posterUrl = firstText(
     video ? absoluteUrl(video.getAttribute("poster"), pageUrl) : undefined,
-    metaImageUrl(doc, pageUrl),
+    origin.socialImageUrls[0],
   );
   const poster = posterUrl ? `![${escapeMarkdownLabel(alt)}](${posterUrl})\n\n` : "";
 
@@ -192,7 +186,7 @@ export function extractQuote(
   selectedText: string,
   savedAt = new Date().toISOString(),
 ): MediaExtractionResult {
-  const origin = originMetadata(doc, pageUrl);
+  const origin = extractPageMetadata(doc, pageUrl);
   const text = selectedText.replace(/\r\n?/g, "\n").trim();
   const excerpt = truncateUnicode(text.replace(/\s+/g, " ").trim(), MAX_QUOTE_EXCERPT_CHARACTERS);
   const markdown = text
@@ -245,68 +239,6 @@ function videoSourceUrls(video: HTMLVideoElement): Array<string | null | undefin
 
 function figureCaption(element: Element): string | undefined {
   return firstText(element.closest("figure")?.querySelector("figcaption")?.textContent);
-}
-
-function originMetadata(doc: Document, pageUrl: string): OriginMetadata {
-  return {
-    title: firstText(metaContent(doc, "meta[property='og:title']"), doc.title),
-    canonicalUrl: canonicalPageUrl(doc, pageUrl),
-    site: firstText(metaContent(doc, "meta[property='og:site_name']"), hostname(pageUrl)),
-    author: firstText(
-      metaContent(doc, "meta[name='author']"),
-      metaContent(doc, "meta[property='article:author']"),
-    ),
-    lang: firstText(doc.documentElement.lang),
-    excerpt: firstText(
-      metaContent(doc, "meta[property='og:description']"),
-      metaContent(doc, "meta[name='description']"),
-    ),
-  };
-}
-
-function canonicalPageUrl(doc: Document, pageUrl: string): string {
-  const canonical = doc.querySelector<HTMLLinkElement>("link[rel='canonical']")?.href;
-  const openGraph = metaContent(doc, "meta[property='og:url']");
-  return absoluteUrl(canonical || openGraph, pageUrl) ?? pageUrl;
-}
-
-function metaImageUrl(doc: Document, pageUrl: string): string | undefined {
-  return absoluteUrl(
-    firstText(
-      metaContent(doc, "meta[property='og:image']"),
-      metaContent(doc, "meta[name='twitter:image']"),
-    ),
-    pageUrl,
-  );
-}
-
-function metaContent(doc: Document, selector: string): string | undefined {
-  return firstText(doc.querySelector<HTMLMetaElement>(selector)?.content);
-}
-
-function firstText(...values: Array<string | null | undefined>): string | undefined {
-  for (const value of values) {
-    const compact = value?.replace(/\s+/g, " ").trim();
-    if (compact) return compact;
-  }
-  return undefined;
-}
-
-function absoluteUrl(value: string | null | undefined, base: string): string | undefined {
-  if (!value) return undefined;
-  try {
-    return new URL(value, base).href;
-  } catch {
-    return value;
-  }
-}
-
-function hostname(url: string): string | undefined {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return undefined;
-  }
 }
 
 function filenameFromUrl(url: string): string | undefined {

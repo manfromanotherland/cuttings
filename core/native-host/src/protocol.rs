@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use cuttings_core::ReadingKind;
 
 /// The wire protocol version shared with the browser extension.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// Incoming save request from the browser extension.
 #[derive(Debug, Deserialize)]
@@ -17,12 +17,29 @@ pub struct SaveRequest {
     /// Image bytes captured by the extension. The host writes these to disk; it
     /// never downloads anything itself.
     pub images: Vec<RequestImage>,
+    #[serde(default)]
+    pub preview_url: Option<String>,
+    #[serde(default)]
+    pub favicon_url: Option<String>,
+}
+
+/// Incoming lightweight-link request with metadata/assets read from the live page.
+#[derive(Debug, Deserialize)]
+pub struct SaveLinkRequest {
+    pub protocol_version: u32,
+    pub action: String,
+    pub metadata: RequestMetadata,
+    pub images: Vec<RequestImage>,
+    #[serde(default)]
+    pub preview_url: Option<String>,
+    #[serde(default)]
+    pub favicon_url: Option<String>,
 }
 
 /// One image, captured and base64-encoded by the extension.
 #[derive(Debug, Deserialize)]
 pub struct RequestImage {
-    /// The URL exactly as it appears in `markdown`, used to rewrite the link.
+    /// Source lookup key: a Markdown URL or an explicit preview/favicon role URL.
     pub url: String,
     /// The `Content-Type` the browser saw, used to pick a file extension.
     #[serde(default)]
@@ -55,6 +72,36 @@ pub struct CheckRequest {
     pub url: String,
 }
 
+/// Start one connection-scoped browser video upload.
+#[derive(Debug, Deserialize)]
+pub struct VideoImportBeginRequest {
+    pub protocol_version: u32,
+    pub action: String,
+    pub upload_id: String,
+    pub metadata: RequestMetadata,
+    pub content_type: String,
+    #[serde(default)]
+    pub expected_bytes: Option<u64>,
+}
+
+/// Append one base64-encoded chunk to the active browser video upload.
+#[derive(Debug, Deserialize)]
+pub struct VideoImportChunkRequest {
+    pub protocol_version: u32,
+    pub action: String,
+    pub upload_id: String,
+    pub sequence: u64,
+    pub data_base64: String,
+}
+
+/// Finish or abort the active browser video upload.
+#[derive(Debug, Deserialize)]
+pub struct VideoImportEndRequest {
+    pub protocol_version: u32,
+    pub action: String,
+    pub upload_id: String,
+}
+
 /// Outgoing response to the browser extension (shared by save and check actions).
 #[derive(Debug, Serialize)]
 pub struct SaveResponse {
@@ -74,6 +121,18 @@ pub struct SaveResponse {
 }
 
 impl SaveResponse {
+    pub fn ack() -> Self {
+        Self {
+            protocol_version: PROTOCOL_VERSION,
+            ok: true,
+            id: None,
+            path: None,
+            error: None,
+            message: None,
+            saved: None,
+        }
+    }
+
     pub fn success(id: String, path: String) -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,

@@ -748,6 +748,7 @@ mod tests {
             url: url.to_string(),
             media_url: None,
             preview_asset: None,
+            favicon_asset: None,
             canonical_url: url.to_string(),
             title: title.to_string(),
             author: None,

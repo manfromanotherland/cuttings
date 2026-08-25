@@ -218,6 +218,7 @@ mod tests {
             url: "https://example.com/article".to_string(),
             media_url: None,
             preview_asset: None,
+            favicon_asset: None,
             canonical_url: "https://example.com/article".to_string(),
             title: "Test article".to_string(),
             author: None,

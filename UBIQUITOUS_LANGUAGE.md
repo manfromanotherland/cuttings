@@ -41,21 +41,21 @@ host, and macOS app.
 | Library folder | Same as Library, used when emphasizing the on-disk directory. |
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |
 | Save | The user action that adds a page, media item, or text to the library as a new reading/card, from either the extension or the app's paste/drop path. |
-| Capture | The extension step that turns a page or right-click context into Markdown, universal origin metadata, and optional local image bytes before the save is written. Internal/technical term; users just "save". |
+| Capture | The extension step that turns a page or right-click context into Markdown, universal origin metadata, optional local image bytes, or a bounded document-video stream before the save is written. Internal/technical term; users just "save". |
 | Reading | One saved item in the user's library. A reading is backed by an article file plus optional assets and highlights inside its reading folder. |
 | Card | User-facing visual representation of a reading on the macOS masonry board. Do not rename the internal `Reading` domain type merely to match presentation. |
 | Card kind | The reading's capture/rendering kind: `article`, `image`, `video`, or `quote`. A missing kind on an older file means `article`. |
 | Origin | The source page for a web card: `url`, `canonical_url`, page title/site, and save date. For image/video cards this is deliberately distinct from `media_url`. Source-less app saves instead carry a private local identity. |
-| Media URL | Optional media identity for an image/video card. Normally it is a durable direct URL. A session-local video uses an opaque stable capture reference, while source-less saves and offline migrations may use a content-derived local asset reference. It supplements the origin and never replaces the page URL. |
+| Media URL | Optional media identity for an image/video card. Images may retain a durable direct URL; every newly browser-saved video uses a content-derived `cuttings-asset:` reference to its local movie. Legacy direct video URLs remain readable. The media identity supplements the origin and never replaces the page URL. |
 | Preview asset | Optional safe local `assets/<file>` reference used by the masonry card. The host derives it only after captured image/poster bytes have been written. |
 | Quote | A text card whose full text is stored as Markdown. Browser selections retain their page origin; source-less paste/drop text uses a private local identity. |
-| Lightweight link | An article card created by pasting or dropping only an HTTP(S) URL. It is explicitly marked `lightweight: true`; a later full browser capture upgrades the same reading in place. |
-| Local identity | A deterministic, non-web `cuttings://local/...` URL used for source-less text or image saves. It prevents machine-local paths leaking into synced files and is never shown as an openable source. |
+| Lightweight link | An article card with no cleaned article body. It may be created by paste/drop or the browser toolbar and may retain page metadata, a social preview, and a favicon. It is explicitly marked `lightweight: true`; a later full browser capture upgrades the same reading in place. |
+| Local identity | A deterministic, non-web `cuttings://local/...` URL used for source-less text, image, or video saves. It prevents machine-local paths leaking into synced files and is never shown as an openable source. |
 | Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its assets and highlights, and any preserved legacy sidecars. Moving or deleting a reading operates on this one folder. |
 | Article file | The `article.md` file inside a reading folder (`articles/<prefix>/<id>/article.md`) that stores one reading's frontmatter and body. |
 | Frontmatter | YAML metadata at the top of an article file. It is the source of truth for reading metadata and state. |
 | Body | The cleaned Markdown content after frontmatter in an article file. |
-| Asset | A local file, usually an image, stored in the reading's own `assets/` folder (`articles/<prefix>/<id>/assets/`) and linked from the body with a relative `assets/<file>` path. |
+| Asset | A local image or video stored in the reading's own `assets/` folder (`articles/<prefix>/<id>/assets/`) and linked from the body with a relative `assets/<file>` path. |
 | Original HTML | Optional raw HTML snapshot stored as `original.html` inside the reading folder for future reprocessing. |
 | Highlight | A saved selected text passage for one reading. Highlights are stored in the reading folder, separate from the article file. |
 | Highlight file | The `highlights.md` file inside a reading folder (`articles/<prefix>/<id>/highlights.md`) that stores that reading's saved highlights. |
@@ -98,7 +98,8 @@ host, and macOS app.
 
 | Term | Definition |
 |------|------------|
-| Extension | Browser extension that captures a cleaned page, clicked image/video, or selected-text quote and sends Markdown, universal origin metadata, and optional image bytes to the native host. |
+| Extension | Browser extension that saves a cleaned article, lightweight link, or visible screenshot from its toolbar, and captures a clicked image/video or selected-text quote from its context menu. It sends ordinary captures as Markdown, origin metadata, and optional image bytes; every video instead uses the acknowledged browser video import stream. |
+| Browser video import | Protocol-v4 transfer used by every browser video save. The extension streams readable source bytes or records one rendered loop as compatible H.264 MP4 when the source cannot be fetched, then sends acknowledged chunks through the native host; the core commits a content-addressed local asset and cleans incomplete staging. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |
 | Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, highlights, legacy compatibility, and the UniFFI surface. |
@@ -149,7 +150,7 @@ paragraphs, and the welcome article.
 | Clip | Save | One verb covers pages, media, quotes, and in-app paste/drop without implying that only a fragment is kept. |
 | Standalone note | Quote | Source-less text saved to Cuttings is a quote card, not a separate note kind. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
-| Bookmark (user action) | Save | A full browser capture stores cleaned content; a URL-only app save is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
+| Bookmark (user action) | Save | A full browser capture stores cleaned content; a link saved without cleaned content, from the app or toolbar, is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |
 | Read-later app | Inspiration library | The product is organized around collecting and revisiting inspiration, not clearing an unread queue. |
 | Preferences | Settings | macOS renamed Preferences to Settings; the app's UI says Settings. |

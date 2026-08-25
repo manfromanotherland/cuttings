@@ -110,6 +110,7 @@ mod tests {
             url: "https://example.com/article".to_string(),
             media_url: None,
             preview_asset: None,
+            favicon_asset: None,
             canonical_url: "https://example.com/article".to_string(),
             title: "Test Article".to_string(),
             author: Some("Jane Doe".to_string()),
@@ -146,6 +147,7 @@ mod tests {
         meta.kind = crate::ReadingKind::Video;
         meta.media_url = Some("https://cdn.example.com/clip.mp4".into());
         meta.preview_asset = Some("assets/poster.jpg".into());
+        meta.favicon_asset = Some("assets/favicon.ico".into());
         let reading = Reading {
             metadata: meta.clone(),
             body: "![Poster](assets/poster.jpg)\n".into(),
@@ -155,6 +157,7 @@ mod tests {
         assert!(rendered.contains("kind: video"));
         assert!(rendered.contains("media_url: https://cdn.example.com/clip.mp4"));
         assert!(rendered.contains("preview_asset: assets/poster.jpg"));
+        assert!(rendered.contains("favicon_asset: assets/favicon.ico"));
         assert_eq!(parse_reading(&rendered).unwrap().metadata, meta);
     }
 
@@ -205,6 +208,7 @@ Body.
         assert_eq!(parsed.metadata.kind, crate::ReadingKind::Article);
         assert_eq!(parsed.metadata.media_url, None);
         assert_eq!(parsed.metadata.preview_asset, None);
+        assert_eq!(parsed.metadata.favicon_asset, None);
     }
 
     #[test]

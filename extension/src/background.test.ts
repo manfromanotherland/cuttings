@@ -6,8 +6,8 @@ import { HOST_ID } from "./host.js";
 import { PROTOCOL_VERSION } from "./protocol.js";
 
 describe("capture contract", () => {
-  it("uses protocol version 2", () => {
-    expect(PROTOCOL_VERSION).toBe(2);
+  it("uses protocol version 4", () => {
+    expect(PROTOCOL_VERSION).toBe(4);
   });
 
   it("targets the Cuttings native messaging host", () => {

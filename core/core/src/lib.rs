@@ -33,11 +33,12 @@ pub use id::{media_id, new_id, quote_id, url_id};
 pub use images::{first_local_image_asset, write_images, ImageBytes};
 pub use index::open as open_index;
 pub use ingest::{
-    import_image, import_image_from_origin_with_options, import_image_with_options, import_link,
-    import_link_with_options, import_reading, import_text, import_text_with_options,
-    import_video_file, import_video_file_from_origin_with_options, import_video_file_with_options,
-    save_capture, ImportOptions, ImportedReadingState, SaveDisposition, SaveError, SaveInput,
-    SaveOutcome,
+    begin_browser_video_import, import_image, import_image_from_origin_with_options,
+    import_image_with_options, import_link, import_link_with_options, import_reading, import_text,
+    import_text_with_options, import_video_file, import_video_file_from_origin_with_options,
+    import_video_file_with_options, save_capture, save_link_capture, BrowserVideoImport,
+    BrowserVideoImportInput, ImportOptions, ImportedReadingState, SaveDisposition, SaveError,
+    SaveInput, SaveLinkInput, SaveOutcome, MAX_BROWSER_VIDEO_BYTES,
 };
 pub use list::{
     get_reading, list_readings, sidebar_counts, view_counts, CountScope, ListOptions, ReadingRow,

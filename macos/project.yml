@@ -49,6 +49,7 @@ targets:
       path: Sources/Cuttings/App/Cuttings.entitlements
     preBuildScripts:
       - name: Build and copy cuttings-native-host
+        basedOnDependencyAnalysis: false
         script: |
           set -e
           # Xcode runs build phases with a sanitized PATH that omits ~/.cargo/bin,

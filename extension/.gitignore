@@ -5,3 +5,4 @@ dist/
 key.pem
 *.pem
 artifacts/
+unpacked/

@@ -995,6 +995,8 @@ fn execute_origin_quote(
             saved_at: options.saved_at.clone().unwrap_or_default(),
             markdown,
             images: vec![],
+            preview_url: None,
+            favicon_url: None,
             excerpt: Some(truncate_chars(&identity_text, QUOTE_EXCERPT_CHARACTERS)),
             word_count: Some(identity_text.split_whitespace().count() as u32),
             lang: None,

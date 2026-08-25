@@ -4,12 +4,18 @@ mod check;
 mod install;
 mod protocol;
 mod save;
+mod save_link;
+mod video_import;
 
 use std::io::{Read, Write};
 
 use anyhow::Result;
-use protocol::{CheckRequest, SaveRequest, SaveResponse};
+use protocol::{
+    CheckRequest, SaveLinkRequest, SaveRequest, SaveResponse, VideoImportBeginRequest,
+    VideoImportChunkRequest, VideoImportEndRequest,
+};
 use serde::Deserialize;
+use video_import::VideoImportSession;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -36,22 +42,30 @@ fn run_loop() -> Result<()> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
 
+    run_loop_with(&mut stdin.lock(), &mut stdout.lock())
+}
+
+/// Handle one browser connection. Video imports are scoped to this stream, so
+/// EOF and transport errors drop the session and its incomplete staged file.
+fn run_loop_with(reader: &mut impl Read, writer: &mut impl Write) -> Result<()> {
+    let mut session = NativeSession::default();
+
     loop {
-        let raw = match read_message(&mut stdin.lock()) {
+        let raw = match read_message(reader) {
             Ok(bytes) => bytes,
             Err(e) if is_eof_error(&e) => break,
             Err(e) => return Err(e),
         };
 
-        let response = dispatch(&raw);
+        let response = session.dispatch(&raw);
         let payload = serde_json::to_vec(&response)?;
 
         // Enforce the 1 MB host→browser limit.
         if payload.len() > 1_048_576 {
             let truncated = SaveResponse::error("io_error", "response exceeds 1 MB limit");
-            write_message(&mut stdout.lock(), &serde_json::to_vec(&truncated)?)?;
+            write_message(writer, &serde_json::to_vec(&truncated)?)?;
         } else {
-            write_message(&mut stdout.lock(), &payload)?;
+            write_message(writer, &payload)?;
         }
     }
 
@@ -63,30 +77,95 @@ struct ActionPeek {
     action: String,
 }
 
+#[cfg(test)]
 fn dispatch(raw: &[u8]) -> SaveResponse {
-    let action = match serde_json::from_slice::<ActionPeek>(raw) {
-        Err(e) => return SaveResponse::error("invalid_request", &e.to_string()),
-        Ok(p) => p.action,
-    };
+    NativeSession::default().dispatch(raw)
+}
 
-    match action.as_str() {
-        "check" => match serde_json::from_slice::<CheckRequest>(raw) {
-            Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
-            Ok(req) => match check::handle(req) {
-                Ok(resp) => resp,
-                Err(e) => SaveResponse::error("io_error", &e.to_string()),
-            },
-        },
-        _ => match serde_json::from_slice::<SaveRequest>(raw) {
-            Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
-            Ok(req) => match save::handle(req) {
-                Ok(resp) => resp,
-                Err(e) => {
-                    let (code, msg) = save::classify_error(&e);
-                    SaveResponse::error(code, &msg)
+#[derive(Default)]
+struct NativeSession {
+    video_import: VideoImportSession,
+}
+
+impl NativeSession {
+    fn dispatch(&mut self, raw: &[u8]) -> SaveResponse {
+        let action = match serde_json::from_slice::<ActionPeek>(raw) {
+            Err(e) => {
+                self.video_import.abort_active();
+                return SaveResponse::error("invalid_request", &e.to_string());
+            }
+            Ok(p) => p.action,
+        };
+
+        let action_can_continue_active_upload = matches!(
+            action.as_str(),
+            "video_import_begin"
+                | "video_import_chunk"
+                | "video_import_finish"
+                | "video_import_abort"
+        );
+        if self.video_import.is_active() && !action_can_continue_active_upload {
+            self.video_import.abort_active();
+            return SaveResponse::error(
+                "invalid_request",
+                "a browser video upload is active on this connection",
+            );
+        }
+
+        match action.as_str() {
+            "video_import_begin" => match serde_json::from_slice::<VideoImportBeginRequest>(raw) {
+                Ok(request) => self.video_import.begin(request),
+                Err(error) => {
+                    self.video_import.abort_active();
+                    SaveResponse::error("invalid_request", &error.to_string())
                 }
             },
-        },
+            "video_import_chunk" => match serde_json::from_slice::<VideoImportChunkRequest>(raw) {
+                Ok(request) => self.video_import.chunk(request),
+                Err(error) => {
+                    self.video_import.abort_active();
+                    SaveResponse::error("invalid_request", &error.to_string())
+                }
+            },
+            "video_import_finish" => match serde_json::from_slice::<VideoImportEndRequest>(raw) {
+                Ok(request) => self.video_import.finish(request),
+                Err(error) => {
+                    self.video_import.abort_active();
+                    SaveResponse::error("invalid_request", &error.to_string())
+                }
+            },
+            "video_import_abort" => match serde_json::from_slice::<VideoImportEndRequest>(raw) {
+                Ok(request) => self.video_import.abort(request),
+                Err(error) => {
+                    self.video_import.abort_active();
+                    SaveResponse::error("invalid_request", &error.to_string())
+                }
+            },
+            "check" => match serde_json::from_slice::<CheckRequest>(raw) {
+                Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
+                Ok(req) => match check::handle(req) {
+                    Ok(resp) => resp,
+                    Err(e) => SaveResponse::error("io_error", &e.to_string()),
+                },
+            },
+            "save_link" => match serde_json::from_slice::<SaveLinkRequest>(raw) {
+                Err(error) => SaveResponse::error("invalid_request", &error.to_string()),
+                Ok(request) => match save_link::handle(request) {
+                    Ok(response) => response,
+                    Err(error) => SaveResponse::error("io_error", &error.to_string()),
+                },
+            },
+            _ => match serde_json::from_slice::<SaveRequest>(raw) {
+                Err(e) => SaveResponse::error("invalid_request", &e.to_string()),
+                Ok(req) => match save::handle(req) {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        let (code, msg) = save::classify_error(&e);
+                        SaveResponse::error(code, &msg)
+                    }
+                },
+            },
+        }
     }
 }
 
@@ -167,7 +246,8 @@ mod tests {
 mod integration_tests {
     use super::*;
     use base64::Engine;
-    use std::sync::Mutex;
+    use serde_json::Value;
+    use std::{io::Cursor, sync::Mutex};
     use tempfile::TempDir;
 
     // Serialize all tests that touch CUTTINGS_LIBRARY to avoid races.
@@ -175,7 +255,7 @@ mod integration_tests {
 
     fn save_message(url: &str) -> Vec<u8> {
         serde_json::to_vec(&serde_json::json!({
-            "protocol_version": 2,
+            "protocol_version": 4,
             "action": "save",
             "metadata": {
                 "url": url,
@@ -196,7 +276,7 @@ mod integration_tests {
         markdown: &str,
     ) -> Vec<u8> {
         serde_json::to_vec(&serde_json::json!({
-            "protocol_version": 2,
+            "protocol_version": 4,
             "action": "save",
             "metadata": {
                 "kind": kind,
@@ -214,6 +294,39 @@ mod integration_tests {
         .unwrap()
     }
 
+    fn save_link_message(url: &str) -> Vec<u8> {
+        let social_url = "https://cdn.example.com/social.png";
+        let favicon_url = "https://example.com/favicon.ico";
+        serde_json::to_vec(&serde_json::json!({
+            "protocol_version": 4,
+            "action": "save_link",
+            "metadata": {
+                "kind": "article",
+                "url": url,
+                "canonical_url": url,
+                "title": "Link title",
+                "site": "Example",
+                "excerpt": "Link description",
+                "saved_at": "2026-06-13T15:00:00Z"
+            },
+            "images": [
+                {
+                    "url": social_url,
+                    "content_type": "image/png",
+                    "data_base64": base64::engine::general_purpose::STANDARD.encode(b"social image")
+                },
+                {
+                    "url": favicon_url,
+                    "content_type": "image/x-icon",
+                    "data_base64": base64::engine::general_purpose::STANDARD.encode(b"favicon")
+                }
+            ],
+            "preview_url": social_url,
+            "favicon_url": favicon_url
+        }))
+        .unwrap()
+    }
+
     fn with_library<F, R>(f: F) -> R
     where
         F: FnOnce(&TempDir) -> R,
@@ -226,6 +339,523 @@ mod integration_tests {
         let result = f(&dir);
         std::env::remove_var("CUTTINGS_LIBRARY");
         result
+    }
+
+    fn run_framed_messages(messages: &[Value]) -> Vec<Value> {
+        let input = messages
+            .iter()
+            .fold(Vec::new(), |mut framed_input, message| {
+                let payload = serde_json::to_vec(message).unwrap();
+                framed_input.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+                framed_input.extend_from_slice(&payload);
+                framed_input
+            });
+        let mut reader = Cursor::new(input);
+        let mut output = Vec::new();
+        run_loop_with(&mut reader, &mut output).unwrap();
+
+        let mut responses = Vec::new();
+        let mut cursor = Cursor::new(output);
+        loop {
+            match read_message(&mut cursor) {
+                Ok(payload) => responses.push(serde_json::from_slice(&payload).unwrap()),
+                Err(error) if is_eof_error(&error) => break,
+                Err(error) => panic!("invalid framed response: {error}"),
+            }
+        }
+        responses
+    }
+
+    fn video_begin(upload_id: &str, url: &str, expected_bytes: Option<usize>) -> Value {
+        serde_json::json!({
+            "protocol_version": 4,
+            "action": "video_import_begin",
+            "upload_id": upload_id,
+            "metadata": {
+                "kind": "video",
+                "url": url,
+                "canonical_url": url,
+                "title": "Framed browser video",
+                "saved_at": "2026-08-25T12:00:00.000Z"
+            },
+            "content_type": "video/mp4",
+            "expected_bytes": expected_bytes
+        })
+    }
+
+    fn video_chunk(upload_id: &str, sequence: u64, bytes: &[u8]) -> Value {
+        serde_json::json!({
+            "protocol_version": 4,
+            "action": "video_import_chunk",
+            "upload_id": upload_id,
+            "sequence": sequence,
+            "data_base64": base64::engine::general_purpose::STANDARD.encode(bytes)
+        })
+    }
+
+    fn video_end(action: &str, upload_id: &str) -> Value {
+        serde_json::json!({
+            "protocol_version": 4,
+            "action": action,
+            "upload_id": upload_id
+        })
+    }
+
+    fn mp4_video_bytes(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(32 + payload.len());
+        bytes.extend_from_slice(&24_u32.to_be_bytes());
+        bytes.extend_from_slice(b"ftyp");
+        bytes.extend_from_slice(b"isom");
+        bytes.extend_from_slice(&0_u32.to_be_bytes());
+        bytes.extend_from_slice(b"isom");
+        bytes.extend_from_slice(b"mp42");
+        bytes.extend_from_slice(&u32::try_from(8 + payload.len()).unwrap().to_be_bytes());
+        bytes.extend_from_slice(b"mdat");
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    fn staging_is_empty(library: &TempDir) -> bool {
+        let staging = library.path().join(".cuttings-imports");
+        !staging.is_dir() || std::fs::read_dir(staging).unwrap().next().is_none()
+    }
+
+    #[test]
+    fn framed_video_import_persists_the_exact_local_video() {
+        with_library(|dir| {
+            let expected = mp4_video_bytes(b"first framed video chunk and its second chunk");
+            let (first, second) = expected.split_at(16);
+            let messages = vec![
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "action": "video_import_begin",
+                    "upload_id": "upload-exact",
+                    "metadata": {
+                        "kind": "video",
+                        "url": "https://example.com/clips/exact",
+                        "canonical_url": "https://example.com/canonical/exact#player",
+                        "title": "Exact browser video",
+                        "author": "Example Director",
+                        "site": "Example Cinema",
+                        "lang": "en-IE",
+                        "excerpt": "A framed browser video.",
+                        "word_count": 4,
+                        "saved_at": "2026-08-25T12:00:00.000Z"
+                    },
+                    "content_type": "video/mp4",
+                    "expected_bytes": expected.len()
+                }),
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "action": "video_import_chunk",
+                    "upload_id": "upload-exact",
+                    "sequence": 0,
+                    "data_base64": base64::engine::general_purpose::STANDARD.encode(first)
+                }),
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "action": "video_import_chunk",
+                    "upload_id": "upload-exact",
+                    "sequence": 1,
+                    "data_base64": base64::engine::general_purpose::STANDARD.encode(second)
+                }),
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "action": "video_import_finish",
+                    "upload_id": "upload-exact"
+                }),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses.len(), 4);
+            assert!(responses.iter().all(|response| response["ok"] == true));
+            let ack = serde_json::json!({ "protocol_version": 4, "ok": true });
+            assert_eq!(responses[0], ack, "begin is a small ack");
+            assert_eq!(responses[1], ack, "chunk is a small ack");
+            assert_eq!(responses[2], ack, "chunk is a small ack");
+
+            let id = responses[3]["id"].as_str().unwrap();
+            let article_path = dir.path().join(responses[3]["path"].as_str().unwrap());
+            let reading =
+                cuttings_core::parse_reading(&std::fs::read_to_string(article_path).unwrap())
+                    .unwrap();
+            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Video);
+            assert_eq!(
+                reading.metadata.canonical_url,
+                "https://example.com/canonical/exact"
+            );
+            assert_eq!(reading.metadata.author.as_deref(), Some("Example Director"));
+            assert_eq!(reading.metadata.site.as_deref(), Some("Example Cinema"));
+            assert_eq!(reading.metadata.lang.as_deref(), Some("en-IE"));
+            assert_eq!(
+                reading.metadata.excerpt.as_deref(),
+                Some("A framed browser video.")
+            );
+            assert_eq!(reading.metadata.word_count, Some(4));
+            let local_reference = reading
+                .metadata
+                .media_url
+                .as_deref()
+                .unwrap()
+                .strip_prefix("cuttings-asset:")
+                .unwrap();
+            assert_eq!(
+                std::fs::read(
+                    dir.path()
+                        .join("articles")
+                        .join(&id[..2])
+                        .join(id)
+                        .join(local_reference)
+                )
+                .unwrap(),
+                expected
+            );
+        });
+    }
+
+    #[test]
+    fn framed_save_check_and_link_actions_remain_compatible() {
+        with_library(|_dir| {
+            let saved_url = "https://example.com/framed-existing-actions";
+            let link_url = "https://example.com/framed-existing-link";
+            let messages = vec![
+                serde_json::from_slice(&save_message(saved_url)).unwrap(),
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "action": "check",
+                    "url": saved_url
+                }),
+                serde_json::from_slice(&save_link_message(link_url)).unwrap(),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses.len(), 3);
+            assert_eq!(responses[0]["ok"], true);
+            assert_eq!(responses[1]["ok"], true);
+            assert_eq!(responses[1]["saved"], true);
+            assert_eq!(responses[2]["ok"], true);
+        });
+    }
+
+    #[test]
+    fn out_of_order_video_chunk_cancels_the_transfer() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"order recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-order",
+                    "https://example.com/clips/out-of-order",
+                    Some(1),
+                ),
+                video_chunk("upload-order", 1, b"x"),
+                video_begin(
+                    "upload-recovery",
+                    "https://example.com/clips/order-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-recovery", 0, &recovery),
+                video_end("video_import_finish", "upload-recovery"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[1]["ok"], false);
+            assert_eq!(responses[1]["error"], "invalid_request");
+            assert_eq!(responses[2]["ok"], true, "the failed transfer was cleared");
+            assert_eq!(responses[4]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn wrong_video_upload_id_cancels_the_transfer() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"wrong id recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-right",
+                    "https://example.com/clips/wrong-id",
+                    Some(1),
+                ),
+                video_chunk("upload-wrong", 0, b"x"),
+                video_begin(
+                    "upload-after-wrong-id",
+                    "https://example.com/clips/wrong-id-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-after-wrong-id", 0, &recovery),
+                video_end("video_import_finish", "upload-after-wrong-id"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[1]["ok"], false);
+            assert_eq!(responses[1]["error"], "invalid_request");
+            assert_eq!(responses[2]["ok"], true, "the failed transfer was cleared");
+            assert_eq!(responses[4]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn oversized_decoded_video_chunk_cancels_the_transfer() {
+        with_library(|dir| {
+            let oversized = vec![0xA5; 256 * 1024 + 1];
+            let recovery = mp4_video_bytes(b"oversized chunk recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-oversized",
+                    "https://example.com/clips/oversized",
+                    Some(oversized.len()),
+                ),
+                video_chunk("upload-oversized", 0, &oversized),
+                video_begin(
+                    "upload-after-oversized",
+                    "https://example.com/clips/oversized-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-after-oversized", 0, &recovery),
+                video_end("video_import_finish", "upload-after-oversized"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[1]["ok"], false);
+            assert!(responses[1]["message"]
+                .as_str()
+                .unwrap()
+                .contains("262144 byte limit"));
+            assert_eq!(responses[2]["ok"], true, "the failed transfer was cleared");
+            assert_eq!(responses[4]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn declared_video_size_mismatch_cancels_the_transfer() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"size mismatch recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-mismatch",
+                    "https://example.com/clips/mismatch",
+                    Some(2),
+                ),
+                video_chunk("upload-mismatch", 0, b"x"),
+                video_end("video_import_finish", "upload-mismatch"),
+                video_begin(
+                    "upload-after-mismatch",
+                    "https://example.com/clips/mismatch-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-after-mismatch", 0, &recovery),
+                video_end("video_import_finish", "upload-after-mismatch"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[2]["ok"], false);
+            assert!(responses[2]["message"]
+                .as_str()
+                .unwrap()
+                .contains("did not match the declared size"));
+            assert_eq!(responses[3]["ok"], true, "the failed transfer was cleared");
+            assert_eq!(responses[5]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn abort_cleans_the_partial_video_and_allows_another_upload() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"abort recovery");
+            let messages = vec![
+                video_begin("upload-abort", "https://example.com/clips/abort", None),
+                video_chunk("upload-abort", 0, b"partial"),
+                video_end("video_import_abort", "upload-abort"),
+                video_begin(
+                    "upload-after-abort",
+                    "https://example.com/clips/abort-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-after-abort", 0, &recovery),
+                video_end("video_import_finish", "upload-after-abort"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(
+                responses[2],
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "ok": true
+                })
+            );
+            assert_eq!(responses[3]["ok"], true);
+            assert_eq!(responses[5]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn connection_eof_cleans_an_unfinished_video_upload() {
+        with_library(|dir| {
+            let responses = run_framed_messages(&[
+                video_begin("upload-eof", "https://example.com/clips/eof", None),
+                video_chunk("upload-eof", 0, b"partial bytes before EOF"),
+            ]);
+
+            assert_eq!(responses.len(), 2);
+            assert!(responses.iter().all(|response| response["ok"] == true));
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn second_begin_rejects_and_cleans_the_active_video_upload() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"second begin recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-first",
+                    "https://example.com/clips/first-active",
+                    None,
+                ),
+                video_chunk("upload-first", 0, b"partial"),
+                video_begin(
+                    "upload-second",
+                    "https://example.com/clips/second-active",
+                    Some(1),
+                ),
+                video_begin(
+                    "upload-third",
+                    "https://example.com/clips/third-active",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-third", 0, &recovery),
+                video_end("video_import_finish", "upload-third"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[2]["ok"], false);
+            assert!(responses[2]["message"]
+                .as_str()
+                .unwrap()
+                .contains("already active"));
+            assert_eq!(
+                responses[3]["ok"], true,
+                "the rejected begin cleared the transfer"
+            );
+            assert_eq!(responses[5]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn unknown_video_action_cancels_the_transfer() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"unknown action recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-unknown-action",
+                    "https://example.com/clips/unknown-action",
+                    None,
+                ),
+                video_chunk("upload-unknown-action", 0, b"partial"),
+                serde_json::json!({
+                    "protocol_version": 4,
+                    "action": "video_import_unknown",
+                    "upload_id": "upload-unknown-action"
+                }),
+                video_begin(
+                    "upload-after-unknown-action",
+                    "https://example.com/clips/unknown-action-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-after-unknown-action", 0, &recovery),
+                video_end("video_import_finish", "upload-after-unknown-action"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[2]["ok"], false);
+            assert_eq!(responses[3]["ok"], true, "the failed transfer was cleared");
+            assert_eq!(responses[5]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn video_import_begin_requires_video_metadata() {
+        with_library(|dir| {
+            let mut begin = video_begin(
+                "upload-article-kind",
+                "https://example.com/clips/article-kind",
+                Some(1),
+            );
+            begin["metadata"]["kind"] = serde_json::json!("article");
+
+            let responses = run_framed_messages(&[begin]);
+            assert_eq!(responses[0]["ok"], false);
+            assert_eq!(responses[0]["error"], "invalid_request");
+            assert!(responses[0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("video metadata"));
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn zero_byte_video_chunk_cancels_the_transfer() {
+        with_library(|dir| {
+            let recovery = mp4_video_bytes(b"empty chunk recovery");
+            let messages = vec![
+                video_begin(
+                    "upload-empty-chunk",
+                    "https://example.com/clips/empty-chunk",
+                    None,
+                ),
+                video_chunk("upload-empty-chunk", 0, b""),
+                video_begin(
+                    "upload-after-empty-chunk",
+                    "https://example.com/clips/empty-chunk-recovery",
+                    Some(recovery.len()),
+                ),
+                video_chunk("upload-after-empty-chunk", 0, &recovery),
+                video_end("video_import_finish", "upload-after-empty-chunk"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[1]["ok"], false);
+            assert!(responses[1]["message"]
+                .as_str()
+                .unwrap()
+                .contains("must not be empty"));
+            assert_eq!(responses[2]["ok"], true, "the failed transfer was cleared");
+            assert_eq!(responses[4]["ok"], true);
+            assert!(staging_is_empty(dir));
+        });
+    }
+
+    #[test]
+    fn duplicate_browser_video_returns_the_duplicate_protocol_error() {
+        with_library(|dir| {
+            let url = "https://example.com/clips/duplicate-browser-video";
+            let video = mp4_video_bytes(b"duplicate browser video");
+            let messages = vec![
+                video_begin("upload-duplicate-first", url, Some(video.len())),
+                video_chunk("upload-duplicate-first", 0, &video),
+                video_end("video_import_finish", "upload-duplicate-first"),
+                video_begin("upload-duplicate-second", url, Some(video.len())),
+                video_chunk("upload-duplicate-second", 0, &video),
+                video_end("video_import_finish", "upload-duplicate-second"),
+            ];
+
+            let responses = run_framed_messages(&messages);
+            assert_eq!(responses[2]["ok"], true);
+            assert_eq!(responses[5]["ok"], false);
+            assert_eq!(responses[5]["error"], "duplicate");
+            assert!(responses[5]["message"]
+                .as_str()
+                .unwrap()
+                .contains("already exists"));
+            assert!(staging_is_empty(dir));
+        });
     }
 
     #[test]
@@ -260,7 +890,7 @@ mod integration_tests {
         with_library(|_dir| {
             let resp = dispatch(&save_message("https://example.com/resp-shape"));
             assert!(resp.ok);
-            assert_eq!(resp.protocol_version, 2);
+            assert_eq!(resp.protocol_version, 4);
 
             let id = resp
                 .id
@@ -296,16 +926,49 @@ mod integration_tests {
     }
 
     #[test]
-    fn full_capture_upgrades_a_lightweight_link_without_protocol_changes() {
+    fn save_link_writes_metadata_and_assets_then_full_capture_upgrades_it() {
         with_library(|dir| {
-            let library = cuttings_core::LibraryRoot::new(dir.path()).unwrap();
-            let imported =
-                cuttings_core::import_link(&library, "https://example.com/to-upgrade").unwrap();
+            let url = "https://example.com/to-upgrade";
+            let link_response = dispatch(&save_link_message(url));
+            assert!(link_response.ok, "link save should succeed");
 
-            let response = dispatch(&save_message("https://example.com/to-upgrade"));
-            assert!(response.ok, "upgrade should be a protocol-v2 success");
-            assert_eq!(response.protocol_version, 2);
-            assert_eq!(response.id.as_deref(), Some(imported.id.as_str()));
+            let link_content =
+                std::fs::read_to_string(dir.path().join(link_response.path.as_deref().unwrap()))
+                    .unwrap();
+            let link = cuttings_core::parse_reading(&link_content).unwrap();
+            assert!(link.metadata.lightweight);
+            assert_eq!(link.metadata.title, "Link title");
+            assert_eq!(link.metadata.excerpt.as_deref(), Some("Link description"));
+            assert_eq!(link.body, format!("[Open link](<{url}>)\n"));
+            let preview_asset = link.metadata.preview_asset.clone().unwrap();
+            let favicon_asset = link.metadata.favicon_asset.clone().unwrap();
+            assert_eq!(
+                std::fs::read(
+                    dir.path()
+                        .join(link_response.path.as_deref().unwrap())
+                        .parent()
+                        .unwrap()
+                        .join(&preview_asset)
+                )
+                .unwrap(),
+                b"social image"
+            );
+            assert_eq!(
+                std::fs::read(
+                    dir.path()
+                        .join(link_response.path.as_deref().unwrap())
+                        .parent()
+                        .unwrap()
+                        .join(&favicon_asset)
+                )
+                .unwrap(),
+                b"favicon"
+            );
+
+            let response = dispatch(&save_message(url));
+            assert!(response.ok, "upgrade should be a protocol-v4 success");
+            assert_eq!(response.protocol_version, 4);
+            assert_eq!(response.id, link_response.id);
             assert_eq!(response.error, None);
 
             let reading = cuttings_core::parse_reading(
@@ -314,6 +977,8 @@ mod integration_tests {
             .unwrap();
             assert!(!reading.metadata.lightweight);
             assert_eq!(reading.body, "# Test Article\n\nSome content here.\n");
+            assert_eq!(reading.metadata.preview_asset, Some(preview_asset));
+            assert_eq!(reading.metadata.favicon_asset, Some(favicon_asset));
         });
     }
 
@@ -350,7 +1015,7 @@ mod integration_tests {
             let bytes = b"\x89PNG\r\n\x1a\npixels";
             let data_b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 2,
+                "protocol_version": 4,
                 "action": "save",
                 "metadata": {
                     "url": "https://example.com/img-test",
@@ -462,29 +1127,38 @@ mod integration_tests {
     }
 
     #[test]
-    fn video_save_accepts_blob_media_url() {
+    fn ordinary_video_save_rejects_reference_only_media_urls() {
         with_library(|dir| {
-            let source = "https://example.com/watch";
-            let response = dispatch(&kind_save_message(
-                "video",
-                source,
-                Some("blob:https://example.com/7e64a8cf"),
-                "A saved video",
-            ));
-            assert!(
-                response.ok,
-                "blob media URL should save: {:?}",
-                response.error
-            );
+            for (source, media_url) in [
+                (
+                    "https://example.com/watch/blob",
+                    "blob:https://example.com/7e64a8cf",
+                ),
+                (
+                    "https://example.com/watch/http",
+                    "https://media.example.com/movie.mp4",
+                ),
+            ] {
+                let response = dispatch(&kind_save_message(
+                    "video",
+                    source,
+                    Some(media_url),
+                    "A saved video",
+                ));
+                assert!(!response.ok, "ordinary video save must reject {media_url}");
+                assert_eq!(response.error.as_deref(), Some("invalid_request"));
+                assert!(response
+                    .message
+                    .as_deref()
+                    .unwrap()
+                    .contains("streaming video import"));
+                assert_eq!(response.id, None);
+                assert_eq!(response.path, None);
+            }
 
-            let reading = cuttings_core::parse_reading(
-                &std::fs::read_to_string(dir.path().join(response.path.unwrap())).unwrap(),
-            )
-            .unwrap();
-            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Video);
-            assert_eq!(
-                reading.metadata.media_url.as_deref(),
-                Some("blob:https://example.com/7e64a8cf")
+            assert!(
+                !dir.path().join("articles").exists(),
+                "a rejected ordinary video save must not create a reading"
             );
         });
     }
@@ -535,7 +1209,7 @@ mod integration_tests {
         // and reports saved: false.
         with_library(|_dir| {
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 2,
+                "protocol_version": 4,
                 "action": "check",
                 "url": "https://example.com/not-there"
             }))
@@ -553,7 +1227,7 @@ mod integration_tests {
             dispatch(&save_message("https://example.com/saved"));
 
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 2,
+                "protocol_version": 4,
                 "action": "check",
                 "url": "https://example.com/not-there"
             }))
@@ -572,7 +1246,7 @@ mod integration_tests {
             dispatch(&save_message("https://example.com/for-check"));
 
             let msg = serde_json::to_vec(&serde_json::json!({
-                "protocol_version": 2,
+                "protocol_version": 4,
                 "action": "check",
                 "url": "https://example.com/for-check"
             }))
@@ -588,7 +1262,7 @@ mod integration_tests {
     fn missing_required_field_returns_invalid_request() {
         // canonical_url, title, and saved_at are all absent — serde must reject this.
         let msg = serde_json::to_vec(&serde_json::json!({
-            "protocol_version": 2,
+            "protocol_version": 4,
             "action": "save",
             "metadata": { "url": "https://example.com" },
             "markdown": "# Test",

@@ -9,10 +9,10 @@ use serde_json::json;
 
 const HOST_NAME: &str = "is.edmundo.cuttings.host";
 
-/// Chrome extension ID assigned by the Chrome Web Store for the published
-/// extension. The store mints this on upload (the packaged manifest ships
-/// without `key`), so it is the store's ID, not the one derived from the `key`
-/// used for local unpacked development. Keep it in sync with the store listing.
+/// Stable Chrome extension ID derived from the `key` in the extension's source
+/// manifest. The unpacked build retains that key; store uploads omit it because
+/// the store manages the listing's signing identity. Keep this value and the
+/// source manifest key in sync.
 const DEFAULT_EXTENSION_ID: &str = "cegehgdbbjjeondepcaejickdmkacbck";
 
 /// Firefox identifies extensions by add-on ID, not the Chrome extension ID.
@@ -86,6 +86,11 @@ const KNOWN_BROWSERS: &[KnownBrowser] = &[
         manifest_subdir: None,
         flavor: Flavor::Chrome,
     },
+    KnownBrowser {
+        detect_subdir: "Dia",
+        manifest_subdir: None,
+        flavor: Flavor::Chrome,
+    },
     // Firefox: installed under `Firefox/`, but reads manifests from `Mozilla/`.
     KnownBrowser {
         detect_subdir: "Firefox",
@@ -129,10 +134,10 @@ pub fn install_manifest(extension_id: Option<&str>) -> Result<()> {
 ///     we register even if the `NativeMessagingHosts` subdir isn't there yet.
 ///  2. **Discovery** — any existing `NativeMessagingHosts` dir under Application
 ///     Support that the known list didn't already cover. This auto-covers new
-///     Chromium forks the day the user has them, with no release. Discovered
-///     browsers are assumed Chrome-style (the overwhelming majority); a
-///     Firefox-style fork not in [`KNOWN_BROWSERS`] would get the wrong dialect,
-///     so add those to the curated list.
+///     Chromium forks the day the user has them, with no release. A discovered
+///     path matching a known browser keeps that browser's dialect even when its
+///     detection directory is absent; every other discovered browser is assumed
+///     Chrome-style (the overwhelming majority).
 fn install_manifest_in(home: &Path, binary_path: &str, extension_id: Option<&str>) -> Result<()> {
     let app_support = home.join(APP_SUPPORT);
 
@@ -153,7 +158,9 @@ fn install_manifest_in(home: &Path, binary_path: &str, extension_id: Option<&str
     // 2. Any other browser that already has a NativeMessagingHosts dir.
     for nmh in discover_nmh_dirs(&app_support) {
         if seen.insert(nmh.clone()) {
-            targets.push((nmh, Flavor::Chrome));
+            let flavor =
+                known_flavor_for_manifest_dir(&app_support, &nmh).unwrap_or(Flavor::Chrome);
+            targets.push((nmh, flavor));
         }
     }
 
@@ -164,7 +171,7 @@ fn install_manifest_in(home: &Path, binary_path: &str, extension_id: Option<&str
     for (dir, flavor) in targets {
         let manifest = match flavor {
             Flavor::Chrome => chrome_manifest(binary_path, extension_id),
-            Flavor::Firefox => firefox_manifest(binary_path, extension_id),
+            Flavor::Firefox => firefox_manifest(binary_path),
         };
         match write_manifest(&dir, &manifest) {
             Ok(path) => println!("installed: {}", path.display()),
@@ -173,6 +180,16 @@ fn install_manifest_in(home: &Path, binary_path: &str, extension_id: Option<&str
     }
 
     Ok(())
+}
+
+/// Return the dialect for a discovered directory whose path belongs to a
+/// browser in [`KNOWN_BROWSERS`]. Detection and manifest paths can differ (as
+/// they do for Firefox), so classify using the latter.
+fn known_flavor_for_manifest_dir(app_support: &Path, nmh: &Path) -> Option<Flavor> {
+    KNOWN_BROWSERS.iter().find_map(|browser| {
+        let manifest_subdir = browser.manifest_subdir.unwrap_or(browser.detect_subdir);
+        (app_support.join(manifest_subdir).join(NMH_DIR) == nmh).then_some(browser.flavor)
+    })
 }
 
 /// Find every existing `NativeMessagingHosts` directory under Application
@@ -218,26 +235,26 @@ fn discover_nmh_dirs(app_support: &Path) -> Vec<PathBuf> {
 }
 
 fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json::Value {
-    let origin = format!(
-        "chrome-extension://{}/",
-        extension_id.unwrap_or(DEFAULT_EXTENSION_ID)
-    );
+    let mut origins = vec![format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")];
+    if let Some(extension_id) = extension_id.filter(|id| *id != DEFAULT_EXTENSION_ID) {
+        origins.push(format!("chrome-extension://{extension_id}/"));
+    }
     json!({
         "name": HOST_NAME,
         "description": "Cuttings native messaging host",
         "path": binary_path,
         "type": "stdio",
-        "allowed_origins": [origin]
+        "allowed_origins": origins
     })
 }
 
-fn firefox_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json::Value {
+fn firefox_manifest(binary_path: &str) -> serde_json::Value {
     json!({
         "name": HOST_NAME,
         "description": "Cuttings native messaging host",
         "path": binary_path,
         "type": "stdio",
-        "allowed_extensions": [extension_id.unwrap_or(FIREFOX_DEFAULT_EXTENSION_ID)]
+        "allowed_extensions": [FIREFOX_DEFAULT_EXTENSION_ID]
     })
 }
 
@@ -285,6 +302,49 @@ mod tests {
     }
 
     #[test]
+    fn registers_with_dia_before_its_native_messaging_dir_exists() {
+        let home = TempDir::new().unwrap();
+        // Dia has created its profile, but it has never needed a native host.
+        // The installer must create the browser-specific directory proactively.
+        fs::create_dir_all(app_support(home.path()).join("Dia")).unwrap();
+
+        install_manifest_in(home.path(), "/opt/cuttings/cuttings-native-host", None).unwrap();
+
+        let nmh = app_support(home.path()).join("Dia").join(NMH_DIR);
+        let manifest = read_manifest(&nmh);
+        assert_eq!(manifest["path"], "/opt/cuttings/cuttings-native-host");
+        assert_eq!(
+            manifest["allowed_origins"][0],
+            format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")
+        );
+    }
+
+    #[test]
+    fn custom_chrome_id_keeps_the_stable_id_without_changing_firefox() {
+        let home = TempDir::new().unwrap();
+        fs::create_dir_all(app_support(home.path()).join("Dia")).unwrap();
+        fs::create_dir_all(app_support(home.path()).join("Firefox")).unwrap();
+        let custom_id = "jbldchbmlmdpcolnjjdfndiacgeaehgh";
+
+        install_manifest_in(home.path(), "/bin/host", Some(custom_id)).unwrap();
+
+        let dia = read_manifest(&app_support(home.path()).join("Dia").join(NMH_DIR));
+        assert_eq!(
+            dia["allowed_origins"],
+            json!([
+                format!("chrome-extension://{DEFAULT_EXTENSION_ID}/"),
+                format!("chrome-extension://{custom_id}/")
+            ])
+        );
+
+        let firefox = read_manifest(&app_support(home.path()).join("Mozilla").join(NMH_DIR));
+        assert_eq!(
+            firefox["allowed_extensions"],
+            json!([FIREFOX_DEFAULT_EXTENSION_ID])
+        );
+    }
+
+    #[test]
     fn skips_absent_known_browser() {
         let home = TempDir::new().unwrap();
         fs::create_dir_all(app_support(home.path()).join("Google/Chrome")).unwrap();
@@ -325,6 +385,30 @@ mod tests {
 
         let nmh = app_support(home.path()).join("Mozilla").join(NMH_DIR);
         assert!(!nmh.join(format!("{HOST_NAME}.json")).exists());
+    }
+
+    #[test]
+    fn existing_mozilla_nmh_keeps_the_firefox_dialect_without_a_profile() {
+        let home = TempDir::new().unwrap();
+        // An existing native-messaging directory is enough for discovery to
+        // revisit the target. Its well-known path must still determine the
+        // Firefox dialect even if the Firefox profile has since been removed.
+        let nmh = app_support(home.path()).join("Mozilla").join(NMH_DIR);
+        fs::create_dir_all(&nmh).unwrap();
+
+        install_manifest_in(
+            home.path(),
+            "/bin/host",
+            Some("jbldchbmlmdpcolnjjdfndiacgeaehgh"),
+        )
+        .unwrap();
+
+        let manifest = read_manifest(&nmh);
+        assert_eq!(
+            manifest["allowed_extensions"],
+            json!([FIREFOX_DEFAULT_EXTENSION_ID])
+        );
+        assert!(manifest.get("allowed_origins").is_none());
     }
 
     #[test]

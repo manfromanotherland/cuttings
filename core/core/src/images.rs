@@ -64,7 +64,7 @@ pub(crate) fn write_images_under_lock(
             // The article file (article.md) and its assets/ folder are siblings
             // inside the reading's folder, so the link is just `assets/<file>`.
             let rel = format!("assets/{filename}");
-            result = result.replace(image.url.as_str(), &rel);
+            result = rewrite_markdown_image_destinations(&result, &image.url, &rel);
         }
     }
     Ok(result)
@@ -97,7 +97,8 @@ pub(crate) fn write_images_required_under_lock(
         let ext = image_extension(&image.content_type, &image.url);
         let filename = format!("{hash}.{ext}");
         write_required_asset(&assets_dir, &filename, &hash, &image.bytes)?;
-        result = result.replace(image.url.as_str(), &format!("assets/{filename}"));
+        result =
+            rewrite_markdown_image_destinations(&result, &image.url, &format!("assets/{filename}"));
     }
     Ok(result)
 }
@@ -178,9 +179,162 @@ pub fn first_local_image_asset(markdown: &str) -> Option<String> {
     None
 }
 
+/// Resolve the local asset path written for one captured source URL.
+///
+/// Browser previews and favicons need a durable frontmatter reference without
+/// being inserted into the visible Markdown body. The writer's file naming is
+/// content-addressed, so the expected path can be derived and then verified.
+pub(crate) fn written_image_asset(
+    library: &LibraryRoot,
+    id: &str,
+    images: &[ImageBytes],
+    source_url: &str,
+) -> Option<String> {
+    let image = images.iter().find(|image| image.url == source_url)?;
+    let hash = sha256_hex(&image.bytes);
+    let extension = image_extension(&image.content_type, &image.url);
+    let relative = format!("assets/{hash}.{extension}");
+    library
+        .reading_dir(id)
+        .join(&relative)
+        .is_file()
+        .then_some(relative)
+}
+
 fn is_local_asset_path(path: &str) -> bool {
     path.strip_prefix("assets/")
         .is_some_and(|file| !file.is_empty() && !file.contains('/') && file != "." && file != "..")
+}
+
+/// Rewrite only complete inline-image destinations that match `source_url`.
+///
+/// Captured social previews and favicons share the image transport but do not
+/// belong in the body. A global string replacement would corrupt ordinary
+/// links, prose, or a different body URL for which the role URL is a prefix.
+fn rewrite_markdown_image_destinations(
+    markdown: &str,
+    source_url: &str,
+    replacement: &str,
+) -> String {
+    if source_url.is_empty() {
+        return markdown.to_string();
+    }
+
+    let bytes = markdown.as_bytes();
+    let mut matches = Vec::new();
+    let mut cursor = 0;
+
+    while cursor + 1 < bytes.len() {
+        if bytes[cursor] != b'!' || bytes[cursor + 1] != b'[' || is_markdown_escaped(bytes, cursor)
+        {
+            cursor += 1;
+            continue;
+        }
+
+        let mut alt_cursor = cursor + 2;
+        let mut bracket_depth = 1usize;
+        let mut alt_end = None;
+        while alt_cursor < bytes.len() {
+            match bytes[alt_cursor] {
+                b'\\' => alt_cursor = (alt_cursor + 2).min(bytes.len()),
+                b'[' => {
+                    bracket_depth += 1;
+                    alt_cursor += 1;
+                }
+                b']' => {
+                    bracket_depth -= 1;
+                    if bracket_depth == 0 {
+                        alt_end = Some(alt_cursor);
+                        break;
+                    }
+                    alt_cursor += 1;
+                }
+                _ => alt_cursor += 1,
+            }
+        }
+
+        let Some(alt_end) = alt_end else {
+            break;
+        };
+        if bytes.get(alt_end + 1) != Some(&b'(') {
+            cursor = alt_end + 1;
+            continue;
+        }
+
+        let mut destination_cursor = alt_end + 2;
+        while bytes
+            .get(destination_cursor)
+            .is_some_and(u8::is_ascii_whitespace)
+        {
+            destination_cursor += 1;
+        }
+        if destination_cursor >= bytes.len() {
+            break;
+        }
+
+        let (destination_start, destination_end) = if bytes[destination_cursor] == b'<' {
+            let start = destination_cursor + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end] != b'>' {
+                end += if bytes[end] == b'\\' { 2 } else { 1 };
+            }
+            if end >= bytes.len() {
+                cursor = destination_cursor + 1;
+                continue;
+            }
+            (start, end)
+        } else {
+            let start = destination_cursor;
+            let mut end = start;
+            let mut parentheses = 0usize;
+            while end < bytes.len() {
+                match bytes[end] {
+                    b'\\' => end = (end + 2).min(bytes.len()),
+                    b'(' => {
+                        parentheses += 1;
+                        end += 1;
+                    }
+                    b')' if parentheses == 0 => break,
+                    b')' => {
+                        parentheses -= 1;
+                        end += 1;
+                    }
+                    byte if byte.is_ascii_whitespace() && parentheses == 0 => break,
+                    _ => end += 1,
+                }
+            }
+            (start, end)
+        };
+
+        if markdown.get(destination_start..destination_end) == Some(source_url) {
+            matches.push((destination_start, destination_end));
+        }
+        cursor = destination_end.max(cursor + 2);
+    }
+
+    if matches.is_empty() {
+        return markdown.to_string();
+    }
+
+    let mut rewritten = String::with_capacity(markdown.len());
+    let mut copied_through = 0;
+    for (start, end) in matches {
+        rewritten.push_str(&markdown[copied_through..start]);
+        rewritten.push_str(replacement);
+        copied_through = end;
+    }
+    rewritten.push_str(&markdown[copied_through..]);
+    rewritten
+}
+
+fn is_markdown_escaped(bytes: &[u8], index: usize) -> bool {
+    let mut preceding_backslashes = 0;
+    let mut cursor = index;
+    while cursor > 0 && bytes[cursor - 1] == b'\\' {
+        preceding_backslashes += 1;
+        cursor -= 1;
+    }
+    preceding_backslashes % 2 == 1
 }
 
 /// Choose a file extension from the `Content-Type`, falling back to the URL's
@@ -281,6 +435,20 @@ mod tests {
             image_extension("application/octet-stream", "https://e.com/x"),
             "bin"
         );
+    }
+
+    #[test]
+    fn rewrites_only_exact_inline_image_destinations() {
+        let source = "https://cdn.example.com/social.png";
+        let markdown = format!(
+            "[ordinary link]({source})\n\n![variant]({source}?width=640)\n\n![exact](<{source}>)"
+        );
+
+        let rewritten = rewrite_markdown_image_destinations(&markdown, source, "assets/social.png");
+
+        assert!(rewritten.contains(&format!("[ordinary link]({source})")));
+        assert!(rewritten.contains(&format!("![variant]({source}?width=640)")));
+        assert!(rewritten.contains("![exact](<assets/social.png>)"));
     }
 
     #[test]

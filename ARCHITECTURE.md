@@ -29,9 +29,13 @@ index is a disposable, per-device cache.
                                               SQLite + FTS5 (per-device, NOT synced)
 ```
 
-The extension either extracts and cleans the current page, captures the right-clicked image, records
-a right-clicked video plus its poster, or turns selected text into a quote. It hands Markdown,
-metadata, and captured image bytes to a small native host that writes them into the library folder.
+The extension toolbar can extract and clean the current article, save a lightweight link, or capture
+the visible page as a screenshot. The context menu also captures a right-clicked image, saves a
+right-clicked video as a local movie, or turns selected text into a quote. Ordinary captures hand
+Markdown, metadata, and image bytes to a small native host; every video uses the bounded stream
+below. The host writes both paths into the library folder.
+Article and link saves retain live Open Graph/Twitter metadata plus local social-preview and favicon
+assets without injecting those head assets into the cleaned Markdown body.
 The macOS app also accepts dropped or pasted HTTP(S) links, text, and images. Both native entry
 points call the same core save service: local bytes are copied into the library, source-less items
 receive a private deterministic identity, and URL-only saves are marked lightweight so a later
@@ -40,11 +44,12 @@ masonry board, full-text search, type filters, and tags — so browser saves, in
 delivered by sync reconcile through the same index path.
 
 Every card kind records its origin page in `url`/`canonical_url` plus its page title/site and save
-date. `media_url` stores a durable image/video address in addition to that origin. If a video only
-exposes a session-local `blob:`/`data:` source, the extension stores a compact opaque capture
-reference for identity and links playback back to the origin page. An offline migration can use a
-content-derived local asset reference while preserving the exported HTTP(S) origin. Neither path
-substitutes a CDN/media address or machine-local file path for the origin page.
+date. A browser-saved video's `media_url` is always a content-addressed local `cuttings-asset:`
+reference. The extension streams readable HTTP(S), `data:`, and document-scoped `blob:` bytes; if
+the selected source cannot be fetched, it records one loop of the exact rendered element. The
+recording fallback requires an explicit H.264 MP4 capability and never saves an
+AVPlayer-incompatible WebM. Transient `blob:` and `data:` values are never persisted. Neither a
+CDN/media address nor a machine-local file path replaces the origin page.
 
 ## Components
 
@@ -53,18 +58,22 @@ Rust core. Keeping them in one Git history lets protocol and format changes land
 every affected component.
 
 ### Browser extension (`extension`)
-- **Responsibility:** extract readable page content; capture a selected image; record a selected
-  video and poster; or capture selected text as a quote. Every path produces Markdown plus origin
-  metadata and any local image bytes needed by the card.
+- **Responsibility:** expose toolbar actions for an article, lightweight link, or visible screenshot;
+  capture a selected image; record a selected video and poster; or capture selected text as a quote.
+  Every path produces Markdown plus origin metadata and any local image bytes needed by the card.
 - **Why cleanup happens here:** the extension has the *live, rendered DOM*, so it sees JS-rendered
   content and pages the user is logged into. The engine never sees the page.
 - **Stack:** Manifest V3, TypeScript (Readability-style extraction + HTML→Markdown).
 - **Hard constraint:** MV3 extensions can't write files to disk, so saving goes through a **native
   messaging host** — a small native binary (a thin wrapper over `core`) that receives the cleaned
   Markdown + assets and writes them into the library.
-- **Video boundary:** direct video files and streams are not downloaded into the library. The card
-  stores the page origin, a durable media URL when available (otherwise an identity-only capture
-  reference), and a locally captured poster when available.
+- **Video boundary:** every successful browser video save contains a local movie asset. HTTP(S),
+  `data:`, and document-scoped `blob:` sources are read in the isolated or owning page world; an
+  unreadable source is captured from the exact rendered element as H.264 MP4. Bytes are relayed
+  over one persistent native connection in acknowledged chunks of at most 256 KiB decoded bytes.
+  The core streams at most 1 GiB into `.cuttings-imports/`, validates, hashes, and atomically
+  commits the local asset, and removes incomplete staging on abort, disconnect, or error. Ordinary
+  save messages carry no video bytes, and the host performs no network request.
 
 ### Engine (`core`, Rust)
 - **Responsibility:** owns the library format and all logic — validate and write extension or
@@ -118,11 +127,12 @@ no directory grows unbounded, and it holds everything for that reading:
 Keeping a reading in one folder makes image links trivially relative (`assets/<file>`, no `../`),
 makes a reading one movable unit, and makes deletion a single guarded folder removal. Article
 identity remains the normalized visited URL. Image/video identity combines the kind, normalized
-origin page, and media identity. That identity is the durable media URL or, for session-local video
-streams, a stable page-and-element reference. Quote identity combines the normalized origin page
-and normalized selected Markdown. Exact repeat saves therefore deduplicate while multiple clips
-from one page can coexist. Source-less pasted text and images use content-derived local identities;
-their stored `cuttings://local/...` URLs are internal provenance, never openable web sources.
+origin page, and media identity. Images may use a durable media URL; every newly browser-saved
+video uses its content-derived local asset reference. Quote identity combines the normalized
+origin page and normalized selected Markdown. Exact repeat saves therefore deduplicate
+while multiple clips from one page can coexist. Source-less pasted text and images use
+content-derived local identities; their stored `cuttings://local/...` URLs are internal provenance,
+never openable web sources.
 
 Older libraries may contain a user-authored `note.md` sidecar. It stays separate from the captured
 article body and source hash. The current macOS app does not display or mutate it; routine scans,
@@ -131,11 +141,14 @@ article rewrites, and metadata edits leave it untouched so existing library data
 The card metadata is additive and backwards compatible:
 
 - `kind`: `article`, `image`, `video`, or `quote` (missing means `article`).
-- `media_url`: optional image/video identity: normally a durable direct address, or an opaque stable
-  reference for a session-local video stream. The page origin remains in `url`.
+- `media_url`: optional image/video identity: either a durable direct address or a content-derived
+  `cuttings-asset:` reference for locally copied media. The page origin remains in `url`.
 - `preview_asset`: optional safe `assets/<file>` path derived after the host writes captured image
   bytes. It drives the board thumbnail and is never a remote URL.
-- `lightweight`: optional `true` marker for a URL-only app save. A later full browser capture
+- `favicon_asset`: optional safe `assets/<file>` path for a captured page icon. It remains distinct
+  from the full-size card preview and is never a remote URL.
+- `lightweight`: optional `true` marker for a link saved without cleaned article content, from the
+  app or browser toolbar. A later full browser capture
   replaces that placeholder at the same article id and clears the marker while preserving user
   state.
 

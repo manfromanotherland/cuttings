@@ -8,6 +8,12 @@ const MAX_CONCURRENCY = 6;
 /** Abort a single image fetch that takes longer than this. */
 const FETCH_TIMEOUT_MS = 15_000;
 
+/** Bound one page asset before it is base64 encoded, matching the total envelope. */
+const MAX_IMAGE_BYTES = 40 * 1024 * 1024;
+
+/** Bound content-script → worker messages before native-message capping. */
+const MAX_FETCH_TOTAL_BYTES = 40 * 1024 * 1024;
+
 /** The outcome of fetching a set of image URLs. */
 export interface FetchImagesResult {
   /** Images whose bytes we captured, ready to send to the host. */
@@ -29,21 +35,38 @@ export interface FetchImagesResult {
  */
 export async function fetchImages(urls: string[]): Promise<FetchImagesResult> {
   const unique = [...new Set(urls)];
-  const images: ImageData[] = [];
-  const unresolved: string[] = [];
+  const results: Array<ImageData | null> = Array.from({ length: unique.length }, () => null);
   let next = 0;
 
   async function worker(): Promise<void> {
     while (next < unique.length) {
-      const url = unique[next++];
-      const image = await fetchImage(url);
-      if (image) images.push(image);
-      else unresolved.push(url);
+      const index = next++;
+      results[index] = await fetchImage(unique[index]);
     }
   }
 
   const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, unique.length) }, worker);
   await Promise.all(workers);
+
+  // Preserve candidate order regardless of which concurrent request finished
+  // first, and cap before a content script sends the result to the worker.
+  const images: ImageData[] = [];
+  const unresolved: string[] = [];
+  let totalBytes = 0;
+  for (let index = 0; index < unique.length; index++) {
+    const image = results[index];
+    if (!image) {
+      unresolved.push(unique[index]);
+      continue;
+    }
+    const size = decodedBase64Size(image.data_base64);
+    if (totalBytes + size > MAX_FETCH_TOTAL_BYTES) {
+      unresolved.push(unique[index]);
+      continue;
+    }
+    totalBytes += size;
+    images.push(image);
+  }
   return { images, unresolved };
 }
 
@@ -54,10 +77,20 @@ export async function fetchImage(url: string): Promise<ImageData | null> {
   try {
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) return null;
-    const buffer = await response.arrayBuffer();
-    if (buffer.byteLength === 0) return null;
+    if (response.url && !safeResponseUrl(url, response.url)) return null;
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) return null;
     const content_type = (response.headers.get("content-type") ?? "").split(";")[0].trim();
-    return { url, content_type, data_base64: bytesToBase64(new Uint8Array(buffer)) };
+    if (
+      content_type &&
+      !content_type.startsWith("image/") &&
+      content_type !== "application/octet-stream"
+    ) {
+      return null;
+    }
+    const bytes = await readBoundedBytes(response, MAX_IMAGE_BYTES);
+    if (!bytes?.byteLength) return null;
+    return { url, content_type, data_base64: bytesToBase64(bytes) };
   } catch {
     // Opaque/blocked by CORS, network error, timeout, or abort.
     return null;
@@ -86,10 +119,64 @@ export function capTotalBytes(images: ImageData[], maxBytes: number): ImageData[
   let total = 0;
   for (const image of images) {
     // Decoded size is ~3/4 of the base64 length.
-    const size = Math.floor((image.data_base64.length * 3) / 4);
+    const size = decodedBase64Size(image.data_base64);
     if (total + size > maxBytes) continue;
     total += size;
     kept.push(image);
   }
   return kept;
+}
+
+async function readBoundedBytes(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const buffer = await response.arrayBuffer();
+    return buffer.byteLength <= maxBytes ? new Uint8Array(buffer) : null;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function decodedBase64Size(value: string): number {
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((value.length * 3) / 4) - padding);
+}
+
+function safeResponseUrl(requestedValue: string, responseValue: string): boolean {
+  try {
+    const requested = new URL(requestedValue);
+    const response = new URL(responseValue);
+    if (requested.protocol === "http:" || requested.protocol === "https:") {
+      return (
+        (response.protocol === "http:" || response.protocol === "https:") &&
+        !response.username &&
+        !response.password
+      );
+    }
+    return (
+      (requested.protocol === "blob:" || requested.protocol === "data:") &&
+      response.protocol === requested.protocol
+    );
+  } catch {
+    return false;
+  }
 }

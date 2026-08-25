@@ -1,5 +1,5 @@
 {
-  "protocol_version": 2,
+  "protocol_version": 4,
   "action": "save",
   "metadata": {
     "url": "https://blog.example.com/posts/local-first?utm_source=hn",

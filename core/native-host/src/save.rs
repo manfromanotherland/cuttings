@@ -4,7 +4,9 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use base64::Engine;
-use cuttings_core::{save_capture, ImageBytes, LibraryRoot, SaveDisposition, SaveError, SaveInput};
+use cuttings_core::{
+    save_capture, ImageBytes, LibraryRoot, ReadingKind, SaveDisposition, SaveError, SaveInput,
+};
 
 use crate::protocol::{SaveRequest, SaveResponse, PROTOCOL_VERSION};
 
@@ -21,6 +23,12 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
             &format!("unknown action: {}", req.action),
         ));
     }
+    if req.metadata.kind == ReadingKind::Video {
+        return Ok(SaveResponse::error(
+            "invalid_request",
+            "browser video saves require the streaming video import",
+        ));
+    }
 
     let library_path = match find_library_path() {
         Ok(p) => p,
@@ -35,20 +43,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
 
     // Decode the image bytes the extension captured. An image whose base64 won't
     // decode is skipped, so its URL stays in the Markdown as a placeholder.
-    let images: Vec<ImageBytes> = req
-        .images
-        .iter()
-        .filter_map(|img| {
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(&img.data_base64)
-                .ok()?;
-            Some(ImageBytes {
-                url: img.url.clone(),
-                content_type: img.content_type.clone(),
-                bytes,
-            })
-        })
-        .collect();
+    let images = decode_images(&req.images);
 
     let outcome = match save_capture(
         &library,
@@ -65,6 +60,8 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
             saved_at: req.metadata.saved_at,
             markdown: req.markdown,
             images,
+            preview_url: req.preview_url,
+            favicon_url: req.favicon_url,
             excerpt: req.metadata.excerpt,
             word_count: req.metadata.word_count,
             lang: req.metadata.lang,
@@ -85,6 +82,22 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
     }
 
     Ok(SaveResponse::success(outcome.id, outcome.path))
+}
+
+pub(crate) fn decode_images(images: &[crate::protocol::RequestImage]) -> Vec<ImageBytes> {
+    images
+        .iter()
+        .filter_map(|image| {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&image.data_base64)
+                .ok()?;
+            Some(ImageBytes {
+                url: image.url.clone(),
+                content_type: image.content_type.clone(),
+                bytes,
+            })
+        })
+        .collect()
 }
 
 /// Classify an anyhow error into a protocol error code + message.

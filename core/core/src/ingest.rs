@@ -20,7 +20,10 @@ use crate::{
     sha256_hex, url_id, ImageBytes, LibraryRoot, Metadata, ReadingKind,
 };
 use crate::{
-    images::{image_extension, write_images_required_under_lock, write_images_under_lock},
+    images::{
+        image_extension, write_images_required_under_lock, write_images_under_lock,
+        written_image_asset,
+    },
     locking::{lock_reading, ReadingLock},
     notes::set_note_under_lock,
     tags::validate_imported_tag,
@@ -35,6 +38,7 @@ const LOCAL_ASSET_SCHEME: &str = "cuttings-asset:";
 // create_new calls. Empty operational directories are ignored by the scanner.
 const IMPORT_STAGING_DIRECTORY: &str = ".cuttings-imports";
 const VIDEO_COPY_BUFFER_SIZE: usize = 1024 * 1024;
+pub const MAX_BROWSER_VIDEO_BYTES: u64 = 1024 * 1024 * 1024;
 const QUOTE_EXCERPT_CHARACTERS: usize = 600;
 
 /// Everything required to persist one browser capture or native import.
@@ -54,6 +58,10 @@ pub struct SaveInput {
     pub saved_at: String,
     pub markdown: String,
     pub images: Vec<ImageBytes>,
+    /// Captured source URL to use as the card preview without adding it to the body.
+    pub preview_url: Option<String>,
+    /// Captured source URL to retain as the page favicon.
+    pub favicon_url: Option<String>,
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
     pub lang: Option<String>,
@@ -79,6 +87,56 @@ pub struct ImportOptions {
     pub state: ImportedReadingState,
 }
 
+/// Metadata supplied before a browser starts streaming a selected video.
+pub struct BrowserVideoImportInput {
+    pub content_type: String,
+    /// Exact decoded byte count when the browser knows it. The completed import
+    /// is rejected if the streamed count differs.
+    pub expected_bytes: Option<u64>,
+    pub origin_url: String,
+    pub canonical_url: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub site: Option<String>,
+    pub lang: Option<String>,
+    pub excerpt: Option<String>,
+    pub word_count: Option<u32>,
+    pub saved_at: String,
+}
+
+/// One in-progress browser video import.
+///
+/// Bytes are written and hashed incrementally in the library's staging
+/// directory. Dropping this value before [`finish`](Self::finish) removes the
+/// incomplete file.
+pub struct BrowserVideoImport {
+    library_path: PathBuf,
+    input: Option<BrowserVideoImportInput>,
+    extension: String,
+    staging_path: Option<PathBuf>,
+    destination: Option<fs::File>,
+    hasher: Sha256,
+    byte_count: u64,
+    failed: bool,
+}
+
+/// Live-DOM metadata and local image bytes for a lightweight browser link save.
+/// The core still owns URL normalization, body construction, and the
+/// lightweight marker; clients only report what the current page exposed.
+pub struct SaveLinkInput {
+    pub url: String,
+    pub canonical_url: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub site: Option<String>,
+    pub saved_at: String,
+    pub images: Vec<ImageBytes>,
+    pub preview_url: Option<String>,
+    pub favicon_url: Option<String>,
+    pub excerpt: Option<String>,
+    pub lang: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SaveDisposition {
     Saved,
@@ -96,7 +154,7 @@ pub struct SaveOutcome {
 }
 
 /// Invalid capture data is kept distinct from storage failures so the native
-/// messaging adapter can preserve its protocol-v2 error classification.
+/// messaging adapter can preserve its protocol-v3 error classification.
 #[derive(Debug, thiserror::Error)]
 pub enum SaveError {
     #[error("{0}")]
@@ -223,7 +281,15 @@ fn save_capture_under_lock_with_state(
             write_images_required_under_lock(library, &id, &input.markdown, &input.images, lock)?
         }
     };
-    let preview_asset = first_local_image_asset(&markdown);
+    let preview_asset = input
+        .preview_url
+        .as_deref()
+        .and_then(|url| written_image_asset(library, &id, &input.images, url))
+        .or_else(|| first_local_image_asset(&markdown));
+    let favicon_asset = input
+        .favicon_url
+        .as_deref()
+        .and_then(|url| written_image_asset(library, &id, &input.images, url));
 
     let mut metadata = Metadata {
         format_version: 1,
@@ -233,6 +299,7 @@ fn save_capture_under_lock_with_state(
         url: input.url,
         media_url: input.media_url,
         preview_asset,
+        favicon_asset,
         canonical_url: input.canonical_url,
         title: input.title,
         author: input.author,
@@ -256,6 +323,12 @@ fn save_capture_under_lock_with_state(
         metadata.favorite = previous.favorite;
         metadata.rating = previous.rating;
         metadata.tags = previous.tags;
+        if metadata.preview_asset.is_none() {
+            metadata.preview_asset = previous.preview_asset;
+        }
+        if metadata.favicon_asset.is_none() {
+            metadata.favicon_asset = previous.favicon_asset;
+        }
     }
 
     if !upgrading {
@@ -284,6 +357,43 @@ fn save_capture_under_lock_with_state(
 /// the normal article id so a later browser capture upgrades this same reading.
 pub fn import_link(library: &LibraryRoot, url: &str) -> Result<SaveOutcome, SaveError> {
     import_link_with_options(library, url, ImportOptions::default())
+}
+
+/// Save an HTTP(S) link with metadata/assets captured from the live browser DOM.
+/// It deliberately remains lightweight because no cleaned article body was
+/// captured; a later full article save upgrades this same URL-derived reading.
+pub fn save_link_capture(
+    library: &LibraryRoot,
+    input: SaveLinkInput,
+) -> Result<SaveOutcome, SaveError> {
+    let normalized = normalize_http_url(&input.url)?;
+    let canonical_url =
+        normalize_http_url(&input.canonical_url).unwrap_or_else(|_| normalized.clone());
+    let parsed = Url::parse(&normalized).map_err(invalid)?;
+    let site = input.site.or_else(|| parsed.host_str().map(str::to_string));
+
+    save_capture(
+        library,
+        SaveInput {
+            quote_identity_markdown: None,
+            kind: ReadingKind::Article,
+            lightweight: true,
+            url: normalized.clone(),
+            media_url: None,
+            canonical_url,
+            title: import_title(Some(&input.title), &normalized),
+            author: input.author,
+            site,
+            saved_at: imported_saved_at(Some(input.saved_at)),
+            markdown: format!("[Open link](<{normalized}>)"),
+            images: input.images,
+            preview_url: input.preview_url,
+            favicon_url: input.favicon_url,
+            excerpt: input.excerpt,
+            word_count: None,
+            lang: input.lang,
+        },
+    )
 }
 
 /// Import an HTTP(S) URL with source metadata and initial user state.
@@ -316,6 +426,8 @@ pub fn import_link_with_options(
             saved_at: imported_saved_at(saved_at),
             markdown: format!("[Open link](<{normalized}>)"),
             images: vec![],
+            preview_url: None,
+            favicon_url: None,
             excerpt: None,
             word_count: None,
             lang: None,
@@ -391,6 +503,8 @@ pub fn import_text_with_options(
             saved_at: imported_saved_at(saved_at),
             markdown,
             images: vec![],
+            preview_url: None,
+            favicon_url: None,
             excerpt: Some(truncate_chars(&identity_text, QUOTE_EXCERPT_CHARACTERS)),
             word_count: Some(identity_text.split_whitespace().count() as u32),
             lang: None,
@@ -460,6 +574,8 @@ pub fn import_image_with_options(
                 content_type: content_type.trim().to_string(),
                 bytes,
             }],
+            preview_url: None,
+            favicon_url: None,
             excerpt: None,
             word_count: None,
             lang: None,
@@ -519,12 +635,200 @@ pub fn import_image_from_origin_with_options(
                 content_type: content_type.trim().to_string(),
                 bytes,
             }],
+            preview_url: None,
+            favicon_url: None,
             excerpt: None,
             word_count: None,
             lang: None,
         },
         state,
     )
+}
+
+/// Begin a bounded, incremental import for a browser-saved video.
+pub fn begin_browser_video_import(
+    library: &LibraryRoot,
+    mut input: BrowserVideoImportInput,
+) -> Result<BrowserVideoImport, SaveError> {
+    if let Some(expected_bytes) = input.expected_bytes {
+        if expected_bytes == 0 {
+            return Err(SaveError::InvalidRequest(
+                "browser video import requires non-empty bytes".to_string(),
+            ));
+        }
+        if expected_bytes > MAX_BROWSER_VIDEO_BYTES {
+            return Err(SaveError::InvalidRequest(format!(
+                "browser video exceeds the {} byte limit",
+                MAX_BROWSER_VIDEO_BYTES
+            )));
+        }
+    }
+
+    input.origin_url = normalize_http_url(&input.origin_url)?;
+    input.canonical_url =
+        normalize_http_url(&input.canonical_url).unwrap_or_else(|_| input.origin_url.clone());
+    let extension = video_extension(&input.content_type)?.to_string();
+    let staging_dir = library.path().join(IMPORT_STAGING_DIRECTORY);
+    fs::create_dir_all(&staging_dir)?;
+    let staging_path = staging_dir.join(format!("video-{}.tmp", crate::new_id()));
+    let destination = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&staging_path)?;
+
+    Ok(BrowserVideoImport {
+        library_path: library.path().to_path_buf(),
+        input: Some(input),
+        extension,
+        staging_path: Some(staging_path),
+        destination: Some(destination),
+        hasher: Sha256::new(),
+        byte_count: 0,
+        failed: false,
+    })
+}
+
+impl BrowserVideoImport {
+    /// Append one decoded browser-message chunk without retaining it in memory.
+    pub fn append(&mut self, bytes: &[u8]) -> Result<(), SaveError> {
+        if self.failed {
+            return Err(SaveError::InvalidRequest(
+                "browser video import cannot continue after an earlier failure".to_string(),
+            ));
+        }
+
+        let next_count = self
+            .byte_count
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| {
+                self.failed = true;
+                SaveError::InvalidRequest("browser video byte count overflowed".to_string())
+            })?;
+        if next_count > MAX_BROWSER_VIDEO_BYTES {
+            self.failed = true;
+            return Err(SaveError::InvalidRequest(format!(
+                "browser video exceeds the {} byte limit",
+                MAX_BROWSER_VIDEO_BYTES
+            )));
+        }
+        if self
+            .input
+            .as_ref()
+            .and_then(|input| input.expected_bytes)
+            .is_some_and(|expected| next_count > expected)
+        {
+            self.failed = true;
+            return Err(SaveError::InvalidRequest(
+                "browser video exceeded its declared byte count".to_string(),
+            ));
+        }
+
+        let destination = self.destination.as_mut().ok_or_else(|| {
+            self.failed = true;
+            SaveError::InvalidRequest("browser video import is already finished".to_string())
+        })?;
+        if let Err(error) = destination.write_all(bytes) {
+            self.failed = true;
+            return Err(error.into());
+        }
+        self.hasher.update(bytes);
+        self.byte_count = next_count;
+        Ok(())
+    }
+
+    /// Commit the completed stream as a content-addressed local video asset.
+    pub fn finish(mut self) -> Result<SaveOutcome, SaveError> {
+        if self.failed {
+            return Err(SaveError::InvalidRequest(
+                "browser video import cannot finish after an earlier failure".to_string(),
+            ));
+        }
+        if self.byte_count == 0 {
+            return Err(SaveError::InvalidRequest(
+                "browser video import requires non-empty bytes".to_string(),
+            ));
+        }
+
+        let input = self
+            .input
+            .take()
+            .expect("browser video import input exists until finish");
+        if input
+            .expected_bytes
+            .is_some_and(|expected| expected != self.byte_count)
+        {
+            return Err(SaveError::InvalidRequest(format!(
+                "browser video byte count did not match the declared size: expected {}, received {}",
+                input.expected_bytes.unwrap(),
+                self.byte_count
+            )));
+        }
+
+        let destination = self
+            .destination
+            .take()
+            .expect("browser video staging file exists until finish");
+        destination.sync_all()?;
+        drop(destination);
+        validate_browser_video_container(
+            self.staging_path
+                .as_deref()
+                .expect("browser video staging path exists until finish"),
+            &self.extension,
+        )?;
+
+        let staged = StagedVideo {
+            path: self.staging_path.take(),
+            content_hash: hex::encode(self.hasher.clone().finalize()),
+        };
+        let library = LibraryRoot::new(&self.library_path)?;
+        let origin = input.origin_url;
+        let fallback_site = Url::parse(&origin)
+            .map_err(invalid)?
+            .host_str()
+            .map(str::to_string);
+        let site = input
+            .site
+            .filter(|site| !site.trim().is_empty())
+            .or(fallback_site);
+        let extension = std::mem::take(&mut self.extension);
+
+        save_staged_video(
+            &library,
+            staged,
+            &extension,
+            ImportOptions {
+                title: Some(input.title),
+                saved_at: Some(input.saved_at),
+                ..ImportOptions::default()
+            },
+            move |_content_hash, media_reference| {
+                let id =
+                    media_id(ReadingKind::Video, &origin, media_reference).map_err(|error| {
+                        SaveError::InvalidRequest(format!("could not derive reading id: {error}"))
+                    })?;
+                Ok(VideoImportIdentity {
+                    id,
+                    origin,
+                    canonical_url: input.canonical_url,
+                    author: input.author,
+                    site,
+                    lang: input.lang,
+                    excerpt: input.excerpt,
+                    word_count: input.word_count,
+                })
+            },
+        )
+    }
+}
+
+impl Drop for BrowserVideoImport {
+    fn drop(&mut self) {
+        self.destination.take();
+        if let Some(path) = self.staging_path.take() {
+            let _ = fs::remove_file(path);
+        }
+    }
 }
 
 /// Import a source-less local video without materializing it in memory.
@@ -566,11 +870,11 @@ pub fn import_video_file_with_options(
         extension,
         options,
         |content_hash, _media_reference| {
-            Ok(VideoImportIdentity {
-                id: local_video_id(content_hash),
-                origin: format!("{LOCAL_ORIGIN_SCHEME}/video/{content_hash}"),
-                site: None,
-            })
+            Ok(VideoImportIdentity::with_default_metadata(
+                local_video_id(content_hash),
+                format!("{LOCAL_ORIGIN_SCHEME}/video/{content_hash}"),
+                None,
+            ))
         },
     )
 }
@@ -601,7 +905,7 @@ pub fn import_video_file_from_origin_with_options(
             let id = media_id(ReadingKind::Video, &origin, media_reference).map_err(|error| {
                 SaveError::InvalidRequest(format!("could not derive reading id: {error}"))
             })?;
-            Ok(VideoImportIdentity { id, origin, site })
+            Ok(VideoImportIdentity::with_default_metadata(id, origin, site))
         },
     )
 }
@@ -609,7 +913,27 @@ pub fn import_video_file_from_origin_with_options(
 struct VideoImportIdentity {
     id: String,
     origin: String,
+    canonical_url: String,
+    author: Option<String>,
     site: Option<String>,
+    lang: Option<String>,
+    excerpt: Option<String>,
+    word_count: Option<u32>,
+}
+
+impl VideoImportIdentity {
+    fn with_default_metadata(id: String, origin: String, site: Option<String>) -> Self {
+        Self {
+            id,
+            canonical_url: origin.clone(),
+            origin,
+            author: None,
+            site,
+            lang: None,
+            excerpt: None,
+            word_count: None,
+        }
+    }
 }
 
 fn save_staged_video(
@@ -623,13 +947,23 @@ fn save_staged_video(
     let filename = format!("{content_hash}.{extension}");
     let relative_asset = format!("assets/{filename}");
     let media_reference = format!("{LOCAL_ASSET_SCHEME}{relative_asset}");
-    let VideoImportIdentity { id, origin, site } = identity(&content_hash, &media_reference)?;
+    let VideoImportIdentity {
+        id,
+        origin,
+        canonical_url,
+        author,
+        site,
+        lang,
+        excerpt,
+        word_count,
+    } = identity(&content_hash, &media_reference)?;
 
     // Hashing must finish before the content-addressed lock is known. Hold it
     // from the duplicate check through the asset move and article rename so two
     // processes importing the same bytes cannot race each other.
     let lock = lock_reading(library, &id)?;
     if library.article_path(&id).is_file() {
+        restore_missing_video_asset(library, &id, &content_hash, &mut staged)?;
         return Ok(outcome(library, SaveDisposition::Duplicate, id));
     }
 
@@ -653,9 +987,10 @@ fn save_staged_video(
         url: origin.clone(),
         media_url: Some(media_reference),
         preview_asset: None,
-        canonical_url: origin,
+        favicon_asset: None,
+        canonical_url,
         title: import_title(title.as_deref(), "Imported video"),
-        author: None,
+        author,
         site,
         saved_at: imported_saved_at(saved_at),
         read_at: None,
@@ -663,9 +998,9 @@ fn save_staged_video(
         favorite: imported_state.favorite,
         rating: 0,
         tags: imported_state.tags,
-        excerpt: None,
-        word_count: None,
-        lang: None,
+        excerpt,
+        word_count,
+        lang,
         source_hash: String::new(),
     };
     let body = format!("[Play video]({relative_asset})");
@@ -680,6 +1015,77 @@ fn save_staged_video(
     write_reading_under_lock(library, metadata, body, &lock)?;
 
     Ok(outcome(library, SaveDisposition::Saved, id))
+}
+
+fn restore_missing_video_asset(
+    library: &LibraryRoot,
+    id: &str,
+    content_hash: &str,
+    staged: &mut StagedVideo,
+) -> Result<(), SaveError> {
+    let metadata = read_metadata(&library.article_path(id))?;
+    if metadata.kind != ReadingKind::Video {
+        return Err(existing_video_error(
+            id,
+            "the content-addressed reading is not a video",
+        ));
+    }
+
+    let media_reference = metadata.media_url.as_deref().ok_or_else(|| {
+        existing_video_error(id, "the existing video has no local media reference")
+    })?;
+    let relative_asset = media_reference
+        .strip_prefix(LOCAL_ASSET_SCHEME)
+        .and_then(|relative| relative.strip_prefix("assets/"))
+        .ok_or_else(|| {
+            existing_video_error(
+                id,
+                "the existing video media reference is not a local asset",
+            )
+        })?;
+    if relative_asset.is_empty() || relative_asset.contains('/') {
+        return Err(existing_video_error(
+            id,
+            "the existing video asset path is not safe",
+        ));
+    }
+
+    let (stored_hash, stored_extension) = relative_asset.split_once('.').ok_or_else(|| {
+        existing_video_error(id, "the existing video asset name is not content-addressed")
+    })?;
+    if stored_hash.len() != 64
+        || !stored_hash
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+        || !stored_hash.eq_ignore_ascii_case(content_hash)
+        || stored_extension.contains('.')
+        || !is_safe_video_extension(stored_extension)
+    {
+        return Err(existing_video_error(
+            id,
+            "the existing video asset name does not match the imported content",
+        ));
+    }
+
+    let asset_path = library.assets_dir(id).join(relative_asset);
+    if asset_path.is_file() {
+        return Ok(());
+    }
+    if asset_path.exists() {
+        return Err(existing_video_error(
+            id,
+            "the existing video asset path is not a regular file",
+        ));
+    }
+
+    fs::create_dir_all(library.assets_dir(id))?;
+    staged.persist(&asset_path)
+}
+
+fn existing_video_error(id: &str, reason: &str) -> SaveError {
+    SaveError::Storage(anyhow::anyhow!(
+        "could not reconcile existing video reading {id}: {reason}"
+    ))
 }
 
 fn import_title(title: Option<&str>, fallback: &str) -> String {
@@ -749,6 +1155,135 @@ fn video_extension(content_type: &str) -> Result<&'static str, SaveError> {
             content_type.trim()
         ))),
     }
+}
+
+fn is_safe_video_extension(extension: &str) -> bool {
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "mp4" | "mov" | "m4v" | "webm" | "mpeg" | "avi" | "ogv" | "mkv" | "3gp" | "3g2"
+    )
+}
+
+fn validate_browser_video_container(path: &Path, extension: &str) -> Result<(), SaveError> {
+    const SIGNATURE_BYTES: usize = 64 * 1024;
+
+    let mut file = fs::File::open(path)?;
+    let mut prefix = vec![0_u8; SIGNATURE_BYTES];
+    let read = file.read(&mut prefix)?;
+    prefix.truncate(read);
+
+    let valid = match extension {
+        "mp4" | "mov" | "m4v" | "3gp" | "3g2" => is_iso_base_media(&prefix),
+        "webm" => ebml_document_type(&prefix) == Some(b"webm".as_slice()),
+        "mkv" => ebml_document_type(&prefix) == Some(b"matroska".as_slice()),
+        "mpeg" => {
+            prefix.starts_with(&[0x00, 0x00, 0x01, 0xba])
+                || prefix.starts_with(&[0x00, 0x00, 0x01, 0xb3])
+        }
+        "avi" => prefix.len() >= 12 && &prefix[..4] == b"RIFF" && &prefix[8..12] == b"AVI ",
+        "ogv" => prefix.starts_with(b"OggS"),
+        _ => false,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(SaveError::InvalidRequest(format!(
+            "browser video does not contain a valid video container for .{extension}"
+        )))
+    }
+}
+
+fn is_iso_base_media(bytes: &[u8]) -> bool {
+    let mut offset = 0_usize;
+
+    // A file-type box is normally first, but ISO BMFF and QuickTime also allow
+    // harmless padding boxes before it. Parse their declared sizes instead of
+    // accepting an arbitrary `ftyp` byte sequence elsewhere in the payload.
+    for _ in 0..4 {
+        if bytes.len().saturating_sub(offset) < 8 {
+            return false;
+        }
+        let size32 = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as u64;
+        let box_type = &bytes[offset + 4..offset + 8];
+        let (box_size, header_size) = if size32 == 1 {
+            if bytes.len().saturating_sub(offset) < 16 {
+                return false;
+            }
+            (
+                u64::from_be_bytes(bytes[offset + 8..offset + 16].try_into().unwrap()),
+                16_usize,
+            )
+        } else {
+            (size32, 8_usize)
+        };
+        let Ok(box_size) = usize::try_from(box_size) else {
+            return false;
+        };
+        if box_size < header_size || box_size > bytes.len().saturating_sub(offset) {
+            return false;
+        }
+
+        if box_type == b"ftyp" {
+            let payload = &bytes[offset + header_size..offset + box_size];
+            return payload.len() >= 8
+                && payload.len().is_multiple_of(4)
+                && payload[..4]
+                    .iter()
+                    .all(|byte| byte.is_ascii_alphanumeric() || *byte == b' ')
+                && payload[..4].iter().any(|byte| *byte != b' ');
+        }
+        if !matches!(box_type, b"free" | b"skip" | b"wide") || box_size == 0 {
+            return false;
+        }
+        offset += box_size;
+    }
+    false
+}
+
+fn ebml_document_type(bytes: &[u8]) -> Option<&[u8]> {
+    if !bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+        return None;
+    }
+    let (header_size, size_width) = ebml_size(&bytes[4..])?;
+    let mut offset = 4 + size_width;
+    let header_end = offset.checked_add(header_size)?;
+    if header_end > bytes.len() {
+        return None;
+    }
+
+    while offset < header_end {
+        let id_width = bytes[offset].leading_zeros() as usize + 1;
+        if !(1..=4).contains(&id_width) || offset.checked_add(id_width)? > header_end {
+            return None;
+        }
+        let id = &bytes[offset..offset + id_width];
+        offset += id_width;
+        let (payload_size, size_width) = ebml_size(&bytes[offset..header_end])?;
+        offset += size_width;
+        let payload_end = offset.checked_add(payload_size)?;
+        if payload_end > header_end {
+            return None;
+        }
+        if id == [0x42, 0x82] {
+            return Some(&bytes[offset..payload_end]);
+        }
+        offset = payload_end;
+    }
+    None
+}
+
+fn ebml_size(bytes: &[u8]) -> Option<(usize, usize)> {
+    let first = *bytes.first()?;
+    let width = first.leading_zeros() as usize + 1;
+    if width > 8 || bytes.len() < width {
+        return None;
+    }
+    let marker = 1_u8 << (8 - width);
+    let mut value = usize::from(first & (marker - 1));
+    for byte in &bytes[1..width] {
+        value = value.checked_mul(256)?.checked_add(usize::from(*byte))?;
+    }
+    Some((value, width))
 }
 
 struct StagedVideo {
@@ -953,6 +1488,8 @@ mod tests {
             saved_at: "2026-08-24T12:00:00.000Z".to_string(),
             markdown: "# Captured title\n\nFull body.".to_string(),
             images: vec![],
+            preview_url: None,
+            favicon_url: None,
             excerpt: Some("Full body.".to_string()),
             word_count: Some(2),
             lang: Some("en".to_string()),
@@ -968,6 +1505,20 @@ mod tests {
                 "temporary video imports must be cleaned up"
             );
         }
+    }
+
+    fn mp4_video_bytes(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(32 + payload.len());
+        bytes.extend_from_slice(&24_u32.to_be_bytes());
+        bytes.extend_from_slice(b"ftyp");
+        bytes.extend_from_slice(b"isom");
+        bytes.extend_from_slice(&0_u32.to_be_bytes());
+        bytes.extend_from_slice(b"isom");
+        bytes.extend_from_slice(b"mp42");
+        bytes.extend_from_slice(&u32::try_from(8 + payload.len()).unwrap().to_be_bytes());
+        bytes.extend_from_slice(b"mdat");
+        bytes.extend_from_slice(payload);
+        bytes
     }
 
     #[test]
@@ -1291,6 +1842,50 @@ mod tests {
     }
 
     #[test]
+    fn browser_capture_stores_social_preview_and_favicon_outside_markdown() {
+        let (_dir, library) = library();
+        let url = "https://example.com/meta-assets";
+        let preview_url = "https://cdn.example.com/social.png";
+        let favicon_url = "https://example.com/favicon.ico";
+        let preview_bytes = b"social image bytes".to_vec();
+        let favicon_bytes = b"favicon bytes".to_vec();
+        let mut input = full_capture(url);
+        input.markdown =
+            format!("[Social source]({preview_url})\n\n![Remote variant]({preview_url}?width=640)");
+        let original_markdown = input.markdown.clone();
+        input.images = vec![
+            ImageBytes {
+                url: preview_url.to_string(),
+                content_type: "image/png".to_string(),
+                bytes: preview_bytes.clone(),
+            },
+            ImageBytes {
+                url: favicon_url.to_string(),
+                content_type: "image/x-icon".to_string(),
+                bytes: favicon_bytes.clone(),
+            },
+        ];
+        input.preview_url = Some(preview_url.to_string());
+        input.favicon_url = Some(favicon_url.to_string());
+
+        let saved = save_capture(&library, input).unwrap();
+        let article = fs::read_to_string(library.article_path(&saved.id)).unwrap();
+        let reading = parse_reading(&article).unwrap();
+
+        assert_eq!(reading.body.trim_end(), original_markdown);
+        let preview_asset = reading.metadata.preview_asset.unwrap();
+        let favicon_asset = reading.metadata.favicon_asset.unwrap();
+        assert_eq!(
+            fs::read(library.reading_dir(&saved.id).join(preview_asset)).unwrap(),
+            preview_bytes
+        );
+        assert_eq!(
+            fs::read(library.reading_dir(&saved.id).join(favicon_asset)).unwrap(),
+            favicon_bytes
+        );
+    }
+
+    #[test]
     fn origin_image_import_preserves_origin_and_uses_a_local_asset_identity() {
         let (_dir, library) = library();
         let bytes = b"origin-aware image bytes".to_vec();
@@ -1428,6 +2023,11 @@ mod tests {
             format!("cuttings://local/video/{content_hash}")
         );
         assert_eq!(reading.metadata.canonical_url, reading.metadata.url);
+        assert_eq!(reading.metadata.author, None);
+        assert_eq!(reading.metadata.site, None);
+        assert_eq!(reading.metadata.lang, None);
+        assert_eq!(reading.metadata.excerpt, None);
+        assert_eq!(reading.metadata.word_count, None);
         assert_eq!(reading.metadata.title, "Local clip");
         assert_eq!(
             reading.metadata.media_url.as_deref(),
@@ -1443,6 +2043,218 @@ mod tests {
             !article.contains(source.to_string_lossy().as_ref()),
             "the caller's source path must never be persisted"
         );
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn browser_video_import_streams_multiple_chunks_to_the_exact_local_asset() {
+        let (_dir, library) = library();
+        let expected = mp4_video_bytes(b"first browser video chunk and the second chunk");
+        let (first, second) = expected.split_at(11);
+
+        let mut import = begin_browser_video_import(
+            &library,
+            BrowserVideoImportInput {
+                content_type: "video/mp4".to_string(),
+                expected_bytes: Some(expected.len() as u64),
+                origin_url: "https://www.example.com/clips/one?utm_source=feed".to_string(),
+                canonical_url: "https://example.com/canonical-clip#player".to_string(),
+                title: "Browser clip".to_string(),
+                author: Some("Ed Example".to_string()),
+                site: Some("Example Studio".to_string()),
+                lang: Some("en-IE".to_string()),
+                excerpt: Some("A locally captured browser clip.".to_string()),
+                word_count: Some(5),
+                saved_at: "2026-08-25T12:00:00.000Z".to_string(),
+            },
+        )
+        .unwrap();
+        import.append(first).unwrap();
+        import.append(second).unwrap();
+        let imported = import.finish().unwrap();
+
+        let reading = read_metadata(&library.article_path(&imported.id)).unwrap();
+        assert_eq!(reading.canonical_url, "https://example.com/canonical-clip");
+        assert_eq!(reading.author.as_deref(), Some("Ed Example"));
+        assert_eq!(reading.site.as_deref(), Some("Example Studio"));
+        assert_eq!(reading.lang.as_deref(), Some("en-IE"));
+        assert_eq!(
+            reading.excerpt.as_deref(),
+            Some("A locally captured browser clip.")
+        );
+        assert_eq!(reading.word_count, Some(5));
+        let media_reference = reading.media_url.unwrap();
+        let relative_asset = media_reference.strip_prefix(LOCAL_ASSET_SCHEME).unwrap();
+        assert_eq!(
+            fs::read(library.reading_dir(&imported.id).join(relative_asset)).unwrap(),
+            expected
+        );
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn browser_video_import_deduplicates_by_content_within_its_origin() {
+        let (_dir, library) = library();
+        let bytes = mp4_video_bytes(b"same browser bytes");
+        let saved_at = "2026-08-25T12:00:00.000Z";
+
+        let mut first = begin_browser_video_import(
+            &library,
+            BrowserVideoImportInput {
+                content_type: "video/mp4".to_string(),
+                expected_bytes: None,
+                origin_url: "https://www.example.com/clips/one?utm_source=feed".to_string(),
+                canonical_url: "javascript:alert('not canonical')".to_string(),
+                title: "First title".to_string(),
+                author: None,
+                site: None,
+                lang: None,
+                excerpt: None,
+                word_count: None,
+                saved_at: saved_at.to_string(),
+            },
+        )
+        .unwrap();
+        first.append(&bytes).unwrap();
+        let first = first.finish().unwrap();
+
+        let original = read_metadata(&library.article_path(&first.id)).unwrap();
+        let original_reference = original.media_url.as_deref().unwrap();
+        let original_relative = original_reference.strip_prefix(LOCAL_ASSET_SCHEME).unwrap();
+        let original_asset = library.reading_dir(&first.id).join(original_relative);
+        fs::remove_file(&original_asset).unwrap();
+
+        let mut duplicate = begin_browser_video_import(
+            &library,
+            BrowserVideoImportInput {
+                content_type: "video/quicktime".to_string(),
+                expected_bytes: Some(bytes.len() as u64),
+                origin_url: "https://example.com/clips/one".to_string(),
+                canonical_url: "https://example.com/clips/one".to_string(),
+                title: "Duplicate title".to_string(),
+                author: None,
+                site: None,
+                lang: None,
+                excerpt: None,
+                word_count: None,
+                saved_at: "2027-01-01T00:00:00.000Z".to_string(),
+            },
+        )
+        .unwrap();
+        duplicate.append(&bytes).unwrap();
+        let duplicate = duplicate.finish().unwrap();
+
+        let mut other_origin = begin_browser_video_import(
+            &library,
+            BrowserVideoImportInput {
+                content_type: "video/mp4".to_string(),
+                expected_bytes: Some(bytes.len() as u64),
+                origin_url: "https://elsewhere.example/clips/one".to_string(),
+                canonical_url: "https://elsewhere.example/clips/one".to_string(),
+                title: "Elsewhere".to_string(),
+                author: None,
+                site: None,
+                lang: None,
+                excerpt: None,
+                word_count: None,
+                saved_at: saved_at.to_string(),
+            },
+        )
+        .unwrap();
+        other_origin.append(&bytes).unwrap();
+        let other_origin = other_origin.finish().unwrap();
+
+        let reading = read_metadata(&library.article_path(&first.id)).unwrap();
+        assert_eq!(first.disposition, SaveDisposition::Saved);
+        assert_eq!(duplicate.disposition, SaveDisposition::Duplicate);
+        assert_eq!(duplicate.id, first.id);
+        assert_ne!(other_origin.id, first.id);
+        assert_eq!(reading.url, "https://example.com/clips/one");
+        assert_eq!(reading.canonical_url, reading.url);
+        assert_eq!(reading.site.as_deref(), Some("example.com"));
+        assert_eq!(reading.title, "First title");
+        assert_eq!(reading.saved_at, saved_at);
+        assert_eq!(reading.media_url.as_deref(), Some(original_reference));
+        assert_eq!(fs::read(&original_asset).unwrap(), bytes);
+        assert_eq!(
+            fs::read_dir(library.assets_dir(&first.id)).unwrap().count(),
+            1
+        );
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn browser_video_import_rejects_non_video_bytes_with_a_video_content_type() {
+        let (_dir, library) = library();
+        let bytes = b"not a video";
+        let mut import = begin_browser_video_import(
+            &library,
+            BrowserVideoImportInput {
+                content_type: "video/mp4".to_string(),
+                expected_bytes: Some(bytes.len() as u64),
+                origin_url: "https://example.com/not-a-video".to_string(),
+                canonical_url: "https://example.com/not-a-video".to_string(),
+                title: "Not a video".to_string(),
+                author: None,
+                site: None,
+                lang: None,
+                excerpt: None,
+                word_count: None,
+                saved_at: "2026-08-25T12:00:00.000Z".to_string(),
+            },
+        )
+        .unwrap();
+        import.append(bytes).unwrap();
+
+        assert!(matches!(
+            import.finish(),
+            Err(SaveError::InvalidRequest(message))
+                if message.contains("does not contain a valid video")
+        ));
+        assert_staging_empty(&library);
+    }
+
+    #[test]
+    fn browser_video_import_rejects_empty_mismatched_and_oversized_streams() {
+        let (_dir, library) = library();
+        let input = |expected_bytes| BrowserVideoImportInput {
+            content_type: "video/mp4".to_string(),
+            expected_bytes,
+            origin_url: "https://example.com/clips/failing".to_string(),
+            canonical_url: "https://example.com/clips/failing".to_string(),
+            title: "Failing clip".to_string(),
+            author: None,
+            site: None,
+            lang: None,
+            excerpt: None,
+            word_count: None,
+            saved_at: "2026-08-25T12:00:00.000Z".to_string(),
+        };
+
+        let empty = begin_browser_video_import(&library, input(None)).unwrap();
+        assert!(matches!(empty.finish(), Err(SaveError::InvalidRequest(_))));
+        assert_staging_empty(&library);
+
+        let mut mismatched = begin_browser_video_import(&library, input(Some(8))).unwrap();
+        mismatched.append(b"short").unwrap();
+        assert!(matches!(
+            mismatched.finish(),
+            Err(SaveError::InvalidRequest(_))
+        ));
+        assert_staging_empty(&library);
+
+        let mut exceeded = begin_browser_video_import(&library, input(Some(4))).unwrap();
+        assert!(matches!(
+            exceeded.append(b"12345"),
+            Err(SaveError::InvalidRequest(_))
+        ));
+        drop(exceeded);
+        assert_staging_empty(&library);
+
+        assert!(matches!(
+            begin_browser_video_import(&library, input(Some(MAX_BROWSER_VIDEO_BYTES + 1))),
+            Err(SaveError::InvalidRequest(_))
+        ));
         assert_staging_empty(&library);
     }
 
@@ -1483,7 +2295,11 @@ mod tests {
         );
         assert_eq!(reading.metadata.url, "https://example.com/clips/one");
         assert_eq!(reading.metadata.canonical_url, reading.metadata.url);
+        assert_eq!(reading.metadata.author, None);
         assert_eq!(reading.metadata.site.as_deref(), Some("example.com"));
+        assert_eq!(reading.metadata.lang, None);
+        assert_eq!(reading.metadata.excerpt, None);
+        assert_eq!(reading.metadata.word_count, None);
         assert_eq!(
             reading.metadata.media_url.as_deref(),
             Some(media_reference.as_str())

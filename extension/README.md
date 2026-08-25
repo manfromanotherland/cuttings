@@ -10,10 +10,22 @@
 
 # Browser extension
 
-The Manifest V3 browser extension for **Cuttings**, the local-first native macOS library. It saves
-cleaned articles, right-clicked images and videos, and selected-text quotes together with their
-origin. Captures travel through the `is.edmundo.cuttings.host` native messaging host and become Markdown
-plus local assets in your library folder.
+The Manifest V3 browser extension for **Cuttings**, the local-first native macOS library. Its toolbar
+saves a cleaned article, a lightweight link, or a visible-page screenshot. The context menu also
+saves right-clicked images/videos and selected-text quotes. Article and link saves retain live page
+metadata, social previews, and favicons as local assets. Captures travel through the
+`is.edmundo.cuttings.host` native messaging host and become Markdown plus local assets in your
+library folder.
+
+Every video uses protocol v4's streaming import. The extension reads HTTP(S), `data:`, and
+document-scoped `blob:` sources from the live page; if a source cannot be fetched, it captures one
+loop of the exact rendered video using an explicitly supported H.264 MP4 recorder. It never falls
+back to a WebM that the native app cannot play. Raw bytes travel in chunks of at most 256 KiB over
+one long-lived tab port. The worker relays each chunk over one native connection and waits for its
+acknowledgement before allowing the next one through. It never builds a whole-video `ArrayBuffer`
+or persists a temporary source URL. The native host writes the finished movie as the card's local
+playable asset; failed reads, recordings, stream operations, or native writes abort the upload and
+surface a save error. A poster-only capture is never reported as a successful video save.
 
 ## Build
 
@@ -28,12 +40,15 @@ npm run build
 npm run package
 ```
 
-Builds a fresh bundle, then zips only the files the manifest ships
-(`manifest.json`, `dist/`, `icons/`, `options.html`, `install.html`) into
-`artifacts/cuttings-extension-<version>.zip` — ready to upload to the Chrome
-Web Store, Edge Add-ons, or [AMO](https://addons.mozilla.org). Bump the
-`version` in `manifest.json` before packaging; the stores reject a re-upload of
-an existing version. Requires `zip` (preinstalled on macOS).
+Builds a fresh bundle, then copies only the files the manifest ships
+(`manifest.json`, `dist/`, `icons/`, `popup.html`, `options.html`, `install.html`) into two outputs:
+
+- `unpacked/` — a stable clean directory for **Load unpacked** in Dia/Chrome during development.
+- `artifacts/cuttings-extension-<version>.zip` — ready for the Chrome Web Store, Edge Add-ons, or
+  [AMO](https://addons.mozilla.org).
+
+Bump the `version` in `manifest.json` before store packaging; stores reject a re-upload of an
+existing version. Requires `zip` (preinstalled on macOS).
 
 The packaged manifest drops the `key` field — it pins a stable extension ID for
 local unpacked development, but the Chrome Web Store manages signing itself and
@@ -44,11 +59,14 @@ rejects any upload that carries `key`. `manifest.json` on disk keeps it.
 **Chrome / Edge**
 
 1. Open `chrome://extensions` and enable **Developer mode**.
-2. **Load unpacked** → select this `extension/` folder (the one with `manifest.json`, **not**
-   `dist/`).
+2. Run `npm run package`, then **Load unpacked** → select `extension/unpacked/`.
 
-After editing source, re-run `npm run build` and click the **reload ↻** icon on the extension
-card.
+After editing source, re-run `npm run package` and click the **reload ↻** icon on the extension
+card. Dia/Chrome keeps the same unpacked path and stable development extension ID.
+
+Click the Cuttings toolbar button and choose **Save article**, **Save link**, or **Save screenshot**.
+The screenshot action captures the currently visible viewport. The existing keyboard shortcut saves
+the full article directly.
 
 **Firefox**
 

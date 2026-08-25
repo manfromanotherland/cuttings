@@ -119,7 +119,7 @@ describe("extractStandaloneMedia", () => {
     expect(persisted).not.toContain("DO_NOT_PERSIST_THIS_PAYLOAD");
   });
 
-  it("gives distinct blob-backed videos opaque identities and links both to their origin", () => {
+  it("keeps distinct legacy blob identities for callers outside the production stream path", () => {
     const firstBlob = "blob:https://example.com/session-video-one";
     const secondBlob = "blob:https://example.com/session-video-two";
     const canonicalUrl = "https://example.com/canonical-watch";

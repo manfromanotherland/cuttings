@@ -16,7 +16,7 @@ land them across all affected components in the same monorepo commit.
   .cuttings-locks/            # persistent operational advisory-lock sidecars
     <prefix>/                 # first 2 chars of SHA-256(reading id)
       <sha256-id>.lock        # empty; one stable lock inode per reading id
-  .cuttings-imports/          # persistent staging directory for streamed local-video imports
+  .cuttings-imports/          # persistent staging directory for streamed video imports
     video-<ulid>.tmp          # transient; removed after success, duplicate, or failure
   articles/
     <prefix>/                 # first 2 chars of the id — a fan-out bucket
@@ -42,8 +42,9 @@ land them across all affected components in the same monorepo commit.
   operation or deletion, are not reading data, and are ignored by the scanner; syncing their empty
   files does not carry a live OS lock to another device.
 - `.cuttings-imports/` remains present so concurrent importers never race directory removal. Its
-  uniquely named temporary files exist only while a local video is copied and hashed, are ignored
-  by the scanner, and are cleaned after every completed import path.
+  uniquely named temporary files exist only while a local or browser-saved video is
+  streamed and hashed, are ignored by the scanner, and are cleaned after success, duplicate,
+  abort, disconnect, or error.
 
 ---
 
@@ -62,11 +63,12 @@ url: https://example.com/post/slug         # original URL as visited
 canonical_url: https://example.com/post/slug  # the page's own canonical URL when known (see § URL normalization)
 title: The Title of the Article            # required; extracted from page or og:title
 kind: article                              # article | image | video | quote; missing means article
-lightweight: true                          # optional; URL-only app save awaiting full capture
+lightweight: true                          # optional; link save awaiting full article capture
 media_url: https://cdn.example.com/image.jpg  # optional media identity; never the origin
 preview_asset: assets/3f4a1b8e....jpg      # optional local card preview written by the host
+favicon_asset: assets/91d0c4ab....ico      # optional locally captured page favicon
 author: Jane Doe                           # optional; extracted byline
-site: example.com                          # eTLD+1 of canonical_url
+site: Example                              # optional source-site label or hostname
 saved_at: 2026-06-13T15:00:00Z            # ISO-8601 UTC; set once at save time; never updated
 read_at: 2026-06-14T09:00:00Z             # optional legacy state; preserved for compatibility
 archived: false                            # required legacy state; current macOS app ignores it
@@ -85,12 +87,12 @@ source_hash: sha256:abc123...              # sha256 of the cleaned Markdown body
 `rating`, `tags`, `source_hash`.
 
 #### Optional fields
-`kind`, `lightweight`, `media_url`, `preview_asset`, `author`, `site`, `read_at`, `excerpt`,
+`kind`, `lightweight`, `media_url`, `preview_asset`, `favicon_asset`, `author`, `site`, `read_at`, `excerpt`,
 `word_count`, `lang`.
 
 `kind` is written for every new card but remains optional in the parser for backwards compatibility;
 an older file without it is an `article`. `lightweight` is omitted/false for ordinary captures and
-is true only for a URL-only paste/drop card.
+is true for a link saved without a cleaned article body, from either the app or browser toolbar.
 
 #### Rules
 - `saved_at` is set once at save time and **never updated**, even when metadata is edited.
@@ -98,19 +100,21 @@ is true only for a URL-only paste/drop card.
   card's asset identity belongs in `media_url`; it never replaces the origin. A source-less local
   text/image/video save uses a deterministic `cuttings://local/...` URL in the two required URL fields,
   leaves `site` unset, and is presented as saved locally rather than as an openable web source.
-- `lightweight: true` means the app had only an HTTP(S) URL, so the body is a link rather than
-  cleaned page content. A later full browser capture at the same URL replaces the captured
-  metadata/body and clears this marker while preserving `saved_at`, state, rating, and tags.
+- `lightweight: true` means no cleaned article body was captured, so the body is a link. A browser
+  toolbar save may still include title, canonical/source metadata, a local social preview, and a
+  local favicon. A later full browser capture at the same URL replaces the captured metadata/body
+  and clears this marker while preserving `saved_at`, state, rating, and tags.
 - `kind` is one of `article`, `image`, `video`, or `quote`.
-- `media_url` is meaningful only for `image` and `video` cards. It is normally a durable HTTP(S)
-  direct URL. When a browser video only exposes a session-local `blob:`/`data:` source, the
-  extension stores a compact opaque `cuttings-video:` reference instead; raw transient URLs are
-  never persisted. A source-less video uses `cuttings-asset:assets/<filename>` to identify the
-  copied file inside its own reading folder without persisting the original machine path. An
-  offline migration may use the same local-asset reference while retaining an HTTP(S) origin in
-  `url`; the content-derived asset reference is then the media identity.
+- `media_url` is meaningful only for `image` and `video` cards. Every newly browser-saved video is
+  streamed or recorded into the library and uses `cuttings-asset:assets/<filename>` as its
+  content-derived identity; transient `blob:` and `data:` URLs are never persisted. Source-less
+  videos and offline migrations use the same local reference without persisting an original
+  machine path. A web origin remains in `url`; legacy direct HTTP(S) video references remain
+  readable for format compatibility.
 - `preview_asset`, when present, must be the safe single-file shape `assets/<filename>`. It is
   derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
+- `favicon_asset`, when present, follows the same safe local path rule. It records a captured page
+  icon separately from the full-size card preview and is never inserted into article Markdown.
 - `read_at`, `archived`, `favorite`, and `rating` remain part of the format-v1 compatibility
   contract. Older clients may still interpret and mutate them, so current readers preserve them
   when rewriting a file. The current macOS product does not expose them as curation controls.
@@ -129,9 +133,8 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
   (the article file and its `assets/` folder are siblings), e.g. `![alt](assets/3f4a1b.jpg)`.
 - Do not embed images as base64.
 - An **image** body is a Markdown image whose captured source is rewritten to the local asset.
-- A **video** body may contain its local poster plus a link to the durable media URL. For a
-  session-local stream it links to the origin page instead. Browser captures do not download video
-  bytes; source-less saves and offline migrations may link to a copied local asset.
+- A **video** body links to its copied `assets/<file>` movie and may also reference a local poster.
+  Legacy readings may still link to a durable remote media URL.
 - A **quote** body contains the selected text as Markdown block quotes. Its `excerpt` may carry a
   bounded preview for the board, but the body remains the full selection.
 - A **lightweight article** body is one Markdown link to its HTTP(S) URL. It is intentionally
@@ -181,15 +184,18 @@ More content…
 
 ## Asset files (`articles/<prefix>/<id>/assets/<sha256>.<ext>`)
 
-- Each reading's images live in an `assets/` sub-folder inside the reading's own folder, beside
-  `article.md`, and are linked from the body as `assets/<file>`.
+- Each reading's captured images and copied videos live in an `assets/` sub-folder inside the
+  reading's own folder, beside `article.md`, and are linked from the body as `assets/<file>`.
 - Filename is the **lowercase hex SHA-256** of the file's raw bytes, with an extension chosen from
-  the image's `Content-Type` (falling back to the URL): e.g. `3f4a1b8e....jpg`.
-- Article images and video posters are **captured by the browser extension** (from the page's cache
-  where possible) and sent to the host. Standalone images may also arrive from the app's paste/drop
-  path. Both adapters hand bytes to the same core writer; the core performs no network requests. An
-  image the extension couldn't capture is left as a remote URL in the Markdown and is never
-  re-fetched; the reader shows a labelled placeholder for it.
+  its `Content-Type` (falling back to the source URL for images): e.g. `3f4a1b8e....jpg`.
+- Article and standalone images are **captured by the browser extension** (from the page's cache
+  where possible) and sent to the host. Every browser video is streamed in acknowledged chunks;
+  when source bytes cannot be fetched, the extension records the exact rendered element as a
+  compatible H.264 MP4. Videos are never embedded in an ordinary save message. Standalone images
+  and videos may also arrive from the app's paste/drop path. Every
+  adapter hands bytes to the same core writer; the core performs no network requests. An image the
+  extension couldn't capture is left as a remote URL in the Markdown and is never re-fetched; the
+  reader shows a labelled placeholder for it.
 - The original HTML snapshot is optional. If kept, it lives as `original.html` inside the reading's
   folder for future re-processing.
 
@@ -230,8 +236,9 @@ A **reading id** is a deterministic lowercase-hex SHA-256 content address. The i
 depends on the card kind:
 
 - **Article:** normalized origin `url` (the existing `url_id` behavior).
-- **Web image/video:** kind + normalized origin `url` + `media_url` identity (a durable direct URL
-  or a stable opaque reference for a session-local video).
+- **Web image/video:** kind + normalized origin `url` + `media_url` identity. Images and legacy
+  video readings may use a durable direct URL; newly copied browser videos use their
+  content-derived `cuttings-asset:` reference.
 - **Quote:** normalized origin `url` + normalized selected Markdown body.
 - **Source-less text:** a `cuttings://local/quote/<hash>` origin derived from whitespace-normalized
   text, then the ordinary quote identity rule. Whitespace-only variations deduplicate.
@@ -241,6 +248,9 @@ depends on the card kind:
 - **Source-less video:** a `cuttings://local/video/<hash>` origin derived while streaming a copy of
   the selected file into the library. Its `cuttings-asset:` media reference points at that copy;
   the original path and file name do not affect identity.
+- **Browser video:** normalized HTTP(S) origin `url` plus a content-derived `cuttings-asset:` media
+  reference. The source media URL never participates in identity; identical bytes from different
+  origins remain distinct readings.
 - **Migrated web image/video:** normalized origin `url` plus a content-derived `cuttings-asset:`
   media reference for the copied bytes. The source export path never participates in identity or
   persists in the library; identical bytes from different origins remain distinct readings.
