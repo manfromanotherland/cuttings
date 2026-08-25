@@ -8,7 +8,6 @@ import Foundation
 struct ReadingPageContext {
     let generation: UInt64
     let scope: LibraryScope
-    let sort: ReadingSort
     let search: String?
     let semanticCandidateIDs: [String]
 }
@@ -55,27 +54,18 @@ extension AppState {
         return query.isEmpty ? nil : query
     }
 
-    /// The board's fixed ordering: relevance while searching, newest saved first
-    /// otherwise (search is just another filter through the same list path).
-    private var activeSort: ReadingSort {
-        activeQuery == nil ? .savedAt : .relevance
-    }
-
     /// One page of readings for an immutable scope/search snapshot at `offset`.
     private func fetchReadings(
         _ core: any CoreBridging,
         context: ReadingPageContext,
         offset: UInt32
     ) async throws -> [ReadingRow] {
-        let query = ReadingQuery(
-            kind: nil,
+        let query = ReadingQuery.board(
             scope: context.scope,
-            sort: context.sort,
-            ascending: false,
-            tag: nil,
             search: context.search,
             semanticCandidateIDs: context.semanticCandidateIDs,
-            limit: pageSize, offset: offset
+            limit: pageSize,
+            offset: offset
         )
         return try await core.listReadings(query).map { ReadingRow($0) }
     }
@@ -86,7 +76,6 @@ extension AppState {
         let generation = readingLoadGeneration
         let scope = activeScope
         let search = activeQuery
-        let sort = activeSort
 
         let semanticCandidateIDs: [String]
         do {
@@ -108,7 +97,6 @@ extension AppState {
         return ReadingPageContext(
             generation: generation,
             scope: scope,
-            sort: sort,
             search: search,
             semanticCandidateIDs: semanticCandidateIDs
         )

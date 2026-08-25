@@ -19,3 +19,27 @@ struct ReadingQuery {
     var limit: UInt32
     var offset: UInt32
 }
+
+extension ReadingQuery {
+    /// The board always composes its selected scope and optional search into
+    /// one core query. Search changes ordering, never the active kind scope.
+    static func board(
+        scope: LibraryScope,
+        search: String?,
+        semanticCandidateIDs: [String],
+        limit: UInt32,
+        offset: UInt32
+    ) -> Self {
+        Self(
+            kind: nil,
+            scope: scope,
+            sort: search == nil ? .savedAt : .relevance,
+            ascending: false,
+            tag: nil,
+            search: search,
+            semanticCandidateIDs: semanticCandidateIDs,
+            limit: limit,
+            offset: offset
+        )
+    }
+}

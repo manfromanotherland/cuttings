@@ -82,7 +82,7 @@ targets:
   # content-length formatting, and the FFI-to-presentation ReadingRow mapper. It
   # compiles the specific files under test directly — the same way
   # CuttingsUITests shares AccessibilityID.swift — rather than hosting in the
-  # app. The board performance regression uses an isolated borderless test
+  # app. The board performance regression uses an isolated test
   # window; the suite never launches Cuttings or touches the dev's real library
   # or defaults. The generated bindings and the static core
   # framework are linked because the code under test still meets the FFI
@@ -97,6 +97,7 @@ targets:
       - path: Sources/Cuttings/State/SidebarCounts.swift
       - path: Sources/Cuttings/State/ComposedFilter.swift
       - path: Sources/Cuttings/State/ReadingSort.swift
+      - path: Sources/Cuttings/Bridge/ReadingQuery.swift
       - path: Sources/Cuttings/Shared/Formatting/ReadingTime.swift
       - path: Sources/Cuttings/Features/Tags/TagRules.swift
       # Reader typography: the preference vocabulary and the theme that derives
