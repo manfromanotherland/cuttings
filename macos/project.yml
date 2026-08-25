@@ -31,6 +31,10 @@ targets:
       - sdk: SystemConfiguration.framework
       - sdk: AVFoundation.framework
       - sdk: AVKit.framework
+      - sdk: CoreImage.framework
+      - sdk: CoreSpotlight.framework
+      - sdk: ImageIO.framework
+      - sdk: Vision.framework
       - package: Markdown
       - package: Sparkle
     settings:
@@ -109,6 +113,8 @@ targets:
       - path: Sources/Cuttings/Platform/Library/LibrarySetup.swift
       - path: Sources/Cuttings/Platform/Ingestion
       - path: Sources/Cuttings/Platform/NativeHost/NativeHostInstaller.swift
+      - path: Sources/Cuttings/Platform/Spotlight
+      - path: Sources/Cuttings/Platform/VisualAnalysis
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:
@@ -116,6 +122,10 @@ targets:
         embed: false
       - sdk: SystemConfiguration.framework
       - sdk: AVFoundation.framework
+      - sdk: CoreImage.framework
+      - sdk: CoreSpotlight.framework
+      - sdk: ImageIO.framework
+      - sdk: Vision.framework
     settings:
       base:
         SWIFT_VERSION: "6.0"
