@@ -8,10 +8,8 @@ extension LibraryScope {
     var ffiView: FfiView {
         switch self {
         case .all: .all
-        case .favorites: .favorites
         case .media: .media
         case .articles: .articles
-        case .notes: .notes
         case .links: .links
         case .quotes: .quotes
         }

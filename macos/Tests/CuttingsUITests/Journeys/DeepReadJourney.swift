@@ -2,10 +2,10 @@
 
 import XCTest
 
-/// Open a long article from the board, exercise native Markdown and image zoom,
-/// then favorite it from the inspector.
+/// Open a long article from the board and exercise native Markdown, image zoom,
+/// and typography controls.
 final class DeepReadJourney: UITestCase {
-    func testDeepReadZoomAndFavorite() throws {
+    func testDeepReadZoomAndTypography() throws {
         try launchApp(articles: Fixtures.standardCorpus)
         try library.writeAsset(
             articleId: Fixtures.Ids.kitchenSink,
@@ -26,12 +26,6 @@ final class DeepReadJourney: UITestCase {
         XCTAssertTrue(reader.lightboxImage.waitExists(), "image zoom lightbox opened")
         keyboard.escape()
         XCTAssertTrue(reader.lightboxImage.waitDisappears(), "lightbox dismissed with Escape")
-
-        reader.favoriteToggle()
-        XCTAssertTrue(
-            waitForFrontmatter(id: Fixtures.Ids.kitchenSink) { $0.favorite },
-            "favorite state is written on disk"
-        )
 
         keyboard.increaseFontSize()
         keyboard.increaseFontSize()

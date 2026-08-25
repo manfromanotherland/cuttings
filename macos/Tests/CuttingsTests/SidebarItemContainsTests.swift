@@ -3,8 +3,8 @@
 import XCTest
 
 /// `LibraryScope.contains` mirrors the board scopes exposed by the app. Legacy
-/// read/archive metadata must not hide a card now that those states are no
-/// longer part of the organizing model.
+/// read/archive/favorite metadata must not hide a card now that those states
+/// are no longer part of the organizing model.
 final class LibraryScopeContainsTests: XCTestCase {
     func testAllContainsEveryReadingIncludingLegacyArchivedRows() {
         XCTAssertTrue(LibraryScope.all.contains(makeReadingRow()))
@@ -13,14 +13,6 @@ final class LibraryScopeContainsTests: XCTestCase {
         XCTAssertTrue(
             LibraryScope.all.contains(makeReadingRow(read: true, archived: true, favorite: true))
         )
-    }
-
-    func testFavoritesContainsOnlyFavoritesIncludingLegacyArchivedRows() {
-        XCTAssertTrue(LibraryScope.favorites.contains(makeReadingRow(favorite: true)))
-        XCTAssertTrue(
-            LibraryScope.favorites.contains(makeReadingRow(archived: true, favorite: true))
-        )
-        XCTAssertFalse(LibraryScope.favorites.contains(makeReadingRow(favorite: false)))
     }
 
     func testMediaContainsImagesAndVideosOnly() {
@@ -36,14 +28,6 @@ final class LibraryScopeContainsTests: XCTestCase {
             LibraryScope.articles.contains(makeReadingRow(lightweight: true, kind: .article))
         )
         XCTAssertFalse(LibraryScope.articles.contains(makeReadingRow(kind: .image)))
-    }
-
-    func testNotesContainsAnyReadingWithANote() {
-        XCTAssertTrue(LibraryScope.notes.contains(makeReadingRow(hasNote: true)))
-        XCTAssertTrue(
-            LibraryScope.notes.contains(makeReadingRow(hasNote: true, kind: .video))
-        )
-        XCTAssertFalse(LibraryScope.notes.contains(makeReadingRow(hasNote: false)))
     }
 
     func testLinksContainsOnlyLightweightArticleReadings() {

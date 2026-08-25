@@ -62,7 +62,6 @@ enum ShortcutCatalog {
     // swiftlint:disable line_length
 
     // Item actions
-    static let toggleFavorite = AppShortcut(title: "Add / Remove Favorite", key: "f", modifiers: [.command, .shift], keyGlyph: "F")
     static let editTags = AppShortcut(title: "Edit Tags", key: "t", modifiers: [.command, .shift], keyGlyph: "T")
     static let toggleHighlights = AppShortcut(title: "Show / Hide Highlights", key: "h", modifiers: [.command, .shift], keyGlyph: "H")
     static let delete = AppShortcut(title: "Delete", key: .delete, modifiers: [.command, .option], keyGlyph: "⌫")
@@ -85,7 +84,7 @@ enum ShortcutCatalog {
 
     /// Groups in cheat-sheet display order.
     static let groups: [Group] = [
-        Group(name: "Item", shortcuts: [toggleFavorite, editTags, toggleHighlights, delete, openInBrowser]),
+        Group(name: "Item", shortcuts: [editTags, toggleHighlights, delete, openInBrowser]),
         Group(name: "View", shortcuts: [focusSearch, toggleFocusMode, decreaseCardSize, increaseCardSize, previousItem, nextItem]),
         Group(name: "Typography", shortcuts: [increaseFont, decreaseFont]),
         Group(name: "Help", shortcuts: [showShortcuts])

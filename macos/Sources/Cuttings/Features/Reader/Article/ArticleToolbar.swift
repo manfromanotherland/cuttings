@@ -2,8 +2,8 @@
 
 import SwiftUI
 
-/// The reader's primary-action toolbar: favorite, open in browser, tags,
-/// highlight, and delete. The parent resolves which row to build
+/// The reader's primary-action toolbar: open in browser, tags, highlight, and
+/// delete. The parent resolves which row to build
 /// it for (see `ArticleDetailView.currentRow`); actions write through
 /// `appState`, whose refresh supplies the updated row on the next render.
 struct ArticleToolbar: ToolbarContent {
@@ -18,17 +18,6 @@ struct ArticleToolbar: ToolbarContent {
             // A `Spacer` in a macOS toolbar is an expanding flexible space; it
             // pushes these actions to the trailing edge (far right).
             Spacer()
-
-            Button {
-                Task { await appState.toggleFavorite(row) }
-            } label: {
-                Label(
-                    row.favorite ? "Unfavorite" : "Favorite",
-                    systemImage: row.favorite ? "heart.fill" : "heart"
-                )
-            }
-            .help(row.favorite ? "Remove from favorites" : "Add to favorites")
-            .accessibilityIdentifier(A11y.Toolbar.favorite)
 
             if let url = row.sourceURL {
                 Button {

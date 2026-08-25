@@ -35,7 +35,6 @@ enum A11y {
     /// ── Board filters ─────────────────────────────────────────────────────
     enum Filter {
         static let group = "filter.group"
-        static let favorites = "filter.favorites"
         static let menu = "filter.menu"
 
         /// A tag option in the toolbar Filter menu, keyed by tag name.
@@ -103,7 +102,6 @@ enum A11y {
 
     /// ── Reader toolbar ────────────────────────────────────────────────────
     enum Toolbar {
-        static let favorite = "toolbar.favorite"
         static let openInBrowser = "toolbar.openInBrowser"
         static let tags = "toolbar.tags"
         static let highlight = "toolbar.highlight"
@@ -124,17 +122,6 @@ enum A11y {
         }
 
         static let done = "tagPicker.done"
-    }
-
-    /// ── Per-reading Markdown note ─────────────────────────────────────────
-    enum Note {
-        static let preview = "note.preview"
-        static let add = "note.add"
-        static let edit = "note.edit"
-        static let editor = "note.editor"
-        static let cancel = "note.cancel"
-        static let save = "note.save"
-        static let delete = "note.delete"
     }
 
     /// ── Highlights inspector ────────────────────────────────────────────────

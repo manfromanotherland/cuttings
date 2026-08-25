@@ -207,11 +207,6 @@ struct ReaderPage {
         app.byId(A11y.Detail.close).clickWhenReady()
     }
 
-    func favoriteToggle() {
-        let remove = app.buttons["Remove from favorites"]
-        (remove.exists ? remove : app.buttons["Add to favorites"]).clickWhenReady()
-    }
-
     func openInBrowser() {
         app.byId(A11y.Toolbar.openInBrowser).clickWhenReady()
     }

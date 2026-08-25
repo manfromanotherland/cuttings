@@ -53,7 +53,6 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.tags, ffi.tags)
         XCTAssertEqual(row.kind, .video)
         XCTAssertEqual(row.lightweight, ffi.lightweight)
-        XCTAssertEqual(row.hasNote, ffi.hasNote)
         XCTAssertEqual(row.mediaUrl, ffi.mediaUrl)
         XCTAssertEqual(row.previewAsset, ffi.previewAsset)
     }
@@ -89,7 +88,6 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertNil(row.lang)
         XCTAssertEqual(row.kind, .article)
         XCTAssertFalse(row.lightweight)
-        XCTAssertFalse(row.hasNote)
         XCTAssertNil(row.mediaUrl)
         XCTAssertNil(row.previewAsset)
         XCTAssertTrue(row.tags.isEmpty)

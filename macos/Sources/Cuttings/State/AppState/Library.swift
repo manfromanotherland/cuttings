@@ -106,7 +106,6 @@ extension AppState {
         guard let core else { return }
         do {
             let changed = try await core.sync()
-            noteRevision &+= 1
             if changed > 0 {
                 await refresh()
             }

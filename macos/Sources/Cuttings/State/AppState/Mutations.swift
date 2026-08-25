@@ -3,8 +3,8 @@
 import SwiftUI
 
 // ── Mutations ────────────────────────────────────────────────────────────────
-// Favorite and tag edits land optimistically, then the core write + `refresh()`
-// reconcile. Deletion remains authoritative because it removes files from disk.
+// Tag edits land optimistically, then the core write + `refresh()` reconcile.
+// Deletion remains authoritative because it removes files from disk.
 
 extension AppState {
     /// Optimistically apply an edit so it shows on the next frame, before the
@@ -40,27 +40,6 @@ extension AppState {
             }
             readings.remove(at: index)
         }
-    }
-
-    /// Keep the Notes scope responsive while a note write happens off the main
-    /// thread. Clearing a note removes its card and advances selection in the
-    /// same render tick; the subsequent core refresh remains authoritative.
-    func applyOptimisticNotePresence(id: String, hasNote: Bool) {
-        guard let old = readings.first(where: { $0.id == id }) else { return }
-        var updated = old
-        updated.hasNote = hasNote
-        applyOptimistic(old, updated)
-        advancePastFilteredRow(id: id)
-    }
-
-    func toggleFavorite(_ row: ReadingRow) async {
-        guard let core else { return }
-        var updated = row
-        updated.favorite = !row.favorite
-        applyOptimistic(row, updated)
-        advancePastFilteredRow(id: row.id)
-        try? await core.setFavorite(id: row.id, favorite: updated.favorite)
-        await refresh()
     }
 
     /// Permanently delete a reading: removes its file and assets from disk and

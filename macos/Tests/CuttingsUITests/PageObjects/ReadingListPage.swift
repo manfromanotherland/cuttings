@@ -19,10 +19,6 @@ struct ReadingListPage {
         app.byId(A11y.Filter.menu)
     }
 
-    func showFavorites() {
-        selectScope("Favourites")
-    }
-
     func showAll() {
         selectScope("All")
     }
@@ -107,8 +103,7 @@ struct ReadingListPage {
 
     /// Whether row `id` shows the indicator glyph named `label`. The glyphs carry
     /// the row id in their identifier and the indicator name in their label, but
-    /// their element type varies — the unread dot is a `Circle` (`Other`), the
-    /// favorite heart is an SF Symbol (`Image`) — so check both.
+    /// their element type can vary, so check both common representations.
     func rowHasIndicator(_ id: String, label: String) -> Bool {
         let identifier = A11y.List.row(id)
         func hasMatch(in query: XCUIElementQuery) -> Bool {

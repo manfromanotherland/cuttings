@@ -201,8 +201,7 @@ extension CuttingsLibraryView {
                                 CuttingsCardView(
                                     row: row,
                                     onOpen: { open(row) },
-                                    onEditTags: { tagTargetID = row.id },
-                                    onOptimisticChange: updatePresentedReading
+                                    onEditTags: { tagTargetID = row.id }
                                 )
                                 .accessibilityIdentifier(A11y.List.row(row.id))
                             }
@@ -400,12 +399,6 @@ extension CuttingsLibraryView {
             next += direction
         }
         return false
-    }
-
-    private func updatePresentedReading(_ updated: ReadingRow) {
-        if presentedReading?.id == updated.id {
-            presentedReading = updated
-        }
     }
 
     private func updateTag(_ tag: String, applies: Bool, to row: ReadingRow) {

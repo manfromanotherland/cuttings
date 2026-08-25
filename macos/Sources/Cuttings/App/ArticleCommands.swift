@@ -9,13 +9,6 @@ struct ArticleCommands: Commands {
     var body: some Commands {
         CommandMenu("Item") {
             if let row = selectedRow {
-                Button(row.favorite ? "Remove from Favorites" : "Add to Favorites") {
-                    Task { await appState.toggleFavorite(row) }
-                }
-                .keyboardShortcut(ShortcutCatalog.toggleFavorite)
-
-                Divider()
-
                 Button("Edit Tags…") {
                     appState.showTagSheet = true
                 }

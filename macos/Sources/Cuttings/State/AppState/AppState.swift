@@ -8,7 +8,7 @@ import SwiftUI
 // The behavior lives in sibling extension files in this folder, one per
 // concern: Library.swift (onboarding, boot, sync), Readings.swift (list
 // loading, search, filter reloads), Mutations.swift (row edits with
-// optimistic UI), Highlights.swift, and Notes.swift. This file holds the stored state,
+// optimistic UI) and Highlights.swift. This file holds the stored state,
 // `init`, and the AppKit focus helpers.
 @MainActor
 @Observable
@@ -107,11 +107,6 @@ final class AppState {
     /// in-text tinting and the highlights inspector.
     var highlights: [HighlightRow] = []
 
-    /// Advances for every successful on-disk sync pass, including passes where
-    /// only a note sidecar changed and the indexed article count stays at zero.
-    /// Open note controls use it to re-read files written by sync tools.
-    var noteRevision: UInt64 = 0
-
     // ── Filter metadata ───────────────────────────────────────────────────
 
     /// Global tag names used by each reading's tag editor.
@@ -130,7 +125,7 @@ final class AppState {
     var isSaving: Bool = false
 
     /// True while the user is editing a text field (the toolbar search field, the
-    /// tag picker, note editor, …). macOS dispatches menu/context-menu key-equivalents *before*
+    /// tag picker, …). macOS dispatches menu/context-menu key-equivalents *before*
     /// the focused field editor, so global shortcuts can fire mid-edit instead of
     /// editing the line. Commands whose shortcuts collide with the
     /// field editor's own keys disable themselves while this holds, letting the
@@ -158,14 +153,12 @@ final class AppState {
         defaults.removeObject(forKey: FilterDefaultsKey.kind)
         defaults.removeObject(forKey: FilterDefaultsKey.tag)
 
-        // Restore the current scope or migrate the one compatible legacy value.
-        // Old unread/read/archive values become All so a removed control can never
-        // leave an invisible filter active. The old rating filter is discarded.
+        // Restore a current scope. Retired read/archive/favorite/note values become
+        // All so a removed control can never leave an invisible filter active.
+        // The old rating filter is discarded.
         let persistedScope = defaults.string(forKey: FilterDefaultsKey.scope)
             .flatMap(LibraryScope.init(rawValue:))
-        let legacyScope: LibraryScope = defaults.string(forKey: FilterDefaultsKey.legacyView)
-            == LibraryScope.favorites.rawValue ? .favorites : .all
-        activeScope = persistedScope ?? legacyScope
+        activeScope = persistedScope ?? .all
         defaults.set(activeScope.rawValue, forKey: FilterDefaultsKey.scope)
         defaults.removeObject(forKey: FilterDefaultsKey.legacyView)
         defaults.removeObject(forKey: FilterDefaultsKey.legacyRating)

@@ -96,18 +96,6 @@ actor CoreBridge {
         )
     }
 
-    // ── Notes ─────────────────────────────────────────────────────────────
-
-    func getNote(readingId: String) throws -> String? {
-        try database.getNote(libraryPath: libraryPath, readingId: readingId)
-    }
-
-    func setNote(readingId: String, markdown: String) throws {
-        try database.setNote(
-            libraryPath: libraryPath, readingId: readingId, markdown: markdown
-        )
-    }
-
     // ── Tags ──────────────────────────────────────────────────────────────
 
     func addTag(id: String, tag: String) throws {
@@ -116,12 +104,6 @@ actor CoreBridge {
 
     func removeTag(id: String, tag: String) throws {
         try database.removeTag(libraryPath: libraryPath, id: id, tag: tag)
-    }
-
-    // ── Status flags ──────────────────────────────────────────────────────
-
-    func setFavorite(id: String, favorite: Bool) throws {
-        try database.setFavorite(libraryPath: libraryPath, id: id, favorite: favorite)
     }
 
     // ── Deletion ──────────────────────────────────────────────────────────

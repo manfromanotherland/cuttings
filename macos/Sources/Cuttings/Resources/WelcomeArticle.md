@@ -8,7 +8,7 @@ Install the Cuttings browser extension from this project. Use its toolbar button
 
 ## Your collection
 
-Everything you save lands on one visual board. Use the toolbar to search, filter by kind or tag, change the card size, or focus on your favorites.
+Everything you save lands on one visual board. Use the toolbar to search, filter by kind or tag, or change the card size.
 
 Click any card to open it. Use **←** and **→** to move through nearby ideas without reaching for the mouse.
 
@@ -27,10 +27,6 @@ Press **⌘K** to search. It looks through everything you have saved and puts th
 ## Tags
 
 With an item open, press **⌘⇧T** to add tags. Tags help you group ideas by project, topic, or anything else that makes sense to you.
-
-## Favorites
-
-Use the heart on any item to keep it close. The heart in the toolbar switches between your full collection and just your favorites.
 
 ## Typography and appearance
 

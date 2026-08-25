@@ -33,8 +33,8 @@ enum ReadingKind: String, CaseIterable, Sendable {
 /// A board/search presentation snapshot of a reading, kept apart from the
 /// `FfiReadingRow` boundary DTO so feature code speaks app language rather than
 /// "this came from the Rust FFI" (see ADR 0001). It mirrors the boundary fields
-/// exactly and as `var`, so optimistic favorite/tag edits can copy and tweak it.
-/// `read`, `archived`, and `rating` are compatibility-only snapshots from the
+/// exactly and as `var`, so optimistic tag edits can copy and tweak it.
+/// `read`, `archived`, `favorite`, and `rating` are compatibility-only snapshots from the
 /// format-v1 FFI record; current app queries and views do not use them.
 struct ReadingRow: Identifiable, Equatable, Sendable {
     var id: String
@@ -57,7 +57,6 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var tags: [String]
     var kind: ReadingKind = .article
     var lightweight: Bool
-    var hasNote: Bool
     var mediaUrl: String?
     var previewAsset: String?
 }
@@ -84,7 +83,6 @@ extension ReadingRow {
         tags = row.tags
         kind = ReadingKind(row.kind)
         lightweight = row.lightweight
-        hasNote = row.hasNote
         mediaUrl = row.mediaUrl
         previewAsset = row.previewAsset
     }

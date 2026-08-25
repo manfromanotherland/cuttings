@@ -5,17 +5,14 @@ import XCTest
 /// Pure filtering and one-motion selection rules used by the library board.
 final class ComposedFilterTests: XCTestCase {
     func testMatchesUsesTheSelectedScope() {
-        let favorite = makeReadingRow(favorite: true)
-        XCTAssertTrue(ComposedFilter.matches(favorite, scope: .all))
-        XCTAssertTrue(ComposedFilter.matches(favorite, scope: .favorites))
-
-        let ordinary = makeReadingRow()
-        XCTAssertTrue(ComposedFilter.matches(ordinary, scope: .all))
-        XCTAssertFalse(ComposedFilter.matches(ordinary, scope: .favorites))
+        let image = makeReadingRow(kind: .image)
+        XCTAssertTrue(ComposedFilter.matches(image, scope: .all))
+        XCTAssertTrue(ComposedFilter.matches(image, scope: .media))
+        XCTAssertFalse(ComposedFilter.matches(image, scope: .articles))
     }
 
     func testAllMatchesLegacyArchivedRows() {
-        let row = makeReadingRow(archived: true)
+        let row = makeReadingRow(archived: true, favorite: true)
         XCTAssertTrue(ComposedFilter.matches(row, scope: .all))
     }
 

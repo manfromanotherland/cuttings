@@ -8,7 +8,6 @@ struct CuttingsCardView: View {
     let row: ReadingRow
     var onOpen: () -> Void
     var onEditTags: () -> Void
-    var onOptimisticChange: (ReadingRow) -> Void = { _ in }
 
     @State private var isHovered = false
 
@@ -24,8 +23,7 @@ struct CuttingsCardView: View {
             .contextMenu {
                 CuttingsReadingActions(
                     row: row,
-                    onEditTags: onEditTags,
-                    onOptimisticChange: onOptimisticChange
+                    onEditTags: onEditTags
                 )
             }
             .onHover { hovering in
@@ -148,10 +146,6 @@ struct CuttingsCardView: View {
                 .font(.system(size: 9, weight: .medium))
             Text(row.displaySite ?? "Saved locally")
                 .lineLimit(1)
-            if row.favorite {
-                Image(systemName: "heart.fill")
-                    .foregroundStyle(onDark ? Color.white.opacity(0.9) : Color.red.opacity(0.7))
-            }
         }
         .font(.caption2.weight(.medium))
         .foregroundStyle(onDark ? Color.white.opacity(0.82) : Color.secondary)
@@ -161,8 +155,7 @@ struct CuttingsCardView: View {
         Menu {
             CuttingsReadingActions(
                 row: row,
-                onEditTags: onEditTags,
-                onOptimisticChange: onOptimisticChange
+                onEditTags: onEditTags
             )
         } label: {
             Image(systemName: "ellipsis")

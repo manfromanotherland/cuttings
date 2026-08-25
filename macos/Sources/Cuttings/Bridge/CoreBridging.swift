@@ -27,13 +27,8 @@ protocol CoreBridging: Sendable {
         filePath: String, contentType: String, title: String
     ) async throws -> FfiImportResult
 
-    func getNote(readingId: String) async throws -> String?
-    func setNote(readingId: String, markdown: String) async throws
-
     func addTag(id: String, tag: String) async throws
     func removeTag(id: String, tag: String) async throws
-
-    func setFavorite(id: String, favorite: Bool) async throws
 
     func deleteReading(id: String) async throws
 

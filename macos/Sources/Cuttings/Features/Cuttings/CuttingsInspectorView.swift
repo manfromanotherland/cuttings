@@ -49,12 +49,6 @@ struct CuttingsInspectorView: View {
                 tagsValue
             }
 
-            LabeledContent("Note") {
-                ReadingNoteControl(readingID: row.id)
-                    .id(row.id)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
             if !row.canonicalUrl.isEmpty, row.canonicalUrl != row.url {
                 LabeledContent("Canonical URL") {
                     selectableValue(row.canonicalUrl)

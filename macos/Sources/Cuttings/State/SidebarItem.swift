@@ -6,7 +6,7 @@ import Foundation
 /// metadata remains in the file format for compatibility but no longer
 /// participates in browsing.
 enum LibraryScope: String, CaseIterable, Identifiable {
-    case all, favorites, media, articles, notes, links, quotes
+    case all, media, articles, links, quotes
 
     var id: String {
         rawValue
@@ -15,10 +15,8 @@ enum LibraryScope: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .all: "All"
-        case .favorites: "Favourites"
         case .media: "Media"
         case .articles: "Articles"
-        case .notes: "Notes"
         case .links: "Links"
         case .quotes: "Quotes"
         }
@@ -27,10 +25,8 @@ enum LibraryScope: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .all: "asterisk"
-        case .favorites: "heart"
         case .media: "photo.on.rectangle"
         case .articles: "newspaper"
-        case .notes: "heart.text.square"
         case .links: "link"
         case .quotes: "quote.opening"
         }
@@ -42,10 +38,8 @@ enum LibraryScope: String, CaseIterable, Identifiable {
     func contains(_ row: ReadingRow) -> Bool {
         switch self {
         case .all: true
-        case .favorites: row.favorite
         case .media: row.kind == .image || row.kind == .video
         case .articles: row.kind == .article && !row.lightweight
-        case .notes: row.hasNote
         case .links: row.kind == .article && row.lightweight
         case .quotes: row.kind == .quote
         }

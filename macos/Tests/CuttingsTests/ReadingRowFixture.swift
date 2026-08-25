@@ -10,7 +10,6 @@ func makeReadingRow(
     archived: Bool = false,
     favorite: Bool = false,
     lightweight: Bool = false,
-    hasNote: Bool = false,
     wordCount: UInt32? = nil,
     kind: ReadingKind = .article
 ) -> ReadingRow {
@@ -31,7 +30,6 @@ func makeReadingRow(
         lang: nil,
         tags: [],
         kind: kind,
-        lightweight: lightweight,
-        hasNote: hasNote
+        lightweight: lightweight
     )
 }

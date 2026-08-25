@@ -3,15 +3,12 @@
 import XCTest
 
 /// Drives the app's keyboard shortcuts, mirroring `ShortcutCatalog`. Keeping them
-/// in one place means a journey reads as `keyboard.toggleFavorite()` rather than a raw
-/// `typeKey`, and a shortcut change is updated once.
+/// in one place means a journey reads in product terms rather than raw `typeKey`
+/// calls, and a shortcut change is updated once.
 struct Keyboard {
     let app: XCUIApplication
 
     /// ── Article actions (act on the current selection) ────────────────────
-    func toggleFavorite() {
-        app.typeKey("f", modifierFlags: [.command, .shift])
-    } // ⌘⇧F
     func editTags() {
         app.typeKey("t", modifierFlags: [.command, .shift])
     } // ⌘⇧T

@@ -77,15 +77,6 @@ struct CuttingsReadingOverlay: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
-            Button(action: toggleFavorite) {
-                Label(
-                    row.favorite ? "Remove from favorites" : "Add to favorites",
-                    systemImage: row.favorite ? "heart.fill" : "heart"
-                )
-            }
-            .help(row.favorite ? "Remove from favorites" : "Add to favorites")
-            .accessibilityIdentifier(A11y.Toolbar.favorite)
-
             Button(action: onEditTags) {
                 Label("Edit Tags", systemImage: "tag")
             }
@@ -132,33 +123,6 @@ struct CuttingsReadingOverlay: View {
             moveNext: { onMove(1) },
             toggleInspector: { showsInspector.toggle() }
         )
-    }
-
-    private func toggleFavorite() {
-        let old = row
-        if appState.activeScope == .favorites, old.favorite {
-            if let adjacent = adjacentRowAfterRemovingCurrent {
-                onSelect(adjacent)
-            } else {
-                onClose()
-            }
-        } else {
-            row.favorite.toggle()
-        }
-        Task {
-            await appState.toggleFavorite(old)
-        }
-    }
-
-    private var adjacentRowAfterRemovingCurrent: ReadingRow? {
-        guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return nil }
-        if rows.indices.contains(index + 1) {
-            return rows[index + 1]
-        }
-        if rows.indices.contains(index - 1) {
-            return rows[index - 1]
-        }
-        return nil
     }
 
     @ViewBuilder
