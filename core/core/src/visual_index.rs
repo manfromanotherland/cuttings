@@ -10,12 +10,16 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::Read as _,
+    io::{Read as _, Write as _},
+    path::{Path, PathBuf},
 };
 
 use anyhow::{bail, Result};
 use rusqlite::{params, Connection, OptionalExtension};
-use rustix::fs::{Mode, OFlags};
+use rustix::{
+    fs::{AtFlags, Mode, OFlags},
+    io::Errno,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -25,6 +29,9 @@ const MIN_LABEL_CONFIDENCE: f64 = 0.15;
 const MAX_LABELS: usize = 32;
 const MAX_CACHED_OBSERVATIONS: usize = 128;
 const MAX_PALETTE_CLUSTERS: usize = 32;
+const VISUAL_CACHE_DIR: &str = "visual-assets";
+const STAGING_PREFIX: &str = ".stage-";
+const STAGING_SUFFIX: &str = ".tmp";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VisualAsset {
@@ -105,6 +112,89 @@ pub(crate) struct CachedVisualProjection {
     pub predominant_color: Option<String>,
 }
 
+/// Create and validate the per-device visual staging directory beside the DB.
+/// The final component is never followed when opened, so a planted symlink is
+/// rejected rather than becoming an escape from Application Support.
+pub(crate) fn prepare_visual_cache(db_path: &Path) -> Result<PathBuf> {
+    let parent = db_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let parent = if parent.is_absolute() {
+        parent.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(parent)
+    };
+    let root = parent.join(VISUAL_CACHE_DIR);
+    match rustix::fs::mkdir(&root, Mode::RUSR | Mode::WUSR | Mode::XUSR) {
+        Ok(()) => {}
+        Err(Errno::EXIST) => {}
+        Err(error) => return Err(error.into()),
+    }
+    let directory = open_cache_directory(&root)?;
+    rustix::fs::fchmod(&directory, Mode::RUSR | Mode::WUSR | Mode::XUSR)?;
+    cleanup_stale_temps(&directory)?;
+    Ok(root)
+}
+
+fn open_cache_directory(root: &Path) -> Result<rustix::fd::OwnedFd> {
+    Ok(rustix::fs::open(
+        root,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+        Mode::empty(),
+    )?)
+}
+
+fn cleanup_stale_temps(directory: &rustix::fd::OwnedFd) -> Result<()> {
+    for entry in rustix::fs::Dir::read_from(directory)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Ok(name_text) = name.to_str() else {
+            continue;
+        };
+        if name_text.starts_with(STAGING_PREFIX) && name_text.ends_with(STAGING_SUFFIX) {
+            match rustix::fs::unlinkat(directory, name, AtFlags::empty()) {
+                Ok(()) | Err(Errno::NOENT) => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    rustix::fs::fsync(directory)?;
+    Ok(())
+}
+
+/// Remove content-addressed snapshots no longer referenced by the current
+/// readings projection. Only exact 64-hex cache names are eligible; temp files
+/// have their own cleanup path and unrelated files are left untouched.
+pub(crate) fn prune_visual_cache(conn: &Connection, root: &Path) -> Result<()> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT visual_asset_hash FROM readings WHERE visual_asset_hash IS NOT NULL",
+    )?;
+    let active: HashSet<String> = stmt
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let directory = open_cache_directory(root)?;
+    let mut changed = false;
+    for entry in rustix::fs::Dir::read_from(&directory)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Ok(name_text) = name.to_str() else {
+            continue;
+        };
+        if validate_content_hash(name_text).is_ok() && !active.contains(name_text) {
+            match rustix::fs::unlinkat(&directory, name, AtFlags::empty()) {
+                Ok(()) => changed = true,
+                Err(Errno::NOENT) => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    if changed {
+        rustix::fs::fsync(&directory)?;
+    }
+    Ok(())
+}
+
 struct NormalizedAnalysis {
     labels: Vec<VisualLabel>,
     palette: Vec<WeightedColor>,
@@ -119,6 +209,31 @@ pub(crate) fn inspect_asset(
     reading_id: &str,
     relative_path: &str,
 ) -> Result<VisualAsset> {
+    let mut file = open_source_asset(library, reading_id, relative_path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let absolute = library.reading_dir(reading_id).join(relative_path);
+    Ok(VisualAsset {
+        reading_id: reading_id.to_string(),
+        title: String::new(),
+        relative_path: relative_path.to_string(),
+        absolute_file_path: absolute.to_string_lossy().into_owned(),
+        content_hash: hex::encode(hasher.finalize()),
+    })
+}
+
+fn open_source_asset(
+    library: &LibraryRoot,
+    reading_id: &str,
+    relative_path: &str,
+) -> Result<fs::File> {
     validate_reading_id(reading_id)?;
     let file_name = validate_asset_path(relative_path)?;
     let directory_flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC | OFlags::NOFOLLOW;
@@ -158,27 +273,120 @@ pub(crate) fn inspect_asset(
         OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
         Mode::empty(),
     )?;
-    let mut file = fs::File::from(asset_fd);
+    let file = fs::File::from(asset_fd);
     if !file.metadata()?.is_file() {
         bail!("preview asset is not a regular file for {reading_id}");
     }
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
+    Ok(file)
+}
+
+/// Materialize scanner-identified bytes into the app-owned cache and return
+/// that immutable path. Creation reads only from the pinned library FD and is
+/// committed by atomic rename after its raw hash matches `content_hash`.
+fn staged_asset(
+    cache_root: &Path,
+    library: &LibraryRoot,
+    reading_id: &str,
+    title: String,
+    relative_path: &str,
+    content_hash: &str,
+) -> Result<VisualAsset> {
+    validate_content_hash(content_hash)?;
+    let directory = open_cache_directory(cache_root)?;
+    let target = content_hash;
+    match rustix::fs::openat(
+        &directory,
+        target,
+        OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+        Mode::empty(),
+    ) {
+        Ok(fd) => {
+            let file = fs::File::from(fd);
+            if !file.metadata()?.is_file() {
+                bail!("staged visual asset is not a regular file: {content_hash}");
+            }
+            rustix::fs::fchmod(&file, Mode::RUSR)?;
+            return Ok(staged_asset_record(
+                cache_root,
+                reading_id,
+                title,
+                relative_path,
+                content_hash,
+            ));
         }
-        hasher.update(&buffer[..read]);
+        Err(Errno::NOENT) => {}
+        Err(error) => return Err(error.into()),
     }
-    let absolute = library.reading_dir(reading_id).join(relative_path);
-    Ok(VisualAsset {
+
+    let mut source = open_source_asset(library, reading_id, relative_path)?;
+    let temp_name = format!("{STAGING_PREFIX}{}{STAGING_SUFFIX}", crate::new_id());
+    let stage_result = (|| -> Result<()> {
+        let temp_fd = rustix::fs::openat(
+            &directory,
+            temp_name.as_str(),
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+            Mode::RUSR | Mode::WUSR,
+        )?;
+        let mut staged = fs::File::from(temp_fd);
+        let mut hasher = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = source.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+            staged.write_all(&buffer[..read])?;
+        }
+        if hex::encode(hasher.finalize()) != content_hash {
+            bail!("preview asset changed after it was scanned");
+        }
+        staged.sync_all()?;
+        rustix::fs::fchmod(&staged, Mode::RUSR)?;
+        drop(staged);
+        rustix::fs::renameat(&directory, temp_name.as_str(), &directory, target)?;
+        rustix::fs::fsync(&directory)?;
+        Ok(())
+    })();
+    if stage_result.is_err() {
+        let _ = rustix::fs::unlinkat(&directory, temp_name.as_str(), AtFlags::empty());
+    }
+    stage_result?;
+
+    Ok(staged_asset_record(
+        cache_root,
+        reading_id,
+        title,
+        relative_path,
+        content_hash,
+    ))
+}
+
+fn staged_asset_record(
+    cache_root: &Path,
+    reading_id: &str,
+    title: String,
+    relative_path: &str,
+    content_hash: &str,
+) -> VisualAsset {
+    VisualAsset {
         reading_id: reading_id.to_string(),
-        title: String::new(),
+        title,
         relative_path: relative_path.to_string(),
-        absolute_file_path: absolute.to_string_lossy().into_owned(),
-        content_hash: hex::encode(hasher.finalize()),
-    })
+        absolute_file_path: cache_root.join(content_hash).to_string_lossy().into_owned(),
+        content_hash: content_hash.to_string(),
+    }
+}
+
+fn validate_content_hash(content_hash: &str) -> Result<()> {
+    if content_hash.len() != 64
+        || !content_hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        bail!("invalid visual content hash");
+    }
+    Ok(())
 }
 
 fn validate_reading_id(reading_id: &str) -> Result<()> {
@@ -203,7 +411,12 @@ fn validate_asset_path(path: &str) -> Result<&str> {
     Ok(file.expect("checked above"))
 }
 
-pub fn current_visual_assets(conn: &Connection, library: &LibraryRoot) -> Result<Vec<VisualAsset>> {
+pub fn current_visual_assets(
+    conn: &Connection,
+    library: &LibraryRoot,
+    cache_root: &Path,
+) -> Result<Vec<VisualAsset>> {
+    prune_visual_cache(conn, cache_root)?;
     let mut stmt = conn.prepare(
         "SELECT id, title, visual_asset_path, visual_asset_hash FROM readings
          WHERE visual_asset_path IS NOT NULL AND visual_asset_hash IS NOT NULL ORDER BY id",
@@ -221,23 +434,10 @@ pub fn current_visual_assets(conn: &Connection, library: &LibraryRoot) -> Result
 
     let mut assets = Vec::new();
     for (id, title, path, content_hash) in rows {
-        // These columns exist only after the scanner safely opened and hashed
-        // the asset. Revalidate the lexical contract cheaply; completion does
-        // the intentional second byte read before accepting platform output.
-        if validate_reading_id(&id).is_err() || validate_asset_path(&path).is_err() {
-            continue;
+        match staged_asset(cache_root, library, &id, title, &path, &content_hash) {
+            Ok(asset) => assets.push(asset),
+            Err(error) => eprintln!("visual index: could not stage {id}: {error}"),
         }
-        assets.push(VisualAsset {
-            absolute_file_path: library
-                .reading_dir(&id)
-                .join(&path)
-                .to_string_lossy()
-                .into_owned(),
-            reading_id: id,
-            title,
-            relative_path: path,
-            content_hash,
-        });
     }
     Ok(assets)
 }
@@ -246,12 +446,14 @@ pub fn current_visual_assets(conn: &Connection, library: &LibraryRoot) -> Result
 pub fn pending_visual_analysis(
     conn: &Connection,
     library: &LibraryRoot,
+    cache_root: &Path,
     analyzer_version: &str,
     limit: usize,
 ) -> Result<Vec<VisualAnalysisTask>> {
     if analyzer_version.trim().is_empty() {
         bail!("analyzer version must not be blank");
     }
+    prune_visual_cache(conn, cache_root)?;
     let tx = conn.unchecked_transaction()?;
     // Exact cache hits need no file I/O: the indexed hash was produced by the
     // scanner's safe open, and completion also revalidated it. This makes
@@ -275,7 +477,7 @@ pub fn pending_visual_analysis(
            SELECT 1 FROM visual_analysis a
            WHERE a.content_hash=readings.visual_asset_hash
              AND a.analyzer_version=?1
-         )",
+         ) AND visual_analyzer_version IS NOT ?1",
         params![analyzer_version],
     )?;
     let mut stmt = conn.prepare(
@@ -304,25 +506,21 @@ pub fn pending_visual_analysis(
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     drop(stmt);
+    tx.commit()?;
     let mut pending = Vec::new();
 
-    for (id, _title, path, content_hash) in candidates {
-        if validate_reading_id(&id).is_err() || validate_asset_path(&path).is_err() {
-            continue;
+    for (id, title, path, content_hash) in candidates {
+        match staged_asset(cache_root, library, &id, title, &path, &content_hash) {
+            Ok(asset) => pending.push(VisualAnalysisTask {
+                reading_id: asset.reading_id,
+                relative_path: asset.relative_path,
+                absolute_file_path: asset.absolute_file_path,
+                content_hash: asset.content_hash,
+                analyzer_version: analyzer_version.to_string(),
+            }),
+            Err(error) => eprintln!("visual index: could not stage task for {id}: {error}"),
         }
-        pending.push(VisualAnalysisTask {
-            absolute_file_path: library
-                .reading_dir(&id)
-                .join(&path)
-                .to_string_lossy()
-                .into_owned(),
-            reading_id: id,
-            relative_path: path,
-            content_hash,
-            analyzer_version: analyzer_version.to_string(),
-        });
     }
-    tx.commit()?;
     Ok(pending)
 }
 
@@ -381,14 +579,12 @@ pub fn complete_visual_analysis(
     conn.execute(
         "UPDATE readings SET visual_analyzer_version=?2, visual_terms=?3,
              predominant_color=?4
-         WHERE id=?1 AND visual_asset_path=?5 AND visual_asset_hash=?6",
+         WHERE visual_asset_hash=?1",
         params![
-            current.reading_id,
+            current.content_hash,
             task.analyzer_version,
             normalized.visual_terms,
-            normalized.predominant_color,
-            current.relative_path,
-            current.content_hash
+            normalized.predominant_color
         ],
     )?;
     tx.commit()?;
@@ -580,7 +776,7 @@ pub(crate) fn cached_projection(
                 CASE WHEN supported=1 THEN predominant_color ELSE NULL END
          FROM visual_analysis
          WHERE content_hash=?1
-         ORDER BY completed_at DESC, analyzer_version DESC LIMIT 1",
+         ORDER BY completed_at DESC, rowid DESC LIMIT 1",
         params![content_hash],
         |row| {
             Ok(CachedVisualProjection {
@@ -602,16 +798,18 @@ mod tests {
 
     use crate::{
         apply_diffs, diff, import_image, list_readings, open_index, rebuild, scan_library,
-        ListOptions, PredominantColor,
+        view_counts, CountScope, ListOptions, PredominantColor,
     };
 
-    fn setup_image(bytes: &[u8]) -> (TempDir, LibraryRoot, Connection, String) {
+    fn setup_image(bytes: &[u8]) -> (TempDir, LibraryRoot, Connection, String, PathBuf) {
         let dir = TempDir::new().unwrap();
         let library = LibraryRoot::new(dir.path()).unwrap();
         let imported = import_image(&library, bytes.to_vec(), "image/png", "Dining setup").unwrap();
-        let conn = open_index(&dir.path().join("index.db")).unwrap();
+        let index_path = dir.path().join("index.db");
+        let conn = open_index(&index_path).unwrap();
+        let cache_root = prepare_visual_cache(&index_path).unwrap();
         rebuild(&conn, &library).unwrap();
-        (dir, library, conn, imported.id)
+        (dir, library, conn, imported.id, cache_root)
     }
 
     fn supported_result() -> VisualAnalysisResult {
@@ -711,8 +909,8 @@ mod tests {
 
     #[test]
     fn scanner_hashes_raw_bytes_and_exposes_only_safe_assets() {
-        let (_dir, library, conn, id) = setup_image(b"raw preview bytes");
-        let assets = current_visual_assets(&conn, &library).unwrap();
+        let (_dir, library, conn, id, cache_root) = setup_image(b"raw preview bytes");
+        let assets = current_visual_assets(&conn, &library, &cache_root).unwrap();
         assert_eq!(assets.len(), 1);
         assert_eq!(assets[0].reading_id, id);
         assert_eq!(
@@ -720,12 +918,44 @@ mod tests {
             crate::sha256_hex(b"raw preview bytes")
         );
         assert!(assets[0].relative_path.starts_with("assets/"));
+        assert!(Path::new(&assets[0].absolute_file_path).starts_with(&cache_root));
+        assert_eq!(
+            std::fs::read(&assets[0].absolute_file_path).unwrap(),
+            b"raw preview bytes"
+        );
+
+        let reused = current_visual_assets(&conn, &library, &cache_root).unwrap();
+        assert_eq!(reused[0].absolute_file_path, assets[0].absolute_file_path);
+        assert!(!std::fs::read_dir(&cache_root).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(STAGING_PREFIX)
+        }));
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert_eq!(
+                std::fs::metadata(&cache_root).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+            assert_eq!(
+                std::fs::metadata(&assets[0].absolute_file_path)
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o400
+            );
+        }
     }
 
     #[test]
     fn completion_indexes_labels_and_color_and_rebuild_reuses_cache() {
-        let (_dir, library, conn, id) = setup_image(b"semantic image");
-        let task = pending_visual_analysis(&conn, &library, "vision-r2", 10)
+        let (_dir, library, conn, id, cache_root) = setup_image(b"semantic image");
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10)
             .unwrap()
             .pop()
             .unwrap();
@@ -771,11 +1001,37 @@ mod tests {
         )
         .unwrap();
         assert_eq!(blue.iter().map(|row| &row.id).collect::<Vec<_>>(), [&id]);
+        assert_eq!(
+            list_readings(
+                &conn,
+                &ListOptions {
+                    query: Some("blue".into()),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .len(),
+            1
+        );
+        assert_eq!(
+            view_counts(
+                &conn,
+                &CountScope {
+                    predominant_color: Some(PredominantColor::Blue),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .all,
+            1
+        );
 
         rebuild(&conn, &library).unwrap();
-        assert!(pending_visual_analysis(&conn, &library, "vision-r2", 10)
-            .unwrap()
-            .is_empty());
+        assert!(
+            pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10)
+                .unwrap()
+                .is_empty()
+        );
         let cache_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM visual_analysis", [], |row| row.get(0))
             .unwrap();
@@ -796,13 +1052,13 @@ mod tests {
 
     #[test]
     fn unsupported_hash_is_not_retried_until_analyzer_changes() {
-        let (_dir, library, conn, _id) = setup_image(b"unsupported image");
-        let older = pending_visual_analysis(&conn, &library, "vision-r1", 1)
+        let (_dir, library, conn, _id, cache_root) = setup_image(b"unsupported image");
+        let older = pending_visual_analysis(&conn, &library, &cache_root, "vision-r1", 1)
             .unwrap()
             .pop()
             .unwrap();
         assert!(complete_visual_analysis(&conn, &library, &older, &supported_result()).unwrap());
-        let task = pending_visual_analysis(&conn, &library, "vision-r2", 1)
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
             .pop()
             .unwrap();
@@ -812,11 +1068,13 @@ mod tests {
             palette: vec![],
         };
         assert!(complete_visual_analysis(&conn, &library, &task, &unsupported).unwrap());
-        assert!(pending_visual_analysis(&conn, &library, "vision-r2", 1)
-            .unwrap()
-            .is_empty());
+        assert!(
+            pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
-            pending_visual_analysis(&conn, &library, "vision-r3", 1)
+            pending_visual_analysis(&conn, &library, &cache_root, "vision-r3", 1)
                 .unwrap()
                 .len(),
             1
@@ -835,23 +1093,26 @@ mod tests {
 
     #[test]
     fn changed_or_deleted_asset_invalidates_projection_and_stale_completion() {
-        let (_dir, library, conn, id) = setup_image(b"old bytes");
+        let (_dir, library, conn, id, cache_root) = setup_image(b"old bytes");
         let old_scan = scan_library(&library).unwrap();
-        let task = pending_visual_analysis(&conn, &library, "vision-r2", 1)
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
             .pop()
             .unwrap();
-        std::fs::write(&task.absolute_file_path, b"new bytes").unwrap();
+        let old_staged_path = task.absolute_file_path.clone();
+        let canonical_path = library.reading_dir(&id).join(&task.relative_path);
+        std::fs::write(&canonical_path, b"new bytes").unwrap();
         let new_scan = scan_library(&library).unwrap();
         apply_diffs(&conn, &diff(&old_scan, &new_scan)).unwrap();
         assert!(!complete_visual_analysis(&conn, &library, &task, &supported_result()).unwrap());
-        let replacement = pending_visual_analysis(&conn, &library, "vision-r2", 1)
+        let replacement = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
             .pop()
             .unwrap();
+        let replacement_staged_path = replacement.absolute_file_path.clone();
         assert_ne!(replacement.content_hash, task.content_hash);
 
-        std::fs::remove_file(&replacement.absolute_file_path).unwrap();
+        std::fs::remove_file(&canonical_path).unwrap();
         let after_delete = scan_library(&library).unwrap();
         apply_diffs(&conn, &diff(&new_scan, &after_delete)).unwrap();
         let state: (Option<String>, String) = conn
@@ -862,6 +1123,99 @@ mod tests {
             )
             .unwrap();
         assert_eq!(state, (None, String::new()));
-        assert!(current_visual_assets(&conn, &library).unwrap().is_empty());
+        assert!(current_visual_assets(&conn, &library, &cache_root)
+            .unwrap()
+            .is_empty());
+        assert!(!Path::new(&old_staged_path).exists());
+        assert!(!Path::new(&replacement_staged_path).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn post_scan_symlink_swap_cannot_change_returned_staged_bytes() {
+        use std::os::unix::fs::symlink;
+
+        let (dir, library, conn, id, cache_root) = setup_image(b"inside bytes");
+        let asset = current_visual_assets(&conn, &library, &cache_root)
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(
+            std::fs::read(&asset.absolute_file_path).unwrap(),
+            b"inside bytes"
+        );
+        assert!(Path::new(&asset.absolute_file_path).starts_with(&cache_root));
+
+        let canonical_path = library.reading_dir(&id).join(&asset.relative_path);
+        let outside = dir.path().join("outside.png");
+        std::fs::write(&outside, b"outside bytes").unwrap();
+        std::fs::remove_file(&canonical_path).unwrap();
+        symlink(&outside, &canonical_path).unwrap();
+
+        // Vision and Spotlight receive only the app-owned staged URL. Swapping
+        // the canonical library entry after scan cannot redirect that URL.
+        assert_eq!(
+            std::fs::read(&asset.absolute_file_path).unwrap(),
+            b"inside bytes"
+        );
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(task.absolute_file_path, asset.absolute_file_path);
+        assert_eq!(
+            std::fs::read(&task.absolute_file_path).unwrap(),
+            b"inside bytes"
+        );
+        assert!(!complete_visual_analysis(&conn, &library, &task, &supported_result()).unwrap());
+
+        rebuild(&conn, &library).unwrap();
+        assert!(current_visual_assets(&conn, &library, &cache_root)
+            .unwrap()
+            .is_empty());
+        assert!(
+            pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(!Path::new(&asset.absolute_file_path).exists());
+    }
+
+    #[test]
+    fn cache_initialization_cleans_only_stale_temps() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+        let root = prepare_visual_cache(&db_path).unwrap();
+        let stale = root.join(format!("{STAGING_PREFIX}abandoned{STAGING_SUFFIX}"));
+        let unrelated = root.join("keep-me");
+        std::fs::write(&stale, b"partial").unwrap();
+        std::fs::write(&unrelated, b"unrelated").unwrap();
+
+        assert_eq!(prepare_visual_cache(&db_path).unwrap(), root);
+        assert!(!stale.exists());
+        assert!(unrelated.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cache_rejects_root_symlinks_and_unlinks_temp_symlinks_without_following() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let outside_dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+        symlink(outside_dir.path(), dir.path().join(VISUAL_CACHE_DIR)).unwrap();
+        assert!(prepare_visual_cache(&db_path).is_err());
+
+        std::fs::remove_file(dir.path().join(VISUAL_CACHE_DIR)).unwrap();
+        let root = prepare_visual_cache(&db_path).unwrap();
+        let outside_file = outside_dir.path().join("outside");
+        std::fs::write(&outside_file, b"keep outside").unwrap();
+        let temp_link = root.join(format!("{STAGING_PREFIX}link{STAGING_SUFFIX}"));
+        symlink(&outside_file, &temp_link).unwrap();
+
+        prepare_visual_cache(&db_path).unwrap();
+        assert!(!temp_link.exists());
+        assert_eq!(std::fs::read(outside_file).unwrap(), b"keep outside");
     }
 }

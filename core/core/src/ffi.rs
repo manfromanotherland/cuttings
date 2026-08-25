@@ -4,11 +4,12 @@
 //!
 //! `Database` is the central object: open it with a SQLite path, then call
 //! `rebuild` on first launch and `sync` on subsequent launches (or whenever
-//! the library folder changes). All mutation helpers take a `library_path`
-//! so the object stays path-agnostic and the caller controls where files live.
+//! the library folder changes). Library mutations still take an explicit
+//! `library_path`; the object additionally owns a disposable, per-device visual
+//! snapshot cache derived beside `db_path` for safe platform image decoding.
 
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -109,7 +110,7 @@ pub struct FfiVisualAsset {
     pub title: String,
     /// Reading-relative public path (`assets/<file>`).
     pub relative_path: String,
-    /// Transient, safely resolved path for platform image APIs. Never persisted.
+    /// App-owned, read-only staged path for platform image APIs. Never synced.
     pub absolute_file_path: String,
     pub content_hash: String,
 }
@@ -477,13 +478,14 @@ impl From<FfiListOptions> for ListOptions {
 
 /// The main entry point for the Swift client.
 ///
-/// Wraps the SQLite connection and the last-known scan snapshot so the
-/// caller can call `sync()` for incremental updates after the initial
-/// `rebuild()`.
+/// Wraps the SQLite connection, its sibling visual snapshot cache, and the
+/// last-known library scan so `sync()` can incrementally reconcile after the
+/// initial `rebuild()`.
 #[derive(uniffi::Object)]
 pub struct Database {
     conn: Mutex<rusqlite::Connection>,
     last_scan: Mutex<Vec<ScannedReading>>,
+    visual_cache_root: PathBuf,
 }
 
 #[uniffi::export]
@@ -491,10 +493,13 @@ impl Database {
     /// Open (or create) the index at `db_path`.
     #[uniffi::constructor]
     pub fn open(db_path: String) -> Result<Arc<Self>, CoreError> {
-        let conn = crate::open_index(Path::new(&db_path)).map_err(e)?;
+        let db_path = Path::new(&db_path);
+        let conn = crate::open_index(db_path).map_err(e)?;
+        let visual_cache_root = crate::visual_index::prepare_visual_cache(db_path).map_err(e)?;
         Ok(Arc::new(Self {
             conn: Mutex::new(conn),
             last_scan: Mutex::new(Vec::new()),
+            visual_cache_root,
         }))
     }
 
@@ -509,6 +514,7 @@ impl Database {
         let scan = crate::scan_library(&lib).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::reconcile::rebuild_scanned(&conn, &scan).map_err(e)?;
+        crate::visual_index::prune_visual_cache(&conn, &self.visual_cache_root).map_err(e)?;
         *self.last_scan.lock().unwrap() = scan;
         Ok(())
     }
@@ -526,6 +532,7 @@ impl Database {
         if !diffs.is_empty() {
             let conn = self.conn.lock().unwrap();
             crate::apply_diffs(&conn, &diffs).map_err(e)?;
+            crate::visual_index::prune_visual_cache(&conn, &self.visual_cache_root).map_err(e)?;
         }
         *self.last_scan.lock().unwrap() = new_scan;
         Ok(count)
@@ -538,13 +545,13 @@ impl Database {
     ) -> Result<Vec<FfiVisualAsset>, CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
-        crate::current_visual_assets(&conn, &lib)
+        crate::current_visual_assets(&conn, &lib, &self.visual_cache_root)
             .map_err(e)
             .map(|assets| assets.into_iter().map(Into::into).collect())
     }
 
-    /// Return at most `limit` safely revalidated assets not cached for this
-    /// analyzer version. Exact cache hits are applied without being retried.
+    /// Return at most `limit` immutable staged snapshots not cached for this
+    /// analyzer version. Exact analysis hits are applied without being retried.
     pub fn pending_visual_analysis(
         &self,
         library_path: String,
@@ -553,9 +560,15 @@ impl Database {
     ) -> Result<Vec<FfiVisualAnalysisTask>, CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
-        crate::pending_visual_analysis(&conn, &lib, &analyzer_version, limit as usize)
-            .map_err(e)
-            .map(|tasks| tasks.into_iter().map(Into::into).collect())
+        crate::pending_visual_analysis(
+            &conn,
+            &lib,
+            &self.visual_cache_root,
+            &analyzer_version,
+            limit as usize,
+        )
+        .map_err(e)
+        .map(|tasks| tasks.into_iter().map(Into::into).collect())
     }
 
     /// Cache a platform result only when its reading, path, and raw bytes still
@@ -868,6 +881,35 @@ mod tests {
             .media_url
             .as_deref()
             .is_some_and(|url| url.starts_with("cuttings-asset:assets/") && url.ends_with(".mp4")));
+    }
+
+    #[test]
+    fn visual_asset_paths_are_staged_beside_the_database() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let imported = database
+            .import_image(
+                library_dir.path().display().to_string(),
+                b"ffi staged image".to_vec(),
+                "image/png".into(),
+                "Staged".into(),
+            )
+            .unwrap();
+
+        let asset = database
+            .current_visual_assets(library_dir.path().display().to_string())
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(asset.reading_id, imported.id);
+        assert!(Path::new(&asset.absolute_file_path)
+            .starts_with(index_dir.path().join("visual-assets")));
+        assert_eq!(
+            std::fs::read(asset.absolute_file_path).unwrap(),
+            b"ffi staged image"
+        );
     }
 
     #[test]
