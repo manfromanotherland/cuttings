@@ -241,10 +241,10 @@ extension CuttingsLibraryView {
                 let contentWidth = finiteBoardWidth(for: proxy.size.width)
 
                 ScrollView {
-                    LazyVStack(spacing: 22) {
+                    LazyVStack(spacing: Self.boardSpacing) {
                         MasonryLayout(
                             minimumColumnWidth: cardSize.minimumColumnWidth,
-                            spacing: 18,
+                            spacing: Self.boardSpacing,
                             maximumColumns: 6
                         ) {
                             ForEach(appState.readings) { row in
@@ -260,16 +260,14 @@ extension CuttingsLibraryView {
 
                         if appState.hasMoreReadings {
                             ProgressView()
-                                .padding(.vertical, 18)
+                                .padding(.vertical, Self.boardSpacing)
                                 .onAppear {
                                     Task { await appState.loadMoreReadings() }
                                 }
                         }
                     }
                     .frame(width: contentWidth)
-                    .padding(.horizontal, 30)
-                    .padding(.top, 30)
-                    .padding(.bottom, 42)
+                    .padding(Self.boardSpacing)
                 }
                 .accessibilityIdentifier(A11y.List.table)
             }
@@ -417,6 +415,8 @@ extension CuttingsLibraryView {
         appState.selectedKind != nil || appState.selectedTag != nil
     }
 
+    private static let boardSpacing: CGFloat = 18
+
     private var tagTargetRow: ReadingRow? {
         let id = tagTargetID ?? (appState.showTagSheet ? appState.selectedId : nil)
         guard let id else { return nil }
@@ -437,7 +437,7 @@ extension CuttingsLibraryView {
     }
 
     private func finiteBoardWidth(for proposedWidth: CGFloat) -> CGFloat {
-        let horizontalPadding: CGFloat = 60
+        let horizontalPadding = Self.boardSpacing * 2
         guard proposedWidth.isFinite, proposedWidth > horizontalPadding else { return 220 }
         return max(220, proposedWidth - horizontalPadding)
     }
