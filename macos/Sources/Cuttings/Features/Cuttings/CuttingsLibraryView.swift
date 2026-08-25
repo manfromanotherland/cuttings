@@ -15,6 +15,15 @@ struct CuttingsLibraryView: View {
     @State private var tagTargetID: String?
     @State private var isDropTargeted = false
     @State private var videoPlaybackPositions = VideoPlaybackPositionStore()
+    @State var preparedBoardItems: [MasonryCardGeometryIdentity] = []
+    @State var boardAspectRatios: [String: CGFloat] = [:]
+    @State var boardCardHeights: [MasonryCardHeightKey: CGFloat] = [:]
+    @State var boardGeometryGeneration = 0
+    @State var preparedCardWidths: [CGFloat] = []
+    @State var preparedLibraryPath = ""
+    @State var preparedColumnWidthBuckets: [Int] = []
+    @State var isPreparingBoardGeometry = false
+    @State var activeBoardGeometryPreparation: UUID?
 
     var body: some View {
         NavigationStack {
@@ -197,6 +206,7 @@ extension CuttingsLibraryView {
         } else {
             GeometryReader { proxy in
                 let previewMaxPixel = cardSize.previewMaxPixel(displayScale: displayScale)
+                let geometryRequest = boardGeometryRequestID(for: proxy.size.width)
                 let configurationID = [
                     appState.libraryURL?.path ?? "",
                     String(Int(previewMaxPixel)),
@@ -205,7 +215,7 @@ extension CuttingsLibraryView {
                     String(describing: scenePhase)
                 ].joined(separator: ":")
                 MasonryBoard(
-                    appState.readings,
+                    boardReadings(for: geometryRequest),
                     id: \.id,
                     width: proxy.size.width,
                     minimumColumnWidth: cardSize.minimumColumnWidth,
@@ -217,11 +227,28 @@ extension CuttingsLibraryView {
                         right: Self.boardSpacing
                     ),
                     configurationID: configurationID,
-                    hasMore: appState.hasMoreReadings,
-                    isLoadingMore: appState.isLoadingMore,
-                    estimatedHeight: estimatedCardHeight,
+                    geometryID: boardGeometryGeneration,
+                    animatesLayoutChanges: !accessibilityReduceMotion,
+                    hasMore: boardGeometryIsCurrent(for: geometryRequest)
+                        && appState.hasMoreReadings,
+                    isLoadingMore: appState.isLoadingMore || isPreparingBoardGeometry,
+                    cardHeight: stableCardHeight,
                     onLoadMore: {
                         Task { await appState.loadMoreReadings() }
+                    },
+                    onPrefetch: { rows in
+                        AssetPreviewPrefetcher.shared.prefetch(
+                            rows: rows,
+                            libraryURL: appState.libraryURL,
+                            maxPixel: previewMaxPixel
+                        )
+                    },
+                    onCancelPrefetch: { rows in
+                        AssetPreviewPrefetcher.shared.cancel(
+                            rows: rows,
+                            libraryURL: appState.libraryURL,
+                            maxPixel: previewMaxPixel
+                        )
                     },
                     content: { row in
                         CuttingsCardView(
@@ -240,8 +267,11 @@ extension CuttingsLibraryView {
                     }
                 )
                 .accessibilityIdentifier(A11y.List.table)
+                .task(id: geometryRequest) {
+                    await prepareBoardGeometry(for: geometryRequest)
+                }
                 .overlay(alignment: .bottom) {
-                    if appState.isLoadingMore {
+                    if appState.isLoadingMore || isPreparingBoardGeometry {
                         ProgressView()
                             .padding(Self.boardSpacing)
                             .background(.regularMaterial, in: Capsule())
@@ -354,7 +384,7 @@ extension CuttingsLibraryView {
         )
     }
 
-    private static let boardSpacing: CGFloat = 18
+    static let boardSpacing: CGFloat = 18
     private static let boardTopSpacing: CGFloat = 12
 
     private var tagTargetRow: ReadingRow? {
@@ -373,27 +403,6 @@ extension CuttingsLibraryView {
                 return presentedReading
             }
             return rowsByID[id]
-        }
-    }
-
-    private func estimatedCardHeight(_ row: ReadingRow, width: CGFloat) -> CGFloat {
-        switch row.kind {
-        case .image:
-            return width * 3 / 4
-        case .video:
-            return width * 9 / 16
-        case .quote:
-            let text = row.excerpt.flatMap { $0.isEmpty ? nil : $0 } ?? row.displayTitle
-            let charactersPerLine = max(12, Int(width / 11))
-            let lines = min(12, max(1, Int(ceil(Double(text.count) / Double(charactersPerLine)))))
-            return 22 + 24 + 18 + CGFloat(lines * 30) + 18 + 16 + 22
-        case .article:
-            if row.previewAsset != nil {
-                return width * 2 / 3 + 76
-            }
-            let titleLines = min(5, max(1, Int(ceil(Double(row.displayTitle.count) / 24))))
-            let excerptLines = min(6, max(0, Int(ceil(Double(row.excerpt?.count ?? 0) / 34))))
-            return 32 + CGFloat(titleLines * 29 + excerptLines * 20) + 32
         }
     }
 

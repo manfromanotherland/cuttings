@@ -13,16 +13,14 @@ extension EnvironmentValues {
 private final class MasonryHostingModel {
     var identity: AnyHashable?
     var width: CGFloat = 220
+    var height: CGFloat = 180
     var content = AnyView(EmptyView())
     var isVisible = false
-
-    @ObservationIgnored var reportHeight: ((CGFloat, CGFloat) -> Void)?
 
     func reset() {
         identity = nil
         content = AnyView(EmptyView())
         isVisible = false
-        reportHeight = nil
     }
 }
 
@@ -33,13 +31,8 @@ private struct MasonryHostedCard: View {
         model.content
             .id(model.identity)
             .environment(\.masonryCardIsVisible, model.isVisible)
-            .frame(width: model.width)
-            .fixedSize(horizontal: false, vertical: true)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { height in
-                model.reportHeight?(model.width, height)
-            }
+            .frame(width: model.width, height: model.height, alignment: .top)
+            .clipped()
     }
 }
 
@@ -48,9 +41,14 @@ final class MasonryHostingItem: NSCollectionViewItem {
     static let reuseIdentifier = NSUserInterfaceItemIdentifier("MasonryHostingItem")
     #if DEBUG
         private(set) static var allocationCount = 0
+        private(set) static var visibilityMutationCount = 0
 
         static func resetAllocationCount() {
             allocationCount = 0
+        }
+
+        static func resetVisibilityMutationCount() {
+            visibilityMutationCount = 0
         }
     #endif
 
@@ -71,18 +69,21 @@ final class MasonryHostingItem: NSCollectionViewItem {
     func configure(
         identity: AnyHashable,
         width: CGFloat,
-        content: AnyView,
-        reportHeight: @escaping (CGFloat, CGFloat) -> Void
+        height: CGFloat,
+        content: AnyView
     ) {
         _ = view
         model.identity = identity
         model.width = width
+        model.height = height
         model.content = content
-        model.reportHeight = reportHeight
-        measure()
     }
 
     func setVisible(_ visible: Bool) {
+        guard model.isVisible != visible else { return }
+        #if DEBUG
+            Self.visibilityMutationCount += 1
+        #endif
         model.isVisible = visible
     }
 
@@ -92,32 +93,22 @@ final class MasonryHostingItem: NSCollectionViewItem {
 
     override func apply(_ layoutAttributes: NSCollectionViewLayoutAttributes) {
         super.apply(layoutAttributes)
-        guard abs(model.width - layoutAttributes.size.width) >= 0.5 else { return }
-        model.width = layoutAttributes.size.width
-        measure()
+        if abs(model.width - layoutAttributes.size.width) >= 0.5 {
+            model.width = layoutAttributes.size.width
+        }
+        if abs(model.height - layoutAttributes.size.height) >= 0.5 {
+            model.height = layoutAttributes.size.height
+        }
     }
 
     override func preferredLayoutAttributesFitting(
         _ layoutAttributes: NSCollectionViewLayoutAttributes
     ) -> NSCollectionViewLayoutAttributes {
-        measure(width: layoutAttributes.size.width)
-        return layoutAttributes
+        layoutAttributes
     }
 
     override func prepareForReuse() {
         model.reset()
         super.prepareForReuse()
-    }
-
-    private func measure(width: CGFloat? = nil) {
-        let width = width ?? model.width
-        guard width.isFinite, width > 0 else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, model.identity != nil else { return }
-            let size = hostingController.sizeThatFits(
-                in: CGSize(width: width, height: .greatestFiniteMagnitude)
-            )
-            model.reportHeight?(width, size.height)
-        }
     }
 }

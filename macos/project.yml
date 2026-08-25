@@ -101,9 +101,12 @@ targets:
       - path: Sources/Cuttings/Shared/Preferences/CardSize.swift
       - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
       - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
+      - path: Sources/Cuttings/Features/Cuttings/MasonryBoard.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryLayout.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryCollectionViewLayout.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryHostingItem.swift
+      - path: Sources/Cuttings/Features/Cuttings/MasonryCardAspectRatioLoader.swift
+      - path: Sources/Cuttings/Features/Cuttings/MasonryCardHeightLoader.swift
       - path: Sources/Cuttings/Features/Cuttings/VideoCardViewport.swift
       - path: Sources/Cuttings/Features/Reader/Markdown/AssetImageLoader.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarCountModels.swift
