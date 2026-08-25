@@ -11,8 +11,8 @@
 # macos
 
 The native SwiftUI client for **Cuttings**. Browse articles, images, videos, and quotes as a mixed
-visual inspiration board, then search, tag, favorite, and revisit them. It embeds the Rust engine (`core`) via UniFFI
-and watches the library folder for changes arriving through the user's own sync.
+visual inspiration board, then search, tag, and revisit them. It embeds the Rust engine (`core`)
+via UniFFI and watches the library folder for changes arriving through the user's own sync.
 
 ## Prerequisites
 

@@ -13,8 +13,6 @@ and versions track the app's `CFBundleShortVersionString`. See
   them on the card board or pasting with ⌘V. URL-only saves remain explicitly
   lightweight until a later browser capture upgrades them in place. Local videos are copied into
   the library and play directly in Cuttings without depending on the original file.
-- Every saved item can now carry a personal Markdown note. Notes are edited from the card inspector
-  and stored as an optional `note.md` beside the item's article file and assets.
 - Settings › Typography can now set the reader's **Width** — the measure the
   article is laid out to — from Extra Small (520 pt) through Extra Large
   (960 pt), with Medium (680 pt) the previous fixed value and still the default.
@@ -35,6 +33,11 @@ and versions track the app's `CFBundleShortVersionString`. See
   going from Read back to All drops both. Previously they changed
   independently, which left the list scoped by a combination you hadn't asked
   for — often empty, for a reason hidden in a collapsed section.
+
+### Removed
+
+- Favorite and personal-note controls have been removed from the macOS app. Existing `favorite`
+  metadata and `note.md` sidecars remain untouched for compatibility with older libraries.
 
 ### Fixed
 

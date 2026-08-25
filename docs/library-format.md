@@ -25,7 +25,7 @@ land them across all affected components in the same monorepo commit.
         assets/
           <sha256>.<ext>      # captured/imported media, linked as assets/<file>
         highlights.md         # optional — the reading's saved highlights (§ Highlights)
-        note.md               # optional — the user's personal Markdown note (§ Personal note)
+        note.md               # optional legacy sidecar — preserved when present (§ Legacy note sidecar)
         original.html         # optional — raw HTML snapshot for future re-processing
 ```
 
@@ -70,7 +70,7 @@ site: example.com                          # eTLD+1 of canonical_url
 saved_at: 2026-06-13T15:00:00Z            # ISO-8601 UTC; set once at save time; never updated
 read_at: 2026-06-14T09:00:00Z             # optional legacy state; preserved for compatibility
 archived: false                            # required legacy state; current macOS app ignores it
-favorite: false                            # bool — marked as a favorite?
+favorite: false                            # required legacy state; current macOS app ignores it
 rating: 0                                  # required legacy 0–5 value; current macOS app ignores it
 tags: [rust, local-first]                  # string[]; elements are lowercase, no spaces
 excerpt: One-sentence summary.             # optional; shown in the list view
@@ -109,10 +109,9 @@ is true only for a URL-only paste/drop card.
   copied file inside its own reading folder without persisting the original machine path.
 - `preview_asset`, when present, must be the safe single-file shape `assets/<filename>`. It is
   derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
-- `read_at`, `archived`, and `rating` remain part of the format-v1 compatibility contract. Older
-  clients may still interpret and mutate them, so current readers preserve them when rewriting a
-  file. The current macOS product does not expose them as curation controls.
-- `favorite` is the source of truth for the visible favorite state; the DB mirrors it.
+- `read_at`, `archived`, `favorite`, and `rating` remain part of the format-v1 compatibility
+  contract. Older clients may still interpret and mutate them, so current readers preserve them
+  when rewriting a file. The current macOS product does not expose them as curation controls.
 - `tags` elements must be lowercase, trimmed, and contain no spaces (use `-` as separator).
 - `source_hash` is recomputed on any edit to the body; the DB uses it to detect stale index entries.
 
@@ -209,17 +208,16 @@ are never mistaken for readings.
 
 ---
 
-## Personal note (`articles/<prefix>/<id>/note.md`)
+## Legacy note sidecar (`articles/<prefix>/<id>/note.md`)
 
-A reading may have one personal note. It is a plain UTF-8 CommonMark document with no frontmatter,
-stored as `note.md` beside the reading's article file and highlights. The app preserves the user's
-Markdown as written and replaces the whole file atomically when saving. Saving an empty or
-whitespace-only note removes the optional file.
+Older clients and importers may have written one plain UTF-8 CommonMark `note.md` beside a
+reading's article file and highlights. The current macOS app does not display, create, edit, or
+remove this sidecar. Routine scans, article rewrites, metadata edits, and capture upgrades preserve
+it as written. Deleting the reading still deletes its whole reading folder, including any sidecars.
 
-The note is separate from the captured body: editing it never changes `article.md` or that file's
-`source_hash`. It is read directly from the reading folder and is not mirrored in the disposable
-index or included in full-text search. As with `highlights.md`, the scanner's fixed `article.md`
-entry point ensures a note is never mistaken for another reading.
+The legacy note remains separate from the captured body and its `source_hash`. It is not mirrored
+in the disposable index or included in full-text search. As with `highlights.md`, the scanner's
+fixed `article.md` entry point ensures a note is never mistaken for another reading.
 
 ---
 
@@ -282,16 +280,20 @@ the same content can still produce two readings — an accepted trade-off of ori
 
 ## Current macOS board scopes
 
-The current macOS app has no sidebar and does not expose read, archive, or rating workflows:
+The current macOS app has no sidebar and does not expose note, favorite, read, archive, or rating
+workflows:
 
 | Scope | Filter |
 |-------|--------|
 | **All** | every saved item, regardless of legacy state fields |
-| **Favorites** | `favorite == true` |
+| **Media** | image and video readings |
+| **Articles** | captured articles, excluding lightweight links |
+| **Links** | lightweight URL-only article placeholders |
+| **Quotes** | quote readings |
 
-The core continues to parse, index, and round-trip `read_at`, `archived`, and `rating` so opening
-an existing library does not strip data used by an older client. Those fields no longer hide cards
-from **All**.
+The core continues to parse, index, and round-trip `read_at`, `archived`, `favorite`, and `rating`
+so opening an existing library does not strip data used by an older client. Those fields no longer
+hide cards from **All**, and existing `note.md` sidecars remain untouched.
 
 ---
 
@@ -314,6 +316,6 @@ from **All**.
 | `articles/<prefix>/<id>/article.md` | SQLite index (`~/Library/Application Support/Cuttings/`) |
 | `articles/<prefix>/<id>/assets/*` | App preferences (theme, font, library path) |
 | `articles/<prefix>/<id>/highlights.md` | Native messaging host manifest |
-| `articles/<prefix>/<id>/note.md` (optional) | |
+| `articles/<prefix>/<id>/note.md` (optional legacy sidecar) | |
 | `articles/<prefix>/<id>/original.html` (optional) | |
 | `.cuttings-locks/<prefix>/<sha256-id>.lock` (operational, empty) | |

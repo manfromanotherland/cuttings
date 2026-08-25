@@ -67,16 +67,16 @@ every affected component.
 
 ### Engine (`core`, Rust)
 - **Responsibility:** owns the library format and all logic — validate and write extension or
-  paste/drop saves, scan and index the library, full-text search, tags, personal Markdown notes,
-  and reconcile changes that arrive via sync.
+  paste/drop saves, scan and index the library, full-text search, tags, highlights, and reconcile
+  changes that arrive via sync.
 - **Shape:** a core library crate reused by the other native pieces (the macOS app and the native
   messaging host both link it). Not a long-running daemon.
 - **Index:** local SQLite database with FTS5. Rebuildable; per-device; never synced.
 
 ### macOS client (`macos`, Swift)
-- **Responsibility:** the native UI — browse a mixed masonry board, filter by favorites, card kind,
-  and tag, open articles, inspect images/videos/quotes, search, favorite, and save supported
-  drop/paste payloads; appearance settings.
+- **Responsibility:** the native UI — browse a mixed masonry board, filter by card kind and tag,
+  open articles, inspect images/videos/quotes, search, and save supported drop/paste payloads;
+  appearance settings.
 - **Stack:** Swift / SwiftUI, embedding `core` via **UniFFI**-generated bindings.
 - **Native rendering only — never a WebView.** The reader renders article Markdown as a native
   SwiftUI view tree via Apple's [`swift-markdown`](https://github.com/apple/swift-markdown) parser —
@@ -85,8 +85,7 @@ every affected component.
 - Card detail is a full-window native Gallery destination: the existing Markdown reader handles
   articles and quote bodies; image/video cards use local preview assets and source/media actions.
   A persistent filmstrip navigates the current board order, while an optional trailing Inspector
-  exposes the origin page when one exists, identifies source-less cards as saved locally, and can
-  edit that reading's personal Markdown note.
+  exposes the origin page when one exists and identifies source-less cards as saved locally.
 - Owns the local index and watches the library folder for changes (including files arriving via
   sync), reindexing incrementally.
 
@@ -110,7 +109,7 @@ no directory grows unbounded, and it holds everything for that reading:
         article.md            # Markdown body + YAML frontmatter (source of truth)
         assets/<hash>.<ext>   # captured images, linked as assets/<file> from article.md
         highlights.md         # optional — the reading's saved highlights
-        note.md               # optional — the user's personal Markdown note
+        note.md               # legacy sidecar — preserved when present
         original.html         # optional — raw HTML snapshot for re-processing
 ```
 
@@ -123,11 +122,9 @@ and normalized selected Markdown. Exact repeat saves therefore deduplicate while
 from one page can coexist. Source-less pasted text and images use content-derived local identities;
 their stored `cuttings://local/...` URLs are internal provenance, never openable web sources.
 
-The optional `note.md` is a user-authored sidecar, kept separate from the captured article body and
-its source hash. The core reads and atomically replaces it directly; blank Markdown removes it. It
-is synced as part of the reading folder but is not mirrored in SQLite or included in full-text
-search. Folder-watcher events still invalidate an open note even when the indexed article is
-unchanged, and the editor requires an explicit choice before replacing a newer on-disk version.
+Older libraries may contain a user-authored `note.md` sidecar. It stays separate from the captured
+article body and source hash. The current macOS app does not display or mutate it; routine scans,
+article rewrites, and metadata edits leave it untouched so existing library data is not discarded.
 
 The card metadata is additive and backwards compatible:
 
@@ -140,8 +137,8 @@ The card metadata is additive and backwards compatible:
   replaces that placeholder at the same article id and clears the marker while preserving user
   state.
 
-- **Frontmatter is the source of truth** for metadata (title, tags, favorite state, and legacy
-  format-v1 state fields). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the
+- **Frontmatter is the source of truth** for metadata (title, tags, and legacy format-v1 state
+  fields, including `favorite`). The full, versioned schema is [`docs/library-format.md`](./docs/library-format.md); the
   native-messaging contract is [`docs/native-messaging.md`](./docs/native-messaging.md).
 - **The index DB is a disposable cache** — derived from the files, rebuildable by re-scanning, and
   stored **outside** the library (per-device, never synced).

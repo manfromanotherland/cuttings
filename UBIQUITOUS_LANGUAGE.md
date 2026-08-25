@@ -16,7 +16,7 @@ host, and macOS app.
   right-click context → Markdown, origin metadata, image bytes). The user saves;
   the extension captures.
 - Use **reading** for the established internal saved-domain object. In user-facing copy, prefer
-  **card** or **saved item**: people browse, search, revisit, annotate, tag, favorite, or delete it.
+  **card** or **saved item**: people browse, search, revisit, tag, highlight, or delete it.
 - Use **article file** only when talking about the on-disk `article.md` inside a
   reading's folder.
 - Use **reading folder** for the per-reading folder `articles/<prefix>/<id>/`
@@ -27,8 +27,8 @@ host, and macOS app.
   truth.
 - Use **tag**, not list, collection, folder, or category.
 - Use **extension** or **browser extension**, not plugin.
-- Use **favorite** for the one visible boolean curation state. `read_at`, `archived`, and `rating`
-  are legacy format-v1 field names, not current product vocabulary.
+- `read_at`, `archived`, `favorite`, and `rating` are legacy format-v1 field names, not current
+  product vocabulary.
 
 ## Core Domain Terms
 
@@ -42,7 +42,7 @@ host, and macOS app.
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |
 | Save | The user action that adds a page, media item, or text to the library as a new reading/card, from either the extension or the app's paste/drop path. |
 | Capture | The extension step that turns a page or right-click context into Markdown, universal origin metadata, and optional local image bytes before the save is written. Internal/technical term; users just "save". |
-| Reading | One saved item in the user's library. A reading is backed by an article file plus optional assets, highlights, and a personal note — all inside its reading folder. |
+| Reading | One saved item in the user's library. A reading is backed by an article file plus optional assets and highlights inside its reading folder. |
 | Card | User-facing visual representation of a reading on the macOS masonry board. Do not rename the internal `Reading` domain type merely to match presentation. |
 | Card kind | The reading's capture/rendering kind: `article`, `image`, `video`, or `quote`. A missing kind on an older file means `article`. |
 | Origin | The source page for a web card: `url`, `canonical_url`, page title/site, and save date. For image/video cards this is deliberately distinct from `media_url`. Source-less app saves instead carry a private local identity. |
@@ -51,7 +51,7 @@ host, and macOS app.
 | Quote | A text card whose full text is stored as Markdown. Browser selections retain their page origin; source-less paste/drop text uses a private local identity. |
 | Lightweight link | An article card created by pasting or dropping only an HTTP(S) URL. It is explicitly marked `lightweight: true`; a later full browser capture upgrades the same reading in place. |
 | Local identity | A deterministic, non-web `cuttings://local/...` URL used for source-less text or image saves. It prevents machine-local paths leaking into synced files and is never shown as an openable source. |
-| Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its `assets/`, `highlights.md`, and `note.md`. Moving or deleting a reading operates on this one folder. |
+| Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its assets and highlights, and any preserved legacy sidecars. Moving or deleting a reading operates on this one folder. |
 | Article file | The `article.md` file inside a reading folder (`articles/<prefix>/<id>/article.md`) that stores one reading's frontmatter and body. |
 | Frontmatter | YAML metadata at the top of an article file. It is the source of truth for reading metadata and state. |
 | Body | The cleaned Markdown content after frontmatter in an article file. |
@@ -59,8 +59,7 @@ host, and macOS app.
 | Original HTML | Optional raw HTML snapshot stored as `original.html` inside the reading folder for future reprocessing. |
 | Highlight | A saved selected text passage for one reading. Highlights are stored in the reading folder, separate from the article file. |
 | Highlight file | The `highlights.md` file inside a reading folder (`articles/<prefix>/<id>/highlights.md`) that stores that reading's saved highlights. |
-| Personal note | The user's optional Markdown annotation attached to one reading. It is distinct from both the captured body and highlights; Cuttings does not create standalone note cards. |
-| Note file | The optional `note.md` file inside a reading folder (`articles/<prefix>/<id>/note.md`) that stores one personal note as plain Markdown. |
+| Legacy note file | A `note.md` sidecar written by an older client or importer. The current macOS app does not display or mutate it, but preserves it when present. |
 | Reading id | Deterministic lowercase-hex SHA-256 content address. Web articles hash the normalized origin URL; web image/video cards hash kind + normalized origin + media identity; web quotes hash normalized origin + normalized selected Markdown; source-less app saves derive identity from their content. It names the reading folder and frontmatter `id`. |
 | Content-addressed id | An id derived from stable card identity rather than assigned, so identical input yields an identical id without a coordinator. |
 | ULID | Sortable id scheme (Crockford Base32). Used for highlight ids; reading ids are content-addressed (see Reading id), not ULIDs. |
@@ -73,13 +72,11 @@ host, and macOS app.
 
 | Term | Definition |
 |------|------------|
-| Favorite | Boolean state meaning the user marked the reading as important or worth returning to. Stored in frontmatter. |
 | Tag | User-defined label stored in a reading's frontmatter. Tags organize readings and are indexed by search. |
-| Board scope | Exactly one toolbar selection: All, Favourites, Media, Articles, Notes, Links, or Quotes. Media combines image and video readings; Articles excludes lightweight links; Notes selects readings with a personal note sidecar; Links selects lightweight article placeholders. |
+| Board scope | Exactly one toolbar selection: All, Media, Articles, Links, or Quotes. Media combines image and video readings; Articles excludes lightweight links; Links selects lightweight article placeholders. |
 | Board filter | The selected board scope and optional search query, applied as an intersection to the board. |
 | All | The unfiltered board scope. It includes every saved item, including files carrying a legacy `archived: true` value. |
-| Favourites | Board scope for readings where `favorite == true`. |
-| Legacy state field | `read_at`, `archived`, or `rating` in a format-v1 file. The core preserves these for compatibility; the current macOS app does not display or mutate them. |
+| Legacy state field | `read_at`, `archived`, `favorite`, or `rating` in a format-v1 file. The core preserves these for compatibility; the current macOS app does not display or mutate them. |
 | Selection | The currently open reading in the macOS app. When an optimistic edit removes it from the active board scope, selection advances to an adjacent matching reading in the same render tick. |
 
 ## Storage And Sync
@@ -104,8 +101,8 @@ host, and macOS app.
 | Extension | Browser extension that captures a cleaned page, clicked image/video, or selected-text quote and sends Markdown, universal origin metadata, and optional image bytes to the native host. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |
-| Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, favorites, compatibility fields, highlights, personal notes, and the UniFFI surface. |
-| macOS client | SwiftUI app that lets the user save by paste/drop, browse, search, revisit, annotate, tag, highlight, favorite, delete, and configure the library. |
+| Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, highlights, legacy compatibility, and the UniFFI surface. |
+| macOS client | SwiftUI app that lets the user save by paste/drop, browse, search, revisit, tag, highlight, delete, and configure the library. |
 | UniFFI bindings | Generated Swift bridge that lets the macOS client call the Rust core. |
 | Thin client | A client that delegates domain logic to the Rust core and keeps only presentation, navigation, and local UI state. |
 | Folder watcher | macOS file-system watcher that notices library changes and triggers reconcile. |
@@ -117,7 +114,6 @@ host, and macOS app.
 |------|------------|
 | Reader | Main article reading surface in the macOS app. It renders Markdown natively and supports local assets, text selection, highlights, and typography settings. |
 | Card board | Full-width mixed masonry presentation of reading rows for the active board scope and search query. |
-| Note editor | The raw-Markdown sheet opened from a card's inspector to add, replace, or delete that reading's personal note. |
 | Reading list | Legacy name for the old row-based macOS presentation and for the core listing API; the current user-facing home is the card board. |
 | Search | Full-text query over indexed reading title, content, and tags. |
 | Board order | Fixed card-board ordering: newest saved first while browsing and relevance while searching. |
@@ -149,9 +145,9 @@ paragraphs, and the welcome article.
 | Sync engine | External sync | The app does not sync for the user. |
 | Article as domain object | Reading | Article is useful for file names and reader UI, but reading is the product entity. |
 | "Reading"/"readings" as a user-facing noun | Card, saved item, article, image, video, or quote | The internal domain term should not make the product sound like a reading queue. |
-| Starred | Favorite | Favorite is the product's one visible boolean curation state. |
+| Starred or favorite | Tag | The current product uses tags for curation; `favorite` remains only as legacy file metadata. |
 | Clip | Save | One verb covers pages, media, quotes, and in-app paste/drop without implying that only a fragment is kept. |
-| Standalone note | Personal note | A note in Cuttings annotates a saved reading; it is not a fifth card kind or a general-purpose notes-app document. |
+| Standalone note | Quote | Source-less text saved to Cuttings is a quote card, not a separate note kind. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
 | Bookmark (user action) | Save | A full browser capture stores cleaned content; a URL-only app save is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |
@@ -187,8 +183,8 @@ paragraphs, and the welcome article.
 > **Dev:** "How does someone organize what they saved?"
 >
 > **Domain expert:** "Everything stays together on the board. They can add
-> **tags**, mark a card as a **favorite**, search for it later, or permanently
-> **delete** it when it no longer belongs."
+> **tags**, search for it later, or permanently **delete** it when it no longer
+> belongs."
 >
 > **Dev:** "So the **index** knows all of this?"
 >

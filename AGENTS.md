@@ -12,7 +12,7 @@ forever, and return to it when it sparks something.
 
 You save a web page, a right-clicked image or video, or selected text from your browser. Each save
 becomes a **Markdown file plus local assets on your own disk**. A native app lets you browse the
-result as a mixed visual board, inspect media and quotes, open articles, search, tag, and favorite
+result as a mixed visual board, inspect media and quotes, open articles, search, tag, and delete
 cards. There are no accounts, no servers, no logins, no telemetry. The files remain usable without
 this app.
 
@@ -24,7 +24,7 @@ These are load-bearing. Most architectural questions resolve by appealing to one
    server to run and nothing to log into.
 
 2. **Files are the source of truth.** Each reading is a Markdown file with YAML frontmatter.
-   Everything that matters — content, source URL, tags, favorites, save date — lives
+   Everything that matters — content, source URL, tags, and save date — lives
    *in the file*. If every other part of this project vanished, the user's library would still
    be complete and usable in any text editor.
 
@@ -54,15 +54,13 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   on the board. Text and image bytes are stored locally; a link is explicitly lightweight until a
   later browser capture upgrades the same URL-derived reading.
 - **Visual card board** — native app. Browse articles, images, videos, and quotes together in one
-  full-width masonry layout. Favorites remain available as a lightweight board filter.
+  full-width masonry layout with kind and tag filters.
 - **Search** — native app. Full-text search over readings (title, content, tags) via SQLite
   FTS5. Word-occurrence lookup and word meanings are noted as future ideas, not v1 scope.
 - **Tags** — native app. Organize readings with labels stored in each file's frontmatter. (The
   macOS mockup's "Lists" section is implemented as **Tags** — manual Lists are not planned.)
-- **Personal notes** — native app. Attach one plain-Markdown note to any reading, stored as
-  `note.md` inside that reading's folder and synced with it.
-- **Curation** — native app. Mark useful cards as **favorites**, organize them with tags, or
-  permanently delete cards that no longer belong.
+- **Curation** — native app. Organize cards with tags or permanently delete cards that no longer
+  belong.
 - **Card kind** — every reading is an **article**, **image**, **video**, or **quote**. Older files
   without a kind remain articles.
 - **Origin** — web captures retain the originating page URL, canonical URL, page title/site, and
@@ -79,8 +77,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 ## Decisions already made
 
 - Markdown + YAML frontmatter as the storage format; files are the source of truth.
-- Personal notes are per-reading Markdown sidecars, not standalone cards. A blank note removes the
-  optional `note.md`; notes stay separate from captured content and its source hash.
+- Legacy `favorite` metadata and `note.md` sidecars remain readable and preserved for format
+  compatibility, but the current macOS app neither displays nor mutates them.
 - HTML cleanup runs in the extension (it has the live DOM).
 - All logic in a Rust core crate; native UIs are thin and share it.
 - The index is SQLite + FTS5, rebuildable, per-device, never synced.
@@ -109,10 +107,10 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   arbitrary video files into native-messaging JSON.
 - **The macOS home is a search-first, sidebar-free masonry board.** Articles still use the
   existing native Markdown reader in the card detail overlay; no WebView is introduced.
-- **The organizing model is Tags plus Favorites** (both stored in frontmatter), not manual Lists,
-  read/unread queues, ratings, or an archive. The main board includes every saved item. Legacy
-  `read_at`, `archived`, and `rating` fields remain readable as format-v1 compatibility data but
-  are not exposed by the current macOS product.
+- **The organizing model is Tags**, not manual Lists, favorites, read/unread queues, ratings, or an
+  archive. The main board includes every saved item. Legacy `read_at`, `archived`, `favorite`, and
+  `rating` fields remain readable as format-v1 compatibility data but are not exposed by the
+  current macOS product.
 - **UI preferences** (theme, reader font/size/width/line height) are per-device app
   preferences — not stored in the library and not synced.
 - **Paste/drop URL saves are deliberately lightweight.** The app never pretends a URL alone is a
@@ -185,7 +183,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>  ← AI co-author traile
   refresh is the self-heal — a failed write re-reads as the prior truth, so optimistic guesses can
   never get stuck wrong. Don't add manual rollback paths; let the refresh be authoritative.
 - **When an action removes the selected row from the current filter, advance in one motion.** If
-  an optimistic edit pushes a row out of Favorites or the active tag, remove it **and** move
+  an optimistic edit pushes a row out of the active tag, remove it **and** move
   selection to an adjacent row in the *same* render tick. Flipping the control in place and then
   letting the row jump on the later refresh reads as a two-stage stutter. Membership ordering
   still settles on the refresh.

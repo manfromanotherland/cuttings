@@ -40,8 +40,8 @@ Light, and Dark appearance, increased contrast, and future macOS changes work wi
 theme implementation.
 
 The identity is **paper + ink** — warm off-white and near-black. **The primary action is dark ink,
-never blue.** The only two non-gray brand accents anywhere are a marker **yellow** and a heart
-**red**; status colors (green / amber) are functional signals that sit *outside* the brand neutrals.
+never blue.** The only non-gray brand accent is marker **yellow**; status colors (green / amber)
+are functional signals that sit *outside* the brand neutrals.
 
 | Token | Role | Paper (light) | Charcoal (dark) |
 |-------|------|---------------|-----------------|
@@ -55,15 +55,13 @@ never blue.** The only two non-gray brand accents anywhere are a marker **yellow
 | `line-strong` | stronger borders | `rgb(23 24 26 / 0.18)` | `rgb(255 255 255 / 0.15)` |
 | `accent` | primary action ("ink pill") | bg `#17181a` / text `#f7f6f4` | bg `#e8e9eb` / text `#17181a` |
 | `highlight` | marker yellow (brand accent) | `#ffe066` | `#ffe066` |
-| `heart` | favourite red (brand accent) | `#ff5f57` | `#ff5f57` |
 
 - **The accent inverts between themes** — a dark pill on paper, a light pill on charcoal — and its
   text color inverts with it. It is never a colored (blue) accent.
-- **`highlight` and `heart` are fixed across both themes:** the marker is yellow and the heart is
-  red on paper as much as on charcoal.
+- **`highlight` is fixed across both themes:** the marker is yellow on paper and charcoal.
 - The extension keeps a functional **green** (connected) and **amber** (warning) for status dots
   and log lines. These are signals, not brand colors, and are deliberately the only hues outside
-  the neutrals + the two accents.
+  the neutrals + the highlight accent.
 
 ## Design language
 
@@ -110,10 +108,10 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   from the toolbar by the same 30 pt used at the board's horizontal edges.
 - Put the native search field in the unified window toolbar using `.searchable`, with the prompt
   *"Search Cuttings"*. Do not create a bespoke `NSSearchField` or oversized page header.
-- Use one native labeled segmented picker for the board scope, in this order: **All, Favourites,
-  Media, Articles, Notes, Links, Quotes**. Media combines image and video cards; Articles excludes
-  lightweight link placeholders; Notes means any reading with a `note.md` sidecar; Links means
-  lightweight URL saves. Tags have no toolbar filter because the search field already indexes them.
+- Use one native labeled segmented picker for the board scope, in this order: **All, Media,
+  Articles, Links, Quotes**. Media combines image and video cards; Articles excludes lightweight
+  link placeholders; Links means lightweight URL saves. A separate toolbar menu and searchable
+  sheet handle exact tag filtering.
 - The selected board scope and search query compose as an intersection. Filtering is performed in
   the Rust core, not on the currently loaded Swift page, so pagination remains correct. Board order
   is fixed: newest saved first when browsing and relevance when searching.
@@ -141,7 +139,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - Browser right-click uses one **"Add to Cuttings"** command for a page, image, video, or selected
   text. Selection becomes a quote card; image bytes and video posters are copied locally when
   available.
-- The native card context menu provides favorite, tags, open origin, and permanent delete.
+- The native card context menu provides tags, open origin, and permanent delete.
   Destructive actions retain confirmation.
 
 ### Card detail
@@ -155,11 +153,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   Videos show the local poster and source/media actions without silently downloading a stream.
   Quotes show the full selected text natively.
 - Metadata lives in an optional trailing Inspector toggled from the standard toolbar, not a
-  permanent sidebar. It uses a compact native form for origin, saved date, tags, a personal note,
-  and relevant local/direct-media paths. Favorite, tags, origin, and delete actions live in the
-  toolbar and its More menu. The note opens in a focused raw-Markdown editor sheet; saving blank
-  content removes it. If sync changes the note while that sheet is open, the user chooses whether
-  to load the latest file or explicitly replace it with the draft.
+  permanent sidebar. It uses a compact native form for origin, saved date, tags, and relevant
+  local/direct-media paths. Tags, origin, and delete actions live in the toolbar and its More menu.
 
 ### Content states
 
@@ -399,29 +394,27 @@ produce. Anything unrecognized recurses into its children so **no content is sil
 > HTML→Markdown (e.g. flatten footnotes, drop math) so the reader stays clean. Revisit footnotes and
 > syntax highlighting as future enhancements.
 
-## Curation & data-model impact
+## Organization & data-model impact
 
 The visible organizing model is deliberately small:
 
 | Curation | Frontmatter field | Notes |
 |----------|-------------------|-------|
-| Favorite | `favorite: bool` | powers the toolbar Favourites scope |
 | Tags | `tags: [..]` | labels indexed by the global search field |
 
-The main board includes every saved item. The format-v1 `read_at`, `archived`, and `rating`
-fields remain readable and round-trippable for compatibility with existing libraries and older
-clients, but the current macOS app neither displays nor mutates them.
+The main board includes every saved item. The format-v1 `read_at`, `archived`, `favorite`, and
+`rating` fields remain readable and round-trippable for compatibility with existing libraries and
+older clients, but the current macOS app neither displays nor mutates them.
 
 ## Interaction model — optimistic & self-healing
 
-Favorite and tag changes **apply to the UI instantly**; persistence happens in the background.
-The user clicks, the heart or tag flips on the next frame, and the
-core write + index refresh run behind it. Because the markdown file is the source of truth and the
-refresh re-reads from it, a failed write simply reconciles back — no spinners, no manual undo.
+Tag changes **apply to the UI instantly**; persistence happens in the background. The user clicks,
+the tag flips on the next frame, and the core write + index refresh run behind it. Because the
+Markdown file is the source of truth and the refresh re-reads from it, a failed write simply
+reconciles back — no spinners, no manual undo.
 
-**One motion, not two.** When an action moves a card out of the scope you're looking at — removing
-it from Favourites or clearing its personal note while viewing Notes — the row slides out **and**
-selection advances to the neighbouring card in the same beat.
+**One motion, not two.** When removing a tag moves a card out of the active tag filter, the row
+slides out **and** selection advances to the neighbouring card in the same beat.
 The reader follows to the next item. (Flipping the icon in place and letting the row jump a moment
 later, on the async refresh, reads as a stutter; this avoids it.) Row *re-ordering* after an edit
 still settles on the background refresh — only removal/advance is immediate.
