@@ -40,7 +40,7 @@ struct CuttingsApp: App {
         // restores the size the user left it at, so `.defaultSize` is ignored.
         .defaultSize(width: 1100, height: 720)
         .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified(showsTitle: true))
+        .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {}
             ArticleCommands(appState: appState)
