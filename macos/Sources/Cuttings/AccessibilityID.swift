@@ -57,7 +57,7 @@ enum A11y {
         /// enumerating rows, which trips an XCUITest snapshot bug on article
         /// headings (`AXHeading`).
         static let rows = "list.rows"
-        static let cardSizeMenu = "list.cardSize"
+        static let cardSizePicker = "list.cardSize"
         static let sortMenu = "list.sort"
         /// Default "Nothing here yet" empty state.
         static let emptyState = "list.empty"

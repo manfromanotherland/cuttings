@@ -137,7 +137,7 @@ extension CuttingsLibraryView {
         ToolbarItemGroup(placement: .primaryAction) {
             favoritesToggle
             filterMenu
-            cardSizeMenu
+            cardSizePicker
             sortMenu
         }
     }
@@ -218,19 +218,18 @@ extension CuttingsLibraryView {
         .accessibilityIdentifier(A11y.List.sortMenu)
     }
 
-    private var cardSizeMenu: some View {
-        Menu {
-            Picker("Card Size", selection: $cardSize) {
-                ForEach(CardSize.allCases) { size in
-                    Label(size.label, systemImage: size.symbol)
-                        .tag(size)
-                }
+    private var cardSizePicker: some View {
+        Picker("Card Size", selection: $cardSize) {
+            ForEach(CardSize.allCases) { size in
+                Label(size.label, systemImage: size.symbol)
+                    .labelStyle(.iconOnly)
+                    .tag(size)
             }
-        } label: {
-            Label("Card Size", systemImage: cardSize.symbol)
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
         .help("Change card size")
-        .accessibilityIdentifier(A11y.List.cardSizeMenu)
+        .accessibilityIdentifier(A11y.List.cardSizePicker)
     }
 
     @ViewBuilder

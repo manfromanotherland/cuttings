@@ -61,4 +61,13 @@ final class MasonryGeometryTests: XCTestCase {
         XCTAssertEqual(MasonryGeometry.shortestColumn(in: [120, 80, 80]), 1)
         XCTAssertEqual(MasonryGeometry.shortestColumn(in: []), 0)
     }
+
+    func testCardSizeControlUsesRequestedIconsInSizeOrder() {
+        XCTAssertEqual(CardSize.allCases, [.small, .medium, .large])
+        XCTAssertEqual(CardSize.allCases.map(\.rawValue), ["small", "medium", "large"])
+        XCTAssertEqual(
+            CardSize.allCases.map(\.symbol),
+            ["square.grid.3x3.fill", "square.grid.3x2.fill", "square.grid.2x2.fill"]
+        )
+    }
 }

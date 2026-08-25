@@ -6,9 +6,9 @@ import SwiftUI
 /// width is `small`; larger options widen cards and naturally reduce the number
 /// of columns that fit in the window.
 enum CardSize: String, CaseIterable, Identifiable {
-    case large
-    case medium
     case small
+    case medium
+    case large
 
     var id: Self {
         self
@@ -32,9 +32,9 @@ enum CardSize: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
-        case .large: "rectangle.grid.1x2"
-        case .medium: "square.grid.2x2"
-        case .small: "square.grid.3x3"
+        case .large: "square.grid.2x2.fill"
+        case .medium: "square.grid.3x2.fill"
+        case .small: "square.grid.3x3.fill"
         }
     }
 }
