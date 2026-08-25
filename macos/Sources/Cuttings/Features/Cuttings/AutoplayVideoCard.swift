@@ -8,8 +8,6 @@ import SwiftUI
 /// video above it. The player is prepared on first entry, released offscreen,
 /// and recreated at its saved playback position when the card returns.
 struct AutoplayVideoCard: View {
-    @Environment(\.masonryCardIsVisible) private var masonryCardIsVisible
-
     let row: ReadingRow
     let libraryURL: URL?
     let viewportSize: CGSize
@@ -58,7 +56,7 @@ struct AutoplayVideoCard: View {
 
     private var shouldAutoplay: Bool {
         autoplayEnabled
-            && (masonryCardIsVisible ?? isInViewport)
+            && isInViewport
             && !reduceMotion
             && scenePhase == .active
     }

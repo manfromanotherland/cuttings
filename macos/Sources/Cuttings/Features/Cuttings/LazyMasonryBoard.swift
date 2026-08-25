@@ -6,7 +6,7 @@ import SwiftUI
 /// Cuttings' stable geometry contract for LazyLayoutKit. Every card receives a
 /// deterministic height before its view is built, so scrolling never waits for
 /// asset decoding or a SwiftUI measurement pass.
-private struct CuttingsMasonryLayout: LazyLayoutAlgorithm {
+struct CuttingsMasonryLayout: LazyLayoutAlgorithm {
     typealias Item = ItemMetric
 
     let minimumColumnWidth: Double
@@ -43,7 +43,7 @@ private struct CuttingsMasonryLayout: LazyLayoutAlgorithm {
         )
     }
 
-    private func columnCount(forContainerWidth containerWidth: Double) -> Int {
+    func columnCount(forContainerWidth containerWidth: Double) -> Int {
         let availableWidth = max(1, containerWidth - leadingInset - trailingInset)
         let safeMinimum = minimumColumnWidth.isFinite && minimumColumnWidth > 0
             ? minimumColumnWidth : 1
