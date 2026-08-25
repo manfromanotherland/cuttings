@@ -124,9 +124,12 @@ extension CuttingsLibraryView {
     @ToolbarContentBuilder
     private var boardToolbar: some ToolbarContent {
         if presentedReading == nil {
-            ToolbarItemGroup(placement: .primaryAction) {
-                boardFilterPicker
+            ToolbarItem(placement: .navigation) {
                 cardSizeControl
+            }
+
+            ToolbarItem(placement: .principal) {
+                boardFilterPicker
             }
         }
     }
@@ -135,7 +138,7 @@ extension CuttingsLibraryView {
         Picker("Filter", selection: scopeSelection) {
             ForEach(LibraryScope.allCases) { scope in
                 Label(scope.label, systemImage: scope.icon)
-                    .labelStyle(.titleAndIcon)
+                    .labelStyle(.iconOnly)
                     .help(scope.label)
                     .accessibilityLabel(scope.label)
                     .tag(scope)
