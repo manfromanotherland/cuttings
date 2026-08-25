@@ -30,6 +30,10 @@ func makeReadingRow(
         lang: nil,
         tags: [],
         kind: kind,
-        lightweight: lightweight
+        lightweight: lightweight,
+        mediaUrl: nil,
+        previewAsset: nil,
+        faviconAsset: nil,
+        themeColor: nil
     )
 }
