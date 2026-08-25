@@ -62,42 +62,46 @@ final class SpotlightThumbnailManifestTests: XCTestCase {
     }
 
     func testIncrementalPassDonatesTitleHashAndMissingThumbnailChanges() throws {
-        let oldAsset = makeAsset(id: "one", hash: "old", title: "Old")
-        let oldFilename = SpotlightThumbnailNaming.filename(
-            readingID: oldAsset.readingID,
-            assetHash: oldAsset.assetHash
-        )
-        let existing = SpotlightThumbnailManifest(entries: [
-            oldAsset.readingID: SpotlightThumbnailManifestEntry(
-                assetHash: oldAsset.assetHash,
-                displayTitle: oldAsset.displayTitle,
-                thumbnailFilename: oldFilename
-            )
-        ])
+        let fixture = existingAssetFixture()
+        try assertTitleChangeUsesExistingThumbnail(fixture)
+        try assertHashChangeRegeneratesThumbnail(fixture)
+        try assertMissingThumbnailIsRegenerated(fixture)
+    }
 
+    private func assertTitleChangeUsesExistingThumbnail(
+        _ fixture: ExistingAssetFixture
+    ) throws {
         let renamed = makeAsset(id: "one", hash: "old", title: "New")
         let titlePlan = try SpotlightReconciliationPlan.make(
-            existing: existing,
+            existing: fixture.manifest,
             desired: [renamed],
-            availableThumbnailFilenames: [oldFilename],
+            availableThumbnailFilenames: [fixture.filename],
             includeUnchangedDonations: false
         )
         XCTAssertEqual(titlePlan.upserts.count, 1)
         XCTAssertFalse(try XCTUnwrap(titlePlan.upserts.first).needsThumbnail)
+    }
 
+    private func assertHashChangeRegeneratesThumbnail(
+        _ fixture: ExistingAssetFixture
+    ) throws {
         let changed = makeAsset(id: "one", hash: "new", title: "New")
         let hashPlan = try SpotlightReconciliationPlan.make(
-            existing: existing,
+            existing: fixture.manifest,
             desired: [changed],
-            availableThumbnailFilenames: [oldFilename],
+            availableThumbnailFilenames: [fixture.filename],
             includeUnchangedDonations: false
         )
         XCTAssertTrue(try XCTUnwrap(hashPlan.upserts.first).needsThumbnail)
-        XCTAssertEqual(hashPlan.obsoleteThumbnailFilenames, [oldFilename])
+        XCTAssertEqual(hashPlan.obsoleteThumbnailFilenames, [fixture.filename])
+    }
 
+    private func assertMissingThumbnailIsRegenerated(
+        _ fixture: ExistingAssetFixture
+    ) throws {
         let missingPlan = try SpotlightReconciliationPlan.make(
-            existing: existing,
-            desired: [oldAsset],
+            existing: fixture.manifest,
+            desired: [fixture.asset],
             availableThumbnailFilenames: [],
             includeUnchangedDonations: false
         )
@@ -204,4 +208,26 @@ final class SpotlightThumbnailManifestTests: XCTestCase {
             displayTitle: title
         )
     }
+
+    private func existingAssetFixture() -> ExistingAssetFixture {
+        let asset = makeAsset(id: "one", hash: "old", title: "Old")
+        let filename = SpotlightThumbnailNaming.filename(
+            readingID: asset.readingID,
+            assetHash: asset.assetHash
+        )
+        let manifest = SpotlightThumbnailManifest(entries: [
+            asset.readingID: SpotlightThumbnailManifestEntry(
+                assetHash: asset.assetHash,
+                displayTitle: asset.displayTitle,
+                thumbnailFilename: filename
+            )
+        ])
+        return ExistingAssetFixture(asset: asset, filename: filename, manifest: manifest)
+    }
+}
+
+private struct ExistingAssetFixture {
+    let asset: SpotlightVisualAsset
+    let filename: String
+    let manifest: SpotlightThumbnailManifest
 }

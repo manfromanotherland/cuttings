@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import CoreSpotlight
 import CryptoKit
 import Foundation
 
@@ -36,6 +37,58 @@ struct SpotlightReconciliationPlan: Equatable {
         let asset: SpotlightVisualAsset
         let thumbnailFilename: String
         let needsThumbnail: Bool
+    }
+
+    private struct Draft {
+        var upserts: [Upsert] = []
+        var entries: [String: SpotlightThumbnailManifestEntry] = [:]
+        var obsoleteFilenames = Set<String>()
+        var unchangedCount = 0
+
+        mutating func add(
+            _ asset: SpotlightVisualAsset,
+            oldEntry: SpotlightThumbnailManifestEntry?,
+            availableFilenames: Set<String>,
+            includeUnchangedDonations: Bool
+        ) {
+            let filename = SpotlightThumbnailNaming.filename(
+                readingID: asset.readingID,
+                assetHash: asset.assetHash
+            )
+            entries[asset.readingID] = SpotlightThumbnailManifestEntry(
+                assetHash: asset.assetHash,
+                displayTitle: asset.displayTitle,
+                thumbnailFilename: filename
+            )
+            let needsThumbnail = oldEntry?.assetHash != asset.assetHash
+                || oldEntry?.thumbnailFilename != filename
+                || !availableFilenames.contains(filename)
+            let needsMetadataDonation = oldEntry?.displayTitle != asset.displayTitle
+            if includeUnchangedDonations || needsThumbnail || needsMetadataDonation {
+                upserts.append(Upsert(
+                    asset: asset,
+                    thumbnailFilename: filename,
+                    needsThumbnail: needsThumbnail
+                ))
+            }
+            if !needsThumbnail, oldEntry?.displayTitle == asset.displayTitle {
+                unchangedCount += 1
+            }
+            if let oldFilename = oldEntry?.thumbnailFilename, oldFilename != filename {
+                obsoleteFilenames.insert(oldFilename)
+            }
+        }
+
+        mutating func includeDeletions(
+            _ readingIDs: [String],
+            from manifest: SpotlightThumbnailManifest
+        ) {
+            for readingID in readingIDs {
+                if let filename = manifest.entries[readingID]?.thumbnailFilename {
+                    obsoleteFilenames.insert(filename)
+                }
+            }
+        }
     }
 
     let upserts: [Upsert]
@@ -79,90 +132,67 @@ struct SpotlightReconciliationPlan: Equatable {
         availableThumbnailFilenames: Set<String>,
         includeUnchangedDonations: Bool
     ) throws -> SpotlightReconciliationPlan {
-        var desiredByReadingID: [String: SpotlightVisualAsset] = [:]
+        let desiredByReadingID = try normalizedAssets(assets)
+        var draft = Draft()
+        for asset in desiredByReadingID.values.sorted(by: assetOrder) {
+            draft.add(
+                asset,
+                oldEntry: existing.entries[asset.readingID],
+                availableFilenames: availableThumbnailFilenames,
+                includeUnchangedDonations: includeUnchangedDonations
+            )
+        }
+        let desiredReadingIDs = Set(desiredByReadingID.keys)
+        let deletedReadingIDs = existing.entries.keys
+            .filter { !desiredReadingIDs.contains($0) }
+            .sorted()
+        draft.includeDeletions(deletedReadingIDs, from: existing)
+        let desiredFilenames = Set(draft.entries.values.map(\.thumbnailFilename))
+        draft.obsoleteFilenames.formUnion(
+            availableThumbnailFilenames.subtracting(desiredFilenames)
+        )
+        draft.obsoleteFilenames.subtract(desiredFilenames)
+
+        return SpotlightReconciliationPlan(
+            upserts: draft.upserts,
+            deletedReadingIDs: deletedReadingIDs,
+            obsoleteThumbnailFilenames: draft.obsoleteFilenames.sorted(),
+            unchangedCount: draft.unchangedCount,
+            resultingManifest: SpotlightThumbnailManifest(entries: draft.entries)
+        )
+    }
+
+    private static func normalizedAssets(
+        _ assets: [SpotlightVisualAsset]
+    ) throws -> [String: SpotlightVisualAsset] {
+        var result: [String: SpotlightVisualAsset] = [:]
         for asset in assets {
             let readingID = asset.readingID.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !readingID.isEmpty else { throw SpotlightVisualIndexError.emptyReadingID }
-
             let assetHash = asset.assetHash.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !assetHash.isEmpty else {
                 throw SpotlightVisualIndexError.emptyAssetHash(readingID: readingID)
             }
-            guard desiredByReadingID[readingID] == nil else {
+            guard result[readingID] == nil else {
                 throw SpotlightVisualIndexError.duplicateReadingID(readingID)
             }
-
             let displayTitle = asset.displayTitle?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            desiredByReadingID[readingID] = SpotlightVisualAsset(
+            result[readingID] = SpotlightVisualAsset(
                 readingID: readingID,
                 assetHash: assetHash,
                 assetURL: asset.assetURL.standardizedFileURL,
                 displayTitle: displayTitle?.isEmpty == true ? nil : displayTitle
             )
         }
+        return result
+    }
 
-        var upserts: [Upsert] = []
-        var entries: [String: SpotlightThumbnailManifestEntry] = [:]
-        var obsoleteFilenames = Set<String>()
-        var unchangedCount = 0
-
-        for readingID in desiredByReadingID.keys.sorted() {
-            guard let asset = desiredByReadingID[readingID] else { continue }
-            let filename = SpotlightThumbnailNaming.filename(
-                readingID: readingID,
-                assetHash: asset.assetHash
-            )
-            let desiredEntry = SpotlightThumbnailManifestEntry(
-                assetHash: asset.assetHash,
-                displayTitle: asset.displayTitle,
-                thumbnailFilename: filename
-            )
-            entries[readingID] = desiredEntry
-
-            let oldEntry = existing.entries[readingID]
-            let needsThumbnail = oldEntry?.assetHash != asset.assetHash
-                || oldEntry?.thumbnailFilename != filename
-                || !availableThumbnailFilenames.contains(filename)
-            let needsMetadataDonation = oldEntry?.displayTitle != asset.displayTitle
-            if includeUnchangedDonations || needsThumbnail || needsMetadataDonation {
-                upserts.append(Upsert(
-                    asset: asset,
-                    thumbnailFilename: filename,
-                    needsThumbnail: needsThumbnail
-                ))
-            }
-
-            if !needsThumbnail, oldEntry?.displayTitle == asset.displayTitle {
-                unchangedCount += 1
-            }
-
-            if let oldFilename = oldEntry?.thumbnailFilename, oldFilename != filename {
-                obsoleteFilenames.insert(oldFilename)
-            }
-        }
-
-        let desiredReadingIDs = Set(desiredByReadingID.keys)
-        let deletedReadingIDs = existing.entries.keys
-            .filter { !desiredReadingIDs.contains($0) }
-            .sorted()
-        for readingID in deletedReadingIDs {
-            if let filename = existing.entries[readingID]?.thumbnailFilename {
-                obsoleteFilenames.insert(filename)
-            }
-        }
-
-        let desiredFilenames = Set(entries.values.map(\.thumbnailFilename))
-        obsoleteFilenames.formUnion(availableThumbnailFilenames.subtracting(desiredFilenames))
-        obsoleteFilenames.subtract(desiredFilenames)
-
-        return SpotlightReconciliationPlan(
-            upserts: upserts,
-            deletedReadingIDs: deletedReadingIDs,
-            obsoleteThumbnailFilenames: obsoleteFilenames.sorted(),
-            unchangedCount: unchangedCount,
-            resultingManifest: SpotlightThumbnailManifest(entries: entries)
-        )
+    private static func assetOrder(
+        _ lhs: SpotlightVisualAsset,
+        _ rhs: SpotlightVisualAsset
+    ) -> Bool {
+        lhs.readingID < rhs.readingID
     }
 }
 
@@ -171,6 +201,11 @@ struct SpotlightReconciliationCommit: Equatable {
     let deletedReadingIDs: [String]
     let obsoleteThumbnailFilenames: [String]
     let manifest: SpotlightThumbnailManifest
+}
+
+struct SpotlightLoadedManifest {
+    let manifest: SpotlightThumbnailManifest
+    let requiresFullRepair: Bool
 }
 
 struct SpotlightThumbnailManifestStore {
@@ -206,7 +241,7 @@ struct SpotlightThumbnailManifestStore {
             guard !readingID.isEmpty,
                   !entry.assetHash.isEmpty,
                   entry.thumbnailFilename == URL(fileURLWithPath: entry.thumbnailFilename)
-                    .lastPathComponent,
+                  .lastPathComponent,
                   entry.thumbnailFilename.hasSuffix(".png")
             else {
                 throw SpotlightVisualIndexError.invalidManifest
@@ -258,6 +293,30 @@ struct SpotlightThumbnailManifestStore {
             || url.lastPathComponent.hasPrefix(".thumbnail-")
         {
             try fileManager.removeItem(at: url)
+        }
+    }
+}
+
+/// Core Spotlight documents `cancel()` as callable when input changes, but its
+/// Objective-C query class has no Swift Sendable annotation.
+final class SpotlightUserQueryCancellation: @unchecked Sendable {
+    private let query: CSUserQuery
+
+    init(query: CSUserQuery) {
+        self.query = query
+    }
+
+    func cancel() {
+        query.cancel()
+    }
+}
+
+extension Array {
+    func chunked(maximumCount: Int) -> [[Element]] {
+        guard !isEmpty else { return [] }
+        let size = Swift.max(1, maximumCount)
+        return stride(from: 0, to: count, by: size).map { start in
+            Array(self[start ..< Swift.min(start + size, count)])
         }
     }
 }

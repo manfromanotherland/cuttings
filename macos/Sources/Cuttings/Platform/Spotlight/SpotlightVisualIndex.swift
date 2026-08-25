@@ -14,7 +14,7 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
     nonisolated static let domainIdentifier = "is.edmundo.cuttings.visual-content"
 
     private static let itemIdentifierPrefix = "cuttings-visual:"
-    private static let defaultMaximumResultCount = 2_000
+    private static let defaultMaximumResultCount = 2000
 
     private let cacheRootURL: URL
     private let maximumThumbnailPixelSize: Int
@@ -26,7 +26,7 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
     private var latestReconciliationGeneration = 0
     private var hasPerformedBootRepair = false
 
-    init(cacheRootURL: URL? = nil, maximumThumbnailPixelSize: Int = 1_024) {
+    init(cacheRootURL: URL? = nil, maximumThumbnailPixelSize: Int = 1024) {
         let root = cacheRootURL ?? FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Cuttings", isDirectory: true)
@@ -38,9 +38,7 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         manifestStore = SpotlightThumbnailManifestStore(rootURL: root)
     }
 
-    func reconcile(
-        _ assets: [SpotlightVisualAsset]
-    ) async throws -> SpotlightReconciliationResult {
+    func reconcile(_ assets: [SpotlightVisualAsset]) async throws -> SpotlightReconciliationResult {
         guard #available(macOS 15.0, *), CSSearchableIndex.isIndexingAvailable() else {
             return .unavailable
         }
@@ -66,108 +64,22 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
             limit: min(limit, Self.defaultMaximumResultCount)
         )
     }
+}
 
-    @available(macOS 15.0, *)
-    private func reconcileAvailable(
+@available(macOS 15.0, *)
+private extension SpotlightVisualIndex {
+    func reconcileAvailable(
         _ assets: [SpotlightVisualAsset],
         generation: Int
     ) async throws -> SpotlightReconciliationResult {
         var didMutateSpotlight = false
         do {
-            let existingManifest: SpotlightThumbnailManifest
-            var requiresFullRepair = !hasPerformedBootRepair
-            do {
-                switch try manifestStore.load() {
-                case .missing:
-                    requiresFullRepair = true
-                    didMutateSpotlight = true
-                    try await deleteDomain()
-                    try requireCurrentReconciliation(generation)
-                    try manifestStore.clearDerivedFiles()
-                    existingManifest = .empty
-                case let .present(manifest):
-                    existingManifest = manifest
-                }
-            } catch SpotlightVisualIndexError.invalidManifest {
-                requiresFullRepair = true
-                didMutateSpotlight = true
-                try await deleteDomain()
-                try requireCurrentReconciliation(generation)
-                try manifestStore.clearDerivedFiles()
-                existingManifest = .empty
-            }
-
-            let availableFilenames = try manifestStore.thumbnailFilenames()
-            let plan = try SpotlightReconciliationPlan.make(
-                existing: existingManifest,
-                desired: assets,
-                availableThumbnailFilenames: availableFilenames,
-                includeUnchangedDonations: requiresFullRepair
-            )
-
-            var failedThumbnailReadingIDs = Set<String>()
-            for upsert in plan.upserts where upsert.needsThumbnail {
-                let destinationURL = cacheRootURL.appendingPathComponent(
-                    upsert.thumbnailFilename,
-                    isDirectory: false
-                )
-                let sourceURL = upsert.asset.assetURL
-                let maximumPixelSize = maximumThumbnailPixelSize
-                do {
-                    try await Task.detached(priority: .utility) {
-                        try SpotlightThumbnailRenderer.writeThumbnail(
-                            from: sourceURL,
-                            to: destinationURL,
-                            maximumPixelDimension: maximumPixelSize
-                        )
-                    }.value
-                    try requireCurrentReconciliation(generation)
-                } catch {
-                    // Detached work does not inherit task cancellation. Always
-                    // re-check the generation before treating a source-local
-                    // decode failure as isolated and continuing the batch.
-                    try requireCurrentReconciliation(generation)
-                    failedThumbnailReadingIDs.insert(upsert.asset.readingID)
-                }
-            }
-
-            try requireCurrentReconciliation(generation)
-            let commit = plan.committing(
-                excludingReadingIDs: failedThumbnailReadingIDs
-            )
-            let searchableItems = commit.upserts.map(makeSearchableItem)
-            for chunk in searchableItems.chunked(maximumCount: 100) {
-                try requireCurrentReconciliation(generation)
-                didMutateSpotlight = true
-                try await indexSearchableItems(chunk)
-                try requireCurrentReconciliation(generation)
-            }
-
-            let deletedIdentifiers = commit.deletedReadingIDs.map(Self.itemIdentifier)
-            for chunk in deletedIdentifiers.chunked(maximumCount: 100) {
-                didMutateSpotlight = true
-                try await deleteSearchableItems(withIdentifiers: chunk)
-                try requireCurrentReconciliation(generation)
-            }
-
-            // No actor suspension is allowed between the final generation
-            // check and committing the local manifest/cache state.
-            try requireCurrentReconciliation(generation)
-            try manifestStore.save(commit.manifest)
-            try manifestStore.deleteThumbnails(named: commit.obsoleteThumbnailFilenames)
-            hasPerformedBootRepair = true
-
-            return SpotlightReconciliationResult(
-                isAvailable: true,
-                indexedCount: commit.upserts.count,
-                deletedCount: commit.deletedReadingIDs.count,
-                unchangedCount: plan.unchangedCount
+            return try await performReconciliation(
+                assets,
+                generation: generation,
+                didMutateSpotlight: &didMutateSpotlight
             )
         } catch {
-            // A newer generation can arrive while a Spotlight callback is in
-            // flight. If any index mutation may already have landed, discard
-            // the whole disposable mirror so the waiting newest generation
-            // necessarily rebuilds it instead of trusting a stale manifest.
             if didMutateSpotlight {
                 hasPerformedBootRepair = false
                 try? await deleteDomain()
@@ -177,10 +89,131 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         }
     }
 
-    @available(macOS 15.0, *)
-    private func searchAvailable(_ queryString: String, limit: Int) async throws -> [String] {
-        CSUserQuery.prepare()
+    func performReconciliation(
+        _ assets: [SpotlightVisualAsset], generation: Int, didMutateSpotlight: inout Bool
+    ) async throws -> SpotlightReconciliationResult {
+        let loaded = try await loadManifest(
+            generation: generation, didMutateSpotlight: &didMutateSpotlight
+        )
+        let plan = try makePlan(assets, loaded: loaded)
+        let failedReadingIDs = try await prepareThumbnails(for: plan, generation: generation)
+        try requireCurrentReconciliation(generation)
+        let commit = plan.committing(excludingReadingIDs: failedReadingIDs)
+        if !commit.upserts.isEmpty || !commit.deletedReadingIDs.isEmpty {
+            didMutateSpotlight = true
+        }
+        try await apply(commit, generation: generation)
+        try commitManifest(commit, generation: generation)
+        return SpotlightReconciliationResult(
+            isAvailable: true,
+            indexedCount: commit.upserts.count,
+            deletedCount: commit.deletedReadingIDs.count,
+            unchangedCount: plan.unchangedCount
+        )
+    }
 
+    func loadManifest(
+        generation: Int,
+        didMutateSpotlight: inout Bool
+    ) async throws -> SpotlightLoadedManifest {
+        do {
+            switch try manifestStore.load() {
+            case .missing:
+                didMutateSpotlight = true
+                try await resetDerivedState(generation: generation)
+                return SpotlightLoadedManifest(manifest: .empty, requiresFullRepair: true)
+            case let .present(manifest):
+                return SpotlightLoadedManifest(
+                    manifest: manifest,
+                    requiresFullRepair: !hasPerformedBootRepair
+                )
+            }
+        } catch SpotlightVisualIndexError.invalidManifest {
+            didMutateSpotlight = true
+            try await resetDerivedState(generation: generation)
+            return SpotlightLoadedManifest(manifest: .empty, requiresFullRepair: true)
+        }
+    }
+
+    func resetDerivedState(generation: Int) async throws {
+        try await deleteDomain()
+        try requireCurrentReconciliation(generation)
+        try manifestStore.clearDerivedFiles()
+    }
+
+    func makePlan(
+        _ assets: [SpotlightVisualAsset], loaded: SpotlightLoadedManifest
+    ) throws -> SpotlightReconciliationPlan {
+        try SpotlightReconciliationPlan.make(
+            existing: loaded.manifest,
+            desired: assets,
+            availableThumbnailFilenames: manifestStore.thumbnailFilenames(),
+            includeUnchangedDonations: loaded.requiresFullRepair
+        )
+    }
+
+    func prepareThumbnails(
+        for plan: SpotlightReconciliationPlan, generation: Int
+    ) async throws -> Set<String> {
+        var failedReadingIDs = Set<String>()
+        for upsert in plan.upserts where upsert.needsThumbnail {
+            do {
+                try await renderThumbnail(for: upsert)
+                try requireCurrentReconciliation(generation)
+            } catch {
+                try requireCurrentReconciliation(generation)
+                failedReadingIDs.insert(upsert.asset.readingID)
+            }
+        }
+        return failedReadingIDs
+    }
+
+    func renderThumbnail(for upsert: SpotlightReconciliationPlan.Upsert) async throws {
+        let destinationURL = cacheRootURL.appendingPathComponent(
+            upsert.thumbnailFilename,
+            isDirectory: false
+        )
+        let sourceURL = upsert.asset.assetURL
+        let maximumPixelSize = maximumThumbnailPixelSize
+        try await Task.detached(priority: .utility) {
+            try SpotlightThumbnailRenderer.writeThumbnail(
+                from: sourceURL,
+                to: destinationURL,
+                maximumPixelDimension: maximumPixelSize
+            )
+        }.value
+    }
+
+    func apply(_ commit: SpotlightReconciliationCommit, generation: Int) async throws {
+        for chunk in commit.upserts.map(makeSearchableItem).chunked(maximumCount: 100) {
+            try requireCurrentReconciliation(generation)
+            try await indexSearchableItems(chunk)
+            try requireCurrentReconciliation(generation)
+        }
+        let deletedIdentifiers = commit.deletedReadingIDs.map(Self.itemIdentifier)
+        for chunk in deletedIdentifiers.chunked(maximumCount: 100) {
+            try await deleteSearchableItems(withIdentifiers: chunk)
+            try requireCurrentReconciliation(generation)
+        }
+    }
+
+    func commitManifest(_ commit: SpotlightReconciliationCommit, generation: Int) throws {
+        try requireCurrentReconciliation(generation)
+        try manifestStore.save(commit.manifest)
+        try manifestStore.deleteThumbnails(named: commit.obsoleteThumbnailFilenames)
+        hasPerformedBootRepair = true
+    }
+
+    func searchAvailable(_ queryString: String, limit: Int) async throws -> [String] {
+        CSUserQuery.prepare()
+        let userQuery = CSUserQuery(
+            userQueryString: queryString,
+            userQueryContext: makeQueryContext(limit: limit)
+        )
+        return try await readingIDs(from: collectItems(from: userQuery))
+    }
+
+    func makeQueryContext(limit: Int) -> CSUserQueryContext {
         let context = CSUserQueryContext()
         context.enableRankedResults = true
         context.maxResultCount = limit
@@ -188,24 +221,25 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         context.maxSuggestionCount = 0
         context.fetchAttributes = ["domainIdentifier"]
         context.filterQueries = ["domainIdentifier=\"\(Self.domainIdentifier)\""]
+        return context
+    }
 
-        let userQuery = CSUserQuery(
-            userQueryString: queryString,
-            userQueryContext: context
-        )
+    func collectItems(from userQuery: CSUserQuery) async throws -> [CSUserQuery.Item] {
         let cancellation = SpotlightUserQueryCancellation(query: userQuery)
-        let items: [CSUserQuery.Item] = try await withTaskCancellationHandler {
-            var foundItems: [CSUserQuery.Item] = []
+        return try await withTaskCancellationHandler {
+            var items: [CSUserQuery.Item] = []
             for try await response in userQuery.responses {
                 try Task.checkCancellation()
                 guard case let .item(item) = response else { continue }
-                foundItems.append(item)
+                items.append(item)
             }
-            return foundItems
+            return items
         } onCancel: {
             cancellation.cancel()
         }
+    }
 
+    func readingIDs(from items: [CSUserQuery.Item]) -> [String] {
         var seen = Set<String>()
         return items.sorted {
             $0.item.compare(byRank: $1.item) == .orderedAscending
@@ -218,10 +252,7 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         }
     }
 
-    @available(macOS 15.0, *)
-    private func makeSearchableItem(
-        _ upsert: SpotlightReconciliationPlan.Upsert
-    ) -> CSSearchableItem {
+    func makeSearchableItem(_ upsert: SpotlightReconciliationPlan.Upsert) -> CSSearchableItem {
         let thumbnailURL = cacheRootURL.appendingPathComponent(
             upsert.thumbnailFilename,
             isDirectory: false
@@ -237,9 +268,6 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
             domainIdentifier: Self.domainIdentifier,
             attributeSet: attributes
         )
-        // The first reconciliation in this process performs a full repair;
-        // later reconciliations donate only changed items while retaining
-        // non-update upsert semantics for those donations.
         item.isUpdate = false
         item.expirationDate = .distantFuture
         return item
@@ -249,7 +277,43 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         itemIdentifierPrefix + readingID
     }
 
-    private func acquireReconciliation() async {
+    func indexSearchableItems(_ items: [CSSearchableItem]) async throws {
+        guard !items.isEmpty else { return }
+        try await withCheckedThrowingContinuation { continuation in
+            index.indexSearchableItems(items) { error in
+                self.resume(continuation, with: error)
+            }
+        }
+    }
+
+    func deleteSearchableItems(withIdentifiers identifiers: [String]) async throws {
+        guard !identifiers.isEmpty else { return }
+        try await withCheckedThrowingContinuation { continuation in
+            index.deleteSearchableItems(withIdentifiers: identifiers) { error in
+                self.resume(continuation, with: error)
+            }
+        }
+    }
+
+    func deleteDomain() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            index.deleteSearchableItems(withDomainIdentifiers: [Self.domainIdentifier]) { error in
+                self.resume(continuation, with: error)
+            }
+        }
+    }
+
+    nonisolated func resume(_ continuation: CheckedContinuation<Void, Error>, with error: Error?) {
+        if let error {
+            continuation.resume(throwing: error)
+        } else {
+            continuation.resume()
+        }
+    }
+}
+
+private extension SpotlightVisualIndex {
+    func acquireReconciliation() async {
         if !isReconciling {
             isReconciling = true
             return
@@ -259,7 +323,7 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         }
     }
 
-    private func releaseReconciliation() {
+    func releaseReconciliation() {
         if reconciliationWaiters.isEmpty {
             isReconciling = false
         } else {
@@ -267,76 +331,10 @@ actor SpotlightVisualIndex: SpotlightVisualIndexing {
         }
     }
 
-    private func requireCurrentReconciliation(_ generation: Int) throws {
+    func requireCurrentReconciliation(_ generation: Int) throws {
         try Task.checkCancellation()
         guard generation == latestReconciliationGeneration else {
             throw CancellationError()
-        }
-    }
-
-    @available(macOS 15.0, *)
-    private func indexSearchableItems(_ items: [CSSearchableItem]) async throws {
-        guard !items.isEmpty else { return }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            index.indexSearchableItems(items) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-
-    @available(macOS 15.0, *)
-    private func deleteSearchableItems(withIdentifiers identifiers: [String]) async throws {
-        guard !identifiers.isEmpty else { return }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            index.deleteSearchableItems(withIdentifiers: identifiers) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-
-    @available(macOS 15.0, *)
-    private func deleteDomain() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            index.deleteSearchableItems(withDomainIdentifiers: [Self.domainIdentifier]) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
-    }
-}
-
-/// Core Spotlight documents `cancel()` as callable when input changes, but its
-/// Objective-C query class has no Swift Sendable annotation. The cancellation
-/// handler is the only cross-executor use of this reference.
-private final class SpotlightUserQueryCancellation: @unchecked Sendable {
-    private let query: CSUserQuery
-
-    init(query: CSUserQuery) {
-        self.query = query
-    }
-
-    func cancel() {
-        query.cancel()
-    }
-}
-
-private extension Array {
-    func chunked(maximumCount: Int) -> [[Element]] {
-        guard !isEmpty else { return [] }
-        let size = Swift.max(1, maximumCount)
-        return stride(from: 0, to: count, by: size).map { start in
-            Array(self[start ..< Swift.min(start + size, count)])
         }
     }
 }
