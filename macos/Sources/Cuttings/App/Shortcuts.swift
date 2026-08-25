@@ -71,6 +71,8 @@ enum ShortcutCatalog {
     // View / navigation
     static let focusSearch = AppShortcut(title: "Focus Search", key: "k", modifiers: .command, keyGlyph: "K")
     static let toggleFocusMode = AppShortcut(title: "Toggle Focus Mode", key: "r", modifiers: [.command, .shift], keyGlyph: "R")
+    static let decreaseCardSize = AppShortcut(title: "Decrease Card Size", key: "-", modifiers: [.command, .shift], keyGlyph: "-")
+    static let increaseCardSize = AppShortcut(title: "Increase Card Size", key: "=", modifiers: [.command, .shift], keyGlyph: "+")
     static let previousItem = AppShortcut(title: "Previous Item", key: "k", modifiers: [], keyGlyph: "K")
     static let nextItem = AppShortcut(title: "Next Item", key: "j", modifiers: [], keyGlyph: "J")
 
@@ -84,7 +86,7 @@ enum ShortcutCatalog {
     /// Groups in cheat-sheet display order.
     static let groups: [Group] = [
         Group(name: "Item", shortcuts: [toggleFavorite, editTags, toggleHighlights, delete, openInBrowser]),
-        Group(name: "View", shortcuts: [focusSearch, toggleFocusMode, previousItem, nextItem]),
+        Group(name: "View", shortcuts: [focusSearch, toggleFocusMode, decreaseCardSize, increaseCardSize, previousItem, nextItem]),
         Group(name: "Typography", shortcuts: [increaseFont, decreaseFont]),
         Group(name: "Help", shortcuts: [showShortcuts])
     ]

@@ -54,7 +54,6 @@ struct LocalReadingImage: View {
 
     @MainActor
     private func load() async {
-        image = nil
         failed = false
         let baseURL = AssetImageLoader.readingFolderURL(
             libraryURL: libraryURL, readingID: row.id
@@ -62,6 +61,7 @@ struct LocalReadingImage: View {
         let decoded: AssetImageLoader.Decoded?
         if let source = row.previewAsset {
             guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
+                image = nil
                 failed = true
                 return
             }
@@ -71,11 +71,13 @@ struct LocalReadingImage: View {
             }.value
         } else if let source = row.localVideoAssetReference {
             guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL) else {
+                image = nil
                 failed = true
                 return
             }
             decoded = await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
         } else {
+            image = nil
             return
         }
         guard !Task.isCancelled else { return }

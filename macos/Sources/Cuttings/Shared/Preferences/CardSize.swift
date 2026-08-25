@@ -30,11 +30,19 @@ enum CardSize: String, CaseIterable, Identifiable {
         }
     }
 
-    var symbol: String {
+    var smaller: Self? {
         switch self {
-        case .large: "square.grid.2x2.fill"
-        case .medium: "square.grid.3x2.fill"
-        case .small: "square.grid.3x3.fill"
+        case .large: .medium
+        case .medium: .small
+        case .small: nil
+        }
+    }
+
+    var larger: Self? {
+        switch self {
+        case .large: nil
+        case .medium: .large
+        case .small: .medium
         }
     }
 }

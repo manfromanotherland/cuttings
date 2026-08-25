@@ -25,6 +25,7 @@ extension FocusedValues {
 /// Menu bar commands for navigating the main window.
 struct NavigationCommands: Commands {
     var appState: AppState
+    @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
     @FocusedValue(\.detailNavigationActions) private var detailNavigationActions
 
     var body: some Commands {
@@ -38,6 +39,24 @@ struct NavigationCommands: Commands {
                 appState.isFocusMode.toggle()
             }
             .keyboardShortcut(ShortcutCatalog.toggleFocusMode)
+
+            Divider()
+
+            Button("Decrease Card Size") {
+                if let smaller = cardSize.smaller {
+                    cardSize = smaller
+                }
+            }
+            .keyboardShortcut(ShortcutCatalog.decreaseCardSize)
+            .disabled(detailNavigationActions != nil || cardSize.smaller == nil)
+
+            Button("Increase Card Size") {
+                if let larger = cardSize.larger {
+                    cardSize = larger
+                }
+            }
+            .keyboardShortcut(ShortcutCatalog.increaseCardSize)
+            .disabled(detailNavigationActions != nil || cardSize.larger == nil)
 
             if let detailNavigationActions {
                 Divider()

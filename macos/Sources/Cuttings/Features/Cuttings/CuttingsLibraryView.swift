@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct CuttingsLibraryView: View {
     @Environment(AppState.self) var appState
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
 
     @State private var presentedReading: ReadingRow?
@@ -132,7 +133,7 @@ extension CuttingsLibraryView {
             ToolbarItemGroup(placement: .primaryAction) {
                 favoritesToggle
                 filterMenu
-                cardSizePicker
+                cardSizeControl
                 sortMenu
             }
         }
@@ -214,18 +215,32 @@ extension CuttingsLibraryView {
         .accessibilityIdentifier(A11y.List.sortMenu)
     }
 
-    private var cardSizePicker: some View {
-        Picker("Card Size", selection: $cardSize) {
-            ForEach(CardSize.allCases) { size in
-                Label(size.label, systemImage: size.symbol)
-                    .labelStyle(.iconOnly)
-                    .tag(size)
+    private var cardSizeControl: some View {
+        ControlGroup("Card Size") {
+            Button {
+                if let smaller = cardSize.smaller {
+                    cardSize = smaller
+                }
+            } label: {
+                Label("Decrease Card Size", systemImage: "minus")
             }
+            .disabled(cardSize.smaller == nil)
+            .help("Decrease card size (\(ShortcutCatalog.decreaseCardSize.display))")
+
+            Button {
+                if let larger = cardSize.larger {
+                    cardSize = larger
+                }
+            } label: {
+                Label("Increase Card Size", systemImage: "plus")
+            }
+            .disabled(cardSize.larger == nil)
+            .help("Increase card size (\(ShortcutCatalog.increaseCardSize.display))")
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .help("Change card size")
-        .accessibilityIdentifier(A11y.List.cardSizePicker)
+        .controlGroupStyle(.navigation)
+        .labelStyle(.iconOnly)
+        .accessibilityValue(cardSize.label)
+        .accessibilityIdentifier(A11y.List.cardSizeControl)
     }
 
     @ViewBuilder
@@ -267,6 +282,12 @@ extension CuttingsLibraryView {
                         }
                     }
                     .frame(width: contentWidth)
+                    .animation(
+                        accessibilityReduceMotion
+                            ? nil
+                            : .smooth(duration: 0.3, extraBounce: 0),
+                        value: cardSize
+                    )
                     .padding(Self.boardSpacing)
                 }
                 .accessibilityIdentifier(A11y.List.table)
