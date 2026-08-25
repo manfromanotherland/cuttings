@@ -15,12 +15,8 @@ final class InboxZeroJourney: UITestCase {
     // A single end-to-end triage walk; asserting every beat keeps it over the limit.
     // swiftlint:disable:next function_body_length
     func testTriageUnreadToZero() throws {
-        // Pin the sort so the Unread order is deterministic regardless of the
-        // machine's persisted sort preference: saved-at descending → [7,4,3,2,1].
-        try launchApp(articles: Fixtures.standardCorpus) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        // The fixed newest-saved-first order is [7,4,3,2,1].
+        try launchApp(articles: Fixtures.standardCorpus)
         sidebar.select(.unread)
         XCTAssertTrue(list.waitForRowCount(5), "Unread starts with 5")
 

@@ -13,10 +13,7 @@ import XCTest
 /// whole corpus becomes reachable.
 final class PaginationCheck: UITestCase {
     func testLoadsEveryPage() throws {
-        try launchApp(articles: Fixtures.bulkCorpus(count: 120)) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0" // desc → id119 first, id0 last
-        }
+        try launchApp(articles: Fixtures.bulkCorpus(count: 120))
         XCTAssertTrue(list.row(Fixtures.id(119)).waitExists(), "newest article heads the list")
 
         // The oldest article (row 120) is only present once loadMore has paged past

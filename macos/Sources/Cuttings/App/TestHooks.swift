@@ -37,7 +37,7 @@ enum TestHooks {
     }
 
     /// Throwaway `UserDefaults` suite name for persisted preferences, so a test
-    /// that changes theme/font/size/sort never touches the real defaults domain
+    /// that changes theme, typography, or card size never touches the real defaults domain
     /// (see `AppDefaults`). `nil` in production. The harness destroys the suite.
     static var defaultsSuiteName: String? {
         env("CUTTINGS_TEST_DEFAULTS")

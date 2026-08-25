@@ -14,13 +14,9 @@ final class OddArticlesJourney: UITestCase {
 
     func testOddArticlesRenderGracefully() throws {
         // The standard corpus carries the unicode and minimal articles; add the
-        // oversize one (kept out of the standard corpus for its ~11 MB body). Pin
-        // saved-at descending: the oversize article is newest, so the three articles
-        // under test all sit near the top of the list, reachable without scrolling.
-        try launchApp(articles: Fixtures.standardCorpus + [Fixtures.oversizeArticle()]) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        // oversize one (kept out of the standard corpus for its ~11 MB body). The
+        // fixed newest-saved-first order keeps all three near the top of the board.
+        try launchApp(articles: Fixtures.standardCorpus + [Fixtures.oversizeArticle()])
 
         // 1. Unicode/emoji title renders in the list row and the reader header.
         XCTAssertTrue(

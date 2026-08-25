@@ -162,7 +162,7 @@ Examples:
 - `AppState+Mutations`,
 - `AppState+Highlights`,
 - sidebar selection and count state (`SidebarItem`, `SidebarCounts`),
-- reading sort selection (`ReadingSort`).
+- reading query order (`ReadingSort`).
 
 `State` owns UI coordination. It can call `CoreBridge`, hold snapshots returned
 from the core, and apply optimistic UI changes. It must reconcile back to the

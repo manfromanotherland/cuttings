@@ -22,7 +22,7 @@ struct LaunchOptions {
 
     /// Defaults pinned through the NSArgumentDomain (`-key value` launch args),
     /// which `UserDefaults` reads ahead of the persisted store — so a run starts
-    /// from a known theme/font/sort no matter what's on disk, without writing to
+    /// from known preferences no matter what's on disk, without writing to
     /// (or having to restore) the real defaults. Values are formatted the way the
     /// argument domain expects: a raw string, or `"0"`/`"1"` for a Bool.
     var pinnedDefaults: [String: String] = [:]

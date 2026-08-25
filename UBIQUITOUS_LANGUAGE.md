@@ -116,13 +116,13 @@ host, and macOS app.
 | Term | Definition |
 |------|------------|
 | Reader | Main article reading surface in the macOS app. It renders Markdown natively and supports local assets, text selection, highlights, and typography settings. |
-| Card board | Full-width mixed masonry presentation of reading rows for the active favorites, kind, tag, search query, and sort. |
+| Card board | Full-width mixed masonry presentation of reading rows for the active favorites, kind, tag, and search query. |
 | Note editor | The raw-Markdown sheet opened from a card's inspector to add, replace, or delete that reading's personal note. |
 | Reading list | Legacy name for the old row-based macOS presentation and for the core listing API; the current user-facing home is the card board. |
 | Search | Full-text query over indexed reading title, content, and tags. |
-| Sort | User-selected order for the card board: relevance, date saved, or content length. |
+| Board order | Fixed card-board ordering: newest saved first while browsing and relevance while searching. |
 | Optimistic UI | UI pattern where local state changes immediately, then the core write and refresh reconcile against persisted truth. |
-| Refresh | UI reload from the core/index after a mutation, sync, filter change, search change, or sort change. |
+| Refresh | UI reload from the core/index after a mutation, sync, filter change, or search change. |
 | One-motion removal | Interaction rule where a row that leaves the active filter is removed and selection advances in the same render tick. |
 | Settings | macOS surface for appearance, typography, library folder, and native host status. |
 | Appearance preference | Per-device Light, Dark, or System setting. |

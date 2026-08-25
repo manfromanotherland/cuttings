@@ -14,18 +14,11 @@ final class SearchEdgeCheck: UITestCase {
         try launchApp(articles: Fixtures.standardCorpus)
         XCTAssertTrue(list.row(Fixtures.Ids.rust).waitExists(), "list loaded")
 
-        // 1. A nonsense query yields the search empty state, and the sort menu stays
-        //    put: an empty *result* is still a searchable list (see
-        //    `showsSortControl`). Only the settled states are asserted — the blink
-        //    this rule also guards against, while the debounced reload catches up
-        //    with a cleared query, is too short for XCUITest to sample reliably.
-        XCTAssertTrue(list.sortMenu.waitExists(), "sort menu present with a full list")
+        // 1. A nonsense query yields the search empty state.
         list.pasteSearch(Fixtures.Search.noResults) // "zzzqxk"
         XCTAssertTrue(list.searchEmptyState.waitExists(), "no-results empty state")
-        XCTAssertTrue(list.sortMenu.exists, "sort menu stays through a no-results search")
         list.clearSearch()
         XCTAssertTrue(list.row(Fixtures.Ids.rust).waitExists(), "clearing restores the list")
-        XCTAssertTrue(list.sortMenu.exists, "sort menu present again once the list is back")
 
         // 2. Diacritic-insensitive: "cafe" matches "Café …" (the unicode article).
         list.pasteSearch(Fixtures.Search.diacriticQuery) // "cafe"

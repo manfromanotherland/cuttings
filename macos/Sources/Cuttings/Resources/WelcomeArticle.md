@@ -8,7 +8,7 @@ Install the Cuttings browser extension from this project. Use its toolbar button
 
 ## Your collection
 
-Everything you save lands on one visual board. Use the toolbar to search, filter by kind or tag, change the sort order, or focus on your favorites.
+Everything you save lands on one visual board. Use the toolbar to search, filter by kind or tag, change the card size, or focus on your favorites.
 
 Click any card to open it. Use **←** and **→** to move through nearby ideas without reaching for the mouse.
 
@@ -22,7 +22,7 @@ Cuttings keeps everything you save right where you can find it.
 
 ## Search
 
-Press **⌘K** to search. It looks through everything you have saved and puts the closest matches first. You can still change the sort order while you search.
+Press **⌘K** to search. It looks through everything you have saved and puts the closest matches first.
 
 ## Tags
 

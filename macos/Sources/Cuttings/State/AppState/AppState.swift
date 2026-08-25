@@ -13,11 +13,6 @@ import SwiftUI
 @MainActor
 @Observable
 final class AppState {
-    private enum SortDefaultsKey {
-        static let field = "sortField"
-        static let ascending = "sortAscending"
-    }
-
     /// Keys the library scope, tag filter, and search box persist under.
     private enum FilterDefaultsKey {
         static let kind = "selectedKind"
@@ -82,11 +77,6 @@ final class AppState {
         }
     }
 
-    /// Sort applied while a search is active. Kept separate from `sortField` so
-    /// searching (which defaults to relevance) never clobbers the list's own
-    /// persisted sort. Not persisted — a fresh search starts on relevance.
-    var searchSort: ReadingSort = .relevance
-
     /// Pending debounced search reload. Each keystroke cancels the previous one
     /// so the core is queried once typing settles, not per character. Plumbing
     /// only — not part of the observable UI state.
@@ -107,23 +97,6 @@ final class AppState {
     var selectedTag: String? {
         didSet {
             AppDefaults.store.set(selectedTag, forKey: FilterDefaultsKey.tag)
-        }
-    }
-
-    /// Sort field for the reading list, persisted across launches. The default
-    /// here only initializes the backing store; `init` immediately overwrites it
-    /// with the persisted preference (re-persisting the same value harmlessly).
-    var sortField: ReadingSort = .savedAt {
-        didSet {
-            AppDefaults.store.set(sortField.rawValue, forKey: SortDefaultsKey.field)
-        }
-    }
-
-    /// Sort direction (ascending when `true`), persisted across launches.
-    /// Descending is the default for every field.
-    var sortAscending: Bool = false {
-        didSet {
-            AppDefaults.store.set(sortAscending, forKey: SortDefaultsKey.ascending)
         }
     }
 
@@ -192,11 +165,12 @@ final class AppState {
     private var editingMonitor: TextEditingMonitor?
 
     init() {
-        // Restore the persisted sort preference (defaults: saved-at, descending).
         let defaults = AppDefaults.store
-        sortField = defaults.string(forKey: SortDefaultsKey.field)
-            .flatMap(ReadingSort.init(rawValue:)) ?? .savedAt
-        sortAscending = defaults.bool(forKey: SortDefaultsKey.ascending)
+
+        // Removed sort controls must not leave an invisible preference behind.
+        // The board now always uses its fixed newest-first / relevance ordering.
+        defaults.removeObject(forKey: "sortField")
+        defaults.removeObject(forKey: "sortAscending")
 
         // Restore the current scope or migrate the one compatible legacy value.
         // Old unread/read/archive values become All so a removed control can never

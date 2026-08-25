@@ -9,7 +9,7 @@ import XCTest
 /// dialog, the row removal, and the `.md` file leaving disk, plus a cancel path
 /// that leaves its article untouched.
 ///
-/// Sort is pinned saved-at descending so the All order is deterministic
+/// The fixed newest-saved-first All order is deterministic
 /// ([7,6,5,4,3,2,1,0]) and the selection-advance target is known. The three read
 /// active articles are `ratedThree` (idx6), `favoriteRead` (idx5) and `rust`
 /// (idx0); archiving idx6 advances the selection to idx5, which is archived next.
@@ -17,10 +17,7 @@ final class WeekendCleanupJourney: UITestCase {
     // A single declutter walk; asserting every beat keeps it long.
     // swiftlint:disable:next function_body_length
     func testArchiveReviewUnarchiveAndDelete() throws {
-        try launchApp(articles: Fixtures.standardCorpus) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        try launchApp(articles: Fixtures.standardCorpus)
         XCTAssertTrue(sidebar.waitForCount(.all, equals: Fixtures.Oracle.ViewCounts.all), "All starts at 8")
 
         // 1. In All, archive the read articles one after another. Each row leaves

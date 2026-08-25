@@ -88,7 +88,7 @@ struct ArticleDetailView: View {
         // material sits above it and leaves a lit band across the top of the zoom.
         // Dropping that material while a zoom is up lets the backdrop — which
         // already ignores the safe area — run the window's full height. The bar
-        // itself stays put (search, sort and board filters keep working); only
+        // itself stays put (search, card size, and board filters keep working); only
         // its background steps aside, and it returns when the lightbox closes.
         .toolbarBackground(imageZoom.target == nil ? .automatic : .hidden, for: .windowToolbar)
         .inspector(isPresented: $appState.showHighlights) {
@@ -184,9 +184,9 @@ struct ArticleDetailView: View {
     /// The selected row resolved straight from the shared, synchronously
     /// published `appState.readings` (kept fresh by every mutation's refresh).
     /// Driving the toolbar from this — rather than the async-loaded `@State row`
-    /// — makes the actions appear/disappear in the SAME render frame as the
-    /// sort button (which also keys off `appState.readings`). Using the async
-    /// `row` instead lets the two reflow a frame apart, which reads as a blink.
+    /// — makes the actions appear/disappear in the same render frame as the rest
+    /// of the selection-dependent toolbar. Using the async `row` instead lets the
+    /// controls reflow a frame apart, which reads as a blink.
     private var currentRow: ReadingRow? {
         guard let id = appState.selectedId else { return nil }
         // Fall back to the loaded detail row when the selection sits outside the
@@ -199,7 +199,7 @@ struct ArticleDetailView: View {
         // The lightbox's backdrop is a content overlay and can't cover the unified
         // title bar, so the reader's own actions step aside while an image is
         // zoomed — they'd float above the dark backdrop and act on an article the
-        // user can't see. Search, sort, and board filters remain available because
+        // user can't see. Search, card size, and board filters remain available because
         // the zoom never covers the board toolbar.
         if showsToolbar, let row = currentRow, imageZoom.target == nil {
             ArticleToolbar(row: row, appState: appState)

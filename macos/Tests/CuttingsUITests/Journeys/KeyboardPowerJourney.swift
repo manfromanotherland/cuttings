@@ -8,8 +8,7 @@ import XCTest
 /// to search and Escape back, ⌘/ for the shortcuts cheat sheet, ⌃⌘S to toggle
 /// the sidebar, and ⌘⇧R for focus mode — the full keyboard surface in one flow.
 ///
-/// The sort is pinned (saved-at descending) so the Unread order is deterministic
-/// regardless of the machine's persisted preference:
+/// The fixed newest-saved-first order keeps the Unread sequence deterministic:
 ///   swiftTips(7) → minimal(4) → unicode(3) → kitchenSink(2) → swift(1)
 /// The triage beats (one-motion removal, live counts, on-disk truth) mirror the
 /// toolbar-driven `InboxZeroJourney`; here every one is reached from the keyboard.
@@ -20,11 +19,7 @@ final class KeyboardPowerJourney: UITestCase {
     // One continuous keyboard-only walk; asserting every beat keeps it over the limit.
     // swiftlint:disable:next function_body_length
     func testDriveTheQueueFromTheKeyboard() throws {
-        // Pin the sort so the Unread order is fixed: saved-at descending → [7,4,3,2,1].
-        try launchApp(articles: Fixtures.standardCorpus) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        try launchApp(articles: Fixtures.standardCorpus)
         sidebar.select(.unread)
         XCTAssertTrue(list.waitForRowCount(5), "Unread starts with 5")
 

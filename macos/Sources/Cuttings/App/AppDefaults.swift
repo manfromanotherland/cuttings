@@ -3,7 +3,7 @@
 import Foundation
 
 /// The `UserDefaults` store the app persists its per-device preferences to
-/// (theme, reader typography, card size, board sort, and filters).
+/// (theme, reader typography, card size, and filters).
 ///
 /// In production this is `.standard`. Under UI testing, when the harness passes a
 /// suite name via `CUTTINGS_TEST_DEFAULTS`, it's a throwaway suite in that name
@@ -11,9 +11,8 @@ import Foundation
 /// `is.edmundo.cuttings` domain, and the dev's own preferences stay untouched. The
 /// harness creates the suite per test and destroys it on teardown.
 ///
-/// Every `@AppStorage` for a preference key passes `store: AppDefaults.store`, and
-/// the sort keys written from `AppState` go through it too, so there is a single
-/// redirection point.
+/// Every `@AppStorage` for a preference key passes `store: AppDefaults.store`, so
+/// there is a single redirection point.
 enum AppDefaults {
     /// `UserDefaults` is thread-safe but not `Sendable`, so the Swift 6 concurrency
     /// checker flags a shared `static let`; `nonisolated(unsafe)` opts out (the type

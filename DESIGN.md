@@ -95,7 +95,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Cuttings      [Favorites] [Filter] [Sort]       [ Search ]      │
+│ Cuttings      [Favorites] [Filter] [Size]       [ Search ]      │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────┐ ┌───────┐ ┌─────────┐ ┌──────────┐                │
 │  │ quote   │ │ image │ │ video   │ │ article  │                │
@@ -111,7 +111,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - Put the native search field in the unified window toolbar using `.searchable`, with the prompt
   *"Search Cuttings"*. Do not create a bespoke `NSSearchField` or oversized page header.
 - Keep **Favorites** as a visible heart control in the toolbar. Put card kind and tag in one
-  standard toolbar **Filter** menu; put sort field and order in a standard toolbar **Sort** menu.
+  standard toolbar **Filter** menu, with card size in a compact segmented control. Board order is
+  fixed: newest saved first when browsing and relevance when searching.
 - Search, favorites, kind, and tag remain intersections. Filtering is performed in the Rust
   core, not on the currently loaded Swift page, so pagination remains correct.
 
@@ -428,7 +429,7 @@ an edit drops it from the visible board — for example, removing its favorite w
 Favorites. The
 list simply shows no highlight, and the toolbar reads from the open reading rather than the (now
 absent) list row. This keeps the reader and the list from disagreeing, and a post-edit refresh
-never re-homes the selection out from under you (only direct reloads — filter switch, sort, search,
+never re-homes the selection out from under you (only direct reloads — filter switch, search,
 first load — pick a default row).
 
 ## Paste and drop

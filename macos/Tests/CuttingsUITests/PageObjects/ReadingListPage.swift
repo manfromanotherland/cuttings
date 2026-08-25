@@ -3,21 +3,9 @@
 import AppKit
 import XCTest
 
-/// The visual board, its cards, toolbar controls, search, sort, and empty states.
+/// The visual board, its cards, toolbar controls, search, and empty states.
 struct ReadingListPage {
     let app: XCUIApplication
-
-    /// Sort menu labels, mirroring `ReadingSort.label` / `directionLabel`.
-    enum Sort {
-        static let dateSaved = "Date saved"
-        static let length = "Length"
-        static let relevance = "Relevance"
-
-        static let newestFirst = "Newest first"
-        static let oldestFirst = "Oldest first"
-        static let longestFirst = "Longest first"
-        static let shortestFirst = "Shortest first"
-    }
 
     var table: XCUIElement {
         app.byId(A11y.List.table)
@@ -66,7 +54,7 @@ struct ReadingListPage {
         select(id)
     }
 
-    /// The ids of the currently loaded rows, in list order — for sort-oracle and
+    /// The ids of the currently loaded rows, in list order — for ordering and
     /// membership assertions.
     ///
     /// Read from the list's hidden probe (`A11y.List.rows`) via a single
@@ -202,30 +190,6 @@ struct ReadingListPage {
     private func clearField(_ field: XCUIElement) {
         field.typeKey("a", modifierFlags: .command)
         field.typeKey(.delete, modifierFlags: [])
-    }
-
-    // ── Sort ──────────────────────────────────────────────────────────────
-
-    /// The native toolbar's sort menu button.
-    var sortMenu: XCUIElement {
-        app.byId(A11y.List.sortMenu)
-    }
-
-    func openSortMenu() {
-        sortMenu.clickWhenReady()
-    }
-
-    /// Pick a sort field (see `Sort`). Opens the menu, clicks the field, and the
-    /// menu closes.
-    func selectSortField(_ label: String) {
-        openSortMenu()
-        app.menuItems[label].clickWhenReady()
-    }
-
-    /// Pick a sort direction (see `Sort`). The order picker lives in the same menu.
-    func selectSortDirection(_ label: String) {
-        openSortMenu()
-        app.menuItems[label].clickWhenReady()
     }
 
     // ── Empty states ────────────────────────────────────────────────────────

@@ -58,7 +58,6 @@ enum A11y {
         /// headings (`AXHeading`).
         static let rows = "list.rows"
         static let cardSizeControl = "list.cardSize"
-        static let sortMenu = "list.sort"
         /// Default "Nothing here yet" empty state.
         static let emptyState = "list.empty"
         /// Search "No results" empty state.

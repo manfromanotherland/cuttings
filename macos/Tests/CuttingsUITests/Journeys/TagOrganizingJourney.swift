@@ -10,10 +10,7 @@ final class TagOrganizingJourney: UITestCase {
     // One end-to-end organizing walk; asserting each persistence boundary keeps it long.
     // swiftlint:disable:next function_body_length
     func testCreateApplyFilterAndRemoveTags() throws {
-        try launchApp(articles: Fixtures.standardCorpus) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        try launchApp(articles: Fixtures.standardCorpus)
         let tag = Self.newTag
 
         list.open(Fixtures.Ids.minimal)

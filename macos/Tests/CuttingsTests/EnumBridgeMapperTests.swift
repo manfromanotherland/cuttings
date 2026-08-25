@@ -15,11 +15,5 @@ final class EnumBridgeMapperTests: XCTestCase {
     func testReadingSortMapsEverySortCase() {
         XCTAssertEqual(ReadingSort.relevance.ffiSort, .relevance)
         XCTAssertEqual(ReadingSort.savedAt.ffiSort, .savedAt)
-        // "Length" is derived from the core's word count.
-        XCTAssertEqual(ReadingSort.timeToRead.ffiSort, .wordCount)
-    }
-
-    func testReadingSortUsesNeutralLengthLabel() {
-        XCTAssertEqual(ReadingSort.timeToRead.label, "Length")
     }
 }

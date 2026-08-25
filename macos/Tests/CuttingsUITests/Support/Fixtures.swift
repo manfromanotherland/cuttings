@@ -10,9 +10,6 @@ import Foundation
 /// - scopes: All includes every card, including legacy archived metadata;
 ///   Favorites =`favorite=1`;
 /// - tag counts include every card in All;
-/// - sort: `field DIR, id DESC`, with `word_count` NULLs forced last in both
-///   directions; the app default is `saved_at` descending.
-///
 /// Every article's id is `TestULID.make(index)`, so ids sort in index order —
 /// which makes the `id DESC` tiebreak (and the whole default ordering) predictable.
 enum Fixtures {
@@ -143,23 +140,6 @@ enum Fixtures {
             ("rust", 3), ("swift", 2), ("unicode", 1)
         ]
 
-        // Expected row order (by id) in the **All** view for each sort field and
-        // direction. Indices below map to `Fixtures.id(_:)`; see the per-field
-        // reasoning inline.
-        // swiftlint:disable:next nesting
-        enum Sort {
-            // saved_at increases with index → DESC is reverse index order.
-            static let savedAtDescending = ids([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
-            static let savedAtAscending = ids([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-            // word_count: 2=5000 ... 3=300; 4=NULL and remains last.
-            static let wordCountDescending = ids([2, 7, 1, 5, 9, 0, 8, 6, 3, 4])
-            static let wordCountAscending = ids([3, 6, 8, 0, 9, 5, 1, 7, 2, 4])
-        }
-
-        private static func ids(_ indices: [Int]) -> [String] {
-            indices.map(Fixtures.id)
-        }
     }
 
     /// ── Search terms ────────────────────────────────────────────────────────

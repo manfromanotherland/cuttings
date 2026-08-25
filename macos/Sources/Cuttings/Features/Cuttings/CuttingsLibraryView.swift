@@ -67,15 +67,6 @@ extension CuttingsLibraryView {
             .onChange(of: appState.searchQuery) { _, _ in
                 appState.searchDidChange()
             }
-            .onChange(of: appState.sortField) { _, _ in
-                Task { await appState.loadReadings() }
-            }
-            .onChange(of: appState.searchSort) { _, _ in
-                Task { await appState.loadReadings() }
-            }
-            .onChange(of: appState.sortAscending) { _, _ in
-                Task { await appState.loadReadings() }
-            }
             .onChange(of: appState.readings) { _, rows in
                 guard let id = presentedReading?.id,
                       let refreshed = rows.first(where: { $0.id == id }) else { return }
@@ -134,7 +125,6 @@ extension CuttingsLibraryView {
                 favoritesToggle
                 filterMenu
                 cardSizeControl
-                sortMenu
             }
         }
     }
@@ -188,31 +178,6 @@ extension CuttingsLibraryView {
         }
         .help("Filter cuttings")
         .accessibilityIdentifier(A11y.Filter.menu)
-    }
-
-    private var sortMenu: some View {
-        let searching = !appState.searchQuery.isEmpty
-        let effectiveSort = searching ? appState.searchSort : appState.sortField
-
-        return Menu {
-            Picker("Sort By", selection: searching ? searchSortSelection : sortFieldSelection) {
-                ForEach(ReadingSort.options(searching: searching)) { field in
-                    Text(field.label).tag(field)
-                }
-            }
-
-            if effectiveSort != .relevance {
-                Divider()
-                Picker("Order", selection: sortAscendingSelection) {
-                    Text(effectiveSort.directionLabel(ascending: false)).tag(false)
-                    Text(effectiveSort.directionLabel(ascending: true)).tag(true)
-                }
-            }
-        } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
-        }
-        .help("Sort cuttings")
-        .accessibilityIdentifier(A11y.List.sortMenu)
     }
 
     private var cardSizeControl: some View {
@@ -410,27 +375,6 @@ extension CuttingsLibraryView {
                     appState.toggleTag(current)
                 }
             }
-        )
-    }
-
-    private var sortFieldSelection: Binding<ReadingSort> {
-        Binding(
-            get: { appState.sortField },
-            set: { appState.sortField = $0 }
-        )
-    }
-
-    private var searchSortSelection: Binding<ReadingSort> {
-        Binding(
-            get: { appState.searchSort },
-            set: { appState.searchSort = $0 }
-        )
-    }
-
-    private var sortAscendingSelection: Binding<Bool> {
-        Binding(
-            get: { appState.sortAscending },
-            set: { appState.sortAscending = $0 }
         )
     }
 

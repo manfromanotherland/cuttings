@@ -4,10 +4,7 @@ import XCTest
 
 final class GalleryNavigationJourney: UITestCase {
     func testNavigateGalleryWithKeyboard() throws {
-        try launchApp(articles: Fixtures.standardCorpus) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        try launchApp(articles: Fixtures.standardCorpus)
 
         list.open(Fixtures.Ids.minimal)
         XCTAssertTrue(app.byId(A11y.Detail.next).waitExists(), "Gallery detail opens")

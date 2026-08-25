@@ -35,15 +35,10 @@ final class ComposedFiltersJourney: UITestCase {
         article(4, "Echo", tags: ["swift"], rating: 0, read: false)
     ]
 
-    // swiftlint:disable function_body_length
     /// One end-to-end cross-filter walk.
     func testViewRatingAndTagCompose() throws {
-        // Pin the sort so intersections list deterministically (not asserted here,
-        // but keeps the run stable).
-        try launchApp(articles: Self.corpus) { options in
-            options.pinnedDefaults["sortField"] = "savedAt"
-            options.pinnedDefaults["sortAscending"] = "0"
-        }
+        // The fixed board order keeps intersections deterministic.
+        try launchApp(articles: Self.corpus)
 
         // Baseline: All 5, Unread 3, and the ★4 badge counts all three (A,B,C).
         XCTAssertTrue(sidebar.waitForCount(.all, equals: 5), "All 5")

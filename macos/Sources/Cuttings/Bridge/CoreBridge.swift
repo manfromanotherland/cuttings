@@ -27,7 +27,7 @@ actor CoreBridge {
 
     // ── Query ─────────────────────────────────────────────────────────────
 
-    /// One page of readings for the composed scope/tag filter, the chosen sort,
+    /// One page of readings for the composed scope/tag filter, the board order,
     /// and an optional full-text query. Dormant rating support remains nil at the
     /// FFI boundary for library-format compatibility.
     func listReadings(_ query: ReadingQuery) throws -> [FfiReadingRow] {

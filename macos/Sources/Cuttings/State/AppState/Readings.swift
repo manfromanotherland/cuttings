@@ -21,9 +21,8 @@ extension AppState {
 
     /// Entry point for search-field edits. Debounces rapid typing so the core
     /// runs a single search once input settles (~150ms) instead of one pass per
-    /// keystroke; each edit cancels the previous pending reload. Non-search
-    /// reloads (filter, sort, refresh) call `loadReadings` directly and stay
-    /// immediate.
+    /// keystroke; each edit cancels the previous pending reload. Filter and
+    /// refresh reloads call `loadReadings` directly and stay immediate.
     func searchDidChange() {
         searchTask?.cancel()
         searchTask = Task { [weak self] in
@@ -44,16 +43,16 @@ extension AppState {
         searchQuery.isEmpty ? nil : searchQuery
     }
 
-    /// The sort to apply: Relevance while searching, the persisted field
+    /// The board's fixed ordering: relevance while searching, newest saved first
     /// otherwise (search is just another filter through the same list path).
     private var activeSort: ReadingSort {
-        activeQuery == nil ? sortField : searchSort
+        activeQuery == nil ? .savedAt : .relevance
     }
 
     /// One page of readings for the current scope/filter/sort/search at `offset`.
     private func fetchReadings(_ core: any CoreBridging, offset: UInt32) async throws -> [ReadingRow] {
         let query = ReadingQuery(
-            kind: selectedKind, scope: activeScope, sort: activeSort, ascending: sortAscending,
+            kind: selectedKind, scope: activeScope, sort: activeSort, ascending: false,
             tag: selectedTag, search: activeQuery,
             limit: pageSize, offset: offset
         )
@@ -62,7 +61,7 @@ extension AppState {
 
     /// `resetSelectionIfMissing` controls what happens when the current
     /// selection isn't in the freshly loaded list. Direct (re)loads — filter
-    /// switch, sort, search, first load — pass `true` to re-home onto the first
+    /// switch, search, first load — pass `true` to re-home onto the first
     /// row. A `refresh()` after a local mutation passes `false` to leave the
     /// selection alone (see `refresh()`). An empty selection always defaults to
     /// the first row either way.
@@ -73,10 +72,10 @@ extension AppState {
             readings = rows
             hasMoreReadings = rows.count == Int(pageSize)
 
-            // Open the first reading by default so selection-dependent UI (the
-            // reader and its toolbar, including Sort) is visible without an extra
-            // click. A missing selection is re-homed to the first item only when
-            // the caller asked (direct reloads); a post-mutation refresh leaves a
+            // Open the first reading by default so selection-dependent UI is
+            // available without an extra click. A missing selection is re-homed
+            // to the first item only when the caller asked (direct reloads); a
+            // post-mutation refresh leaves a
             // deliberately off-list selection — the open reading — in place.
             if selectedId == nil
                 || (resetSelectionIfMissing && !readings.contains(where: { $0.id == selectedId }))
