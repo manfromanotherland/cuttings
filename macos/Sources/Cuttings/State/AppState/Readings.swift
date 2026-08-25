@@ -3,7 +3,7 @@
 import Foundation
 
 // ── Reading list ─────────────────────────────────────────────────────────────
-// Loading and paginating the list, debounced search, and tag-filter metadata.
+// Loading and paginating the list, debounced search, and tag metadata.
 
 extension AppState {
     // ── Refresh (list + filters) ──────────────────────────────────────────
@@ -34,7 +34,6 @@ extension AppState {
             // a global shortcut fire instead of editing the search term. Leave
             // selection put while the field is active.
             await loadReadings(resetSelectionIfMissing: !isEditingText)
-            await loadFilters()
         }
     }
 
@@ -52,8 +51,8 @@ extension AppState {
     /// One page of readings for the current scope/filter/sort/search at `offset`.
     private func fetchReadings(_ core: any CoreBridging, offset: UInt32) async throws -> [ReadingRow] {
         let query = ReadingQuery(
-            kind: selectedKind, scope: activeScope, sort: activeSort, ascending: false,
-            tag: selectedTag, search: activeQuery,
+            kind: nil, scope: activeScope, sort: activeSort, ascending: false,
+            tag: nil, search: activeQuery,
             limit: pageSize, offset: offset
         )
         return try await core.listReadings(query).map { ReadingRow($0) }
@@ -105,67 +104,25 @@ extension AppState {
     func loadFilters() async {
         guard let core else { return }
         // The compatible FFI count payload still bundles legacy view/rating
-        // counts. Only its tag list is presentation state now.
+        // counts. Only its global tag vocabulary is presentation state now.
+        // Search and board facets must not rebuild/re-publish 13k tag values.
         guard let counts = try? await core.filterCounts(
-            kind: selectedKind, scope: activeScope, tag: selectedTag, query: activeQuery
+            kind: nil, scope: .all, tag: nil, query: nil
         ) else { return }
         filters.tags = counts.tags.map { TagCount($0) }
     }
 
-    /// Reload the board and tag metadata after a scope, kind, or tag change.
+    /// Reload the board after its scope changes. The global tag vocabulary only
+    /// changes when library files change.
     func reloadForFilterChange() async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadReadings() }
-            group.addTask { await self.loadFilters() }
-        }
+        await loadReadings()
     }
 
     // ── Filter selection ──────────────────────────────────────────────────
-    // Scope and tag form a small hierarchy: changing scope clears the tag beneath
-    // it; changing the tag leaves the scope intact.
-
-    /// Select a saved-item kind, or clear the kind facet with `nil`.
-    func selectKind(_ kind: ReadingKind?) {
-        guard selectedKind != kind else { return }
-        selectedKind = kind
-        Task { await reloadForFilterChange() }
-    }
-
-    /// Switch the active scope. Switching scope clears the narrower tag filter.
+    /// Switch to one exact board scope.
     func selectScope(_ scope: LibraryScope) {
-        apply(ComposedFilter.selectingScope(scope, from: filterSelection))
-    }
-
-    /// Select a tag filter, or clear it if the same tag is already active.
-    func toggleTag(_ tag: String) {
-        apply(ComposedFilter.togglingTag(tag, from: filterSelection))
-    }
-
-    /// The board filters as one value for `ComposedFilter` to resolve.
-    private var filterSelection: ComposedFilter.Selection {
-        .init(scope: activeScope, tag: selectedTag)
-    }
-
-    /// Adopt a resolved selection and reload, doing nothing when it matches what
-    /// is already applied. Each property is assigned only when it actually
-    /// differs: every one of them persists to defaults in `didSet`, so blind
-    /// assignment would rewrite unchanged keys and churn observation.
-    private func apply(_ selection: ComposedFilter.Selection) {
-        guard selection != filterSelection else { return }
-        if activeScope != selection.scope {
-            activeScope = selection.scope
-        }
-        if selectedTag != selection.tag {
-            selectedTag = selection.tag
-        }
+        guard activeScope != scope else { return }
+        activeScope = scope
         Task { await reloadForFilterChange() }
-    }
-
-    /// Clear the tag filter (the reading list's "Clear tag filter" empty-state
-    /// action); leaves the scope and search in place.
-    func clearTag() async {
-        guard selectedTag != nil else { return }
-        selectedTag = nil
-        await reloadForFilterChange()
     }
 }

@@ -13,7 +13,8 @@ import SwiftUI
 @MainActor
 @Observable
 final class AppState {
-    /// Keys the library scope, tag filter, and search box persist under.
+    /// Keys the current board scope and search box persist under, plus retired
+    /// kind/tag keys that are cleared during migration.
     private enum FilterDefaultsKey {
         static let kind = "selectedKind"
         static let scope = "activeScope"
@@ -68,15 +69,6 @@ final class AppState {
         }
     }
 
-    /// The optional saved-item kind facet. `nil` is the unfiltered "Everything"
-    /// choice; a concrete value composes with the library scope, tag, and
-    /// full-text filters and is persisted across launches.
-    var selectedKind: ReadingKind? {
-        didSet {
-            AppDefaults.store.set(selectedKind?.rawValue, forKey: FilterDefaultsKey.kind)
-        }
-    }
-
     /// Pending debounced search reload. Each keystroke cancels the previous one
     /// so the core is queried once typing settles, not per character. Plumbing
     /// only — not part of the observable UI state.
@@ -89,14 +81,6 @@ final class AppState {
     var activeScope: LibraryScope = .all {
         didSet {
             AppDefaults.store.set(activeScope.rawValue, forKey: FilterDefaultsKey.scope)
-        }
-    }
-
-    /// The active tag filter, if any. Composes with the scope and search;
-    /// `nil` means no tag filter. At most one tag at a time. Persisted across launches.
-    var selectedTag: String? {
-        didSet {
-            AppDefaults.store.set(selectedTag, forKey: FilterDefaultsKey.tag)
         }
     }
 
@@ -130,7 +114,7 @@ final class AppState {
 
     // ── Filter metadata ───────────────────────────────────────────────────
 
-    /// Tag names used by the board's filter menu.
+    /// Global tag names used by each reading's tag editor.
     var filters = LibraryFilters()
 
     // ── Status ────────────────────────────────────────────────────────────
@@ -171,6 +155,8 @@ final class AppState {
         // The board now always uses its fixed newest-first / relevance ordering.
         defaults.removeObject(forKey: "sortField")
         defaults.removeObject(forKey: "sortAscending")
+        defaults.removeObject(forKey: FilterDefaultsKey.kind)
+        defaults.removeObject(forKey: FilterDefaultsKey.tag)
 
         // Restore the current scope or migrate the one compatible legacy value.
         // Old unread/read/archive values become All so a removed control can never
@@ -183,9 +169,6 @@ final class AppState {
         defaults.set(activeScope.rawValue, forKey: FilterDefaultsKey.scope)
         defaults.removeObject(forKey: FilterDefaultsKey.legacyView)
         defaults.removeObject(forKey: FilterDefaultsKey.legacyRating)
-        selectedKind = defaults.string(forKey: FilterDefaultsKey.kind)
-            .flatMap(ReadingKind.init(rawValue:))
-        selectedTag = defaults.string(forKey: FilterDefaultsKey.tag)
         searchQuery = defaults.string(forKey: FilterDefaultsKey.search) ?? ""
 
         // Resume the extension-install step if the user quit before dismissing it.

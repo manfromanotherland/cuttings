@@ -8,17 +8,10 @@ extension CuttingsLibraryView {
         if !appState.searchQuery.isEmpty {
             ContentUnavailableView.search(text: appState.searchQuery)
                 .accessibilityIdentifier(A11y.List.searchEmptyState)
-        } else if appState.selectedTag != nil {
-            ContentUnavailableView {
-                Label("Nothing here yet", systemImage: "sparkles.rectangle.stack")
-            } actions: {
-                Button("Clear tag filter") { Task { await appState.clearTag() } }
-                    .accessibilityIdentifier(A11y.List.clearTagFilter)
-            }
-            .accessibilityIdentifier(A11y.List.tagEmptyState)
-        } else if let kind = appState.selectedKind {
+        } else if appState.activeScope != .all {
             ContentUnavailableView(
-                "No \(kind.label.lowercased()) here yet", systemImage: kind.symbol
+                "No \(appState.activeScope.label.lowercased()) here yet",
+                systemImage: appState.activeScope.icon
             )
             .accessibilityIdentifier(A11y.List.emptyState)
         } else {

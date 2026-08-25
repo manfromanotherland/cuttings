@@ -18,10 +18,10 @@ extension AppState {
         }
     }
 
-    /// Mirror of the core's scope/tag filter: does `row` still belong in the list
-    /// the user is currently looking at?
+    /// Mirror of the core's board scope: does `row` still belong in the list the
+    /// user is currently looking at?
     private func rowMatchesCurrentFilter(_ row: ReadingRow) -> Bool {
-        ComposedFilter.matches(row, scope: activeScope, tag: selectedTag)
+        ComposedFilter.matches(row, scope: activeScope)
     }
 
     /// Pair with `applyOptimistic`: if the optimistic edit
@@ -40,6 +40,17 @@ extension AppState {
             }
             readings.remove(at: index)
         }
+    }
+
+    /// Keep the Notes scope responsive while a note write happens off the main
+    /// thread. Clearing a note removes its card and advances selection in the
+    /// same render tick; the subsequent core refresh remains authoritative.
+    func applyOptimisticNotePresence(id: String, hasNote: Bool) {
+        guard let old = readings.first(where: { $0.id == id }) else { return }
+        var updated = old
+        updated.hasNote = hasNote
+        applyOptimistic(old, updated)
+        advancePastFilteredRow(id: id)
     }
 
     func toggleFavorite(_ row: ReadingRow) async {

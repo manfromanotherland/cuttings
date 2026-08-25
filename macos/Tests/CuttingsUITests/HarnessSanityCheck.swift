@@ -12,7 +12,7 @@ final class HarnessSanityCheck: UITestCase {
 
         // The board and its toolbar are mounted without relying on a sidebar.
         XCTAssertTrue(app.byId(A11y.List.rows).exists)
-        XCTAssertTrue(app.byId(A11y.Filter.favorites).exists)
+        XCTAssertTrue(app.byId(A11y.Filter.group).exists)
 
         // An empty library shows the "Nothing here yet" empty state, not a table.
         XCTAssertTrue(app.byId(A11y.List.emptyState).waitExists())

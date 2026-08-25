@@ -11,8 +11,7 @@ final class SmokeTest: UITestCase {
         // Legacy read/archive metadata does not remove cards from the board.
         XCTAssertTrue(list.waitForRowCount(Fixtures.standardCorpus.count), "all cards loaded")
         XCTAssertTrue(list.row(Fixtures.Ids.archived).waitExists(), "legacy archived card is visible")
-        XCTAssertTrue(app.byId(A11y.Filter.favorites).exists, "favorites control is available")
-        XCTAssertTrue(app.byId(A11y.Filter.menu).exists, "filter control is available")
+        XCTAssertTrue(app.byId(A11y.Filter.group).exists, "filter control is available")
 
         // Open a known article and confirm the overlay shows its title.
         list.open(Fixtures.Ids.rust)

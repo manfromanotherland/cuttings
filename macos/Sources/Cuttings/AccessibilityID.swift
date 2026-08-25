@@ -34,6 +34,7 @@ enum A11y {
 
     /// ── Board filters ─────────────────────────────────────────────────────
     enum Filter {
+        static let group = "filter.group"
         static let favorites = "filter.favorites"
         static let menu = "filter.menu"
 

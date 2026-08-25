@@ -13,6 +13,8 @@ final class ReadingRowMapperTests: XCTestCase {
             id: "01JREADING000000000000000000",
             title: "The Title",
             kind: .video,
+            lightweight: true,
+            hasNote: true,
             url: "https://example.com/article",
             mediaUrl: "https://cdn.example.com/video.mp4",
             previewAsset: "assets/poster.jpg",
@@ -50,6 +52,8 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.lang, ffi.lang)
         XCTAssertEqual(row.tags, ffi.tags)
         XCTAssertEqual(row.kind, .video)
+        XCTAssertEqual(row.lightweight, ffi.lightweight)
+        XCTAssertEqual(row.hasNote, ffi.hasNote)
         XCTAssertEqual(row.mediaUrl, ffi.mediaUrl)
         XCTAssertEqual(row.previewAsset, ffi.previewAsset)
     }
@@ -59,6 +63,8 @@ final class ReadingRowMapperTests: XCTestCase {
             id: "01JREADING000000000000000001",
             title: "",
             kind: .article,
+            lightweight: false,
+            hasNote: false,
             url: "https://example.com/b",
             mediaUrl: nil,
             previewAsset: nil,
@@ -82,6 +88,8 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertNil(row.wordCount)
         XCTAssertNil(row.lang)
         XCTAssertEqual(row.kind, .article)
+        XCTAssertFalse(row.lightweight)
+        XCTAssertFalse(row.hasNote)
         XCTAssertNil(row.mediaUrl)
         XCTAssertNil(row.previewAsset)
         XCTAssertTrue(row.tags.isEmpty)

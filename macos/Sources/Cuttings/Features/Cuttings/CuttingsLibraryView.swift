@@ -68,9 +68,12 @@ extension CuttingsLibraryView {
                 appState.searchDidChange()
             }
             .onChange(of: appState.readings) { _, rows in
-                guard let id = presentedReading?.id,
-                      let refreshed = rows.first(where: { $0.id == id }) else { return }
-                presentedReading = refreshed
+                guard let id = presentedReading?.id else { return }
+                if let refreshed = rows.first(where: { $0.id == id }) {
+                    presentedReading = refreshed
+                } else {
+                    advanceOverlayPastCurrent()
+                }
             }
     }
 
@@ -122,62 +125,27 @@ extension CuttingsLibraryView {
     private var boardToolbar: some ToolbarContent {
         if presentedReading == nil {
             ToolbarItemGroup(placement: .primaryAction) {
-                favoritesToggle
-                filterMenu
+                boardFilterPicker
                 cardSizeControl
             }
         }
     }
 
-    private var favoritesToggle: some View {
-        let showingFavorites = appState.activeScope == .favorites
-
-        return Button {
-            appState.selectScope(showingFavorites ? .all : .favorites)
-        } label: {
-            Label(
-                showingFavorites ? "Show all" : "Favorites",
-                systemImage: showingFavorites ? "heart.fill" : "heart"
-            )
-        }
-        .accessibilityLabel(showingFavorites ? "Show all cuttings" : "Show favorites")
-        .accessibilityValue(showingFavorites ? "On" : "Off")
-        .accessibilityIdentifier(A11y.Filter.favorites)
-        .help(showingFavorites ? "Show all cuttings" : "Show favorites")
-    }
-
-    private var filterMenu: some View {
-        Menu {
-            Picker("Kind", selection: kindSelection) {
-                Text("Everything").tag(nil as ReadingKind?)
-                ForEach(ReadingKind.allCases, id: \.self) { kind in
-                    Label(kind.label, systemImage: kind.symbol)
-                        .tag(kind as ReadingKind?)
-                }
+    private var boardFilterPicker: some View {
+        Picker("Filter", selection: scopeSelection) {
+            ForEach(LibraryScope.allCases) { scope in
+                Label(scope.label, systemImage: scope.icon)
+                    .labelStyle(.iconOnly)
+                    .help(scope.label)
+                    .accessibilityLabel(scope.label)
+                    .tag(scope)
             }
-
-            if !appState.filters.tags.isEmpty {
-                Divider()
-
-                Picker("Tag", selection: tagSelection) {
-                    Text("Any Tag").tag(nil as String?)
-                    ForEach(appState.filters.tags, id: \.tag) { item in
-                        Text("#\(item.tag)")
-                            .tag(item.tag as String?)
-                            .accessibilityIdentifier(A11y.Filter.tag(item.tag))
-                    }
-                }
-            }
-        } label: {
-            Label(
-                "Filter",
-                systemImage: hasActiveFilters
-                    ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease.circle"
-            )
         }
-        .help("Filter cuttings")
-        .accessibilityIdentifier(A11y.Filter.menu)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel("Filter")
+        .accessibilityValue(appState.activeScope.label)
+        .accessibilityIdentifier(A11y.Filter.group)
     }
 
     private var cardSizeControl: some View {
@@ -357,29 +325,11 @@ extension CuttingsLibraryView {
         )
     }
 
-    private var kindSelection: Binding<ReadingKind?> {
+    private var scopeSelection: Binding<LibraryScope> {
         Binding(
-            get: { appState.selectedKind },
-            set: { appState.selectKind($0) }
+            get: { appState.activeScope },
+            set: { appState.selectScope($0) }
         )
-    }
-
-    private var tagSelection: Binding<String?> {
-        Binding(
-            get: { appState.selectedTag },
-            set: { tag in
-                guard tag != appState.selectedTag else { return }
-                if let tag {
-                    appState.toggleTag(tag)
-                } else if let current = appState.selectedTag {
-                    appState.toggleTag(current)
-                }
-            }
-        )
-    }
-
-    private var hasActiveFilters: Bool {
-        appState.selectedKind != nil || appState.selectedTag != nil
     }
 
     private static let boardSpacing: CGFloat = 18
@@ -457,15 +407,7 @@ extension CuttingsLibraryView {
     }
 
     private func updateTag(_ tag: String, applies: Bool, to row: ReadingRow) {
-        let removesPresentedRowFromActiveTag = !applies
-            && appState.selectedTag == tag
-            && presentedReading?.id == row.id
-
-        if removesPresentedRowFromActiveTag {
-            tagTargetID = nil
-            appState.showTagSheet = false
-            advanceOverlayPastCurrent()
-        } else if var presented = presentedReading, presented.id == row.id {
+        if var presented = presentedReading, presented.id == row.id {
             if applies, !presented.tags.contains(tag) {
                 presented.tags.append(tag)
             } else if !applies {

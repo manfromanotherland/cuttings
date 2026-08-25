@@ -2,70 +2,21 @@
 
 import XCTest
 
-/// Pure scope-and-tag filtering rules used by the library board. The async
-/// persistence/reconciliation around these rules stays outside this hostless
-/// suite.
+/// Pure filtering and one-motion selection rules used by the library board.
 final class ComposedFilterTests: XCTestCase {
-    func testResolveScopeFallsBackToAllOnFavoritesRetap() {
-        XCTAssertEqual(
-            ComposedFilter.resolveScope(active: .favorites, tapped: .favorites),
-            .all
-        )
-        XCTAssertEqual(ComposedFilter.resolveScope(active: .all, tapped: .all), .all)
-        XCTAssertEqual(ComposedFilter.resolveScope(active: .all, tapped: .favorites), .favorites)
-    }
+    func testMatchesUsesTheSelectedScope() {
+        let favorite = makeReadingRow(favorite: true)
+        XCTAssertTrue(ComposedFilter.matches(favorite, scope: .all))
+        XCTAssertTrue(ComposedFilter.matches(favorite, scope: .favorites))
 
-    func testToggleClearsOnReselectOtherwiseReplaces() {
-        XCTAssertEqual(ComposedFilter.toggle(String?.none, "rust"), "rust")
-        XCTAssertNil(ComposedFilter.toggle("rust", "rust"))
-        XCTAssertEqual(ComposedFilter.toggle("rust", "swift"), "swift")
-    }
-
-    func testChangingScopeClearsTheTag() {
-        let current = ComposedFilter.Selection(scope: .all, tag: "swift")
-        let next = ComposedFilter.selectingScope(.favorites, from: current)
-        XCTAssertEqual(next, ComposedFilter.Selection(scope: .favorites, tag: nil))
-    }
-
-    func testFallingBackToAllAlsoClearsTheTag() {
-        let current = ComposedFilter.Selection(scope: .favorites, tag: "swift")
-        let next = ComposedFilter.selectingScope(.favorites, from: current)
-        XCTAssertEqual(next, ComposedFilter.Selection(scope: .all, tag: nil))
-    }
-
-    func testTappingAllWhileAlreadyAllKeepsTheTag() {
-        let current = ComposedFilter.Selection(scope: .all, tag: "swift")
-        XCTAssertEqual(ComposedFilter.selectingScope(.all, from: current), current)
-    }
-
-    func testChangingTheTagLeavesTheScopeAlone() {
-        let current = ComposedFilter.Selection(scope: .favorites, tag: "swift")
-        XCTAssertEqual(
-            ComposedFilter.togglingTag("rust", from: current),
-            ComposedFilter.Selection(scope: .favorites, tag: "rust")
-        )
-        XCTAssertEqual(
-            ComposedFilter.togglingTag("swift", from: current),
-            ComposedFilter.Selection(scope: .favorites, tag: nil)
-        )
-    }
-
-    func testMatchesIntersectsScopeAndTag() {
-        var row = makeReadingRow(favorite: true)
-        row.tags = ["rust"]
-
-        XCTAssertTrue(ComposedFilter.matches(row, scope: .all, tag: nil))
-        XCTAssertTrue(ComposedFilter.matches(row, scope: .all, tag: "rust"))
-        XCTAssertTrue(ComposedFilter.matches(row, scope: .favorites, tag: "rust"))
-        XCTAssertFalse(ComposedFilter.matches(row, scope: .all, tag: "swift"))
-
-        row.favorite = false
-        XCTAssertFalse(ComposedFilter.matches(row, scope: .favorites, tag: "rust"))
+        let ordinary = makeReadingRow()
+        XCTAssertTrue(ComposedFilter.matches(ordinary, scope: .all))
+        XCTAssertFalse(ComposedFilter.matches(ordinary, scope: .favorites))
     }
 
     func testAllMatchesLegacyArchivedRows() {
         let row = makeReadingRow(archived: true)
-        XCTAssertTrue(ComposedFilter.matches(row, scope: .all, tag: nil))
+        XCTAssertTrue(ComposedFilter.matches(row, scope: .all))
     }
 
     func testSelectionAfterRemovingPrefersNextThenPreviousThenNil() {

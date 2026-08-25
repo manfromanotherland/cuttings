@@ -2,14 +2,14 @@
 
 import XCTest
 
-/// Create a tag from the inspector, apply it to a second card, filter the board
-/// from the toolbar, then remove it from both cards.
+/// Create a tag from the inspector, apply it to a second card, then remove it
+/// from both cards without disturbing either reading's other tags.
 final class TagOrganizingJourney: UITestCase {
     private static let newTag = "important"
 
     // One end-to-end organizing walk; asserting each persistence boundary keeps it long.
     // swiftlint:disable:next function_body_length
-    func testCreateApplyFilterAndRemoveTags() throws {
+    func testCreateApplyAndRemoveTags() throws {
         try launchApp(articles: Fixtures.standardCorpus)
         let tag = Self.newTag
 
@@ -40,11 +40,6 @@ final class TagOrganizingJourney: UITestCase {
         )
 
         reader.close()
-        list.selectTagFilter(tag)
-        XCTAssertTrue(list.waitForRowCount(2), "toolbar filter shows the two tagged cards")
-        XCTAssertTrue(list.row(Fixtures.Ids.minimal).waitExists(), "minimal matches the filter")
-        XCTAssertTrue(list.row(Fixtures.Ids.unicode).waitExists(), "unicode matches the filter")
-
         list.open(Fixtures.Ids.minimal)
         reader.openTagPicker()
         tagPicker.toggle(tag)
@@ -54,7 +49,7 @@ final class TagOrganizingJourney: UITestCase {
             "tag removed from minimal's frontmatter"
         )
         reader.close()
-        XCTAssertTrue(list.row(Fixtures.Ids.minimal).waitDisappears(), "minimal leaves the tag filter")
+        XCTAssertTrue(list.row(Fixtures.Ids.minimal).waitExists(), "minimal remains on the board")
 
         list.open(Fixtures.Ids.unicode)
         reader.openTagPicker()
@@ -70,10 +65,8 @@ final class TagOrganizingJourney: UITestCase {
         )
         reader.close()
 
-        XCTAssertTrue(list.tagEmptyState.waitExists(), "empty tag filter state appears")
-        XCTAssertTrue(list.clearTagFilterButton.waitExists(), "clear filter action is offered")
-        list.clearTagFilter()
         XCTAssertTrue(list.waitForRowCount(Fixtures.standardCorpus.count), "full board returns")
         XCTAssertTrue(list.row(Fixtures.Ids.minimal).waitExists(), "minimal is visible again")
+        XCTAssertTrue(list.row(Fixtures.Ids.unicode).waitExists(), "unicode is visible again")
     }
 }

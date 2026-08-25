@@ -11,8 +11,8 @@ struct ReadingListPage {
         app.byId(A11y.List.table)
     }
 
-    var favoritesToggle: XCUIElement {
-        app.byId(A11y.Filter.favorites)
+    var filterGroup: XCUIElement {
+        app.byId(A11y.Filter.group)
     }
 
     var filterMenu: XCUIElement {
@@ -20,11 +20,16 @@ struct ReadingListPage {
     }
 
     func showFavorites() {
-        favoritesToggle.clickWhenReady()
+        selectScope("Favourites")
     }
 
     func showAll() {
-        favoritesToggle.clickWhenReady()
+        selectScope("All")
+    }
+
+    private func selectScope(_ label: String) {
+        let radio = filterGroup.radioButtons[label]
+        (radio.exists ? radio : filterGroup.buttons[label]).clickWhenReady()
     }
 
     func selectTagFilter(_ tag: String) {

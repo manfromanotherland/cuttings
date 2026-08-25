@@ -21,11 +21,16 @@ extension AppState {
     @discardableResult
     func setNote(id: String, markdown: String) async -> String? {
         guard let core else { return nil }
+        let hasNote = !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        applyOptimisticNotePresence(id: id, hasNote: hasNote)
         do {
             try await core.setNote(readingId: id, markdown: markdown)
-            return try await core.getNote(readingId: id)
+            let persisted = try await core.getNote(readingId: id)
+            await loadReadings(resetSelectionIfMissing: false)
+            return persisted
         } catch {
             self.error = error.localizedDescription
+            await loadReadings(resetSelectionIfMissing: false)
             return try? await core.getNote(readingId: id)
         }
     }

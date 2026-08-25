@@ -56,6 +56,8 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var lang: String?
     var tags: [String]
     var kind: ReadingKind = .article
+    var lightweight: Bool
+    var hasNote: Bool
     var mediaUrl: String?
     var previewAsset: String?
 }
@@ -81,6 +83,8 @@ extension ReadingRow {
         lang = row.lang
         tags = row.tags
         kind = ReadingKind(row.kind)
+        lightweight = row.lightweight
+        hasNote = row.hasNote
         mediaUrl = row.mediaUrl
         previewAsset = row.previewAsset
     }

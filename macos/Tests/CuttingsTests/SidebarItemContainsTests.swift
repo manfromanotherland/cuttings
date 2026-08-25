@@ -2,9 +2,9 @@
 
 import XCTest
 
-/// `LibraryScope.contains` mirrors the two library scopes exposed by the app.
-/// Legacy read/archive metadata must not hide a card now that those states are
-/// no longer part of the organizing model.
+/// `LibraryScope.contains` mirrors the board scopes exposed by the app. Legacy
+/// read/archive metadata must not hide a card now that those states are no
+/// longer part of the organizing model.
 final class LibraryScopeContainsTests: XCTestCase {
     func testAllContainsEveryReadingIncludingLegacyArchivedRows() {
         XCTAssertTrue(LibraryScope.all.contains(makeReadingRow()))
@@ -21,5 +21,43 @@ final class LibraryScopeContainsTests: XCTestCase {
             LibraryScope.favorites.contains(makeReadingRow(archived: true, favorite: true))
         )
         XCTAssertFalse(LibraryScope.favorites.contains(makeReadingRow(favorite: false)))
+    }
+
+    func testMediaContainsImagesAndVideosOnly() {
+        XCTAssertTrue(LibraryScope.media.contains(makeReadingRow(kind: .image)))
+        XCTAssertTrue(LibraryScope.media.contains(makeReadingRow(kind: .video)))
+        XCTAssertFalse(LibraryScope.media.contains(makeReadingRow(kind: .article)))
+        XCTAssertFalse(LibraryScope.media.contains(makeReadingRow(kind: .quote)))
+    }
+
+    func testArticlesContainsOnlyFullArticleReadings() {
+        XCTAssertTrue(LibraryScope.articles.contains(makeReadingRow(kind: .article)))
+        XCTAssertFalse(
+            LibraryScope.articles.contains(makeReadingRow(lightweight: true, kind: .article))
+        )
+        XCTAssertFalse(LibraryScope.articles.contains(makeReadingRow(kind: .image)))
+    }
+
+    func testNotesContainsAnyReadingWithANote() {
+        XCTAssertTrue(LibraryScope.notes.contains(makeReadingRow(hasNote: true)))
+        XCTAssertTrue(
+            LibraryScope.notes.contains(makeReadingRow(hasNote: true, kind: .video))
+        )
+        XCTAssertFalse(LibraryScope.notes.contains(makeReadingRow(hasNote: false)))
+    }
+
+    func testLinksContainsOnlyLightweightArticleReadings() {
+        XCTAssertTrue(
+            LibraryScope.links.contains(makeReadingRow(lightweight: true, kind: .article))
+        )
+        XCTAssertFalse(LibraryScope.links.contains(makeReadingRow(kind: .article)))
+        XCTAssertFalse(
+            LibraryScope.links.contains(makeReadingRow(lightweight: true, kind: .video))
+        )
+    }
+
+    func testQuotesContainsQuoteReadingsOnly() {
+        XCTAssertTrue(LibraryScope.quotes.contains(makeReadingRow(kind: .quote)))
+        XCTAssertFalse(LibraryScope.quotes.contains(makeReadingRow(kind: .article)))
     }
 }
