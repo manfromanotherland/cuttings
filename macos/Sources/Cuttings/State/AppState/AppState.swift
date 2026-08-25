@@ -136,8 +136,8 @@ final class AppState {
 
     // Internal rather than private so the sibling extension files in this
     // folder can reach them — Swift's `private` is file-scoped.
-    // One bounded masonry chunk per fetch. Keeping the first render and every
-    // subsequent append to 60 cards prevents a large decode burst.
+    // Fetch a bounded number of cards at a time so the first render and each
+    // subsequent append do not trigger an unbounded decode burst.
     let pageSize: UInt32 = 60
     var core: (any CoreBridging)?
     var accessedURL: URL?

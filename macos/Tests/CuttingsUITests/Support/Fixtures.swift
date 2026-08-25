@@ -185,6 +185,21 @@ enum Fixtures {
         }
     }
 
+    /// A page plus one card for proving pagination continues the existing
+    /// masonry columns. The oldest card in the first page is deliberately tall;
+    /// the next page's card should tuck beneath a shorter neighbouring column,
+    /// rather than starting a new horizontal band below it.
+    static func masonryPaginationCorpus() -> [ArticleFixture] {
+        var corpus = bulkCorpus(count: 61)
+        corpus[1].title = String(
+            repeating: "A deliberately tall first-page card ", count: 8
+        )
+        corpus[1].excerpt = String(
+            repeating: "Its height exposes a page boundary in the masonry layout. ", count: 12
+        )
+        return corpus
+    }
+
     /// A single article whose body exceeds the reader's ~10 MB parse guard, so
     /// the reader shows the "too large / Open in Browser" notice.
     static func oversizeArticle() -> ArticleFixture {

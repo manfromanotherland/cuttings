@@ -20,4 +20,23 @@ final class PaginationCheck: UITestCase {
         // the 60-row first page.
         XCTAssertTrue(list.scrollToRow(Fixtures.id(0)), "loadMore pages through to the oldest article")
     }
+
+    func testNextPageContinuesExistingMasonryColumns() throws {
+        try launchApp(articles: Fixtures.masonryPaginationCorpus())
+
+        let tallFirstPageCard = list.row(Fixtures.id(1))
+        let nextPageCard = list.row(Fixtures.id(0))
+        XCTAssertTrue(
+            list.scrollToRow(Fixtures.id(0)),
+            "the card after the first 60-item page becomes reachable"
+        )
+        XCTAssertTrue(tallFirstPageCard.exists)
+        XCTAssertTrue(nextPageCard.exists)
+
+        XCTAssertLessThan(
+            nextPageCard.frame.minY,
+            tallFirstPageCard.frame.maxY,
+            "the next page should fill a shorter column instead of starting below the tallest card"
+        )
+    }
 }
