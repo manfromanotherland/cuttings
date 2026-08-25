@@ -63,6 +63,7 @@ extension AppState {
     // ── Boot ──────────────────────────────────────────────────────────────
 
     func boot(url: URL) async {
+        visualSearchTask?.cancel()
         isLoading = true
         error = nil
         do {
@@ -79,6 +80,7 @@ extension AppState {
             }
             startWatcher(libraryPath: url.path)
             await refresh()
+            scheduleVisualSearchReconciliation()
         } catch {
             self.error = error.localizedDescription
         }
@@ -108,6 +110,7 @@ extension AppState {
             let changed = try await core.sync()
             if changed > 0 {
                 await refresh()
+                scheduleVisualSearchReconciliation()
             }
         } catch {
             self.error = error.localizedDescription

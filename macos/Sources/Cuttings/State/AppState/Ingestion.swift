@@ -46,6 +46,7 @@ extension AppState {
             // Every core import synchronizes the disposable index before it
             // returns. Reload once after the batch so cards/counts move together.
             await refresh()
+            scheduleVisualSearchReconciliation()
         }
 
         if summary.completed == 0, let lastError = summary.lastError {

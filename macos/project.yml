@@ -115,6 +115,8 @@ targets:
       - path: Sources/Cuttings/Platform/NativeHost/NativeHostInstaller.swift
       - path: Sources/Cuttings/Platform/Spotlight
       - path: Sources/Cuttings/Platform/VisualAnalysis
+      - path: Sources/Cuttings/Bridge/VisualSearchBridging.swift
+      - path: Sources/Cuttings/State/VisualSearchCoordinator.swift
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:

@@ -74,6 +74,9 @@ final class AppState {
     /// only — not part of the observable UI state.
     @ObservationIgnored var searchTask: Task<Void, Never>?
     @ObservationIgnored var saveNoticeTask: Task<Void, Never>?
+    @ObservationIgnored var visualSearchTask: Task<Void, Never>?
+    @ObservationIgnored var readingLoadGeneration: UInt64 = 0
+    @ObservationIgnored var readingPageContext: ReadingPageContext?
 
     /// The active library scope. Always exactly one; `.all` is the unfiltered
     /// base. Persisted under a new key so legacy unread/read/archive selections
@@ -139,13 +142,17 @@ final class AppState {
     // Fetch a bounded number of cards at a time so the first render and each
     // subsequent append do not trigger an unbounded decode burst.
     let pageSize: UInt32 = 60
+    let semanticCandidateLimit = 2000
     var core: (any CoreBridging)?
     var accessedURL: URL?
     var watcher: FolderWatcher?
+    let visualSearchCoordinator: VisualSearchCoordinator?
 
     private var editingMonitor: TextEditingMonitor?
 
     init() {
+        visualSearchCoordinator = Self.makeVisualSearchCoordinator()
+
         let defaults = AppDefaults.store
 
         // Removed sort controls must not leave an invisible preference behind.
@@ -188,6 +195,17 @@ final class AppState {
         editingMonitor = TextEditingMonitor { [weak self] editing in
             self?.isEditingText = editing
         }
+    }
+
+    private static func makeVisualSearchCoordinator() -> VisualSearchCoordinator? {
+        // Never donate throwaway fixture IDs to the user's real Spotlight index
+        // or introduce system-model timing into UI tests.
+        guard !TestHooks.isUITesting else { return nil }
+        return VisualSearchCoordinator(
+            analyzer: AppleVisualAnalyzer(),
+            analyzerVersion: AppleVisualAnalyzer.analyzerVersion,
+            spotlight: SpotlightVisualIndex()
+        )
     }
 
     // ── Extension setup ─────────────────────────────────────────────────────────

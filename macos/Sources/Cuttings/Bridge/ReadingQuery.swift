@@ -12,6 +12,10 @@ struct ReadingQuery {
     var ascending: Bool
     var tag: String?
     var search: String?
+    /// Core Spotlight's best-first semantic matches for `search`. The Rust
+    /// core merges these candidates with its own text/label/colour results so
+    /// filters, relevance ordering, and pagination stay one coherent query.
+    var semanticCandidateIDs: [String]
     var limit: UInt32
     var offset: UInt32
 }

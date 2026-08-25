@@ -25,6 +25,31 @@ actor CoreBridge {
         try database.sync(libraryPath: libraryPath)
     }
 
+    func pendingVisualAnalysis(
+        analyzerVersion: String, limit: UInt32
+    ) throws -> [VisualAnalysisWorkItem] {
+        try database.pendingVisualAnalysis(
+            libraryPath: libraryPath,
+            analyzerVersion: analyzerVersion,
+            limit: limit
+        ).map(VisualAnalysisWorkItem.init)
+    }
+
+    @discardableResult
+    func completeVisualAnalysis(
+        task: VisualAnalysisWorkItem, result: VisualAnalysisCompletion
+    ) throws -> Bool {
+        try database.completeVisualAnalysis(
+            libraryPath: libraryPath,
+            task: task.ffi,
+            result: result.ffi
+        )
+    }
+
+    func currentVisualAssets() throws -> [VisualAssetSnapshot] {
+        try database.currentVisualAssets(libraryPath: libraryPath).map(VisualAssetSnapshot.init)
+    }
+
     // ── Query ─────────────────────────────────────────────────────────────
 
     /// One page of readings for the composed scope/tag filter, the board order,
@@ -40,6 +65,8 @@ actor CoreBridge {
             kind: query.kind?.ffiKind,
             since: nil, until: nil,
             query: query.search,
+            predominantColor: nil,
+            semanticCandidateIds: query.semanticCandidateIDs,
             limit: query.limit, offset: query.offset
         )
         return try database.listReadings(opts: opts)
@@ -51,7 +78,13 @@ actor CoreBridge {
         kind: ReadingKind?, scope: LibraryScope, tag: String?, query: String?
     ) throws -> FfiSidebarCounts {
         let ffiScope = FfiCountScope(
-            view: scope.ffiView, tag: tag, rating: nil, kind: kind?.ffiKind, query: query
+            view: scope.ffiView,
+            tag: tag,
+            rating: nil,
+            kind: kind?.ffiKind,
+            query: query,
+            predominantColor: nil,
+            semanticCandidateIds: []
         )
         return try database.sidebarCounts(scope: ffiScope)
     }

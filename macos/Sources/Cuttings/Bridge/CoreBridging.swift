@@ -9,7 +9,7 @@ import Foundation
 /// The methods are `async throws` here; `CoreBridge`'s actor-isolated synchronous
 /// methods witness them (a call from outside an actor is implicitly async).
 /// Boundary DTOs (`Ffi*`) appear in the signatures because this is the bridge.
-protocol CoreBridging: Sendable {
+protocol CoreBridging: VisualSearchCore {
     func rebuild() async throws
     @discardableResult func sync() async throws -> UInt32
 

@@ -52,6 +52,7 @@ extension AppState {
                 selectedId = nil
             }
             await refresh()
+            scheduleVisualSearchReconciliation()
         } catch {
             self.error = error.localizedDescription
         }
