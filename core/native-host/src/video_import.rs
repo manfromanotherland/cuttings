@@ -77,6 +77,7 @@ impl VideoImportSession {
                 title: request.metadata.title,
                 author: request.metadata.author,
                 site: request.metadata.site,
+                theme_color: request.metadata.theme_color,
                 lang: request.metadata.lang,
                 excerpt: request.metadata.excerpt,
                 word_count: request.metadata.word_count,

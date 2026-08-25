@@ -69,6 +69,7 @@ preview_asset: assets/3f4a1b8e....jpg      # optional local card preview written
 favicon_asset: assets/91d0c4ab....ico      # optional locally captured page favicon
 author: Jane Doe                           # optional; extracted byline
 site: Example                              # optional source-site label or hostname
+theme_color: "#123456"                     # optional normalized website colour for card presentation
 saved_at: 2026-06-13T15:00:00Z            # ISO-8601 UTC; set once at save time; never updated
 read_at: 2026-06-14T09:00:00Z             # optional legacy state; preserved for compatibility
 archived: false                            # required legacy state; current macOS app ignores it
@@ -87,8 +88,8 @@ source_hash: sha256:abc123...              # sha256 of the cleaned Markdown body
 `rating`, `tags`, `source_hash`.
 
 #### Optional fields
-`kind`, `lightweight`, `media_url`, `preview_asset`, `favicon_asset`, `author`, `site`, `read_at`, `excerpt`,
-`word_count`, `lang`.
+`kind`, `lightweight`, `media_url`, `preview_asset`, `favicon_asset`, `author`, `site`,
+`theme_color`, `read_at`, `excerpt`, `word_count`, `lang`.
 
 `kind` is written for every new card but remains optional in the parser for backwards compatibility;
 an older file without it is an `article`. `lightweight` is omitted/false for ordinary captures and
@@ -115,6 +116,10 @@ is true for a link saved without a cleaned article body, from either the app or 
   derived only after captured image/poster bytes are written locally; it is never an HTTP URL.
 - `favicon_asset`, when present, follows the same safe local path rule. It records a captured page
   icon separately from the full-size card preview and is never inserted into article Markdown.
+- `theme_color`, when present, is optional card-presentation metadata derived from the origin
+  website's declared theme colour. Its stored form is lowercase sRGB `#rrggbb`; it does not affect
+  reading identity or content. Save/import adapters may supply common CSS colour forms, which the
+  core normalizes centrally; unsupported values are omitted rather than failing the save.
 - `read_at`, `archived`, `favorite`, and `rating` remain part of the format-v1 compatibility
   contract. Older clients may still interpret and mutate them, so current readers preserve them
   when rewriting a file. The current macOS product does not expose them as curation controls.
@@ -158,6 +163,7 @@ title: Local-First Software
 kind: article
 author: Martin Kleppmann
 site: blog.example.com
+theme_color: "#123456"
 saved_at: 2026-06-13T15:00:00Z
 archived: false
 favorite: false
@@ -186,16 +192,20 @@ More content…
 
 - Each reading's captured images and copied videos live in an `assets/` sub-folder inside the
   reading's own folder, beside `article.md`, and are linked from the body as `assets/<file>`.
+- Captured social previews and favicons use the same local asset store. Frontmatter addresses them
+  only through the relative `preview_asset: assets/<file>` and `favicon_asset: assets/<file>` roles;
+  their remote source URLs are not the stored presentation references.
 - Filename is the **lowercase hex SHA-256** of the file's raw bytes, with an extension chosen from
   its `Content-Type` (falling back to the source URL for images): e.g. `3f4a1b8e....jpg`.
 - Article and standalone images are **captured by the browser extension** (from the page's cache
   where possible) and sent to the host. Every browser video is streamed in acknowledged chunks;
   when source bytes cannot be fetched, the extension records the exact rendered element as a
   compatible H.264 MP4. Videos are never embedded in an ordinary save message. Standalone images
-  and videos may also arrive from the app's paste/drop path. Every
-  adapter hands bytes to the same core writer; the core performs no network requests. An image the
-  extension couldn't capture is left as a remote URL in the Markdown and is never re-fetched; the
-  reader shows a labelled placeholder for it.
+  and videos may also arrive from the app's paste/drop path. The My Mind migration adapter may
+  fetch link metadata, social previews, and favicons during a write unless `--offline` is selected.
+  Every adapter hands already-captured bytes to the same core writer; the core performs no network
+  requests. An image the extension couldn't capture is left as a remote URL in the Markdown and is
+  never re-fetched; the reader shows a labelled placeholder for it.
 - The original HTML snapshot is optional. If kept, it lives as `original.html` inside the reading's
   folder for future re-processing.
 

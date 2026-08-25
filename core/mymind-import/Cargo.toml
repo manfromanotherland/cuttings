@@ -1,6 +1,6 @@
 [package]
 name = "cuttings-import-mymind"
-description = "Offline importer for mymind exports into a Cuttings library."
+description = "Migration adapter for mymind exports and Cuttings link metadata."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,6 +11,8 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 csv = "1"
 cuttings-core = { path = "../core" }
+reqwest = { version = "0.13", features = ["blocking", "brotli", "deflate", "gzip"] }
+scraper = "0.27"
 sha2 = "0.10"
 url = "2"
 

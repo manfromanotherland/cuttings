@@ -25,7 +25,7 @@ mod url_norm;
 pub mod visual_index;
 mod writer;
 
-pub use delete::delete_reading;
+pub use delete::{delete_reading, delete_unenriched_link_files_if_unchanged};
 pub use frontmatter::{parse_reading, read_metadata, render_reading};
 pub use highlights::{
     add_highlight, delete_highlight, list_highlights, toggle_highlight, Highlight,
@@ -35,9 +35,10 @@ pub use images::{first_local_image_asset, write_images, ImageBytes};
 pub use index::open as open_index;
 pub use ingest::{
     begin_browser_video_import, import_image, import_image_from_origin_with_options,
-    import_image_with_options, import_link, import_link_with_options, import_reading, import_text,
-    import_text_with_options, import_video_file, import_video_file_from_origin_with_options,
-    import_video_file_with_options, save_capture, save_link_capture, BrowserVideoImport,
+    import_image_with_options, import_link, import_link_capture, import_link_capture_if_unchanged,
+    import_link_with_options, import_reading, import_text, import_text_with_options,
+    import_video_file, import_video_file_from_origin_with_options, import_video_file_with_options,
+    normalize_theme_color, save_capture, save_link_capture, BrowserVideoImport,
     BrowserVideoImportInput, ImportOptions, ImportedReadingState, SaveDisposition, SaveError,
     SaveInput, SaveLinkInput, SaveOutcome, MAX_BROWSER_VIDEO_BYTES,
 };

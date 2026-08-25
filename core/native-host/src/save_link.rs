@@ -52,6 +52,7 @@ pub fn handle(request: SaveLinkRequest) -> Result<SaveResponse> {
             images,
             preview_url: request.preview_url,
             favicon_url: request.favicon_url,
+            theme_color: request.metadata.theme_color,
             excerpt: request.metadata.excerpt,
             lang: request.metadata.lang,
         },

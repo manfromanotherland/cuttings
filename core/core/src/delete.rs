@@ -10,7 +10,12 @@
 use anyhow::{bail, Result};
 use rusqlite::Connection;
 
-use crate::{locking::lock_reading, reconcile::apply_diffs, scanner::ScanDiff, LibraryRoot};
+use crate::{
+    locking::{lock_reading, ReadingLock},
+    reconcile::apply_diffs,
+    scanner::ScanDiff,
+    LibraryRoot, ReadingKind,
+};
 
 /// Permanently delete the reading `id`: its whole folder and its index row.
 /// Errors if the reading does not exist.
@@ -35,7 +40,91 @@ pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Res
     if !is_valid_reading_id(id) {
         bail!("refusing to delete: invalid reading id {id:?}");
     }
-    let _lock = lock_reading(library, id)?;
+    let lock = lock_reading(library, id)?;
+    delete_reading_files_under_lock(library, id, &lock)?;
+    apply_diffs(conn, &[ScanDiff::Removed(id.to_string())])
+}
+
+/// Delete an existing-library migration target only if it is still the same
+/// lightweight, unenriched HTTP(S) link observed before the network request.
+///
+/// The check and removal share one reading lock. If browser capture, sync, or
+/// another writer enriches/upgrades the reading while metadata is being
+/// fetched, this returns `false` and leaves the newer file untouched. The note
+/// snapshot distinguishes an absent sidecar from exact `note.md` bytes because
+/// deleting the reading folder would otherwise discard a concurrent note edit.
+pub fn delete_unenriched_link_files_if_unchanged(
+    library: &LibraryRoot,
+    id: &str,
+    expected_url: &str,
+    expected_article_sha256: &str,
+    expected_note_sha256: Option<&str>,
+) -> Result<bool> {
+    if !is_valid_reading_id(id) {
+        bail!("refusing to delete: invalid reading id {id:?}");
+    }
+    if expected_article_sha256.len() != 64
+        || !expected_article_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        bail!("expected article snapshot must be 64 lowercase hexadecimal characters");
+    }
+    if expected_note_sha256.is_some_and(|expected| {
+        expected.len() != 64
+            || !expected
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    }) {
+        bail!("expected note snapshot must be 64 lowercase hexadecimal characters");
+    }
+    let expected_id = crate::url_id(expected_url)?;
+    if expected_id != id {
+        bail!("refusing to delete: expected URL does not match reading id");
+    }
+    let lock = lock_reading(library, id)?;
+    let article_path = library.article_path(id);
+    let article_bytes = match std::fs::read(&article_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    if crate::sha256_hex(&article_bytes) != expected_article_sha256 {
+        return Ok(false);
+    }
+    let note_matches = match std::fs::read(library.note_path(id)) {
+        Ok(note_bytes) => {
+            expected_note_sha256.is_some_and(|expected| crate::sha256_hex(&note_bytes) == expected)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            expected_note_sha256.is_none()
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if !note_matches {
+        return Ok(false);
+    }
+    let article = std::str::from_utf8(&article_bytes)?;
+    let metadata = crate::parse_reading(article)?.metadata;
+    let still_target = metadata.id == id
+        && metadata.kind == ReadingKind::Article
+        && metadata.lightweight
+        && crate::url_id(&metadata.url).is_ok_and(|stored_id| stored_id == id)
+        && metadata.preview_asset.is_none()
+        && metadata.favicon_asset.is_none();
+    if !still_target {
+        return Ok(false);
+    }
+    delete_reading_files_under_lock(library, id, &lock)?;
+    Ok(true)
+}
+
+fn delete_reading_files_under_lock(
+    library: &LibraryRoot,
+    id: &str,
+    lock: &ReadingLock,
+) -> Result<()> {
+    lock.ensure_protects(library, id)?;
 
     let dir = library.reading_dir(id);
     let article = library.article_path(id);
@@ -102,7 +191,7 @@ pub fn delete_reading(library: &LibraryRoot, conn: &Connection, id: &str) -> Res
         let _ = std::fs::remove_dir(bucket);
     }
 
-    apply_diffs(conn, &[ScanDiff::Removed(id.to_string())])
+    Ok(())
 }
 
 /// A reading id must be non-empty and ASCII-alphanumeric — true for both
@@ -137,6 +226,7 @@ mod tests {
             media_url: None,
             preview_asset: None,
             favicon_asset: None,
+            theme_color: None,
             canonical_url: "https://example.com".to_string(),
             title: "Test".to_string(),
             author: None,
@@ -189,6 +279,114 @@ mod tests {
         assert!(!lib.highlights_path(&id).exists());
         assert!(!lib.note_path(&id).exists());
         assert_eq!(row_count(&conn, &id), 0);
+    }
+
+    #[test]
+    fn conditional_link_delete_skips_any_changed_article_snapshot() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let url = "https://example.com/migration-target";
+        let id = crate::url_id(url).unwrap();
+        let mut metadata = meta(&id);
+        metadata.lightweight = true;
+        metadata.url = url.to_string();
+        metadata.canonical_url = url.to_string();
+        write_reading(
+            &lib,
+            metadata.clone(),
+            "[Open link](<https://example.com>)".into(),
+        )
+        .unwrap();
+        let planned_hash = crate::sha256_hex(&fs::read(lib.article_path(&id)).unwrap());
+
+        // Keep every old structural predicate true while changing user-visible
+        // content. Only the exact article hash protects this local edit.
+        metadata.title = "Locally changed title".to_string();
+        write_reading(&lib, metadata, "Locally changed body".into()).unwrap();
+
+        assert!(
+            !delete_unenriched_link_files_if_unchanged(&lib, &id, url, &planned_hash, None,)
+                .unwrap()
+        );
+        assert!(lib.article_path(&id).is_file());
+    }
+
+    #[test]
+    fn conditional_link_delete_requires_the_exact_note_snapshot() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let url = "https://example.com/note-protected-target";
+        let id = crate::url_id(url).unwrap();
+        let mut metadata = meta(&id);
+        metadata.lightweight = true;
+        metadata.url = url.to_string();
+        metadata.canonical_url = url.to_string();
+        metadata.author = Some("Previously captured author".to_string());
+        metadata.theme_color = Some("#123456".to_string());
+        metadata.excerpt = Some("Previously captured excerpt".to_string());
+        metadata.lang = Some("en".to_string());
+        write_reading(&lib, metadata, "[Open link](<https://example.com>)".into()).unwrap();
+        let article_hash = crate::sha256_hex(&fs::read(lib.article_path(&id)).unwrap());
+
+        crate::set_note(&lib, &id, "Added after planning").unwrap();
+        assert!(
+            !delete_unenriched_link_files_if_unchanged(&lib, &id, url, &article_hash, None,)
+                .unwrap()
+        );
+
+        let added_hash = crate::sha256_hex(&fs::read(lib.note_path(&id)).unwrap());
+        crate::set_note(&lib, &id, "Changed after planning").unwrap();
+        assert!(!delete_unenriched_link_files_if_unchanged(
+            &lib,
+            &id,
+            url,
+            &article_hash,
+            Some(&added_hash),
+        )
+        .unwrap());
+
+        let changed_hash = crate::sha256_hex(&fs::read(lib.note_path(&id)).unwrap());
+        crate::set_note(&lib, &id, "").unwrap();
+        assert!(!delete_unenriched_link_files_if_unchanged(
+            &lib,
+            &id,
+            url,
+            &article_hash,
+            Some(&changed_hash),
+        )
+        .unwrap());
+
+        crate::set_note(&lib, &id, "Exact planned note").unwrap();
+        let exact_hash = crate::sha256_hex(&fs::read(lib.note_path(&id)).unwrap());
+        assert!(delete_unenriched_link_files_if_unchanged(
+            &lib,
+            &id,
+            url,
+            &article_hash,
+            Some(&exact_hash),
+        )
+        .unwrap());
+        assert!(!lib.reading_dir(&id).exists());
+    }
+
+    #[test]
+    fn conditional_link_delete_removes_the_unchanged_target() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let url = "https://example.com/dead-target";
+        let id = crate::url_id(url).unwrap();
+        let mut metadata = meta(&id);
+        metadata.lightweight = true;
+        metadata.url = url.to_string();
+        metadata.canonical_url = url.to_string();
+        write_reading(&lib, metadata, "[Open link](<https://example.com>)".into()).unwrap();
+        let planned_hash = crate::sha256_hex(&fs::read(lib.article_path(&id)).unwrap());
+
+        assert!(
+            delete_unenriched_link_files_if_unchanged(&lib, &id, url, &planned_hash, None,)
+                .unwrap()
+        );
+        assert!(!lib.article_path(&id).exists());
     }
 
     #[test]

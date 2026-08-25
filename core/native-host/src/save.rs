@@ -62,6 +62,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
             images,
             preview_url: req.preview_url,
             favicon_url: req.favicon_url,
+            theme_color: req.metadata.theme_color,
             excerpt: req.metadata.excerpt,
             word_count: req.metadata.word_count,
             lang: req.metadata.lang,

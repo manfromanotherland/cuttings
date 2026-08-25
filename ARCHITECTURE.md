@@ -35,7 +35,8 @@ right-clicked video as a local movie, or turns selected text into a quote. Ordin
 Markdown, metadata, and image bytes to a small native host; every video uses the bounded stream
 below. The host writes both paths into the library folder.
 Article and link saves retain live Open Graph/Twitter metadata plus local social-preview and favicon
-assets without injecting those head assets into the cleaned Markdown body.
+assets without injecting those head assets into the cleaned Markdown body. When a website declares
+a usable theme colour, the core stores it as normalized `theme_color` card-presentation metadata.
 The macOS app also accepts dropped or pasted HTTP(S) links, text, and images. Both native entry
 points call the same core save service: local bytes are copied into the library, source-less items
 receive a private deterministic identity, and URL-only saves are marked lightweight so a later
@@ -81,7 +82,24 @@ every affected component.
   changes that arrive via sync.
 - **Shape:** a core library crate reused by the other native pieces (the macOS app and the native
   messaging host both link it). Not a long-running daemon.
+- **Network boundary:** the core performs no network requests. Capture and migration adapters must
+  provide page metadata and asset bytes before invoking it; the core only validates, normalizes,
+  and persists that supplied data.
 - **Index:** local SQLite database with FTS5. Rebuildable; per-device; never synced.
+
+### My Mind migration adapter (`core/mymind-import`)
+- **Responsibility:** map a My Mind `cards.csv` export and its local media into the shared core save
+  inputs. Preview planning is offline and never changes the library.
+- **Link enrichment boundary:** writes enrich HTTP(S) link rows by default by fetching page metadata,
+  a bounded social preview, and a favicon. `--offline` opts out and writes URL-only lightweight
+  links. The adapter passes captured metadata and bytes into the network-free core.
+- **Local result:** captured social previews and favicons become relative `assets/<file>` roles in
+  each reading folder. A supported website theme colour becomes normalized `#rrggbb`
+  `theme_color` metadata for the card palette.
+- **Existing-library cleanup:** the explicit enrichment migration snapshots opaque IDs before any
+  writes. It removes confirmed 404/410 links and twice-unreachable origins, with a batch-level guard
+  that retains unreachable links when failures resemble a local or network-wide outage. Reachable
+  rejected, rate-limited, oversized, and non-HTML responses are retained.
 
 ### macOS client (`macos`, Swift)
 - **Responsibility:** the native UI — browse a mixed masonry board, filter by card kind and tag,
@@ -147,6 +165,8 @@ The card metadata is additive and backwards compatible:
   bytes. It drives the board thumbnail and is never a remote URL.
 - `favicon_asset`: optional safe `assets/<file>` path for a captured page icon. It remains distinct
   from the full-size card preview and is never a remote URL.
+- `theme_color`: optional lowercase `#rrggbb` presentation hint derived from the origin website.
+  The card palette may use it as a base colour; it does not participate in reading identity.
 - `lightweight`: optional `true` marker for a link saved without cleaned article content, from the
   app or browser toolbar. A later full browser capture
   replaces that placeholder at the same article id and clears the marker while preserving user

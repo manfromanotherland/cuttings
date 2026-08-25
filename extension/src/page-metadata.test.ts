@@ -20,6 +20,7 @@ describe("extractPageMetadata", () => {
       <meta property="og:site_name" content="Example Journal">
       <meta property="og:description" content="Open Graph description">
       <meta name="description" content="Plain description">
+      <meta name="theme-color" content="#123456">
       <meta property="og:image:secure_url" content="/secure-social.png">
       <meta property="og:image" content="https://cdn.example.com/social.jpg">
       <meta name="twitter:image" content="/twitter.png">
@@ -32,6 +33,7 @@ describe("extractPageMetadata", () => {
       title: "Open Graph title",
       site: "Example Journal",
       excerpt: "Open Graph description",
+      themeColor: "#123456",
     });
     expect(result.socialImageUrls).toEqual([
       "https://example.com/secure-social.png",
@@ -56,6 +58,16 @@ describe("extractPageMetadata", () => {
     ]);
   });
 
+  it("uses the first non-empty standard or underscore theme colour", () => {
+    const doc = buildDoc(`
+      <meta name="theme-color" content="   ">
+      <meta name="theme_color" content=" rgb(12, 34, 56) ">
+      <meta name="theme-color" content="#ignored">
+    `);
+
+    expect(extractPageMetadata(doc, "https://example.com/post").themeColor).toBe("rgb(12, 34, 56)");
+  });
+
   it("rejects non-http and credential-bearing image metadata", () => {
     const doc = buildDoc(`
       <meta property="og:image" content="file:///tmp/private.png">
@@ -66,5 +78,6 @@ describe("extractPageMetadata", () => {
     const result = extractPageMetadata(doc, "https://example.com/post");
     expect(result.socialImageUrls).toEqual([]);
     expect(result.faviconUrls).toEqual([]);
+    expect(result.themeColor).toBeUndefined();
   });
 });

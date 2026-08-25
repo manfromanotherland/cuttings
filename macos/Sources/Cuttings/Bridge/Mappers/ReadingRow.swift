@@ -59,6 +59,8 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var lightweight: Bool
     var mediaUrl: String?
     var previewAsset: String?
+    var faviconAsset: String?
+    var themeColor: String?
 }
 
 extension ReadingRow {
@@ -85,5 +87,7 @@ extension ReadingRow {
         lightweight = row.lightweight
         mediaUrl = row.mediaUrl
         previewAsset = row.previewAsset
+        faviconAsset = row.faviconAsset
+        themeColor = row.themeColor
     }
 }

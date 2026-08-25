@@ -82,6 +82,7 @@ export function extractStandaloneMedia(
     saved_at: savedAt,
     ...(origin.author ? { author: origin.author } : {}),
     ...(origin.site ? { site: origin.site } : {}),
+    ...(origin.themeColor ? { theme_color: origin.themeColor } : {}),
     ...(origin.lang ? { lang: origin.lang } : {}),
     ...(origin.excerpt ? { excerpt: origin.excerpt } : {}),
   };
@@ -204,6 +205,7 @@ export function extractQuote(
     word_count: countWords(text),
     ...(origin.author ? { author: origin.author } : {}),
     ...(origin.site ? { site: origin.site } : {}),
+    ...(origin.themeColor ? { theme_color: origin.themeColor } : {}),
     ...(origin.lang ? { lang: origin.lang } : {}),
   };
 

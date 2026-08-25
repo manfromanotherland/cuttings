@@ -101,6 +101,9 @@ targets:
       - path: Sources/Cuttings/Shared/Preferences/CardSize.swift
       - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
       - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
+      - path: Sources/Cuttings/Features/Cuttings/CuttingsTheme.swift
+      - path: Sources/Cuttings/Features/Cuttings/LocalReadingImage.swift
+      - path: Sources/Cuttings/Features/Cuttings/LocalReadingFavicon.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryBoard.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryLayout.swift
       - path: Sources/Cuttings/Features/Cuttings/MasonryCollectionViewLayout.swift

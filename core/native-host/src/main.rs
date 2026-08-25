@@ -261,6 +261,7 @@ mod integration_tests {
                 "url": url,
                 "canonical_url": url,
                 "title": "Test Article",
+                "theme_color": "#123456",
                 "saved_at": "2026-06-13T15:00:00Z"
             },
             "markdown": "# Test Article\n\nSome content here.\n",
@@ -306,6 +307,7 @@ mod integration_tests {
                 "canonical_url": url,
                 "title": "Link title",
                 "site": "Example",
+                "theme_color": "#654321",
                 "excerpt": "Link description",
                 "saved_at": "2026-06-13T15:00:00Z"
             },
@@ -437,6 +439,7 @@ mod integration_tests {
                         "title": "Exact browser video",
                         "author": "Example Director",
                         "site": "Example Cinema",
+                        "theme_color": "#abcdef",
                         "lang": "en-IE",
                         "excerpt": "A framed browser video.",
                         "word_count": 4,
@@ -486,6 +489,7 @@ mod integration_tests {
             );
             assert_eq!(reading.metadata.author.as_deref(), Some("Example Director"));
             assert_eq!(reading.metadata.site.as_deref(), Some("Example Cinema"));
+            assert_eq!(reading.metadata.theme_color.as_deref(), Some("#abcdef"));
             assert_eq!(reading.metadata.lang.as_deref(), Some("en-IE"));
             assert_eq!(
                 reading.metadata.excerpt.as_deref(),
@@ -873,6 +877,8 @@ mod integration_tests {
             );
 
             let content = std::fs::read_to_string(&article_path).unwrap();
+            let reading = cuttings_core::parse_reading(&content).unwrap();
+            assert_eq!(reading.metadata.theme_color.as_deref(), Some("#123456"));
             assert!(
                 content.contains("format_version: 1"),
                 "missing format_version in frontmatter"
@@ -939,6 +945,7 @@ mod integration_tests {
             assert!(link.metadata.lightweight);
             assert_eq!(link.metadata.title, "Link title");
             assert_eq!(link.metadata.excerpt.as_deref(), Some("Link description"));
+            assert_eq!(link.metadata.theme_color.as_deref(), Some("#654321"));
             assert_eq!(link.body, format!("[Open link](<{url}>)\n"));
             let preview_asset = link.metadata.preview_asset.clone().unwrap();
             let favicon_asset = link.metadata.favicon_asset.clone().unwrap();

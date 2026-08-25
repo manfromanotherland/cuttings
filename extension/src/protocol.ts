@@ -18,6 +18,8 @@ export interface SaveRequestMetadata {
   title: string;
   author?: string;
   site?: string;
+  /** First page-declared theme colour; core validates and normalizes it for storage. */
+  theme_color?: string;
   lang?: string;
   excerpt?: string;
   word_count?: number;

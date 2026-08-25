@@ -61,11 +61,12 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     };
     conn.execute(
         "INSERT OR REPLACE INTO readings
-         (id, kind, lightweight, has_note, url, media_url, preview_asset, canonical_url, title,
-          author, site, saved_at, read_at, archived, favorite, rating, source_hash, excerpt,
-          word_count, lang, tags_json, tags_text, body_text, visual_asset_path,
-          visual_asset_hash, visual_analyzer_version, visual_terms, predominant_color)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28)",
+         (id, kind, lightweight, has_note, url, media_url, preview_asset, favicon_asset,
+          theme_color, canonical_url, title, author, site, saved_at, read_at, archived,
+          favorite, rating, source_hash, excerpt, word_count, lang, tags_json, tags_text,
+          body_text, visual_asset_path, visual_asset_hash, visual_analyzer_version,
+          visual_terms, predominant_color)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30)",
         params![
             r.metadata.id,
             r.metadata.kind.as_str(),
@@ -74,6 +75,8 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.url,
             r.metadata.media_url,
             r.metadata.preview_asset,
+            r.metadata.favicon_asset,
+            r.metadata.theme_color,
             r.metadata.canonical_url,
             r.metadata.title,
             r.metadata.author,
@@ -110,11 +113,11 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     conn.execute(
         "UPDATE readings SET
          kind=?2, lightweight=?3, has_note=?4, url=?5, media_url=?6, preview_asset=?7,
-         canonical_url=?8, title=?9, author=?10, site=?11, saved_at=?12, read_at=?13,
-         archived=?14, favorite=?15, rating=?16, source_hash=?17, excerpt=?18,
-         word_count=?19, lang=?20, tags_json=?21, tags_text=?22, body_text=?23,
-         visual_asset_path=?24, visual_asset_hash=?25, visual_analyzer_version=?26,
-         visual_terms=?27, predominant_color=?28
+         favicon_asset=?8, theme_color=?9, canonical_url=?10, title=?11, author=?12,
+         site=?13, saved_at=?14, read_at=?15, archived=?16, favorite=?17, rating=?18,
+         source_hash=?19, excerpt=?20, word_count=?21, lang=?22, tags_json=?23,
+         tags_text=?24, body_text=?25, visual_asset_path=?26, visual_asset_hash=?27,
+         visual_analyzer_version=?28, visual_terms=?29, predominant_color=?30
          WHERE id=?1",
         params![
             r.metadata.id,
@@ -124,6 +127,8 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             r.metadata.url,
             r.metadata.media_url,
             r.metadata.preview_asset,
+            r.metadata.favicon_asset,
+            r.metadata.theme_color,
             r.metadata.canonical_url,
             r.metadata.title,
             r.metadata.author,
@@ -179,6 +184,7 @@ mod tests {
             media_url: None,
             preview_asset: None,
             favicon_asset: None,
+            theme_color: None,
             canonical_url: url.to_string(),
             title: "Title".to_string(),
             author: None,

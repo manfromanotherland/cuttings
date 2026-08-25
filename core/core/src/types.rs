@@ -58,6 +58,9 @@ pub struct Metadata {
     /// Relative path to the locally captured page favicon.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favicon_asset: Option<String>,
+    /// Canonical sRGB page theme color (`#rrggbb`) captured from website metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_color: Option<String>,
     pub canonical_url: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]

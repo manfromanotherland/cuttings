@@ -18,6 +18,8 @@ final class ReadingRowMapperTests: XCTestCase {
             url: "https://example.com/article",
             mediaUrl: "https://cdn.example.com/video.mp4",
             previewAsset: "assets/poster.jpg",
+            faviconAsset: "assets/favicon.ico",
+            themeColor: "#123456",
             canonicalUrl: "https://example.com/article?canonical",
             author: "Ada Lovelace",
             site: "example.com",
@@ -55,31 +57,24 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.lightweight, ffi.lightweight)
         XCTAssertEqual(row.mediaUrl, ffi.mediaUrl)
         XCTAssertEqual(row.previewAsset, ffi.previewAsset)
+        XCTAssertEqual(row.faviconAsset, ffi.faviconAsset)
+        XCTAssertEqual(row.themeColor, ffi.themeColor)
     }
 
     func testOptionalFieldsPreserveNil() {
-        let ffi = FfiReadingRow(
-            id: "01JREADING000000000000000001",
-            title: "",
-            kind: .article,
-            lightweight: false,
-            hasNote: false,
-            url: "https://example.com/b",
-            mediaUrl: nil,
-            previewAsset: nil,
-            canonicalUrl: "https://example.com/b",
-            author: nil,
-            site: nil,
-            savedAt: "2026-01-01T00:00:00Z",
-            read: false,
-            archived: false,
-            favorite: false,
-            rating: 0,
-            excerpt: nil,
-            wordCount: nil,
-            lang: nil,
-            tags: []
-        )
+        var ffi = sampleFfiRow()
+        ffi.kind = .article
+        ffi.lightweight = false
+        ffi.mediaUrl = nil
+        ffi.previewAsset = nil
+        ffi.faviconAsset = nil
+        ffi.themeColor = nil
+        ffi.author = nil
+        ffi.site = nil
+        ffi.excerpt = nil
+        ffi.wordCount = nil
+        ffi.lang = nil
+        ffi.tags = []
         let row = ReadingRow(ffi)
         XCTAssertNil(row.author)
         XCTAssertNil(row.site)
@@ -90,6 +85,8 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertFalse(row.lightweight)
         XCTAssertNil(row.mediaUrl)
         XCTAssertNil(row.previewAsset)
+        XCTAssertNil(row.faviconAsset)
+        XCTAssertNil(row.themeColor)
         XCTAssertTrue(row.tags.isEmpty)
     }
 

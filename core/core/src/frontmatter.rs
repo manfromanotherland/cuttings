@@ -111,6 +111,7 @@ mod tests {
             media_url: None,
             preview_asset: None,
             favicon_asset: None,
+            theme_color: None,
             canonical_url: "https://example.com/article".to_string(),
             title: "Test Article".to_string(),
             author: Some("Jane Doe".to_string()),

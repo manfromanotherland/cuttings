@@ -20,6 +20,7 @@ describe("extractStandaloneMedia", () => {
         '<link rel="canonical" href="https://example.com/canonical">',
         '<meta property="og:site_name" content="Example Journal">',
         '<meta name="author" content="Jane Doe">',
+        '<meta name="theme-color" content="#123456">',
       ].join(""),
       `<figure><img src="${imageUrl}" alt="System diagram"><figcaption>The whole system</figcaption></figure>`,
       "Architecture article",
@@ -41,6 +42,7 @@ describe("extractStandaloneMedia", () => {
       title: "Architecture article",
       author: "Jane Doe",
       site: "Example Journal",
+      theme_color: "#123456",
       saved_at: "2026-08-23T10:00:00.000Z",
     });
     expect(result.markdown).toBe(`![System diagram](${imageUrl})`);
@@ -171,6 +173,7 @@ describe("extractStandaloneMedia", () => {
       [
         '<link rel="canonical" href="https://example.com/canonical-essay">',
         '<meta property="og:site_name" content="Example Journal">',
+        '<meta name="theme_color" content="#654321">',
       ].join(""),
       "<article>Source body</article>",
       "Source essay",
@@ -189,6 +192,7 @@ describe("extractStandaloneMedia", () => {
       canonical_url: "https://example.com/canonical-essay",
       title: "Source essay",
       site: "Example Journal",
+      theme_color: "#654321",
       saved_at: "2026-08-23T11:00:00.000Z",
       excerpt: "First line continues Second paragraph last line",
       word_count: 7,

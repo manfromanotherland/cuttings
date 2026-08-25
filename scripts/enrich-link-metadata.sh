@@ -18,7 +18,7 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "mymind import requires Rust's cargo command" >&2
+  echo "link metadata migration requires Rust's cargo command" >&2
   exit 127
 fi
 
@@ -26,4 +26,4 @@ exec cargo run \
   --quiet \
   --manifest-path "${repository_root}/core/Cargo.toml" \
   -p cuttings-import-mymind \
-  -- "$@"
+  -- --enrich-existing-links "$@"

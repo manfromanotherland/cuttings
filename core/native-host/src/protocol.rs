@@ -59,6 +59,8 @@ pub struct RequestMetadata {
     pub title: String,
     pub author: Option<String>,
     pub site: Option<String>,
+    #[serde(default)]
+    pub theme_color: Option<String>,
     pub lang: Option<String>,
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,

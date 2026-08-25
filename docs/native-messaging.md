@@ -34,6 +34,7 @@ additional metadata and never replaces that origin.
     "kind": "article",
     "author": "Martin Kleppmann",
     "site": "blog.example.com",
+    "theme_color": "#123456",
     "lang": "en",
     "excerpt": "An argument for software that works offline.",
     "word_count": 3812,
@@ -75,6 +76,7 @@ additional metadata and never replaces that origin.
 | `metadata.media_url` | string | — | Media identity in an ordinary image or legacy video save. Current browser videos use the streaming import below and omit this field at begin |
 | `metadata.author` | string | — | Extracted byline; omit if unknown |
 | `metadata.site` | string | — | Source-site label, usually the page's Open Graph site name or hostname; omit if unknown |
+| `metadata.theme_color` | string | — | First non-empty page `theme-color`/`theme_color` meta value; core validates and normalizes supported CSS colours before storing it |
 | `metadata.lang` | string | — | BCP-47 language tag |
 | `metadata.excerpt` | string | — | One-sentence summary |
 | `metadata.word_count` | integer | — | Word count of the cleaned body |
@@ -94,11 +96,12 @@ placeholder. Ordinary save messages never contain video bytes; every current bro
 the streaming import below and is successful only after its local movie asset is committed.
 
 For articles, the extension also inspects Open Graph/Twitter metadata and the browser-selected or
-declared favicon. Successfully captured role assets are written locally and referenced from
-frontmatter; they are never injected into the cleaned article body. For a quote, `markdown`
-contains the full selected text as block quotes and `excerpt` contains the
-bounded card preview. For image/video/quote requests, the host derives a kind-specific identity so
-several cards can coexist from one origin page.
+declared favicon, plus an optional website theme colour. Successfully captured role assets are
+written locally and referenced from frontmatter; they are never injected into the cleaned article
+body. The core normalizes a supported theme colour into the library's canonical form. For a quote,
+`markdown` contains the full selected text as block quotes and `excerpt` contains the bounded card
+preview. For image/video/quote requests, the host derives a kind-specific identity so several cards
+can coexist from one origin page.
 
 ---
 
@@ -118,6 +121,7 @@ but no cleaned article body is claimed. The core constructs the link body and ma
     "canonical_url": "https://example.com/post",
     "title": "Page title",
     "site": "Example",
+    "theme_color": "#123456",
     "excerpt": "Open Graph description",
     "saved_at": "2026-08-25T09:00:00Z"
   },
@@ -170,6 +174,7 @@ decoded chunk is non-empty and at most 256 KiB; the complete decoded video is at
     "canonical_url": "https://www.cosmos.so/e/2035271300",
     "title": "Saved video",
     "site": "Cosmos",
+    "theme_color": "#123456",
     "saved_at": "2026-08-25T12:00:00Z"
   },
   "content_type": "video/mp4",
@@ -328,7 +333,8 @@ otherwise — including when no library is configured (a `check` never errors on
 - Version `1` supported full-page article saves. Version `2` added first-class card kind and media
   metadata for articles, images, videos, and quotes. Version `3` added lightweight browser-link
   saves plus explicit local social-preview and favicon asset roles. Version `4` adds acknowledged,
-  bounded streaming imports for browser videos.
+  bounded streaming imports for browser videos. Optional `metadata.theme_color` is an additive
+  version-4 field; senders and receivers may omit it.
 - The extension and host must both support the same version; a mismatch should surface an error.
 - Version bumps follow the same lockstep rule as the library format: update both components in one
   monorepo commit.

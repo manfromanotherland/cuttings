@@ -8,6 +8,7 @@ export interface PageMetadata {
   author?: string;
   lang?: string;
   excerpt?: string;
+  themeColor?: string;
   socialImageUrls: string[];
   faviconUrls: string[];
 }
@@ -47,6 +48,7 @@ export function extractPageMetadata(doc: Document, pageUrl: string): PageMetadat
       metaContent(doc, "meta[name='twitter:description']"),
       metaContent(doc, "meta[name='description']"),
     ),
+    themeColor: themeColor(doc),
     socialImageUrls: httpAssetUrls(
       [
         metaContent(doc, "meta[property='og:image:secure_url']"),
@@ -59,6 +61,14 @@ export function extractPageMetadata(doc: Document, pageUrl: string): PageMetadat
     ),
     faviconUrls: faviconUrls(doc, pageUrl),
   };
+}
+
+function themeColor(doc: Document): string | undefined {
+  const candidates = Array.from(
+    doc.querySelectorAll<HTMLMetaElement>("meta[name='theme-color'], meta[name='theme_color']"),
+    (meta) => meta.getAttribute("content"),
+  );
+  return firstText(...candidates);
 }
 
 export function firstText(...values: Array<string | null | undefined>): string | undefined {

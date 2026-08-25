@@ -67,6 +67,7 @@ describe("link save", () => {
         canonical_url: "https://example.com/canonical",
         title: "Social title",
         site: "Example",
+        theme_color: "#123456",
         excerpt: "Social description",
         saved_at: "2026-08-25T09:00:00.000Z",
       },
@@ -104,6 +105,7 @@ describe("link save", () => {
     });
     expect(capture.images).toEqual([]);
     expect(capture.markdown).toBe("");
+    expect(capture.metadata.theme_color).toBeUndefined();
   });
 });
 

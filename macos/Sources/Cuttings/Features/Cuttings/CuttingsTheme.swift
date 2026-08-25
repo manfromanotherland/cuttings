@@ -3,9 +3,95 @@
 import AppKit
 import SwiftUI
 
+/// A website-authored card surface and the pure black/white text colour with
+/// the stronger WCAG contrast against it. Core canonicalises `theme_color` as
+/// `#rrggbb`; this parser remains defensive because library files are externally
+/// writable and may come from an older or hand-edited source.
+struct CardThemePalette: Equatable, Sendable {
+    static let minimumTextContrast = 4.5
+
+    let background: CardSRGBColor
+    let foreground: CardSRGBColor
+
+    init?(themeColor: String?) {
+        guard let background = CardSRGBColor(hex: themeColor) else { return nil }
+        self.init(background: background)
+    }
+
+    init(background: CardSRGBColor) {
+        self.background = background
+        let blackContrast = background.contrastRatio(with: .black)
+        let whiteContrast = background.contrastRatio(with: .white)
+        foreground = blackContrast >= whiteContrast ? .black : .white
+    }
+
+    var textContrast: Double {
+        background.contrastRatio(with: foreground)
+    }
+}
+
+struct CardSRGBColor: Equatable, Sendable {
+    static let black = CardSRGBColor(red: 0, green: 0, blue: 0)
+    static let white = CardSRGBColor(red: 1, green: 1, blue: 1)
+
+    let red: Double
+    let green: Double
+    let blue: Double
+
+    init?(hex rawValue: String?) {
+        guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              value.count == 7,
+              value.first == "#",
+              value.dropFirst().allSatisfy(\.isHexDigit),
+              let packed = UInt64(value.dropFirst(), radix: 16)
+        else { return nil }
+
+        red = Double((packed >> 16) & 0xFF) / 255
+        green = Double((packed >> 8) & 0xFF) / 255
+        blue = Double(packed & 0xFF) / 255
+    }
+
+    init(red: Double, green: Double, blue: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    var color: Color {
+        Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
+    }
+
+    func contrastRatio(with other: CardSRGBColor) -> Double {
+        let lighter = max(relativeLuminance, other.relativeLuminance)
+        let darker = min(relativeLuminance, other.relativeLuminance)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private var relativeLuminance: Double {
+        0.2126 * Self.linearComponent(red)
+            + 0.7152 * Self.linearComponent(green)
+            + 0.0722 * Self.linearComponent(blue)
+    }
+
+    private static func linearComponent(_ component: Double) -> Double {
+        component <= 0.04045
+            ? component / 12.92
+            : pow((component + 0.055) / 1.055, 2.4)
+    }
+}
+
 enum CuttingsTheme {
     static let card = Color(nsColor: .controlBackgroundColor)
     static let border = Color(nsColor: .separatorColor)
+
+    static func articlePalette(for row: ReadingRow) -> CardThemePalette? {
+        guard row.kind == .article else { return nil }
+        return CardThemePalette(themeColor: row.themeColor)
+    }
+
+    static func cardBackground(for row: ReadingRow) -> Color {
+        articlePalette(for: row)?.background.color ?? card
+    }
 
     static func cardTint(for _: String) -> Color {
         card

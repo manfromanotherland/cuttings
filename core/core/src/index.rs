@@ -49,6 +49,27 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 4 {
         migrate_v4(conn)?;
     }
+    if version < 5 {
+        migrate_v5(conn)?;
+    }
+    Ok(())
+}
+
+/// v5: expose locally captured favicons and website theme colors to clients.
+///
+/// Both columns are disposable projections of optional frontmatter fields.
+fn migrate_v5(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings ADD COLUMN favicon_asset TEXT;
+        ALTER TABLE readings ADD COLUMN theme_color TEXT;
+
+        PRAGMA user_version = 5;
+        COMMIT;
+        ",
+    )?;
     Ok(())
 }
 
@@ -310,7 +331,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
 
         // readings table exists
         let count: i64 = conn
@@ -429,6 +450,8 @@ mod tests {
             "url",
             "media_url",
             "preview_asset",
+            "favicon_asset",
+            "theme_color",
             "canonical_url",
             "title",
             "read_at",
@@ -483,7 +506,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -525,7 +548,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
 
         let values: (i64, i64, String) = conn
             .query_row(

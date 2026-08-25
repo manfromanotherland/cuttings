@@ -3,24 +3,34 @@
 //! Offline adapter from mymind's exported `cards.csv` and media files into
 //! Cuttings' shared Rust import pipeline.
 
+mod link_metadata;
+
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     fmt::Write as _,
     fs,
     io::Read,
     path::{Path, PathBuf},
+    sync::{mpsc, Arc, Mutex},
+    thread,
 };
 
 use anyhow::{bail, Result};
 use cuttings_core::{
-    import_image_from_origin_with_options, import_image_with_options, import_link_with_options,
-    import_reading, import_text_with_options, import_video_file_from_origin_with_options,
-    import_video_file_with_options, normalize_url, quote_id, sha256_hex, url_id, ImportOptions,
-    ImportedReadingState, LibraryRoot, ReadingKind, SaveDisposition, SaveInput, SaveOutcome,
-    MAX_TAG_LEN,
+    delete_unenriched_link_files_if_unchanged, import_image_from_origin_with_options,
+    import_image_with_options, import_link_capture, import_link_capture_if_unchanged,
+    import_link_with_options, import_reading, import_text_with_options,
+    import_video_file_from_origin_with_options, import_video_file_with_options,
+    normalize_theme_color, normalize_url, parse_reading, quote_id, sha256_hex, url_id,
+    ImportOptions, ImportedReadingState, LibraryRoot, ReadingKind, SaveDisposition, SaveInput,
+    SaveLinkInput, SaveOutcome, MAX_TAG_LEN,
 };
 use sha2::{Digest, Sha256};
 use url::Url;
+
+use link_metadata::{
+    HttpLinkMetadataFetcher, LinkFetchError, LinkMetadataCapture, LinkMetadataFetcher,
+};
 
 const CSV_FILENAME: &str = "cards.csv";
 const REQUIRED_HEADERS: [&str; 8] = [
@@ -33,6 +43,9 @@ const WARN_LONG_TAG: &str = "overlong tags omitted";
 const ERROR_CSV_RECORD: &str = "malformed CSV records";
 const ERROR_NOTE_CONFLICT: &str = "duplicate readings with conflicting notes";
 const ERROR_IMPORT: &str = "readings that failed while writing";
+const ERROR_DELETE: &str = "dead links that could not be removed safely";
+const WARN_UNREACHABLE_GUARD: &str =
+    "unreachable links retained because failures looked network-wide";
 
 const SKIP_DOCUMENT: &str = "documents (PDF is not a Cuttings card kind)";
 const SKIP_EMPTY_QUOTATION: &str = "quotations without content";
@@ -42,6 +55,7 @@ const SKIP_MEDIA_ID: &str = "media rows without one exact ID-to-filename match";
 const SKIP_MEDIA_TYPE: &str = "media rows with an unsupported exported file type";
 const SKIP_EMPTY_MEDIA: &str = "media rows with unreadable or empty files";
 const SKIP_UNIMPORTABLE: &str = "rows without importable content or an HTTP(S) source";
+const SKIP_UNAVAILABLE_LINK: &str = "web links unavailable during metadata fetch";
 const SKIP_ORPHAN_MEDIA: &str = "exported files not referenced by a CSV row ID";
 const SKIP_UNSUPPORTED_FILE: &str = "unsupported exported files";
 const SKIP_SYMLINK: &str = "symbolic links";
@@ -54,6 +68,98 @@ pub struct RunOptions {
     pub write: bool,
     /// Include one line per reading, identified only by opaque IDs.
     pub verbose: bool,
+    /// Fetch website metadata/assets for link rows before writing them.
+    pub enrich_links: bool,
+    /// Maximum concurrent link fetches. Each host is additionally capped at two.
+    pub workers: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnrichExistingOptions {
+    pub library: PathBuf,
+    /// `false` snapshots the target only; `true` fetches and persists metadata.
+    pub write: bool,
+    /// Include one line per reading, identified only by its opaque ID.
+    pub verbose: bool,
+    /// Maximum concurrent link fetches. Each host is additionally capped at two.
+    pub workers: usize,
+    /// Optional guard against applying to a changed target set.
+    pub expected_count: Option<usize>,
+    /// SHA-256 of the sorted, newline-delimited target IDs.
+    pub expected_digest: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct EnrichExistingReport {
+    pub planned: usize,
+    pub target_digest: String,
+    pub upgraded: usize,
+    pub removed: usize,
+    pub unchanged: usize,
+    pub warnings: usize,
+    pub errors: usize,
+    pub link_fetches: usize,
+    pub link_previews: usize,
+    pub link_favicons: usize,
+    pub link_theme_colors: usize,
+    pub link_fetch_failures: usize,
+    write: bool,
+    warning_reasons: BTreeMap<&'static str, usize>,
+    error_reasons: BTreeMap<&'static str, usize>,
+    verbose_lines: Vec<String>,
+}
+
+impl EnrichExistingReport {
+    pub fn render(&self) -> String {
+        let mut rendered = String::new();
+        rendered.push_str(if self.write {
+            "link metadata migration\n"
+        } else {
+            "link metadata migration preview\n"
+        });
+        rendered.push_str(&format!("Target links: {}\n", self.planned));
+        rendered.push_str(&format!("Target digest: {}\n", self.target_digest));
+        render_reasons(&mut rendered, "Warnings", &self.warning_reasons);
+        render_reasons(&mut rendered, "Errors", &self.error_reasons);
+        if self.write {
+            rendered.push_str(&format!(
+                "Link metadata: fetched {}, previews {}, favicons {}, theme colors {}, unavailable {}, removed {}\n",
+                self.link_fetches,
+                self.link_previews,
+                self.link_favicons,
+                self.link_theme_colors,
+                self.link_fetch_failures,
+                self.removed
+            ));
+        } else if self.planned > 0 {
+            rendered.push_str(&format!(
+                "Link metadata fetches planned on write: {}\n",
+                self.planned
+            ));
+        }
+        if !self.verbose_lines.is_empty() {
+            rendered.push('\n');
+            for line in &self.verbose_lines {
+                rendered.push_str(line);
+                rendered.push('\n');
+            }
+        }
+        rendered.push_str(&format!(
+            "\nSummary: target links {}, enriched {}, removed {}, unchanged {}, warnings {}, errors {}\n",
+            self.planned,
+            self.upgraded,
+            self.removed,
+            self.unchanged,
+            self.warnings,
+            self.errors
+        ));
+        if !self.write {
+            rendered.push_str(
+                "No library files were written. Re-run with --write to apply this exact target.\n",
+            );
+        }
+        rendered
+    }
 }
 
 #[derive(Debug, Default)]
@@ -63,12 +169,19 @@ pub struct RunReport {
     pub merged_duplicates: usize,
     pub saved: usize,
     pub upgraded: usize,
+    pub removed: usize,
     /// Readings already present in the destination library.
     pub duplicates: usize,
     pub skipped: usize,
     pub warnings: usize,
     pub errors: usize,
+    pub link_fetches: usize,
+    pub link_previews: usize,
+    pub link_favicons: usize,
+    pub link_theme_colors: usize,
+    pub link_fetch_failures: usize,
     write: bool,
+    enrich_links: bool,
     write_blocked: bool,
     planned_by_action: BTreeMap<&'static str, usize>,
     skip_reasons: BTreeMap<&'static str, usize>,
@@ -101,6 +214,25 @@ impl RunReport {
         render_reasons(&mut rendered, "Skipped", &self.skip_reasons);
         render_reasons(&mut rendered, "Warnings", &self.warning_reasons);
         render_reasons(&mut rendered, "Errors", &self.error_reasons);
+        if self.link_fetches > 0 || self.link_fetch_failures > 0 {
+            rendered.push_str(&format!(
+                "Link metadata: fetched {}, previews {}, favicons {}, theme colors {}, unavailable {}, removed {}\n",
+                self.link_fetches,
+                self.link_previews,
+                self.link_favicons,
+                self.link_theme_colors,
+                self.link_fetch_failures,
+                self.removed
+            ));
+        } else if self.enrich_links
+            && !self.write
+            && self.planned_by_action.get("articles").copied().unwrap_or(0) > 0
+        {
+            rendered.push_str(&format!(
+                "Link metadata fetches planned on write: {}\n",
+                self.planned_by_action.get("articles").copied().unwrap_or(0)
+            ));
+        }
         if !self.verbose_lines.is_empty() {
             rendered.push('\n');
             for line in &self.verbose_lines {
@@ -109,12 +241,13 @@ impl RunReport {
             }
         }
         rendered.push_str(&format!(
-            "\nSummary: source rows {}, planned unique readings {}, merged duplicate rows {}, saved {}, upgraded {}, already present {}, skipped {}, warnings {}, errors {}\n",
+            "\nSummary: source rows {}, planned unique readings {}, merged duplicate rows {}, saved {}, upgraded {}, removed {}, already present {}, skipped {}, warnings {}, errors {}\n",
             self.source_rows,
             self.planned,
             self.merged_duplicates,
             self.saved,
             self.upgraded,
+            self.removed,
             self.duplicates,
             self.skipped,
             self.warnings,
@@ -135,6 +268,11 @@ impl RunReport {
     fn add_error(&mut self, reason: &'static str) {
         *self.error_reasons.entry(reason).or_default() += 1;
         self.errors += 1;
+    }
+
+    fn add_warning(&mut self, reason: &'static str) {
+        *self.warning_reasons.entry(reason).or_default() += 1;
+        self.warnings += 1;
     }
 }
 
@@ -226,6 +364,12 @@ struct PlannedItem {
     title: Option<String>,
     saved_at: Option<String>,
     state: ImportedReadingState,
+    /// Exact `article.md` bytes observed by an existing-library plan. Export
+    /// imports leave this unset because they are not mutating a prior snapshot.
+    expected_article_sha256: Option<String>,
+    /// `None` means an existing-library plan observed no `note.md`. This is
+    /// consulted only before deletion; metadata enrichment preserves notes.
+    expected_note_sha256: Option<String>,
 }
 
 impl PlannedItem {
@@ -315,6 +459,173 @@ struct MediaInventory {
 }
 
 pub fn run(options: RunOptions) -> Result<RunReport> {
+    run_with_fetcher(options, None)
+}
+
+pub fn enrich_existing_links(options: EnrichExistingOptions) -> Result<EnrichExistingReport> {
+    enrich_existing_links_with_fetcher(options, None)
+}
+
+fn enrich_existing_links_with_fetcher(
+    options: EnrichExistingOptions,
+    injected_fetcher: Option<Arc<dyn LinkMetadataFetcher>>,
+) -> Result<EnrichExistingReport> {
+    if !options.library.is_dir() {
+        bail!("Cuttings library is not a directory");
+    }
+    let library_path = options
+        .library
+        .canonicalize()
+        .map_err(|_| anyhow::anyhow!("could not resolve the library folder"))?;
+    let library =
+        LibraryRoot::new(&library_path).map_err(|_| anyhow::anyhow!("invalid library folder"))?;
+    let items = existing_link_plan(&library)?;
+    let target_digest = target_digest(&items);
+
+    if let Some(expected) = options.expected_count {
+        if expected != items.len() {
+            bail!(
+                "target snapshot changed: expected {expected} links but found {}",
+                items.len()
+            );
+        }
+    }
+    if let Some(expected) = options.expected_digest.as_deref() {
+        let expected = expected.trim().to_ascii_lowercase();
+        if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            bail!("expected target digest must be exactly 64 hexadecimal characters");
+        }
+        if expected != target_digest {
+            bail!("target snapshot changed: digest does not match");
+        }
+    }
+
+    let mut execution = RunReport {
+        write: options.write,
+        enrich_links: true,
+        planned: items.len(),
+        ..RunReport::default()
+    };
+    if options.write && !items.is_empty() {
+        let fetcher = match injected_fetcher {
+            Some(fetcher) => fetcher,
+            None => Arc::new(HttpLinkMetadataFetcher::new()?),
+        };
+        execute_enriched_links(
+            &library_path,
+            items,
+            fetcher,
+            options.workers,
+            options.verbose,
+            true,
+            &mut execution,
+        );
+    }
+
+    Ok(EnrichExistingReport {
+        planned: execution.planned,
+        target_digest,
+        upgraded: execution.upgraded,
+        removed: execution.removed,
+        unchanged: execution.duplicates,
+        warnings: execution.warnings,
+        errors: execution.errors,
+        link_fetches: execution.link_fetches,
+        link_previews: execution.link_previews,
+        link_favicons: execution.link_favicons,
+        link_theme_colors: execution.link_theme_colors,
+        link_fetch_failures: execution.link_fetch_failures,
+        write: options.write,
+        warning_reasons: execution.warning_reasons,
+        error_reasons: execution.error_reasons,
+        verbose_lines: execution.verbose_lines,
+    })
+}
+
+fn existing_link_plan(library: &LibraryRoot) -> Result<Vec<PlannedItem>> {
+    let mut items = Vec::new();
+    let articles = library.articles_dir();
+    if !articles.is_dir() {
+        return Ok(items);
+    }
+    for bucket in fs::read_dir(&articles)? {
+        let bucket = bucket?;
+        if !bucket.file_type()?.is_dir() {
+            continue;
+        }
+        for reading_directory in fs::read_dir(bucket.path())? {
+            let reading_directory = reading_directory?;
+            if !reading_directory.file_type()?.is_dir() {
+                continue;
+            }
+            let article_path = reading_directory.path().join("article.md");
+            let Ok(article_bytes) = fs::read(&article_path) else {
+                continue;
+            };
+            let Ok(article_text) = std::str::from_utf8(&article_bytes) else {
+                continue;
+            };
+            let Ok(reading) = parse_reading(article_text) else {
+                continue;
+            };
+            let metadata = reading.metadata;
+            if reading_directory.path() != library.reading_dir(&metadata.id) {
+                continue;
+            }
+            if metadata.kind != ReadingKind::Article
+                || !metadata.lightweight
+                || metadata.preview_asset.is_some()
+                || metadata.favicon_asset.is_some()
+            {
+                continue;
+            }
+            let Some(url) = http_url(&metadata.url) else {
+                continue;
+            };
+            if url_id(&url).ok().as_deref() != Some(metadata.id.as_str()) {
+                continue;
+            }
+            let expected_note_sha256 = match fs::read(library.note_path(&metadata.id)) {
+                Ok(note_bytes) => Some(sha256_hex(&note_bytes)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(_) => continue,
+            };
+            items.push(PlannedItem {
+                label: format!("reading {}", metadata.id),
+                identity: format!("article:{}", metadata.id),
+                action: PlannedAction::Link { url },
+                title: Some(metadata.title),
+                saved_at: Some(metadata.saved_at),
+                state: ImportedReadingState::default(),
+                expected_article_sha256: Some(sha256_hex(&article_bytes)),
+                expected_note_sha256,
+            });
+        }
+    }
+    items.sort_by(|left, right| left.identity.cmp(&right.identity));
+    Ok(items)
+}
+
+fn target_digest(items: &[PlannedItem]) -> String {
+    let mut ids = items
+        .iter()
+        .map(|item| {
+            item.identity
+                .strip_prefix("article:")
+                .unwrap_or(&item.identity)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if !ids.is_empty() {
+        ids.push('\n');
+    }
+    sha256_hex(ids.as_bytes())
+}
+
+fn run_with_fetcher(
+    options: RunOptions,
+    injected_fetcher: Option<Arc<dyn LinkMetadataFetcher>>,
+) -> Result<RunReport> {
     let (export_root, library_root) = validate_roots(&options.export, &options.library)?;
     let library =
         LibraryRoot::new(&library_root).map_err(|_| anyhow::anyhow!("invalid library folder"))?;
@@ -327,6 +638,7 @@ pub fn run(options: RunOptions) -> Result<RunReport> {
         warnings: plan.diagnostics.warnings.values().sum(),
         errors: plan.diagnostics.errors.values().sum(),
         write: options.write,
+        enrich_links: options.enrich_links,
         planned_by_action: count_actions(&plan.items),
         skip_reasons: plan.diagnostics.skips,
         warning_reasons: plan.diagnostics.warnings,
@@ -338,7 +650,20 @@ pub fn run(options: RunOptions) -> Result<RunReport> {
         return Ok(report);
     }
 
+    let mut link_items = Vec::new();
+    let mut ordinary_items = Vec::new();
     for item in plan.items {
+        if options.write
+            && options.enrich_links
+            && matches!(&item.action, PlannedAction::Link { .. })
+        {
+            link_items.push(item);
+        } else {
+            ordinary_items.push(item);
+        }
+    }
+
+    for item in ordinary_items {
         let action_label = item.action.label();
         if !options.write {
             if options.verbose {
@@ -361,6 +686,22 @@ pub fn run(options: RunOptions) -> Result<RunReport> {
                 }
             }
         }
+    }
+
+    if options.write && options.enrich_links && !link_items.is_empty() {
+        let fetcher = match injected_fetcher {
+            Some(fetcher) => fetcher,
+            None => Arc::new(HttpLinkMetadataFetcher::new()?),
+        };
+        execute_enriched_links(
+            &library_root,
+            link_items,
+            fetcher,
+            options.workers,
+            options.verbose,
+            false,
+            &mut report,
+        );
     }
     Ok(report)
 }
@@ -695,6 +1036,8 @@ fn plan_row(
         title,
         saved_at,
         state,
+        expected_article_sha256: None,
+        expected_note_sha256: None,
     })
 }
 
@@ -897,6 +1240,335 @@ fn contains_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> bool {
         .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
+#[derive(Debug, Default)]
+struct LinkCaptureStats {
+    preview: bool,
+    favicon: bool,
+    theme_color: bool,
+}
+
+struct EnrichedExecution {
+    label: String,
+    outcome: Option<std::result::Result<SaveOutcome, ()>>,
+    fetch_error: Option<LinkFetchError>,
+    removal: Option<RemovalCandidate>,
+    stats: LinkCaptureStats,
+}
+
+struct RemovalCandidate {
+    id: String,
+    url: String,
+    expected_article_sha256: String,
+    expected_note_sha256: Option<String>,
+    reason: LinkFetchError,
+}
+
+fn execute_enriched_links(
+    library_path: &Path,
+    items: Vec<PlannedItem>,
+    fetcher: Arc<dyn LinkMetadataFetcher>,
+    workers: usize,
+    verbose: bool,
+    delete_dead: bool,
+    report: &mut RunReport,
+) {
+    let total = items.len();
+    let worker_count = workers.clamp(1, 32).min(total.max(1));
+    let queue = Arc::new(Mutex::new(VecDeque::from(items)));
+    let (sender, receiver) = mpsc::channel();
+    let mut reached_server = 0;
+    let mut removals = Vec::new();
+
+    thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let queue = Arc::clone(&queue);
+            let fetcher = Arc::clone(&fetcher);
+            let sender = sender.clone();
+            let library_path = library_path.to_path_buf();
+            scope.spawn(move || {
+                let library = LibraryRoot::new(&library_path)
+                    .expect("the validated library remains available to link workers");
+                loop {
+                    let item = queue.lock().expect("link queue lock poisoned").pop_front();
+                    let Some(item) = item else { break };
+                    let execution = execute_enriched_link(&library, item, fetcher.as_ref());
+                    if sender.send(execution).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(sender);
+
+        for (index, execution) in receiver.into_iter().enumerate() {
+            let EnrichedExecution {
+                label,
+                outcome,
+                fetch_error,
+                removal,
+                stats,
+            } = execution;
+            if let Some(error) = fetch_error {
+                report.link_fetch_failures += 1;
+                report.add_warning(error.description());
+                reached_server += usize::from(error.reached_server());
+            } else {
+                reached_server += 1;
+                report.link_fetches += 1;
+                report.link_previews += usize::from(stats.preview);
+                report.link_favicons += usize::from(stats.favicon);
+                report.link_theme_colors += usize::from(stats.theme_color);
+            }
+            let pending_removal = removal.is_some();
+            if let Some(removal) = removal {
+                removals.push(removal);
+            }
+            match outcome {
+                Some(Ok(outcome)) => record_outcome(report, &label, "articles", outcome, verbose),
+                Some(Err(())) => {
+                    report.add_error(ERROR_IMPORT);
+                    if verbose {
+                        report
+                            .verbose_lines
+                            .push(format!("ERROR {}: link metadata import failed", label));
+                    }
+                }
+                None if !delete_dead => {
+                    *report
+                        .skip_reasons
+                        .entry(SKIP_UNAVAILABLE_LINK)
+                        .or_default() += 1;
+                    report.skipped += 1;
+                    if verbose {
+                        report
+                            .verbose_lines
+                            .push(format!("SKIP    {label}: link unavailable"));
+                    }
+                }
+                None if !pending_removal => {
+                    report.duplicates += 1;
+                    if verbose {
+                        report.verbose_lines.push(format!(
+                            "PRESENT {label}: changed while metadata was fetched"
+                        ));
+                    }
+                }
+                None if verbose => report
+                    .verbose_lines
+                    .push(format!("DEAD    {label}: pending safe removal")),
+                None => {}
+            }
+
+            let processed = index + 1;
+            if total >= 50 && (processed % 50 == 0 || processed == total) {
+                eprintln!("Link metadata: processed {processed}/{total}");
+            }
+        }
+    });
+
+    if delete_dead && !removals.is_empty() {
+        apply_dead_link_removals(
+            library_path,
+            total,
+            reached_server,
+            removals,
+            verbose,
+            report,
+        );
+    }
+}
+
+fn apply_dead_link_removals(
+    library_path: &Path,
+    total: usize,
+    reached_server: usize,
+    removals: Vec<RemovalCandidate>,
+    verbose: bool,
+    report: &mut RunReport,
+) {
+    let (gone, unreachable): (Vec<_>, Vec<_>) = removals
+        .into_iter()
+        .partition(|candidate| candidate.reason == LinkFetchError::Gone);
+    let systemic_unreachable = !unreachable.is_empty()
+        && (reached_server == 0 || (total >= 20 && unreachable.len().saturating_mul(4) > total));
+    let mut approved = gone;
+    if systemic_unreachable {
+        *report
+            .warning_reasons
+            .entry(WARN_UNREACHABLE_GUARD)
+            .or_default() += unreachable.len();
+        report.warnings += unreachable.len();
+        report.duplicates += unreachable.len();
+        if verbose {
+            for candidate in &unreachable {
+                report.verbose_lines.push(format!(
+                    "PRESENT reading {}: retained by network-wide failure guard",
+                    candidate.id
+                ));
+            }
+        }
+    } else {
+        approved.extend(unreachable);
+    }
+
+    let library = match LibraryRoot::new(library_path) {
+        Ok(library) => library,
+        Err(_) => {
+            for _ in approved {
+                report.add_error(ERROR_DELETE);
+            }
+            return;
+        }
+    };
+    for candidate in approved {
+        match delete_unenriched_link_files_if_unchanged(
+            &library,
+            &candidate.id,
+            &candidate.url,
+            &candidate.expected_article_sha256,
+            candidate.expected_note_sha256.as_deref(),
+        ) {
+            Ok(true) => {
+                report.removed += 1;
+                if verbose {
+                    report.verbose_lines.push(format!(
+                        "REMOVED reading {}: {}",
+                        candidate.id,
+                        candidate.reason.description()
+                    ));
+                }
+            }
+            Ok(false) => {
+                report.duplicates += 1;
+                if verbose {
+                    report.verbose_lines.push(format!(
+                        "PRESENT reading {}: changed while metadata was fetched",
+                        candidate.id
+                    ));
+                }
+            }
+            Err(_) => report.add_error(ERROR_DELETE),
+        }
+    }
+}
+
+fn execute_enriched_link(
+    library: &LibraryRoot,
+    item: PlannedItem,
+    fetcher: &dyn LinkMetadataFetcher,
+) -> EnrichedExecution {
+    let PlannedItem {
+        label,
+        identity,
+        action,
+        title,
+        saved_at,
+        state,
+        expected_article_sha256,
+        expected_note_sha256,
+    } = item;
+    let PlannedAction::Link { url } = action else {
+        return EnrichedExecution {
+            label,
+            outcome: Some(Err(())),
+            fetch_error: None,
+            removal: None,
+            stats: LinkCaptureStats::default(),
+        };
+    };
+
+    match fetcher.fetch(&url) {
+        Ok(capture) => {
+            let LinkMetadataCapture {
+                canonical_url,
+                title: captured_title,
+                site,
+                author,
+                lang,
+                excerpt,
+                theme_color,
+                images,
+                preview_url,
+                favicon_url,
+            } = capture;
+            let stats = LinkCaptureStats {
+                preview: preview_url.is_some(),
+                favicon: favicon_url.is_some(),
+                theme_color: theme_color
+                    .as_deref()
+                    .and_then(normalize_theme_color)
+                    .is_some(),
+            };
+            let input = SaveLinkInput {
+                url,
+                canonical_url,
+                title: captured_title.or(title).unwrap_or_default(),
+                author,
+                site,
+                saved_at: saved_at.unwrap_or_default(),
+                images,
+                preview_url,
+                favicon_url,
+                theme_color,
+                excerpt,
+                lang,
+            };
+            let outcome = if let Some(expected) = expected_article_sha256.as_deref() {
+                import_link_capture_if_unchanged(library, input, state, expected)
+            } else {
+                import_link_capture(library, input, state)
+            };
+            EnrichedExecution {
+                label,
+                outcome: Some(outcome.map_err(|_| ())),
+                fetch_error: None,
+                removal: None,
+                stats,
+            }
+        }
+        Err(error) if error.should_remove() => EnrichedExecution {
+            label,
+            outcome: None,
+            fetch_error: Some(error),
+            removal: identity.strip_prefix("article:").and_then(|id| {
+                expected_article_sha256.map(|expected_article_sha256| RemovalCandidate {
+                    id: id.to_string(),
+                    url,
+                    expected_article_sha256,
+                    expected_note_sha256,
+                    reason: error,
+                })
+            }),
+            stats: LinkCaptureStats::default(),
+        },
+        Err(error) => {
+            let outcome = if expected_article_sha256.is_some() {
+                None
+            } else {
+                Some(
+                    import_link_with_options(
+                        library,
+                        &url,
+                        ImportOptions {
+                            title,
+                            saved_at,
+                            state,
+                        },
+                    )
+                    .map_err(|_| ()),
+                )
+            };
+            EnrichedExecution {
+                label,
+                outcome,
+                fetch_error: Some(error),
+                removal: None,
+                stats: LinkCaptureStats::default(),
+            }
+        }
+    }
+}
+
 fn execute(
     library: &LibraryRoot,
     item: PlannedItem,
@@ -997,6 +1669,7 @@ fn execute_origin_quote(
             images: vec![],
             preview_url: None,
             favicon_url: None,
+            theme_color: None,
             excerpt: Some(truncate_chars(&identity_text, QUOTE_EXCERPT_CHARACTERS)),
             word_count: Some(identity_text.split_whitespace().count() as u32),
             lang: None,
@@ -1222,8 +1895,93 @@ fn opaque_row_label(id: &str, ordinal: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cuttings_core::{get_note, scan_library};
+    use cuttings_core::{get_note, import_link, scan_library, set_note, write_reading, ImageBytes};
     use tempfile::TempDir;
+
+    struct FixtureLinkMetadataFetcher;
+
+    impl LinkMetadataFetcher for FixtureLinkMetadataFetcher {
+        fn fetch(&self, url: &str) -> std::result::Result<LinkMetadataCapture, LinkFetchError> {
+            if url.contains("gone.example") {
+                return Err(LinkFetchError::Gone);
+            }
+            if url.contains("unreachable.example") {
+                return Err(LinkFetchError::Unreachable);
+            }
+            Ok(fixture_link_capture(url))
+        }
+    }
+
+    struct MutatingLinkMetadataFetcher {
+        library: PathBuf,
+    }
+
+    impl LinkMetadataFetcher for MutatingLinkMetadataFetcher {
+        fn fetch(&self, url: &str) -> std::result::Result<LinkMetadataCapture, LinkFetchError> {
+            let library = LibraryRoot::new(&self.library).unwrap();
+            let id = url_id(url).unwrap();
+            let article_path = library.article_path(&id);
+            let mut reading = parse_reading(&fs::read_to_string(&article_path).unwrap()).unwrap();
+            reading.metadata.title = "Concurrent local title".to_string();
+            write_reading(
+                &library,
+                reading.metadata,
+                "Concurrent lightweight body".to_string(),
+            )
+            .unwrap();
+
+            if url.contains("gone.example") {
+                Err(LinkFetchError::Gone)
+            } else {
+                Ok(fixture_link_capture(url))
+            }
+        }
+    }
+
+    struct AddingNoteLinkMetadataFetcher {
+        library: PathBuf,
+    }
+
+    impl LinkMetadataFetcher for AddingNoteLinkMetadataFetcher {
+        fn fetch(&self, url: &str) -> std::result::Result<LinkMetadataCapture, LinkFetchError> {
+            let library = LibraryRoot::new(&self.library).unwrap();
+            set_note(
+                &library,
+                &url_id(url).unwrap(),
+                "Concurrent note added during metadata fetch",
+            )
+            .unwrap();
+            Err(LinkFetchError::Gone)
+        }
+    }
+
+    fn fixture_link_capture(url: &str) -> LinkMetadataCapture {
+        let preview_url = "https://assets.example/social.png".to_string();
+        let favicon_url = "https://assets.example/favicon.ico".to_string();
+        LinkMetadataCapture {
+            canonical_url: url.to_string(),
+            title: Some("Social title".to_string()),
+            site: Some("Fixture Journal".to_string()),
+            author: None,
+            lang: Some("en".to_string()),
+            excerpt: Some("Social excerpt".to_string()),
+            theme_color: Some("rgb(18 52 86)".to_string()),
+            images: vec![
+                ImageBytes {
+                    url: preview_url.clone(),
+                    content_type: "image/png".to_string(),
+                    bytes: b"social-png".to_vec(),
+                },
+                ImageBytes {
+                    url: favicon_url.clone(),
+                    content_type: "image/x-icon".to_string(),
+                    bytes: b"favicon-ico".to_vec(),
+                },
+            ],
+            preview_url: Some(preview_url),
+            favicon_url: Some(favicon_url),
+        }
+    }
 
     fn setup() -> (TempDir, TempDir) {
         (TempDir::new().unwrap(), TempDir::new().unwrap())
@@ -1235,6 +1993,8 @@ mod tests {
             library: library.to_path_buf(),
             write,
             verbose: false,
+            enrich_links: false,
+            workers: 2,
         }
     }
 
@@ -1264,6 +2024,213 @@ mod tests {
         assert_eq!(reading.metadata.kind, ReadingKind::Quote);
         assert_eq!(reading.metadata.url, "https://example.com/source");
         assert!(reading.body.contains("first line\n> second line"));
+    }
+
+    #[test]
+    fn web_links_capture_social_preview_and_favicon_assets() {
+        let (export, library) = setup();
+        fs::write(
+            export.path().join(CSV_FILENAME),
+            fixture_csv("web,WebPage,,https://good.example/article,,,,2024-03-01T12:00:00Z\n"),
+        )
+        .unwrap();
+
+        let mut run_options = options(export.path(), library.path(), true);
+        run_options.enrich_links = true;
+        let report =
+            run_with_fetcher(run_options, Some(Arc::new(FixtureLinkMetadataFetcher))).unwrap();
+        assert_eq!(report.saved, 1);
+        let root = LibraryRoot::new(library.path()).unwrap();
+        let reading = scan_library(&root).unwrap().pop().unwrap();
+        let preview = reading
+            .metadata
+            .preview_asset
+            .expect("the social image should be stored as a local preview");
+        let favicon = reading
+            .metadata
+            .favicon_asset
+            .expect("the favicon should be stored as a separate local asset");
+        assert!(root.reading_dir(&reading.id).join(preview).is_file());
+        assert!(root.reading_dir(&reading.id).join(favicon).is_file());
+        assert_eq!(reading.metadata.theme_color.as_deref(), Some("#123456"));
+    }
+
+    #[test]
+    fn unavailable_web_links_in_a_fresh_export_are_counted_as_skipped() {
+        let (export, library) = setup();
+        fs::write(
+            export.path().join(CSV_FILENAME),
+            fixture_csv(
+                "gone,WebPage,,https://gone.example/article,,,,2024-03-01T12:00:00Z\n\
+                 unreachable,WebPage,,https://unreachable.example/article,,,,2024-03-01T12:00:00Z\n",
+            ),
+        )
+        .unwrap();
+
+        let mut run_options = options(export.path(), library.path(), true);
+        run_options.enrich_links = true;
+        let report =
+            run_with_fetcher(run_options, Some(Arc::new(FixtureLinkMetadataFetcher))).unwrap();
+
+        assert_eq!(report.planned, 2);
+        assert_eq!(report.saved, 0);
+        assert_eq!(report.upgraded, 0);
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.duplicates, 0);
+        assert_eq!(report.skipped, 2);
+        assert_eq!(report.errors, 0);
+        assert_eq!(
+            report.saved + report.upgraded + report.duplicates + report.skipped,
+            report.planned
+        );
+        assert!(scan_library(&LibraryRoot::new(library.path()).unwrap())
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn existing_migration_enriches_live_links_and_removes_dead_ones() {
+        let library = TempDir::new().unwrap();
+        let root = LibraryRoot::new(library.path()).unwrap();
+        for url in [
+            "https://good.example/article",
+            "https://gone.example/article",
+            "https://unreachable.example/article",
+        ] {
+            import_link(&root, url).unwrap();
+        }
+
+        let report = enrich_existing_links_with_fetcher(
+            EnrichExistingOptions {
+                library: library.path().to_path_buf(),
+                write: true,
+                verbose: false,
+                workers: 3,
+                expected_count: Some(3),
+                expected_digest: None,
+            },
+            Some(Arc::new(FixtureLinkMetadataFetcher)),
+        )
+        .unwrap();
+
+        assert_eq!(report.upgraded, 1);
+        assert_eq!(report.removed, 2);
+        let readings = scan_library(&root).unwrap();
+        assert_eq!(readings.len(), 1);
+        assert_eq!(readings[0].metadata.url, "https://good.example/article");
+        assert_eq!(readings[0].metadata.theme_color.as_deref(), Some("#123456"));
+    }
+
+    #[test]
+    fn existing_migration_skips_enrichment_and_deletion_after_concurrent_edits() {
+        let library = TempDir::new().unwrap();
+        let root = LibraryRoot::new(library.path()).unwrap();
+        for url in [
+            "https://good.example/concurrent",
+            "https://gone.example/concurrent",
+        ] {
+            import_link(&root, url).unwrap();
+        }
+
+        let report = enrich_existing_links_with_fetcher(
+            EnrichExistingOptions {
+                library: library.path().to_path_buf(),
+                write: true,
+                verbose: false,
+                workers: 1,
+                expected_count: Some(2),
+                expected_digest: None,
+            },
+            Some(Arc::new(MutatingLinkMetadataFetcher {
+                library: library.path().to_path_buf(),
+            })),
+        )
+        .unwrap();
+
+        assert_eq!(report.planned, 2);
+        assert_eq!(report.upgraded, 0);
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.unchanged, 2);
+        assert_eq!(report.errors, 0);
+        let readings = scan_library(&root).unwrap();
+        assert_eq!(readings.len(), 2);
+        assert!(readings
+            .iter()
+            .all(|reading| reading.metadata.title == "Concurrent local title"));
+        assert!(readings
+            .iter()
+            .all(|reading| reading.metadata.preview_asset.is_none()));
+    }
+
+    #[test]
+    fn existing_migration_preserves_a_note_added_during_dead_link_fetch() {
+        let library = TempDir::new().unwrap();
+        let root = LibraryRoot::new(library.path()).unwrap();
+        let url = "https://gone.example/concurrent-note";
+        let id = url_id(url).unwrap();
+        import_link(&root, url).unwrap();
+
+        let report = enrich_existing_links_with_fetcher(
+            EnrichExistingOptions {
+                library: library.path().to_path_buf(),
+                write: true,
+                verbose: false,
+                workers: 1,
+                expected_count: Some(1),
+                expected_digest: None,
+            },
+            Some(Arc::new(AddingNoteLinkMetadataFetcher {
+                library: library.path().to_path_buf(),
+            })),
+        )
+        .unwrap();
+
+        assert_eq!(report.planned, 1);
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.unchanged, 1);
+        assert_eq!(report.errors, 0);
+        assert!(root.article_path(&id).is_file());
+        assert_eq!(
+            get_note(&root, &id).unwrap().as_deref(),
+            Some("Concurrent note added during metadata fetch")
+        );
+    }
+
+    #[test]
+    fn systemic_unreachable_guard_counts_retained_links_as_unchanged() {
+        let library = TempDir::new().unwrap();
+        let root = LibraryRoot::new(library.path()).unwrap();
+        for ordinal in 0..3 {
+            import_link(
+                &root,
+                &format!("https://unreachable.example/article-{ordinal}"),
+            )
+            .unwrap();
+        }
+
+        let report = enrich_existing_links_with_fetcher(
+            EnrichExistingOptions {
+                library: library.path().to_path_buf(),
+                write: true,
+                verbose: false,
+                workers: 3,
+                expected_count: Some(3),
+                expected_digest: None,
+            },
+            Some(Arc::new(FixtureLinkMetadataFetcher)),
+        )
+        .unwrap();
+
+        assert_eq!(report.planned, 3);
+        assert_eq!(report.upgraded, 0);
+        assert_eq!(report.removed, 0);
+        assert_eq!(report.unchanged, 3);
+        assert_eq!(report.errors, 0);
+        assert_eq!(scan_library(&root).unwrap().len(), 3);
+        assert_eq!(
+            report.upgraded + report.removed + report.unchanged,
+            report.planned
+        );
     }
 
     #[test]

@@ -20,7 +20,7 @@ struct CuttingsCardView: View {
     var body: some View {
         cardContent
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(CuttingsTheme.card)
+            .background(CuttingsTheme.cardBackground(for: row))
             .clipShape(cardShape)
             .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
             .overlay(alignment: .topTrailing) { hoverMenu }
@@ -90,22 +90,23 @@ struct CuttingsCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(row.displayTitle)
                     .font(.title2.weight(.semibold))
+                    .foregroundStyle(articlePrimaryForeground)
                     .lineLimit(5)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let excerpt = row.excerpt, !excerpt.isEmpty {
                     Text(excerpt)
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(articleSecondaryForeground)
                         .lineLimit(6)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                sourceLine(onDark: false)
+                sourceLine(foreground: articleSecondaryForeground)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(CuttingsTheme.cardTint(for: row.id))
+            .background(CuttingsTheme.cardBackground(for: row))
         }
     }
 
@@ -123,7 +124,7 @@ struct CuttingsCardView: View {
                 .lineLimit(12)
                 .fixedSize(horizontal: false, vertical: true)
 
-            sourceLine(onDark: false)
+            sourceLine(foreground: .secondary)
         }
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -134,19 +135,37 @@ struct CuttingsCardView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(row.displayTitle)
                 .font(.headline.weight(.semibold))
+                .foregroundStyle(articlePrimaryForeground)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
-            sourceLine(onDark: false)
+            sourceLine(foreground: articleSecondaryForeground)
         }
         .padding(15)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func sourceLine(onDark: Bool) -> some View {
-        Text(row.displaySite ?? "Saved locally")
-            .lineLimit(1)
-            .font(.caption2.weight(.regular))
-            .foregroundStyle(onDark ? Color.white.opacity(0.82) : Color.secondary)
+    private func sourceLine(foreground: Color) -> some View {
+        HStack(spacing: 6) {
+            if row.kind == .article, row.faviconAsset != nil {
+                LocalReadingFavicon(row: row, libraryURL: appState.libraryURL)
+            }
+
+            Text(row.displaySite ?? "Saved locally")
+                .lineLimit(1)
+        }
+        .font(.caption2.weight(.regular))
+        .foregroundStyle(foreground)
+    }
+
+    private var articlePrimaryForeground: Color {
+        CuttingsTheme.articlePalette(for: row)?.foreground.color ?? .primary
+    }
+
+    private var articleSecondaryForeground: Color {
+        // A themed surface uses the same pure black/white foreground for every
+        // text role so captions never lose contrast through opacity. Font size
+        // and weight continue to provide the hierarchy.
+        CuttingsTheme.articlePalette(for: row)?.foreground.color ?? .secondary
     }
 
     private var hoverMenu: some View {

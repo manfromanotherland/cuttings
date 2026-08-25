@@ -135,6 +135,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           saved_at: new Date().toISOString(),
           ...(page.author ? { author: page.author } : {}),
           ...(page.site ? { site: page.site } : {}),
+          ...(page.themeColor ? { theme_color: page.themeColor } : {}),
           ...(page.lang ? { lang: page.lang } : {}),
           ...(page.excerpt ? { excerpt: page.excerpt } : {}),
         },

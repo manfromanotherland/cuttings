@@ -128,6 +128,7 @@ describe("extractPage", () => {
       "beforeend",
       [
         '<meta property="og:image" content="https://cdn.example.com/social.png">',
+        '<meta name="theme-color" content="#123456">',
         '<link rel="icon" href="https://example.com/favicon.ico" sizes="32x32">',
       ].join(""),
     );
@@ -136,6 +137,7 @@ describe("extractPage", () => {
 
     expect(result.preview_candidates).toEqual(["https://cdn.example.com/social.png"]);
     expect(result.favicon_candidates).toEqual(["https://example.com/favicon.ico"]);
+    expect(result.metadata.theme_color).toBe("#123456");
     expect(result.markdown).not.toContain("social.png");
     expect(result.markdown).not.toContain("favicon.ico");
   });

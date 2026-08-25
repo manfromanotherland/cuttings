@@ -124,6 +124,7 @@ mod tests {
             media_url: None,
             preview_asset: None,
             favicon_asset: None,
+            theme_color: None,
             canonical_url: "https://example.com".to_string(),
             title: "Test".to_string(),
             author: None,

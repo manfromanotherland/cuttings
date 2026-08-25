@@ -36,10 +36,12 @@ struct LocalReadingImage: View {
 
     private var placeholder: some View {
         ZStack {
-            CuttingsTheme.cardTint(for: row.id)
+            CuttingsTheme.cardBackground(for: row)
             Image(systemName: failed ? "photo.badge.exclamationmark" : row.kind.symbol)
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(
+                    CuttingsTheme.articlePalette(for: row)?.foreground.color ?? .secondary
+                )
         }
     }
 

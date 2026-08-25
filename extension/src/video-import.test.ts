@@ -112,10 +112,12 @@ describe("browser video import", () => {
       throw new Error("the recorder should not be needed for a readable HTTP video");
     });
     const port = new AutoAckVideoImportPort();
+    const doc = cosmosDocument(videoUrl);
+    doc.head.insertAdjacentHTML("beforeend", '<meta name="theme-color" content="#123456">');
 
     await expect(
       importVideo({
-        doc: cosmosDocument(videoUrl),
+        doc,
         pageUrl,
         mediaUrl: videoUrl,
         fetchVideo,
@@ -138,7 +140,7 @@ describe("browser video import", () => {
     expect(port.messages[0]).toMatchObject({
       action: "video_import_begin",
       expected_bytes: bytes.byteLength,
-      metadata: { kind: "video", url: pageUrl },
+      metadata: { kind: "video", url: pageUrl, theme_color: "#123456" },
     });
   });
 

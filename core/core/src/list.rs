@@ -112,6 +112,8 @@ pub struct ReadingRow {
     pub url: String,
     pub media_url: Option<String>,
     pub preview_asset: Option<String>,
+    pub favicon_asset: Option<String>,
+    pub theme_color: Option<String>,
     pub canonical_url: String,
     pub author: Option<String>,
     pub site: Option<String>,
@@ -569,7 +571,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, read_at, kind, media_url, preview_asset, lightweight, has_note
+                rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
+                lightweight, has_note
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
@@ -662,13 +665,14 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
     let mut stmt = conn.prepare(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
-                rating, read_at, kind, media_url, preview_asset, lightweight, has_note, body_text
+                rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
+                lightweight, has_note, body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(21)?;
+        let body: String = row.get(23)?;
         Ok((row_data, body))
     })?;
 
@@ -726,7 +730,7 @@ fn list_readings_search(
          SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
                 (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
                 r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset,
-                r.lightweight, r.has_note
+                r.favicon_asset, r.theme_color, r.lightweight, r.has_note
          FROM matched m JOIN readings r ON r.rowid=m.rowid
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
@@ -776,11 +780,13 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         id: row.get(0)?,
         title: row.get(1)?,
         kind: parse_kind(row.get::<_, String>(16)?.as_str())?,
-        lightweight: row.get::<_, i32>(19)? != 0,
-        has_note: row.get::<_, i32>(20)? != 0,
+        lightweight: row.get::<_, i32>(21)? != 0,
+        has_note: row.get::<_, i32>(22)? != 0,
         url: row.get(2)?,
         media_url: row.get(17)?,
         preview_asset: row.get(18)?,
+        favicon_asset: row.get(19)?,
+        theme_color: row.get(20)?,
         canonical_url: row.get(3)?,
         author: row.get(4)?,
         site: row.get(5)?,
@@ -838,6 +844,7 @@ mod tests {
             media_url: None,
             preview_asset: None,
             favicon_asset: None,
+            theme_color: None,
             canonical_url: url.to_string(),
             title: title.to_string(),
             author: None,

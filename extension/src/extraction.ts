@@ -42,6 +42,7 @@ export function extractPage(doc: Document, pageUrl: string): ExtractionResult | 
     saved_at: new Date().toISOString(),
     ...(author ? { author } : {}),
     site,
+    ...(page.themeColor ? { theme_color: page.themeColor } : {}),
     ...(lang ? { lang } : {}),
     ...(excerpt ? { excerpt } : {}),
     word_count: countWords(article.textContent ?? ""),

@@ -16,8 +16,8 @@ use sha2::{Digest, Sha256};
 use url::Url;
 
 use crate::{
-    find_by_media, find_by_url, first_local_image_asset, media_id, quote_id, read_metadata,
-    sha256_hex, url_id, ImageBytes, LibraryRoot, Metadata, ReadingKind,
+    find_by_media, find_by_url, first_local_image_asset, media_id, parse_reading, quote_id,
+    read_metadata, sha256_hex, url_id, ImageBytes, LibraryRoot, Metadata, Reading, ReadingKind,
 };
 use crate::{
     images::{
@@ -62,6 +62,9 @@ pub struct SaveInput {
     pub preview_url: Option<String>,
     /// Captured source URL to retain as the page favicon.
     pub favicon_url: Option<String>,
+    /// Website-provided CSS theme color. The core normalizes supported values
+    /// to canonical lowercase `#rrggbb` before persisting them.
+    pub theme_color: Option<String>,
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
     pub lang: Option<String>,
@@ -98,6 +101,7 @@ pub struct BrowserVideoImportInput {
     pub title: String,
     pub author: Option<String>,
     pub site: Option<String>,
+    pub theme_color: Option<String>,
     pub lang: Option<String>,
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
@@ -133,6 +137,7 @@ pub struct SaveLinkInput {
     pub images: Vec<ImageBytes>,
     pub preview_url: Option<String>,
     pub favicon_url: Option<String>,
+    pub theme_color: Option<String>,
     pub excerpt: Option<String>,
     pub lang: Option<String>,
 }
@@ -181,6 +186,7 @@ pub fn save_capture(library: &LibraryRoot, input: SaveInput) -> Result<SaveOutco
         input,
         ImportedReadingState::default(),
         ImageWritePolicy::BestEffort,
+        ExistingReadingPolicy::PreserveDuplicate,
     )
 }
 
@@ -197,7 +203,13 @@ pub fn import_reading(
     if input.saved_at.trim().is_empty() {
         input.saved_at = crate::time::now_utc_iso();
     }
-    save_with_imported_state(library, input, state, ImageWritePolicy::Required)
+    save_with_imported_state(
+        library,
+        input,
+        state,
+        ImageWritePolicy::Required,
+        ExistingReadingPolicy::PreserveDuplicate,
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -206,17 +218,39 @@ enum ImageWritePolicy {
     Required,
 }
 
+#[derive(Clone, PartialEq, Eq)]
+enum ExistingReadingPolicy {
+    PreserveDuplicate,
+    EnrichLightweightLink {
+        expected_article_sha256: Option<String>,
+    },
+}
+
+struct ExistingReadingSnapshot {
+    reading: Reading,
+    article_sha256: String,
+}
+
 fn save_with_imported_state(
     library: &LibraryRoot,
     input: SaveInput,
     state: ImportedReadingState,
     image_write_policy: ImageWritePolicy,
+    existing_policy: ExistingReadingPolicy,
 ) -> Result<SaveOutcome, SaveError> {
     let id = capture_id(&input)?;
     // Identity is known before touching disk. Hold its cross-process lock from
     // the duplicate/placeholder read through asset writes and atomic rename.
     let lock = lock_reading(library, &id)?;
-    save_capture_under_lock_with_state(library, input, id, state, image_write_policy, &lock)
+    save_capture_under_lock_with_state(
+        library,
+        input,
+        id,
+        state,
+        image_write_policy,
+        existing_policy,
+        &lock,
+    )
 }
 
 #[cfg(test)]
@@ -232,6 +266,7 @@ fn save_capture_under_lock(
         id,
         ImportedReadingState::default(),
         ImageWritePolicy::BestEffort,
+        ExistingReadingPolicy::PreserveDuplicate,
         lock,
     )
 }
@@ -242,24 +277,66 @@ fn save_capture_under_lock_with_state(
     id: String,
     imported_state: ImportedReadingState,
     image_write_policy: ImageWritePolicy,
+    existing_policy: ExistingReadingPolicy,
     lock: &ReadingLock,
 ) -> Result<SaveOutcome, SaveError> {
     lock.ensure_protects(library, &id)?;
     let existing_id = find_existing(library, &input, &id)?;
 
-    let previous = existing_id
-        .as_deref()
-        .and_then(|existing| read_metadata(&library.article_path(existing)).ok());
+    let previous = existing_id.as_deref().and_then(|existing| {
+        let bytes = fs::read(library.article_path(existing)).ok()?;
+        let article_sha256 = sha256_hex(&bytes);
+        let content = std::str::from_utf8(&bytes).ok()?;
+        let reading = parse_reading(content).ok()?;
+        Some(ExistingReadingSnapshot {
+            reading,
+            article_sha256,
+        })
+    });
     let upgrading = previous.as_ref().is_some_and(|metadata| {
         input.kind == ReadingKind::Article
             && !input.lightweight
-            && metadata.kind == ReadingKind::Article
-            && metadata.lightweight
-            && metadata.id == id
+            && metadata.reading.metadata.kind == ReadingKind::Article
+            && metadata.reading.metadata.lightweight
+            && metadata.reading.metadata.id == id
     });
+    let expected_article_sha256 = match &existing_policy {
+        ExistingReadingPolicy::EnrichLightweightLink {
+            expected_article_sha256,
+        } => expected_article_sha256.as_deref(),
+        ExistingReadingPolicy::PreserveDuplicate => None,
+    };
+    let allows_enrichment = matches!(
+        &existing_policy,
+        ExistingReadingPolicy::EnrichLightweightLink { .. }
+    );
+    let enriching = allows_enrichment
+        && previous.as_ref().is_some_and(|snapshot| {
+            input.kind == ReadingKind::Article
+                && input.lightweight
+                && snapshot.reading.metadata.kind == ReadingKind::Article
+                && snapshot.reading.metadata.lightweight
+                && snapshot.reading.metadata.id == id
+                && url_id(&snapshot.reading.metadata.url)
+                    .is_ok_and(|stored_id| stored_id == id)
+                && expected_article_sha256
+                    .is_none_or(|expected| snapshot.article_sha256 == expected)
+        });
+
+    // A conditional migration enriches an existing snapshot only. If the file
+    // disappeared, stopped being a lightweight URL-derived link, or changed by
+    // even one byte while metadata was fetched, report it as unchanged without
+    // writing downloaded assets or recreating a missing reading.
+    if expected_article_sha256.is_some() && !enriching {
+        return Ok(outcome(
+            library,
+            SaveDisposition::Duplicate,
+            existing_id.unwrap_or(id),
+        ));
+    }
 
     if let Some(existing_id) = existing_id {
-        if !upgrading {
+        if !upgrading && !enriching {
             return Ok(outcome(library, SaveDisposition::Duplicate, existing_id));
         }
     }
@@ -267,13 +344,13 @@ fn save_capture_under_lock_with_state(
     // Imported state is strictly an initializer for a new reading. An upgrade
     // keeps every user-controlled field already stored in Cuttings, and a
     // duplicate returned above performs no validation or writes at all.
-    let imported_state = if upgrading {
+    let imported_state = if upgrading || enriching {
         ImportedReadingState::default()
     } else {
         validate_imported_state(imported_state)?
     };
 
-    let markdown = match image_write_policy {
+    let mut markdown = match image_write_policy {
         ImageWritePolicy::BestEffort => {
             write_images_under_lock(library, &id, &input.markdown, &input.images, lock)?
         }
@@ -281,6 +358,11 @@ fn save_capture_under_lock_with_state(
             write_images_required_under_lock(library, &id, &input.markdown, &input.images, lock)?
         }
     };
+    if enriching {
+        if let Some(previous) = previous.as_ref() {
+            markdown.clone_from(&previous.reading.body);
+        }
+    }
     let preview_asset = input
         .preview_url
         .as_deref()
@@ -300,6 +382,7 @@ fn save_capture_under_lock_with_state(
         media_url: input.media_url,
         preview_asset,
         favicon_asset,
+        theme_color: input.theme_color.as_deref().and_then(normalize_theme_color),
         canonical_url: input.canonical_url,
         title: input.title,
         author: input.author,
@@ -316,7 +399,8 @@ fn save_capture_under_lock_with_state(
         source_hash: String::new(),
     };
 
-    if let Some(previous) = previous.filter(|_| upgrading) {
+    if let Some(previous) = previous.filter(|_| upgrading || enriching) {
+        let previous = previous.reading.metadata;
         metadata.saved_at = previous.saved_at;
         metadata.read_at = previous.read_at;
         metadata.archived = previous.archived;
@@ -329,9 +413,27 @@ fn save_capture_under_lock_with_state(
         if metadata.favicon_asset.is_none() {
             metadata.favicon_asset = previous.favicon_asset;
         }
+        if metadata.theme_color.is_none() {
+            metadata.theme_color = previous.theme_color;
+        }
+        if metadata.author.is_none() {
+            metadata.author = previous.author;
+        }
+        if metadata.site.is_none() {
+            metadata.site = previous.site;
+        }
+        if metadata.excerpt.is_none() {
+            metadata.excerpt = previous.excerpt;
+        }
+        if metadata.word_count.is_none() {
+            metadata.word_count = previous.word_count;
+        }
+        if metadata.lang.is_none() {
+            metadata.lang = previous.lang;
+        }
     }
 
-    if !upgrading {
+    if !upgrading && !enriching {
         if let Some(note_markdown) = imported_state.note_markdown.as_deref() {
             // The article is the commit marker for a reading. Store an explicit
             // imported note first so a successful article commit includes it.
@@ -344,7 +446,7 @@ fn save_capture_under_lock_with_state(
     write_reading_under_lock(library, metadata, markdown, lock)?;
     Ok(outcome(
         library,
-        if upgrading {
+        if upgrading || enriching {
             SaveDisposition::Upgraded
         } else {
             SaveDisposition::Saved
@@ -389,9 +491,93 @@ pub fn save_link_capture(
             images: input.images,
             preview_url: input.preview_url,
             favicon_url: input.favicon_url,
+            theme_color: input.theme_color,
             excerpt: input.excerpt,
             word_count: None,
             lang: input.lang,
+        },
+    )
+}
+
+/// Import a lightweight link captured by an explicit migration adapter.
+///
+/// Unlike an ordinary browser re-save, this may enrich an existing lightweight
+/// link at the same URL-derived id. It preserves every user-controlled field
+/// and note while replacing source metadata and filling local preview/favicon
+/// assets. Full articles and non-article readings remain duplicates.
+pub fn import_link_capture(
+    library: &LibraryRoot,
+    input: SaveLinkInput,
+    state: ImportedReadingState,
+) -> Result<SaveOutcome, SaveError> {
+    import_link_capture_with_snapshot(library, input, state, None)
+}
+
+/// Enrich an existing lightweight link only if its complete `article.md`
+/// still has the exact SHA-256 observed by the migration plan.
+///
+/// The hash comparison and enrichment happen under the same reading lock. A
+/// changed or missing snapshot is returned as [`SaveDisposition::Duplicate`]
+/// and no metadata or downloaded assets are written.
+pub fn import_link_capture_if_unchanged(
+    library: &LibraryRoot,
+    input: SaveLinkInput,
+    state: ImportedReadingState,
+    expected_article_sha256: &str,
+) -> Result<SaveOutcome, SaveError> {
+    if expected_article_sha256.len() != 64
+        || !expected_article_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(SaveError::InvalidRequest(
+            "expected article snapshot must be 64 lowercase hexadecimal characters".to_string(),
+        ));
+    }
+    import_link_capture_with_snapshot(
+        library,
+        input,
+        state,
+        Some(expected_article_sha256.to_string()),
+    )
+}
+
+fn import_link_capture_with_snapshot(
+    library: &LibraryRoot,
+    input: SaveLinkInput,
+    state: ImportedReadingState,
+    expected_article_sha256: Option<String>,
+) -> Result<SaveOutcome, SaveError> {
+    let normalized = normalize_http_url(&input.url)?;
+    let canonical_url =
+        normalize_http_url(&input.canonical_url).unwrap_or_else(|_| normalized.clone());
+
+    save_with_imported_state(
+        library,
+        SaveInput {
+            quote_identity_markdown: None,
+            kind: ReadingKind::Article,
+            lightweight: true,
+            url: normalized.clone(),
+            media_url: None,
+            canonical_url,
+            title: import_title(Some(&input.title), &normalized),
+            author: input.author,
+            site: input.site,
+            saved_at: imported_saved_at(Some(input.saved_at)),
+            markdown: format!("[Open link](<{normalized}>)"),
+            images: input.images,
+            preview_url: input.preview_url,
+            favicon_url: input.favicon_url,
+            theme_color: input.theme_color,
+            excerpt: input.excerpt,
+            word_count: None,
+            lang: input.lang,
+        },
+        state,
+        ImageWritePolicy::Required,
+        ExistingReadingPolicy::EnrichLightweightLink {
+            expected_article_sha256,
         },
     )
 }
@@ -428,6 +614,7 @@ pub fn import_link_with_options(
             images: vec![],
             preview_url: None,
             favicon_url: None,
+            theme_color: None,
             excerpt: None,
             word_count: None,
             lang: None,
@@ -505,6 +692,7 @@ pub fn import_text_with_options(
             images: vec![],
             preview_url: None,
             favicon_url: None,
+            theme_color: None,
             excerpt: Some(truncate_chars(&identity_text, QUOTE_EXCERPT_CHARACTERS)),
             word_count: Some(identity_text.split_whitespace().count() as u32),
             lang: None,
@@ -576,6 +764,7 @@ pub fn import_image_with_options(
             }],
             preview_url: None,
             favicon_url: None,
+            theme_color: None,
             excerpt: None,
             word_count: None,
             lang: None,
@@ -637,6 +826,7 @@ pub fn import_image_from_origin_with_options(
             }],
             preview_url: None,
             favicon_url: None,
+            theme_color: None,
             excerpt: None,
             word_count: None,
             lang: None,
@@ -813,6 +1003,7 @@ impl BrowserVideoImport {
                     canonical_url: input.canonical_url,
                     author: input.author,
                     site,
+                    theme_color: input.theme_color,
                     lang: input.lang,
                     excerpt: input.excerpt,
                     word_count: input.word_count,
@@ -916,6 +1107,7 @@ struct VideoImportIdentity {
     canonical_url: String,
     author: Option<String>,
     site: Option<String>,
+    theme_color: Option<String>,
     lang: Option<String>,
     excerpt: Option<String>,
     word_count: Option<u32>,
@@ -929,6 +1121,7 @@ impl VideoImportIdentity {
             origin,
             author: None,
             site,
+            theme_color: None,
             lang: None,
             excerpt: None,
             word_count: None,
@@ -953,6 +1146,7 @@ fn save_staged_video(
         canonical_url,
         author,
         site,
+        theme_color,
         lang,
         excerpt,
         word_count,
@@ -988,6 +1182,7 @@ fn save_staged_video(
         media_url: Some(media_reference),
         preview_asset: None,
         favicon_asset: None,
+        theme_color: theme_color.as_deref().and_then(normalize_theme_color),
         canonical_url,
         title: import_title(title.as_deref(), "Imported video"),
         author,
@@ -1441,6 +1636,141 @@ fn normalize_http_url(raw: &str) -> Result<String, SaveError> {
     crate::normalize_url(parsed.as_str()).map_err(SaveError::Storage)
 }
 
+/// Normalize the CSS color forms commonly used by `<meta name="theme-color">`
+/// into the single portable representation stored by the library contract.
+/// Unsupported or non-finite values are ignored rather than making an
+/// otherwise useful capture fail.
+pub fn normalize_theme_color(raw: &str) -> Option<String> {
+    let value = raw.trim().to_ascii_lowercase();
+    if let Some(hex) = value.strip_prefix('#') {
+        let expanded = match hex.len() {
+            3 | 4 if hex.chars().all(|character| character.is_ascii_hexdigit()) => hex
+                .chars()
+                .take(3)
+                .flat_map(|character| [character, character])
+                .collect::<String>(),
+            6 | 8 if hex.chars().all(|character| character.is_ascii_hexdigit()) => {
+                hex[..6].to_string()
+            }
+            _ => return None,
+        };
+        return Some(format!("#{expanded}"));
+    }
+
+    let named = match value.as_str() {
+        "black" => Some((0, 0, 0)),
+        "white" => Some((255, 255, 255)),
+        "red" => Some((255, 0, 0)),
+        "green" => Some((0, 128, 0)),
+        "blue" => Some((0, 0, 255)),
+        "gray" | "grey" => Some((128, 128, 128)),
+        "yellow" => Some((255, 255, 0)),
+        "navy" => Some((0, 0, 128)),
+        "teal" => Some((0, 128, 128)),
+        _ => None,
+    };
+    if let Some((red, green, blue)) = named {
+        return Some(rgb_hex(red, green, blue));
+    }
+
+    if let Some(arguments) =
+        css_function_arguments(&value, "rgb").or_else(|| css_function_arguments(&value, "rgba"))
+    {
+        let tokens = css_color_tokens(arguments);
+        if tokens.len() < 3 {
+            return None;
+        }
+        return Some(rgb_hex(
+            css_rgb_channel(tokens[0])?,
+            css_rgb_channel(tokens[1])?,
+            css_rgb_channel(tokens[2])?,
+        ));
+    }
+
+    if let Some(arguments) =
+        css_function_arguments(&value, "hsl").or_else(|| css_function_arguments(&value, "hsla"))
+    {
+        let tokens = css_color_tokens(arguments);
+        if tokens.len() < 3 {
+            return None;
+        }
+        let hue = css_hue(tokens[0])?;
+        let saturation = css_percentage(tokens[1])?;
+        let lightness = css_percentage(tokens[2])?;
+        let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
+        let sector = hue / 60.0;
+        let x = chroma * (1.0 - (sector.rem_euclid(2.0) - 1.0).abs());
+        let (red, green, blue) = match sector as u32 {
+            0 => (chroma, x, 0.0),
+            1 => (x, chroma, 0.0),
+            2 => (0.0, chroma, x),
+            3 => (0.0, x, chroma),
+            4 => (x, 0.0, chroma),
+            _ => (chroma, 0.0, x),
+        };
+        let match_lightness = lightness - chroma / 2.0;
+        let channel = |component: f64| ((component + match_lightness) * 255.0).round() as u8;
+        return Some(rgb_hex(channel(red), channel(green), channel(blue)));
+    }
+
+    None
+}
+
+fn css_function_arguments<'a>(value: &'a str, name: &str) -> Option<&'a str> {
+    value
+        .strip_prefix(name)?
+        .strip_prefix('(')?
+        .strip_suffix(')')
+}
+
+fn css_color_tokens(arguments: &str) -> Vec<&str> {
+    arguments
+        .split(|character: char| character.is_ascii_whitespace() || matches!(character, ',' | '/'))
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
+fn css_rgb_channel(value: &str) -> Option<u8> {
+    if let Some(percentage) = value.strip_suffix('%') {
+        let percentage = percentage.parse::<f64>().ok()?;
+        if !percentage.is_finite() {
+            return None;
+        }
+        return Some((percentage.clamp(0.0, 100.0) * 255.0 / 100.0).round() as u8);
+    }
+    let channel = value.parse::<f64>().ok()?;
+    channel
+        .is_finite()
+        .then(|| channel.clamp(0.0, 255.0).round() as u8)
+}
+
+fn css_percentage(value: &str) -> Option<f64> {
+    let percentage = value.strip_suffix('%')?.parse::<f64>().ok()?;
+    percentage
+        .is_finite()
+        .then(|| percentage.clamp(0.0, 100.0) / 100.0)
+}
+
+fn css_hue(value: &str) -> Option<f64> {
+    let (number, multiplier) = if let Some(number) = value.strip_suffix("deg") {
+        (number, 1.0)
+    } else if let Some(number) = value.strip_suffix("grad") {
+        (number, 0.9)
+    } else if let Some(number) = value.strip_suffix("turn") {
+        (number, 360.0)
+    } else if let Some(number) = value.strip_suffix("rad") {
+        (number, 180.0 / std::f64::consts::PI)
+    } else {
+        (value, 1.0)
+    };
+    let hue = number.parse::<f64>().ok()? * multiplier;
+    hue.is_finite().then(|| hue.rem_euclid(360.0))
+}
+
+fn rgb_hex(red: u8, green: u8, blue: u8) -> String {
+    format!("#{red:02x}{green:02x}{blue:02x}")
+}
+
 fn invalid(error: impl std::fmt::Display) -> SaveError {
     SaveError::InvalidRequest(error.to_string())
 }
@@ -1490,10 +1820,52 @@ mod tests {
             images: vec![],
             preview_url: None,
             favicon_url: None,
+            theme_color: None,
             excerpt: Some("Full body.".to_string()),
             word_count: Some(2),
             lang: Some("en".to_string()),
         }
+    }
+
+    fn link_metadata_capture(url: &str) -> SaveLinkInput {
+        let preview_url = "https://assets.example/social.png".to_string();
+        SaveLinkInput {
+            url: url.to_string(),
+            canonical_url: url.to_string(),
+            title: "Captured social title".to_string(),
+            author: None,
+            site: Some("Example".to_string()),
+            saved_at: "2026-08-25T12:00:00.000Z".to_string(),
+            images: vec![ImageBytes {
+                url: preview_url.clone(),
+                content_type: "image/png".to_string(),
+                bytes: b"preview".to_vec(),
+            }],
+            preview_url: Some(preview_url),
+            favicon_url: None,
+            theme_color: Some("#123456".to_string()),
+            excerpt: Some("Captured excerpt".to_string()),
+            lang: Some("en".to_string()),
+        }
+    }
+
+    #[test]
+    fn website_theme_colors_normalize_to_canonical_srgb_hex() {
+        assert_eq!(normalize_theme_color(" #AbC ").as_deref(), Some("#aabbcc"));
+        assert_eq!(
+            normalize_theme_color("#123456cc").as_deref(),
+            Some("#123456")
+        );
+        assert_eq!(
+            normalize_theme_color("rgb(100% 0% 50%)").as_deref(),
+            Some("#ff0080")
+        );
+        assert_eq!(
+            normalize_theme_color("hsl(210, 50%, 40%)").as_deref(),
+            Some("#336699")
+        );
+        assert_eq!(normalize_theme_color("transparent"), None);
+        assert_eq!(normalize_theme_color("var(--brand)"), None);
     }
 
     fn assert_staging_empty(library: &LibraryRoot) {
@@ -1695,6 +2067,149 @@ mod tests {
         assert_eq!(reading.metadata.tags, vec!["later"]);
         assert_eq!(reading.metadata.title, "Captured title");
         assert_eq!(reading.body, "# Captured title\n\nFull body.\n");
+    }
+
+    #[test]
+    fn metadata_enrichment_preserves_lightweight_body_and_user_state() {
+        let (_dir, library) = library();
+        let url = "https://example.com/enrich-me";
+        let saved_at = "2020-01-02T03:04:05.000Z";
+        let imported = import_link_with_options(
+            &library,
+            url,
+            ImportOptions {
+                title: Some("Imported title".to_string()),
+                saved_at: Some(saved_at.to_string()),
+                state: ImportedReadingState {
+                    favorite: true,
+                    tags: vec!["original".to_string()],
+                    note_markdown: Some("original note".to_string()),
+                },
+            },
+        )
+        .unwrap();
+        let mut existing =
+            parse_reading(&fs::read_to_string(library.article_path(&imported.id)).unwrap())
+                .unwrap();
+        existing.metadata.author = Some("Existing author".to_string());
+        existing.metadata.site = Some("Existing site".to_string());
+        existing.metadata.excerpt = Some("Existing excerpt".to_string());
+        existing.metadata.word_count = Some(42);
+        existing.metadata.lang = Some("ga".to_string());
+        let custom_body = "A locally edited lightweight body.\n";
+        crate::write_reading(&library, existing.metadata, custom_body.to_string()).unwrap();
+
+        let preview_url = "https://assets.example/social.png".to_string();
+        let favicon_url = "https://assets.example/favicon.ico".to_string();
+        let outcome = import_link_capture(
+            &library,
+            SaveLinkInput {
+                url: url.to_string(),
+                canonical_url: url.to_string(),
+                title: "Captured social title".to_string(),
+                author: None,
+                site: None,
+                saved_at: "2026-08-25T12:00:00.000Z".to_string(),
+                images: vec![
+                    ImageBytes {
+                        url: preview_url.clone(),
+                        content_type: "image/png".to_string(),
+                        bytes: b"preview".to_vec(),
+                    },
+                    ImageBytes {
+                        url: favicon_url.clone(),
+                        content_type: "image/x-icon".to_string(),
+                        bytes: b"favicon".to_vec(),
+                    },
+                ],
+                preview_url: Some(preview_url),
+                favicon_url: Some(favicon_url),
+                theme_color: Some("#123456".to_string()),
+                excerpt: None,
+                lang: None,
+            },
+            ImportedReadingState::default(),
+        )
+        .unwrap();
+        let reading =
+            parse_reading(&fs::read_to_string(library.article_path(&imported.id)).unwrap())
+                .unwrap();
+
+        assert_eq!(outcome.disposition, SaveDisposition::Upgraded);
+        assert_eq!(reading.body, custom_body);
+        assert_eq!(reading.metadata.saved_at, saved_at);
+        assert!(reading.metadata.favorite);
+        assert_eq!(reading.metadata.tags, vec!["original"]);
+        assert_eq!(reading.metadata.title, "Captured social title");
+        assert_eq!(reading.metadata.theme_color.as_deref(), Some("#123456"));
+        assert_eq!(reading.metadata.author.as_deref(), Some("Existing author"));
+        assert_eq!(reading.metadata.site.as_deref(), Some("Existing site"));
+        assert_eq!(
+            reading.metadata.excerpt.as_deref(),
+            Some("Existing excerpt")
+        );
+        assert_eq!(reading.metadata.word_count, Some(42));
+        assert_eq!(reading.metadata.lang.as_deref(), Some("ga"));
+        assert!(reading.metadata.preview_asset.is_some());
+        assert!(reading.metadata.favicon_asset.is_some());
+        assert_eq!(
+            get_note(&library, &imported.id).unwrap().as_deref(),
+            Some("original note")
+        );
+    }
+
+    #[test]
+    fn conditional_metadata_enrichment_requires_the_exact_article_snapshot() {
+        let (_dir, library) = library();
+        let url = "https://example.com/conditional-enrichment";
+        let imported = import_link(&library, url).unwrap();
+        let article_path = library.article_path(&imported.id);
+        let planned_hash = sha256_hex(&fs::read(&article_path).unwrap());
+
+        // This edit deliberately leaves the reading lightweight and without
+        // enrichment fields. A structural guard would miss it; the complete
+        // article snapshot must still prevent overwriting the local change.
+        let mut changed = parse_reading(&fs::read_to_string(&article_path).unwrap()).unwrap();
+        changed.metadata.title = "Locally changed title".to_string();
+        crate::write_reading(
+            &library,
+            changed.metadata,
+            "Locally changed lightweight body.".to_string(),
+        )
+        .unwrap();
+
+        let stale = import_link_capture_if_unchanged(
+            &library,
+            link_metadata_capture(url),
+            ImportedReadingState::default(),
+            &planned_hash,
+        )
+        .unwrap();
+        let preserved = parse_reading(&fs::read_to_string(&article_path).unwrap()).unwrap();
+        assert_eq!(stale.disposition, SaveDisposition::Duplicate);
+        assert_eq!(preserved.metadata.title, "Locally changed title");
+        assert_eq!(preserved.body, "Locally changed lightweight body.\n");
+        assert!(preserved.metadata.preview_asset.is_none());
+        assert!(preserved.metadata.theme_color.is_none());
+        assert_eq!(
+            fs::read_dir(library.assets_dir(&imported.id))
+                .unwrap()
+                .count(),
+            0
+        );
+
+        let current_hash = sha256_hex(&fs::read(&article_path).unwrap());
+        let applied = import_link_capture_if_unchanged(
+            &library,
+            link_metadata_capture(url),
+            ImportedReadingState::default(),
+            &current_hash,
+        )
+        .unwrap();
+        assert_eq!(applied.disposition, SaveDisposition::Upgraded);
+        let enriched = read_metadata(&article_path).unwrap();
+        assert!(enriched.preview_asset.is_some());
+        assert_eq!(enriched.theme_color.as_deref(), Some("#123456"));
     }
 
     #[test]
@@ -2062,6 +2577,7 @@ mod tests {
                 title: "Browser clip".to_string(),
                 author: Some("Ed Example".to_string()),
                 site: Some("Example Studio".to_string()),
+                theme_color: Some("#123456".to_string()),
                 lang: Some("en-IE".to_string()),
                 excerpt: Some("A locally captured browser clip.".to_string()),
                 word_count: Some(5),
@@ -2077,6 +2593,7 @@ mod tests {
         assert_eq!(reading.canonical_url, "https://example.com/canonical-clip");
         assert_eq!(reading.author.as_deref(), Some("Ed Example"));
         assert_eq!(reading.site.as_deref(), Some("Example Studio"));
+        assert_eq!(reading.theme_color.as_deref(), Some("#123456"));
         assert_eq!(reading.lang.as_deref(), Some("en-IE"));
         assert_eq!(
             reading.excerpt.as_deref(),
@@ -2108,6 +2625,7 @@ mod tests {
                 title: "First title".to_string(),
                 author: None,
                 site: None,
+                theme_color: None,
                 lang: None,
                 excerpt: None,
                 word_count: None,
@@ -2134,6 +2652,7 @@ mod tests {
                 title: "Duplicate title".to_string(),
                 author: None,
                 site: None,
+                theme_color: None,
                 lang: None,
                 excerpt: None,
                 word_count: None,
@@ -2154,6 +2673,7 @@ mod tests {
                 title: "Elsewhere".to_string(),
                 author: None,
                 site: None,
+                theme_color: None,
                 lang: None,
                 excerpt: None,
                 word_count: None,
@@ -2197,6 +2717,7 @@ mod tests {
                 title: "Not a video".to_string(),
                 author: None,
                 site: None,
+                theme_color: None,
                 lang: None,
                 excerpt: None,
                 word_count: None,
@@ -2225,6 +2746,7 @@ mod tests {
             title: "Failing clip".to_string(),
             author: None,
             site: None,
+            theme_color: None,
             lang: None,
             excerpt: None,
             word_count: None,
