@@ -87,6 +87,7 @@ every affected component.
   articles and quote bodies; image/video cards use local preview assets and source/media actions.
   A persistent filmstrip navigates the current board order, while an optional trailing Inspector
   exposes the origin page when one exists and identifies source-less cards as saved locally.
+  Lightweight links bypass Gallery and open their origin directly in the system browser.
 - Owns the local index and watches the library folder for changes (including files arriving via
   sync), reindexing incrementally.
 

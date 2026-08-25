@@ -378,8 +378,17 @@ extension CuttingsLibraryView {
     }
 
     private func open(_ row: ReadingRow) {
+        if LibraryScope.links.contains(row) {
+            if let url = row.sourceURL {
+                ReadingLink.open(url)
+            }
+            return
+        }
+
         if presentedReading == nil {
-            presentationOrder = appState.readings.map(\.id)
+            presentationOrder = appState.readings
+                .filter { !LibraryScope.links.contains($0) }
+                .map(\.id)
         }
         appState.selectedId = row.id
         presentedReading = row

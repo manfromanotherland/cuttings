@@ -144,9 +144,10 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ### Card detail
 
-- Single-click opens a full-window Gallery detail while preserving the board behind the navigation
-  destination. Escape or Back returns to the board; left/right and J/K move through the frozen
-  current board order.
+- Single-click opens a full-window Gallery detail for articles, images, videos, and quotes while
+  preserving the board behind the navigation destination. A lightweight link opens its origin in
+  the system browser instead and never enters Gallery. Escape or Back returns to the board;
+  left/right and J/K move through the frozen detail-capable board order, skipping links.
 - The selected preview fills the available space above a persistent horizontal filmstrip. Clicking
   a filmstrip thumbnail selects it, and keyboard navigation keeps the selected thumbnail visible.
 - Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.
