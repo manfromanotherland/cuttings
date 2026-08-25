@@ -33,12 +33,18 @@ pub fn apply_diffs(conn: &Connection, diffs: &[ScanDiff]) -> Result<()> {
 /// The FTS triggers keep `readings_fts` in sync automatically.
 pub fn rebuild(conn: &Connection, library: &LibraryRoot) -> Result<()> {
     let readings = scan_library(library)?;
+    rebuild_scanned(conn, &readings)
+}
 
+/// Rebuild from a snapshot the caller already scanned. This lets long-lived
+/// clients retain the exact same snapshot for incremental diffing without
+/// opening and hashing every preview twice at boot.
+pub(crate) fn rebuild_scanned(conn: &Connection, readings: &[ScannedReading]) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
 
     conn.execute("DELETE FROM readings", [])?;
 
-    for r in &readings {
+    for r in readings {
         insert(conn, r)?;
     }
 
@@ -49,12 +55,17 @@ pub fn rebuild(conn: &Connection, library: &LibraryRoot) -> Result<()> {
 fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
     let tags_text = r.metadata.tags.join(" ");
+    let projection = match r.visual_asset.as_ref() {
+        Some(asset) => crate::visual_index::cached_projection(conn, &asset.content_hash)?,
+        None => Default::default(),
+    };
     conn.execute(
         "INSERT OR REPLACE INTO readings
          (id, kind, lightweight, has_note, url, media_url, preview_asset, canonical_url, title,
           author, site, saved_at, read_at, archived, favorite, rating, source_hash, excerpt,
-          word_count, lang, tags_json, tags_text, body_text)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)",
+          word_count, lang, tags_json, tags_text, body_text, visual_asset_path,
+          visual_asset_hash, visual_analyzer_version, visual_terms, predominant_color)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28)",
         params![
             r.metadata.id,
             r.metadata.kind.as_str(),
@@ -79,6 +90,11 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             tags,
             tags_text,
             r.body,
+            r.visual_asset.as_ref().map(|asset| &asset.relative_path),
+            r.visual_asset.as_ref().map(|asset| &asset.content_hash),
+            projection.analyzer_version,
+            projection.visual_terms,
+            projection.predominant_color,
         ],
     )?;
     Ok(())
@@ -87,12 +103,18 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
 fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
     let tags_text = r.metadata.tags.join(" ");
+    let projection = match r.visual_asset.as_ref() {
+        Some(asset) => crate::visual_index::cached_projection(conn, &asset.content_hash)?,
+        None => Default::default(),
+    };
     conn.execute(
         "UPDATE readings SET
          kind=?2, lightweight=?3, has_note=?4, url=?5, media_url=?6, preview_asset=?7,
          canonical_url=?8, title=?9, author=?10, site=?11, saved_at=?12, read_at=?13,
          archived=?14, favorite=?15, rating=?16, source_hash=?17, excerpt=?18,
-         word_count=?19, lang=?20, tags_json=?21, tags_text=?22, body_text=?23
+         word_count=?19, lang=?20, tags_json=?21, tags_text=?22, body_text=?23,
+         visual_asset_path=?24, visual_asset_hash=?25, visual_analyzer_version=?26,
+         visual_terms=?27, predominant_color=?28
          WHERE id=?1",
         params![
             r.metadata.id,
@@ -118,6 +140,11 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             tags,
             tags_text,
             r.body,
+            r.visual_asset.as_ref().map(|asset| &asset.relative_path),
+            r.visual_asset.as_ref().map(|asset| &asset.content_hash),
+            projection.analyzer_version,
+            projection.visual_terms,
+            projection.predominant_color,
         ],
     )?;
     Ok(())

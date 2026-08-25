@@ -103,6 +103,47 @@ pub struct FfiImportResult {
     pub path: String,
 }
 
+#[derive(uniffi::Record)]
+pub struct FfiVisualAsset {
+    pub reading_id: String,
+    pub title: String,
+    /// Reading-relative public path (`assets/<file>`).
+    pub relative_path: String,
+    /// Transient, safely resolved path for platform image APIs. Never persisted.
+    pub absolute_file_path: String,
+    pub content_hash: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct FfiVisualAnalysisTask {
+    pub reading_id: String,
+    pub relative_path: String,
+    pub absolute_file_path: String,
+    pub content_hash: String,
+    pub analyzer_version: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct FfiVisualLabel {
+    pub identifier: String,
+    pub confidence: f64,
+}
+
+#[derive(uniffi::Record)]
+pub struct FfiWeightedColor {
+    pub red: f64,
+    pub green: f64,
+    pub blue: f64,
+    pub weight: f64,
+}
+
+#[derive(uniffi::Record)]
+pub struct FfiVisualAnalysisResult {
+    pub supported: bool,
+    pub labels: Vec<FfiVisualLabel>,
+    pub palette: Vec<FfiWeightedColor>,
+}
+
 #[derive(uniffi::Enum)]
 pub enum FfiImportDisposition {
     Saved,
@@ -141,6 +182,21 @@ pub enum FfiSortField {
     Relevance,
 }
 
+#[derive(uniffi::Enum)]
+pub enum FfiPredominantColor {
+    Red,
+    Orange,
+    Yellow,
+    Green,
+    Blue,
+    Purple,
+    Pink,
+    Brown,
+    Black,
+    Gray,
+    White,
+}
+
 #[derive(uniffi::Record)]
 pub struct FfiListOptions {
     pub view: FfiView,
@@ -153,6 +209,9 @@ pub struct FfiListOptions {
     pub since: Option<String>,
     pub until: Option<String>,
     pub query: Option<String>,
+    pub predominant_color: Option<FfiPredominantColor>,
+    /// Core Spotlight identifiers, ordered best-first for the same query.
+    pub semantic_candidate_ids: Vec<String>,
     pub limit: u32,
     pub offset: u32,
 }
@@ -169,6 +228,8 @@ pub struct FfiCountScope {
     pub rating: Option<u8>,
     pub kind: Option<FfiReadingKind>,
     pub query: Option<String>,
+    pub predominant_color: Option<FfiPredominantColor>,
+    pub semantic_candidate_ids: Vec<String>,
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -245,6 +306,86 @@ impl From<SaveOutcome> for FfiImportResult {
     }
 }
 
+impl From<crate::visual_index::VisualAsset> for FfiVisualAsset {
+    fn from(asset: crate::visual_index::VisualAsset) -> Self {
+        Self {
+            reading_id: asset.reading_id,
+            title: asset.title,
+            relative_path: asset.relative_path,
+            absolute_file_path: asset.absolute_file_path,
+            content_hash: asset.content_hash,
+        }
+    }
+}
+
+impl From<crate::visual_index::VisualAnalysisTask> for FfiVisualAnalysisTask {
+    fn from(task: crate::visual_index::VisualAnalysisTask) -> Self {
+        Self {
+            reading_id: task.reading_id,
+            relative_path: task.relative_path,
+            absolute_file_path: task.absolute_file_path,
+            content_hash: task.content_hash,
+            analyzer_version: task.analyzer_version,
+        }
+    }
+}
+
+impl From<FfiVisualAnalysisTask> for crate::visual_index::VisualAnalysisTask {
+    fn from(task: FfiVisualAnalysisTask) -> Self {
+        Self {
+            reading_id: task.reading_id,
+            relative_path: task.relative_path,
+            absolute_file_path: task.absolute_file_path,
+            content_hash: task.content_hash,
+            analyzer_version: task.analyzer_version,
+        }
+    }
+}
+
+impl From<FfiVisualAnalysisResult> for crate::visual_index::VisualAnalysisResult {
+    fn from(result: FfiVisualAnalysisResult) -> Self {
+        Self {
+            supported: result.supported,
+            labels: result
+                .labels
+                .into_iter()
+                .map(|label| crate::visual_index::VisualLabel {
+                    identifier: label.identifier,
+                    confidence: label.confidence,
+                })
+                .collect(),
+            palette: result
+                .palette
+                .into_iter()
+                .map(|color| crate::visual_index::WeightedColor {
+                    red: color.red,
+                    green: color.green,
+                    blue: color.blue,
+                    weight: color.weight,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<FfiPredominantColor> for crate::visual_index::PredominantColor {
+    fn from(color: FfiPredominantColor) -> Self {
+        match color {
+            FfiPredominantColor::Red => Self::Red,
+            FfiPredominantColor::Orange => Self::Orange,
+            FfiPredominantColor::Yellow => Self::Yellow,
+            FfiPredominantColor::Green => Self::Green,
+            FfiPredominantColor::Blue => Self::Blue,
+            FfiPredominantColor::Purple => Self::Purple,
+            FfiPredominantColor::Pink => Self::Pink,
+            FfiPredominantColor::Brown => Self::Brown,
+            FfiPredominantColor::Black => Self::Black,
+            FfiPredominantColor::Gray => Self::Gray,
+            FfiPredominantColor::White => Self::White,
+        }
+    }
+}
+
 impl From<crate::list::ViewCounts> for FfiViewCounts {
     fn from(c: crate::list::ViewCounts) -> Self {
         Self {
@@ -300,6 +441,8 @@ impl From<FfiCountScope> for CountScope {
             rating: s.rating,
             kind: s.kind.map(Into::into),
             query: s.query,
+            predominant_color: s.predominant_color.map(Into::into),
+            semantic_candidate_ids: s.semantic_candidate_ids,
         }
     }
 }
@@ -322,6 +465,8 @@ impl From<FfiListOptions> for ListOptions {
             since: o.since,
             until: o.until,
             query: o.query,
+            predominant_color: o.predominant_color.map(Into::into),
+            semantic_candidate_ids: o.semantic_candidate_ids,
             limit: o.limit as usize,
             offset: o.offset as usize,
         }
@@ -361,9 +506,9 @@ impl Database {
     /// Stores the resulting scan snapshot so `sync` can diff against it.
     pub fn rebuild(&self, library_path: String) -> Result<(), CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
-        let conn = self.conn.lock().unwrap();
-        crate::rebuild(&conn, &lib).map_err(e)?;
         let scan = crate::scan_library(&lib).map_err(e)?;
+        let conn = self.conn.lock().unwrap();
+        crate::reconcile::rebuild_scanned(&conn, &scan).map_err(e)?;
         *self.last_scan.lock().unwrap() = scan;
         Ok(())
     }
@@ -384,6 +529,48 @@ impl Database {
         }
         *self.last_scan.lock().unwrap() = new_scan;
         Ok(count)
+    }
+
+    /// Safely enumerate current preview assets for Core Spotlight donation.
+    pub fn current_visual_assets(
+        &self,
+        library_path: String,
+    ) -> Result<Vec<FfiVisualAsset>, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let conn = self.conn.lock().unwrap();
+        crate::current_visual_assets(&conn, &lib)
+            .map_err(e)
+            .map(|assets| assets.into_iter().map(Into::into).collect())
+    }
+
+    /// Return at most `limit` safely revalidated assets not cached for this
+    /// analyzer version. Exact cache hits are applied without being retried.
+    pub fn pending_visual_analysis(
+        &self,
+        library_path: String,
+        analyzer_version: String,
+        limit: u32,
+    ) -> Result<Vec<FfiVisualAnalysisTask>, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let conn = self.conn.lock().unwrap();
+        crate::pending_visual_analysis(&conn, &lib, &analyzer_version, limit as usize)
+            .map_err(e)
+            .map(|tasks| tasks.into_iter().map(Into::into).collect())
+    }
+
+    /// Cache a platform result only when its reading, path, and raw bytes still
+    /// match the issued task. `false` is an ordinary stale-task outcome.
+    pub fn complete_visual_analysis(
+        &self,
+        library_path: String,
+        task: FfiVisualAnalysisTask,
+        result: FfiVisualAnalysisResult,
+    ) -> Result<bool, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let task = task.into();
+        let result = result.into();
+        let conn = self.conn.lock().unwrap();
+        crate::complete_visual_analysis(&conn, &lib, &task, &result).map_err(e)
     }
 
     // ── Imports ───────────────────────────────────────────────────────────
@@ -648,6 +835,8 @@ mod tests {
             since: None,
             until: None,
             query: None,
+            predominant_color: None,
+            semantic_candidate_ids: Vec::new(),
             limit: 50,
             offset: 0,
         }

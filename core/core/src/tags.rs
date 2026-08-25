@@ -152,6 +152,9 @@ fn sync_index(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> 
     let content = std::fs::read_to_string(&path)?;
     let reading = parse_reading(&content)?;
     let modified_at = std::fs::metadata(&path)?.modified()?;
+    let visual_asset = reading.metadata.preview_asset.as_deref().and_then(|asset| {
+        crate::visual_index::inspect_asset(library, &reading.metadata.id, asset).ok()
+    });
 
     let scanned = ScannedReading {
         id: reading.metadata.id.clone(),
@@ -159,6 +162,7 @@ fn sync_index(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> 
         modified_at,
         path,
         has_note: crate::scanner::note_file_exists(library, &reading.metadata.id),
+        visual_asset,
         body: reading.body,
         metadata: reading.metadata,
     };

@@ -46,6 +46,91 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 3 {
         migrate_v3(conn)?;
     }
+    if version < 4 {
+        migrate_v4(conn)?;
+    }
+    Ok(())
+}
+
+/// v4: cache device-local visual analysis and make its derived terms searchable.
+///
+/// `visual_analysis` is deliberately independent of `readings`: rebuilding the
+/// disposable readings projection must not throw away expensive analysis for
+/// bytes that are still present (or later reappear). The composite key also
+/// makes analyzer upgrades explicit instead of silently mixing vocabularies.
+fn migrate_v4(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings ADD COLUMN visual_asset_path TEXT;
+        ALTER TABLE readings ADD COLUMN visual_asset_hash TEXT;
+        ALTER TABLE readings ADD COLUMN visual_analyzer_version TEXT;
+        ALTER TABLE readings ADD COLUMN visual_terms TEXT NOT NULL DEFAULT '';
+        ALTER TABLE readings ADD COLUMN predominant_color TEXT;
+
+        CREATE TABLE visual_analysis (
+            content_hash      TEXT NOT NULL,
+            analyzer_version  TEXT NOT NULL,
+            supported         INTEGER NOT NULL CHECK (supported IN (0, 1)),
+            labels_json       TEXT NOT NULL DEFAULT '[]',
+            palette_json      TEXT NOT NULL DEFAULT '[]',
+            visual_terms      TEXT NOT NULL DEFAULT '',
+            predominant_color TEXT,
+            completed_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+            PRIMARY KEY (content_hash, analyzer_version)
+        );
+
+        CREATE INDEX visual_analysis_hash_idx
+            ON visual_analysis(content_hash);
+
+        DROP TRIGGER IF EXISTS readings_ai;
+        DROP TRIGGER IF EXISTS readings_ad;
+        DROP TRIGGER IF EXISTS readings_au;
+        DROP TABLE readings_fts;
+
+        CREATE VIRTUAL TABLE readings_fts USING fts5(
+            title,
+            body_text,
+            site,
+            tags_text,
+            visual_terms,
+            content=readings,
+            content_rowid=rowid
+        );
+
+        CREATE TRIGGER readings_ai
+        AFTER INSERT ON readings BEGIN
+            INSERT INTO readings_fts(rowid, title, body_text, site, tags_text, visual_terms)
+            VALUES (new.rowid, new.title, new.body_text, new.site, new.tags_text,
+                    new.visual_terms);
+        END;
+
+        CREATE TRIGGER readings_ad
+        AFTER DELETE ON readings BEGIN
+            INSERT INTO readings_fts(readings_fts, rowid, title, body_text, site, tags_text,
+                                     visual_terms)
+            VALUES ('delete', old.rowid, old.title, old.body_text, old.site, old.tags_text,
+                    old.visual_terms);
+        END;
+
+        CREATE TRIGGER readings_au
+        AFTER UPDATE ON readings BEGIN
+            INSERT INTO readings_fts(readings_fts, rowid, title, body_text, site, tags_text,
+                                     visual_terms)
+            VALUES ('delete', old.rowid, old.title, old.body_text, old.site, old.tags_text,
+                    old.visual_terms);
+            INSERT INTO readings_fts(rowid, title, body_text, site, tags_text, visual_terms)
+            VALUES (new.rowid, new.title, new.body_text, new.site, new.tags_text,
+                    new.visual_terms);
+        END;
+
+        INSERT INTO readings_fts(readings_fts) VALUES ('rebuild');
+
+        PRAGMA user_version = 4;
+        COMMIT;
+        ",
+    )?;
     Ok(())
 }
 
@@ -225,7 +310,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         // readings table exists
         let count: i64 = conn
@@ -354,6 +439,11 @@ mod tests {
             "tags_json",
             "tags_text",
             "body_text",
+            "visual_asset_path",
+            "visual_asset_hash",
+            "visual_analyzer_version",
+            "visual_terms",
+            "predominant_color",
         ] {
             assert!(columns.contains(&col.to_string()), "missing column: {col}");
         }
@@ -393,7 +483,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -435,7 +525,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         let values: (i64, i64, String) = conn
             .query_row(

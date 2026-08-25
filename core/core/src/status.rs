@@ -82,6 +82,9 @@ where
     let updated_content = std::fs::read_to_string(&updated_path)?;
     let updated = parse_reading(&updated_content)?;
     let modified_at = std::fs::metadata(&updated_path)?.modified()?;
+    let visual_asset = updated.metadata.preview_asset.as_deref().and_then(|path| {
+        crate::visual_index::inspect_asset(library, &updated.metadata.id, path).ok()
+    });
 
     let scanned = ScannedReading {
         id: updated.metadata.id.clone(),
@@ -89,6 +92,7 @@ where
         modified_at,
         path: updated_path,
         has_note: crate::scanner::note_file_exists(library, &updated.metadata.id),
+        visual_asset,
         body: updated.body,
         metadata: updated.metadata,
     };

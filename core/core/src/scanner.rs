@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
 use anyhow::Result;
 
-use crate::{parse_reading, types::LibraryRoot, Metadata};
+use crate::{parse_reading, types::LibraryRoot, visual_index::VisualAsset, Metadata};
 
 /// One article as seen on disk.
 #[derive(Debug, Clone)]
@@ -16,6 +16,8 @@ pub struct ScannedReading {
     pub metadata: Metadata,
     /// Whether the reading folder contains a regular personal-note sidecar.
     pub has_note: bool,
+    /// Safely opened preview bytes, identified by their raw SHA-256 hash.
+    pub visual_asset: Option<VisualAsset>,
     /// Raw Markdown body (after stripping frontmatter), stored for FTS indexing.
     pub body: String,
 }
@@ -92,12 +94,35 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                 continue;
             }
 
+            let visual_asset =
+                reading
+                    .metadata
+                    .preview_asset
+                    .as_deref()
+                    .and_then(|relative_path| {
+                        match crate::visual_index::inspect_asset(
+                            library,
+                            &reading.metadata.id,
+                            relative_path,
+                        ) {
+                            Ok(asset) => Some(asset),
+                            Err(error) => {
+                                eprintln!(
+                                    "scanner: ignoring unsafe preview for {}: {error}",
+                                    reading.metadata.id
+                                );
+                                None
+                            }
+                        }
+                    });
+
             results.push(ScannedReading {
                 id: reading.metadata.id.clone(),
                 source_hash: reading.metadata.source_hash.clone(),
                 modified_at,
                 path,
                 has_note: note_file_exists(library, &reading.metadata.id),
+                visual_asset,
                 metadata: reading.metadata,
                 body: reading.body,
             });
@@ -126,7 +151,8 @@ pub fn diff(old: &[ScannedReading], new: &[ScannedReading]) -> Vec<ScanDiff> {
             Some(old_reading)
                 if old_reading.source_hash != reading.source_hash
                     || old_reading.metadata != reading.metadata
-                    || old_reading.has_note != reading.has_note =>
+                    || old_reading.has_note != reading.has_note
+                    || old_reading.visual_asset != reading.visual_asset =>
             {
                 diffs.push(ScanDiff::Changed(reading.clone()))
             }

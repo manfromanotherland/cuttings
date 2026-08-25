@@ -3,7 +3,7 @@
 use anyhow::Result;
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 
-use crate::ReadingKind;
+use crate::{PredominantColor, ReadingKind};
 
 /// Smart-view filter applied when listing readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +73,10 @@ pub struct ListOptions {
     /// Full-text query. When set, rows are filtered through the FTS index;
     /// `None` is a plain listing.
     pub query: Option<String>,
+    /// Restrict to the stable colour family derived by the Rust core.
+    pub predominant_color: Option<PredominantColor>,
+    /// Ordered Core Spotlight candidates for the same query.
+    pub semantic_candidate_ids: Vec<String>,
     pub limit: usize,
     pub offset: usize,
 }
@@ -89,6 +93,8 @@ impl Default for ListOptions {
             since: None,
             until: None,
             query: None,
+            predominant_color: None,
+            semantic_candidate_ids: Vec::new(),
             limit: 50,
             offset: 0,
         }
@@ -194,6 +200,8 @@ pub struct CountScope {
     /// search; a present-but-unmatchable query scopes every count to zero,
     /// mirroring [`list_readings`].
     pub query: Option<String>,
+    pub predominant_color: Option<PredominantColor>,
+    pub semantic_candidate_ids: Vec<String>,
 }
 
 impl Default for CountScope {
@@ -204,6 +212,8 @@ impl Default for CountScope {
             rating: None,
             kind: None,
             query: None,
+            predominant_color: None,
+            semantic_candidate_ids: Vec::new(),
         }
     }
 }
@@ -227,8 +237,10 @@ pub(crate) enum ResolvedSearch {
     Unfiltered,
     /// A query was present but tokenized/matched to nothing; every count is zero.
     Unmatchable,
-    /// The query resolved to this FTS5 `MATCH` string.
-    Fts(String),
+    /// Ordered semantic candidates exist, but the text tokenized to nothing.
+    Semantic(String),
+    /// The query resolved to FTS5, optionally unioned with semantic candidates.
+    Fts { query: String, semantic: String },
 }
 
 impl ResolvedSearch {
@@ -241,8 +253,12 @@ impl ResolvedSearch {
             Some(q) => match crate::search::match_query(q, |phrase| {
                 phrase_exists_in_count_scope(conn, scope, phrase)
             })? {
-                None => Self::Unmatchable,
-                Some(m) => Self::Fts(m),
+                None if scope.semantic_candidate_ids.is_empty() => Self::Unmatchable,
+                None => Self::Semantic(serde_json::to_string(&scope.semantic_candidate_ids)?),
+                Some(query) => Self::Fts {
+                    query: crate::search::with_visual_fallback(q, &query),
+                    semantic: serde_json::to_string(&scope.semantic_candidate_ids)?,
+                },
             },
         })
     }
@@ -269,6 +285,7 @@ fn phrase_exists_in_count_scope(
                ))
                AND (?3 IS NULL OR r.rating = ?3)
                AND (?4 IS NULL OR r.kind = ?4)
+               AND (?5 IS NULL OR r.predominant_color = ?5)
          )"
     );
     conn.query_row(
@@ -277,7 +294,8 @@ fn phrase_exists_in_count_scope(
             phrase,
             scope.tag.as_deref(),
             scope.rating.map(i64::from),
-            scope.kind.map(ReadingKind::as_str)
+            scope.kind.map(ReadingKind::as_str),
+            scope.predominant_color.map(PredominantColor::as_str)
         ],
         |row| row.get(0),
     )
@@ -329,16 +347,31 @@ pub(crate) fn count_where(
         clauses.push(format!("readings.kind = ?{}", vals.len()));
     }
 
+    if let Some(color) = scope.predominant_color {
+        vals.push(Value::Text(color.as_str().to_string()));
+        clauses.push(format!("readings.predominant_color = ?{}", vals.len()));
+    }
+
     // A search composes with every facet; the caller resolved it once so counts
     // and results always agree. An unmatchable search means the whole count is
     // empty.
     match search {
         ResolvedSearch::Unmatchable => return None,
-        ResolvedSearch::Fts(m) => {
-            vals.push(Value::Text(m.clone()));
+        ResolvedSearch::Fts { query, semantic } => {
+            vals.push(Value::Text(query.clone()));
+            let fts_param = vals.len();
+            vals.push(Value::Text(semantic.clone()));
             clauses.push(format!(
-                "readings.rowid IN \
-                 (SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{})",
+                "(readings.rowid IN \
+                 (SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{fts_param}) \
+                 OR readings.id IN (SELECT value FROM json_each(?{})))",
+                vals.len(),
+            ));
+        }
+        ResolvedSearch::Semantic(semantic) => {
+            vals.push(Value::Text(semantic.clone()));
+            clauses.push(format!(
+                "readings.id IN (SELECT value FROM json_each(?{}))",
                 vals.len()
             ));
         }
@@ -378,11 +411,21 @@ pub(crate) fn pinned_count_filter(
 
     match search {
         ResolvedSearch::Unmatchable => conds.push("0".to_string()),
-        ResolvedSearch::Fts(m) => {
-            vals.push(Value::Text(m.clone()));
+        ResolvedSearch::Fts { query, semantic } => {
+            vals.push(Value::Text(query.clone()));
+            let fts_param = vals.len();
+            vals.push(Value::Text(semantic.clone()));
             conds.push(format!(
-                "readings.rowid IN \
-                 (SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{})",
+                "(readings.rowid IN \
+                 (SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{fts_param}) \
+                 OR readings.id IN (SELECT value FROM json_each(?{})))",
+                vals.len(),
+            ));
+        }
+        ResolvedSearch::Semantic(semantic) => {
+            vals.push(Value::Text(semantic.clone()));
+            conds.push(format!(
+                "readings.id IN (SELECT value FROM json_each(?{}))",
                 vals.len()
             ));
         }
@@ -411,6 +454,11 @@ pub(crate) fn pinned_count_filter(
     if let Some(kind) = scope.kind {
         vals.push(Value::Text(kind.as_str().to_string()));
         conds.push(format!("readings.kind = ?{}", vals.len()));
+    }
+
+    if let Some(color) = scope.predominant_color {
+        vals.push(Value::Text(color.as_str().to_string()));
+        conds.push(format!("readings.predominant_color = ?{}", vals.len()));
     }
 
     conds.join(" AND ")
@@ -491,8 +539,12 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         return match crate::search::match_query(query, |phrase| {
             phrase_exists_in_list_scope(conn, opts, phrase)
         })? {
-            Some(match_query) => list_readings_fts(conn, opts, &match_query),
-            None => Ok(Vec::new()),
+            Some(match_query) => {
+                let match_query = crate::search::with_visual_fallback(query, &match_query);
+                list_readings_search(conn, opts, Some(&match_query))
+            }
+            None if opts.semantic_candidate_ids.is_empty() => Ok(Vec::new()),
+            None => list_readings_search(conn, opts, None),
         };
     }
 
@@ -513,7 +565,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     };
 
     // Optional filters use sentinel values (empty string / 0) so the SQL is
-    // always static with exactly 7 bound parameters — no dynamic param count.
+    // always static with exactly 8 bound parameters — no dynamic param count.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
@@ -525,6 +577,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
            AND (?5 = '' OR saved_at <= ?5)
            AND (?6 = 0 OR rating = ?6)
            AND (?7 = '' OR kind = ?7)
+           AND (?8 = '' OR predominant_color = ?8)
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -536,6 +589,10 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let until_val = opts.until.as_deref().unwrap_or("");
     let rating_val = opts.rating.unwrap_or(0) as i64;
     let kind_val = opts.kind.map(ReadingKind::as_str).unwrap_or("");
+    let color_val = opts
+        .predominant_color
+        .map(PredominantColor::as_str)
+        .unwrap_or("");
 
     let rows = stmt.query_map(
         params![
@@ -545,7 +602,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
             since_val,
             until_val,
             rating_val,
-            kind_val
+            kind_val,
+            color_val
         ],
         parse_row,
     )?;
@@ -576,6 +634,7 @@ fn phrase_exists_in_list_scope(
                AND (?4 = '' OR r.saved_at <= ?4)
                AND (?5 = 0 OR r.rating = ?5)
                AND (?6 = '' OR r.kind = ?6)
+               AND (?7 = '' OR r.predominant_color = ?7)
          )"
     );
     conn.query_row(
@@ -586,7 +645,10 @@ fn phrase_exists_in_list_scope(
             opts.since.as_deref().unwrap_or(""),
             opts.until.as_deref().unwrap_or(""),
             opts.rating.unwrap_or(0) as i64,
-            opts.kind.map(ReadingKind::as_str).unwrap_or("")
+            opts.kind.map(ReadingKind::as_str).unwrap_or(""),
+            opts.predominant_color
+                .map(PredominantColor::as_str)
+                .unwrap_or("")
         ],
         |row| row.get(0),
     )
@@ -619,39 +681,60 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
 /// Full-text variant of [`list_readings`]: filter rows through the FTS index
 /// with `match_query` and rank by BM25 (`SortField::Relevance`) or the requested
 /// field — all while honouring the view/tag/rating/kind/date filters and pagination.
-fn list_readings_fts(
+fn list_readings_search(
     conn: &Connection,
     opts: &ListOptions,
-    match_query: &str,
+    match_query: Option<&str>,
 ) -> Result<Vec<ReadingRow>> {
     let view_clause = view_clause(opts.view);
     let dir = if opts.ascending { "ASC" } else { "DESC" };
     // bm25() scores better matches lower, so plain ascending order is best-first.
     let order = match opts.sort {
-        SortField::Relevance => "bm25(readings_fts), r.id DESC".to_string(),
+        SortField::Relevance => {
+            "m.source_rank ASC, m.text_score ASC, m.semantic_rank ASC, r.id DESC".to_string()
+        }
         SortField::SavedAt => format!("r.saved_at {dir}, r.id DESC"),
         SortField::ReadAt => format!("(r.read_at IS NULL), r.read_at {dir}, r.id DESC"),
         SortField::Rating => format!("r.rating {dir}, r.id DESC"),
         SortField::WordCount => format!("(r.word_count IS NULL), r.word_count {dir}, r.id DESC"),
     };
 
-    // The view/tag/rating columns live only on `readings`, so they're
-    // unambiguous unqualified; `title`/`body_text` exist on both tables, hence
-    // the `r.` on the selected columns.
+    let semantic_json = serde_json::to_string(&opts.semantic_candidate_ids)?;
+    let matched = if match_query.is_some() {
+        "matched(rowid, source_rank, text_score, semantic_rank) AS (
+             SELECT readings_fts.rowid, 0,
+                    bm25(readings_fts, 8.0, 4.0, 2.0, 3.0, 0.7), NULL
+             FROM readings_fts WHERE readings_fts MATCH ?9
+             UNION ALL
+             SELECT r.rowid, 1, 0.0, s.semantic_rank
+             FROM semantic s JOIN readings r ON r.id=s.id
+             WHERE r.rowid NOT IN (
+                 SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?9
+             )
+         )"
+    } else {
+        "matched(rowid, source_rank, text_score, semantic_rank) AS (
+             SELECT r.rowid, 1, 0.0, s.semantic_rank
+             FROM semantic s JOIN readings r ON r.id=s.id
+         )"
+    };
     let sql = format!(
-        "SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
+        "WITH semantic(id, semantic_rank) AS (
+             SELECT value, MIN(CAST(key AS INTEGER)) FROM json_each(?10) GROUP BY value
+         ),
+         {matched}
+         SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
                 (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
                 r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset,
                 r.lightweight, r.has_note
-         FROM readings_fts
-         JOIN readings r ON r.rowid = readings_fts.rowid
-         WHERE readings_fts MATCH ?8
-           AND {view_clause}
+         FROM matched m JOIN readings r ON r.rowid=m.rowid
+         WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
            AND (?4 = '' OR r.saved_at >= ?4)
            AND (?5 = '' OR r.saved_at <= ?5)
            AND (?6 = 0 OR r.rating = ?6)
            AND (?7 = '' OR r.kind = ?7)
+           AND (?8 = '' OR r.predominant_color = ?8)
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -662,6 +745,10 @@ fn list_readings_fts(
     let until_val = opts.until.as_deref().unwrap_or("");
     let rating_val = opts.rating.unwrap_or(0) as i64;
     let kind_val = opts.kind.map(ReadingKind::as_str).unwrap_or("");
+    let color_val = opts
+        .predominant_color
+        .map(PredominantColor::as_str)
+        .unwrap_or("");
 
     let rows = stmt.query_map(
         params![
@@ -672,7 +759,9 @@ fn list_readings_fts(
             until_val,
             rating_val,
             kind_val,
-            match_query
+            color_val,
+            match_query.unwrap_or("\"__cuttings_no_text_match__\""),
+            semantic_json,
         ],
         parse_row,
     )?;
@@ -1814,5 +1903,145 @@ mod tests {
         let (_dir, conn) = setup();
         let result = get_reading(&conn, "nonexistent").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn semantic_candidates_compose_with_text_filters_order_pagination_and_counts() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let text_id = new_id();
+        write_reading(
+            &lib,
+            meta(&text_id, "https://example.com/text", "Text match"),
+            "needle in the body".into(),
+        )
+        .unwrap();
+        let image_id = new_id();
+        let mut image = meta(&image_id, "https://example.com/image", "Semantic image");
+        image.kind = ReadingKind::Image;
+        image.tags = vec!["design".into()];
+        write_reading(&lib, image, "no lexical overlap".into()).unwrap();
+        let quote_id = new_id();
+        let mut quote = meta(&quote_id, "https://example.com/quote", "Semantic quote");
+        quote.kind = ReadingKind::Quote;
+        quote.tags = vec!["design".into()];
+        write_reading(&lib, quote, "another unrelated body".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let candidates = vec![
+            quote_id.clone(),
+            image_id.clone(),
+            text_id.clone(),
+            quote_id.clone(),
+        ];
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                sort: SortField::Relevance,
+                query: Some("needle".into()),
+                semantic_candidate_ids: candidates.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            [text_id.as_str(), quote_id.as_str(), image_id.as_str()]
+        );
+
+        let page = list_readings(
+            &conn,
+            &ListOptions {
+                sort: SortField::Relevance,
+                query: Some("needle".into()),
+                semantic_candidate_ids: candidates.clone(),
+                limit: 1,
+                offset: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(page[0].id, quote_id);
+
+        let images = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("needle".into()),
+                kind: Some(ReadingKind::Image),
+                tag: Some("design".into()),
+                semantic_candidate_ids: candidates.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].id, image_id);
+
+        assert_eq!(
+            view_counts(
+                &conn,
+                &CountScope {
+                    query: Some("needle".into()),
+                    semantic_candidate_ids: candidates.clone(),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .all,
+            3
+        );
+        assert_eq!(
+            view_counts(
+                &conn,
+                &CountScope {
+                    query: Some("needle".into()),
+                    kind: Some(ReadingKind::Image),
+                    tag: Some("design".into()),
+                    semantic_candidate_ids: candidates,
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .all,
+            1
+        );
+    }
+
+    #[test]
+    fn multiword_visual_fallback_survives_a_text_phrase_hit() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let text_id = new_id();
+        write_reading(
+            &lib,
+            meta(&text_id, "https://example.com/text", "Text"),
+            "a blue chair is here".into(),
+        )
+        .unwrap();
+        let visual_id = new_id();
+        write_reading(
+            &lib,
+            meta(&visual_id, "https://example.com/visual", "Visual"),
+            "unrelated".into(),
+        )
+        .unwrap();
+        rebuild(&conn, &lib).unwrap();
+        conn.execute(
+            "UPDATE readings SET visual_terms='blue furniture chair' WHERE id=?1",
+            params![visual_id],
+        )
+        .unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("blue chair".into()),
+                sort: SortField::Relevance,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let ids: std::collections::HashSet<_> = rows.into_iter().map(|row| row.id).collect();
+        assert_eq!(ids, [text_id, visual_id].into());
     }
 }

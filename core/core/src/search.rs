@@ -81,6 +81,17 @@ pub(crate) fn match_query(
     }))
 }
 
+/// Add an all-words fallback scoped only to derived visual terms. Text search
+/// keeps its established phrase-first behaviour, while a phrase hit elsewhere
+/// cannot hide a valid multiword image classification.
+pub(crate) fn with_visual_fallback(raw: &str, resolved: &str) -> String {
+    let tokens = tokenize(raw);
+    if tokens.len() < 2 {
+        return resolved.to_string();
+    }
+    format!("({resolved}) OR (visual_terms : ({}))", and_query(&tokens))
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
