@@ -8,12 +8,14 @@ import Foundation
 ///
 /// The methods are `async throws` here; `CoreBridge`'s actor-isolated synchronous
 /// methods witness them (a call from outside an actor is implicitly async).
-/// Boundary DTOs (`Ffi*`) appear in the signatures because this is the bridge.
+/// Most boundary DTOs (`Ffi*`) appear in the signatures because this is the
+/// bridge. The complete board snapshot is lifted to `ReadingRow` inside the
+/// bridge actor so thousands of row mappings never run on the main actor.
 protocol CoreBridging: VisualSearchCore {
     func rebuild() async throws
     @discardableResult func sync() async throws -> UInt32
 
-    func listReadings(_ query: ReadingQuery) async throws -> [FfiReadingRow]
+    func listReadings(_ query: ReadingQuery) async throws -> [ReadingRow]
     func filterCounts(
         kind: ReadingKind?, scope: LibraryScope, tag: String?, query: String?
     ) async throws -> FfiSidebarCounts

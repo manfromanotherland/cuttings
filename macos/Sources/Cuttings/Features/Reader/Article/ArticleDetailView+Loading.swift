@@ -13,7 +13,7 @@ import SwiftUI
 /// restructured. The state it drives is declared alongside the view.
 extension ArticleDetailView {
     /// The one entry point, driven by the view's `.task(id:)`.
-    func load(id: String?) async {
+    func load(id: String?, contentGeneration: UInt64) async {
         guard let id else {
             row = nil
             articleDocument = nil
@@ -52,17 +52,17 @@ extension ArticleDetailView {
             bodyTooLarge = false
             isLoading = false
             loadHighlightsInBackground(id: id)
-            await revalidate(id: id, cachedBody: cached.body)
+            await revalidate(id: id, cachedBody: cached.body, contentGeneration: contentGeneration)
             return
         }
 
-        await loadUncached(id: id)
+        await loadUncached(id: id, contentGeneration: contentGeneration)
     }
 
     /// The cache-miss tail: fetch the body from the core, then parse it off the main
     /// thread (see `ArticleDocument.parse`). Reached only past `load`'s debounce, so a
     /// reading skimmed past never gets here.
-    private func loadUncached(id: String) async {
+    private func loadUncached(id: String, contentGeneration: UInt64) async {
         isLoading = true
         loadHighlightsInBackground(id: id)
         // The native reader parses Markdown directly (linked images like
@@ -74,9 +74,11 @@ extension ArticleDetailView {
         // us, but neither the fetch above nor the detached parse in `present` observes
         // that cancellation. Bail before touching shared reader state so a stale load
         // can't paint over — or clear the spinner of — the reading now loading.
-        guard appState.selectedId == id else { return }
-        await present(body: body, id: id)
-        guard appState.selectedId == id else { return }
+        guard appState.selectedId == id,
+              appState.libraryContentGeneration == contentGeneration else { return }
+        await present(body: body, id: id, contentGeneration: contentGeneration)
+        guard appState.selectedId == id,
+              appState.libraryContentGeneration == contentGeneration else { return }
         isLoading = false
     }
 
@@ -85,7 +87,7 @@ extension ArticleDetailView {
     /// so the reader shows the oversize notice. The parse runs off the main
     /// thread (see `ArticleDocument.parse`), so a large article can't stall the
     /// UI. A nil body (nothing fetched) clears the reader.
-    private func present(body: String?, id: String) async {
+    private func present(body: String?, id: String, contentGeneration: UInt64) async {
         guard let body else {
             articleDocument = nil
             bodyTooLarge = false
@@ -100,6 +102,7 @@ extension ArticleDetailView {
         }
         bodyTooLarge = false
         let document = await ArticleDocument.parse(markdown: body)
+        guard appState.libraryContentGeneration == contentGeneration else { return }
         // Cache the finished parse under its own id even if the selection moved on
         // while it ran — the work is done and keyed by `id`, so revisiting hits the
         // cache instead of re-parsing.
@@ -126,10 +129,17 @@ extension ArticleDetailView {
     /// that reading, leaving every other cached reading intact. Cheap when
     /// nothing changed (a body fetch + string compare), and off the critical
     /// path since the cached parse is already on screen.
-    private func revalidate(id: String, cachedBody: String) async {
+    private func revalidate(
+        id: String,
+        cachedBody: String,
+        contentGeneration: UInt64
+    ) async {
         let body = await appState.getBody(id: id)
         // Bail if the user moved on, or nothing changed.
-        guard appState.selectedId == id, let body, body != cachedBody else { return }
-        await present(body: body, id: id)
+        guard appState.selectedId == id,
+              appState.libraryContentGeneration == contentGeneration,
+              let body,
+              body != cachedBody else { return }
+        await present(body: body, id: id, contentGeneration: contentGeneration)
     }
 }

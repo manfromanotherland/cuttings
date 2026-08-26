@@ -29,7 +29,7 @@ extension AppState {
 
     private func visualSearchDidFinish(_ result: VisualSearchReconciliation) async {
         guard result.changedSearchResults, activeVisualSearchQuery != nil else { return }
-        await loadReadings(resetSelectionIfMissing: false)
+        _ = await loadReadings(resetSelectionIfMissing: false)
     }
 
     private var activeVisualSearchQuery: String? {

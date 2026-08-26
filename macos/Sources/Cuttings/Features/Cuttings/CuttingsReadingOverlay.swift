@@ -224,9 +224,17 @@ private struct CuttingsQuoteDetailView: View {
             .padding(.vertical, 90)
         }
         .background(CuttingsTheme.cardTint(for: row.id))
-        .task(id: row.id) {
-            bodyText = await appState.getBody(id: row.id)
+        .task(id: contentLoadID) {
+            let generation = appState.libraryContentGeneration
+            let body = await appState.getBody(id: row.id)
+            guard !Task.isCancelled,
+                  generation == appState.libraryContentGeneration else { return }
+            bodyText = body
         }
+    }
+
+    private var contentLoadID: String {
+        "\(row.id):\(appState.libraryContentGeneration)"
     }
 
     private var displayText: String {

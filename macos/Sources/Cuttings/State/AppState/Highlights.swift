@@ -36,6 +36,8 @@ extension AppState {
     /// Save a new highlight for `id` from the user's selected text, then reload.
     func addHighlight(id: String, text: String) async {
         guard let core else { return }
+        beginLibraryWrite()
+        defer { endLibraryWrite() }
         do {
             try await core.addHighlight(readingId: id, text: text)
             await loadHighlights(id: id)
@@ -48,6 +50,8 @@ extension AppState {
     /// highlighted, otherwise adds it. Reloads either way.
     func toggleHighlight(id: String, text: String) async {
         guard let core else { return }
+        beginLibraryWrite()
+        defer { endLibraryWrite() }
         do {
             try await core.toggleHighlight(readingId: id, text: text)
             await loadHighlights(id: id)
@@ -59,6 +63,8 @@ extension AppState {
     /// Remove a single highlight from `id`, then reload.
     func deleteHighlight(id: String, highlightId: String) async {
         guard let core else { return }
+        beginLibraryWrite()
+        defer { endLibraryWrite() }
         try? await core.deleteHighlight(readingId: id, highlightId: highlightId)
         await loadHighlights(id: id)
     }

@@ -147,6 +147,7 @@ private struct LibrarySettingsTab: View {
             Button("Change Library…") {
                 appState.chooseLibrary()
             }
+            .disabled(!appState.canChangeLibrary)
             .accessibilityIdentifier(A11y.Settings.changeLibrary)
         }
         .formStyle(.grouped)

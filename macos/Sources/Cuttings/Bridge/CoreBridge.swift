@@ -9,6 +9,14 @@ actor CoreBridge {
     private let database: Database
     private let libraryPath: String
 
+    /// Opening SQLite can run schema migrations and prepare the visual cache.
+    /// Keep that work off the main actor so a restored window can paint first.
+    static func open(libraryPath: String, dbPath: String) async throws -> CoreBridge {
+        try await Task.detached(priority: .userInitiated) {
+            try CoreBridge(libraryPath: libraryPath, dbPath: dbPath)
+        }.value
+    }
+
     init(libraryPath: String, dbPath: String) throws {
         self.libraryPath = libraryPath
         database = try Database.open(dbPath: dbPath)
@@ -55,7 +63,7 @@ actor CoreBridge {
     /// Readings for the composed scope/tag filter, the board order,
     /// and an optional full-text query. Dormant rating support remains nil at the
     /// FFI boundary for library-format compatibility.
-    func listReadings(_ query: ReadingQuery) throws -> [FfiReadingRow] {
+    func listReadings(_ query: ReadingQuery) throws -> [ReadingRow] {
         let opts = FfiListOptions(
             view: query.scope.ffiView,
             sort: query.sort.ffiSort,
@@ -69,7 +77,11 @@ actor CoreBridge {
             semanticCandidateIds: query.semanticCandidateIDs,
             limit: query.limit, offset: query.offset
         )
-        return try database.listReadings(opts: opts)
+        return try database.listReadings(opts: opts).map(ReadingRow.init)
+    }
+
+    func readingCount() throws -> UInt64 {
+        try filterCounts(kind: nil, scope: .all, tag: nil, query: nil).views.all
     }
 
     /// Reuse the compatible count payload to enumerate tags for the app's filter

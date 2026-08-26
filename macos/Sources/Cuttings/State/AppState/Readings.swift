@@ -11,6 +11,12 @@ private struct ReadingSnapshotContext {
     let semanticCandidateIDs: [String]
 }
 
+enum ReadingLoadResult: Equatable {
+    case published
+    case superseded
+    case failed
+}
+
 // ── Reading list ─────────────────────────────────────────────────────────────
 // Loading the list, debounced search, and tag metadata.
 
@@ -18,10 +24,14 @@ extension AppState {
     // ── Refresh (list + filters) ──────────────────────────────────────────
 
     func refresh() async {
+        // Invalidate an older in-flight query before child tasks can yield; it
+        // must not consume this content publication with pre-mutation rows.
+        readingLoadGeneration &+= 1
+        libraryContentRefreshPending = true
         await withTaskGroup(of: Void.self) { group in
             // A refresh follows a local mutation (or a watcher sync), so never
             // re-home a selection the mutation already advanced deliberately.
-            group.addTask { await self.loadReadings(resetSelectionIfMissing: false) }
+            group.addTask { _ = await self.loadReadings(resetSelectionIfMissing: false) }
             group.addTask { await self.loadFilters() }
         }
     }
@@ -42,7 +52,7 @@ extension AppState {
             // field is still focused. Preserve an unavailable focused card for
             // this reload so the state update cannot disturb the field editor and
             // let a global shortcut fire instead of editing the search term.
-            await loadReadings(resetSelectionIfMissing: !isEditingText)
+            _ = await loadReadings(resetSelectionIfMissing: !isEditingText)
         }
     }
 
@@ -63,25 +73,31 @@ extension AppState {
             search: context.search,
             semanticCandidateIDs: context.semanticCandidateIDs
         )
-        return try await core.listReadings(query).map { ReadingRow($0) }
+        return try await core.listReadings(query)
     }
 
-    private func makeSnapshotContext() async -> ReadingSnapshotContext? {
+    private func makeSnapshotContext(
+        includeSemanticSearch: Bool
+    ) async -> ReadingSnapshotContext? {
         readingLoadGeneration &+= 1
         let generation = readingLoadGeneration
         let scope = activeScope
         let search = activeQuery
 
         let semanticCandidateIDs: [String]
-        do {
-            semanticCandidateIDs = try await loadSemanticCandidateIDs(for: search)
-        } catch is CancellationError {
-            // A newer Spotlight generation or reading load superseded this
-            // snapshot. Do not mistake cancellation for zero semantic hits.
-            return nil
-        } catch {
-            // Core Spotlight is an optional enhancement. A genuine query
-            // failure still leaves Rust text/label/colour search available.
+        if includeSemanticSearch {
+            do {
+                semanticCandidateIDs = try await loadSemanticCandidateIDs(for: search)
+            } catch is CancellationError {
+                // A newer Spotlight generation or reading load superseded this
+                // snapshot. Do not mistake cancellation for zero semantic hits.
+                return nil
+            } catch {
+                // Core Spotlight is an optional enhancement. A genuine query
+                // failure still leaves Rust text/label/colour search available.
+                semanticCandidateIDs = []
+            }
+        } else {
             semanticCandidateIDs = []
         }
 
@@ -120,22 +136,38 @@ extension AppState {
     /// absent from the freshly loaded board. Direct reloads prune it; a
     /// `refresh()` after a local mutation may preserve an open reading that is
     /// deliberately outside the current filter (see `refresh()`).
-    func loadReadings(resetSelectionIfMissing: Bool = true) async {
-        guard let core else { return }
-        guard let context = await makeSnapshotContext() else { return }
+    @discardableResult
+    func loadReadings(
+        resetSelectionIfMissing: Bool = true,
+        includeSemanticSearch: Bool = true
+    ) async -> ReadingLoadResult {
+        guard let core else { return .failed }
+        guard let context = await makeSnapshotContext(
+            includeSemanticSearch: includeSemanticSearch
+        ) else { return .superseded }
         do {
             let rows = try await fetchReadings(core, context: context)
-            guard isCurrent(context) else { return }
+            guard isCurrent(context) else { return .superseded }
             readings = rows
+            if libraryContentRefreshPending {
+                libraryContentRefreshPending = false
+                libraryContentGeneration &+= 1
+            }
+            TestHooks.recordStartupEvent("readings")
 
-            boardSelection.reconcile(
-                with: rows.map(\.id),
-                preserveUnavailableFocus: !resetSelectionIfMissing
-            )
+            if !boardSelection.selectedIDs.isEmpty || boardSelection.focusedID != nil {
+                boardSelection.reconcile(
+                    with: rows.map(\.id),
+                    preserveUnavailableFocus: !resetSelectionIfMissing
+                )
+            }
+            return .published
         } catch {
             if isCurrent(context) {
                 self.error = error.localizedDescription
+                return .failed
             }
+            return .superseded
         }
     }
 
@@ -143,19 +175,21 @@ extension AppState {
 
     func loadFilters() async {
         guard let core else { return }
+        let session = librarySessionGeneration
         // The compatible FFI count payload still bundles legacy view/rating
         // counts. Only its global tag vocabulary is presentation state now.
         // Search and board facets must not rebuild/re-publish 13k tag values.
         guard let counts = try? await core.filterCounts(
             kind: nil, scope: .all, tag: nil, query: nil
         ) else { return }
+        guard session == librarySessionGeneration else { return }
         filters.tags = counts.tags.map { TagCount($0) }
     }
 
     /// Reload the board after its scope changes. The global tag vocabulary only
     /// changes when library files change.
     func reloadForFilterChange() async {
-        await loadReadings()
+        _ = await loadReadings()
     }
 
     // ── Filter selection ──────────────────────────────────────────────────

@@ -16,9 +16,7 @@ import Foundation
 /// exactly as before — even if one of these variables happens to be set.
 enum TestHooks {
     /// True when the app was launched by the UI-test harness (passes `--ui-testing`).
-    static var isUITesting: Bool {
-        ProcessInfo.processInfo.arguments.contains("--ui-testing")
-    }
+    static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
 
     /// Library folder to boot against, replacing the persisted bookmark.
     static var libraryPath: String? {
@@ -51,11 +49,56 @@ enum TestHooks {
             .map { $0 * 1_000_000 }
     }
 
-    /// Records a first-frame event for the command-line startup regression
-    /// probe. The path is available only under `--ui-testing`.
-    static func recordStartupEvent(_ event: String) {
-        guard let path = env("CUTTINGS_TEST_STARTUP_EVENT_PATH") else { return }
-        try? event.write(toFile: path, atomically: true, encoding: .utf8)
+    /// Holds only the file reconciliation phase, after a trusted cached board
+    /// has had a chance to publish. Used by warm-start regression checks.
+    static var libraryReconciliationDelayNanoseconds: UInt64? {
+        env("CUTTINGS_TEST_LIBRARY_RECONCILIATION_DELAY_MS")
+            .flatMap(UInt64.init)
+            .map { $0 * 1_000_000 }
+    }
+
+    /// Declares which redirected library owns the redirected cached index.
+    /// Production derives this trust marker from ~/.config/cuttings/library.
+    static var trustedCachedLibraryPath: String? {
+        env("CUTTINGS_TEST_TRUSTED_CACHE_LIBRARY")
+    }
+
+    /// Records an event for the command-line startup regression probes. A
+    /// single latest-event path keeps the tiny toolbar/timing probes simple;
+    /// an events directory retains named snapshots for reconciliation checks.
+    @MainActor
+    static func recordStartupEvent(_ event: String, details: String? = nil) {
+        let contents = details ?? event
+        if let path = env("CUTTINGS_TEST_STARTUP_EVENT_PATH") {
+            try? contents.write(toFile: path, atomically: true, encoding: .utf8)
+        }
+        if let directory = env("CUTTINGS_TEST_STARTUP_EVENTS_DIR") {
+            let url = URL(fileURLWithPath: directory, isDirectory: true)
+                .appendingPathComponent(event)
+            try? contents.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Captures enough board identity to prove that a cached snapshot was shown
+    /// first and the later file reconciliation replaced it correctly.
+    @MainActor
+    static func recordStartupSnapshot(_ event: String, rows: [ReadingRow]) {
+        guard env("CUTTINGS_TEST_STARTUP_EVENTS_DIR") != nil else { return }
+        let details = [
+            String(rows.count),
+            rows.first?.id ?? "",
+            rows.map(\.id).joined(separator: ",")
+        ].joined(separator: "\n")
+        recordStartupEvent(event, details: details)
+    }
+
+    @MainActor
+    static func recordVisibleCard(id: String) {
+        guard env("CUTTINGS_TEST_STARTUP_EVENTS_DIR") != nil else { return }
+        let safeID = id.map { character in
+            character.isLetter || character.isNumber ? character : "-"
+        }
+        recordStartupEvent("card-visible-\(String(safeID))", details: id)
     }
 
     /// Reads an environment variable, but only in UI-testing mode, so a

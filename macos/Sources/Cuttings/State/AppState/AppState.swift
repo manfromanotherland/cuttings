@@ -141,8 +141,28 @@ final class AppState {
 
     // ── Status ────────────────────────────────────────────────────────────
     var isLoading: Bool = false
+    /// File reconciliation can continue after a trusted cached board is visible.
+    /// Kept separate from `isLoading` so it never hides usable cached readings.
+    var isReconcilingLibrary: Bool = false
     var error: String?
     var isDeleting: Bool = false
+    var activeLibraryWriteCount = 0
+    /// Advances whenever the active core publishes newer file-backed content.
+    /// Detail views include it in their load identity so an already-open cached
+    /// reading revalidates after reconciliation or an incremental sync.
+    var libraryContentGeneration: UInt64 = 0
+
+    var canChangeLibrary: Bool {
+        !isReconcilingLibrary && !isSaving && activeLibraryWriteCount == 0
+    }
+
+    func beginLibraryWrite() {
+        activeLibraryWriteCount += 1
+    }
+
+    func endLibraryWrite() {
+        activeLibraryWriteCount -= 1
+    }
 
     /// Short, non-modal acknowledgement for paste/drop saves. Errors that stop
     /// the whole operation still use `error`; duplicates and partial results are
@@ -164,6 +184,12 @@ final class AppState {
     // folder can reach them — Swift's `private` is file-scoped.
     let semanticCandidateLimit = 2000
     var core: (any CoreBridging)?
+    @ObservationIgnored var activeCoreID: ObjectIdentifier?
+    @ObservationIgnored var hasUsableCachedLibrary = false
+    @ObservationIgnored var librarySessionGeneration: UInt64 = 0
+    @ObservationIgnored var libraryContentRefreshPending = false
+    @ObservationIgnored var watcherSyncTask: Task<Void, Never>?
+    @ObservationIgnored var watcherSyncPending = false
     var accessedURL: URL?
     var watcher: FolderWatcher?
     let visualSearchCoordinator: VisualSearchCoordinator?

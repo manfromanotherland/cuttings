@@ -74,14 +74,15 @@ struct ArticleDetailView: View {
         // Reader figures raise the full-screen zoom; the lightbox layers over the
         // whole detail pane (see `imageZoomOverlay`). Navigating away dismisses it.
         .imageZoomOverlay(imageZoom)
-        // The one trigger for loading: runs on appear *and* on every selection
-        // change, and cancels a load still in flight when the selection moves on. A
-        // `.task` plus a separate `.onChange` both fired for the same reading, so it
-        // was fetched and parsed twice over. Navigating away also closes any open
-        // lightbox so it can't linger.
-        .task(id: appState.selectedId) {
+        // The one trigger for loading: runs on appear, selection changes, and a
+        // newer file-backed library generation. It cancels stale work while
+        // avoiding the duplicate fetch caused by a separate `.onChange` task.
+        // Navigating away also closes any open lightbox so it cannot linger.
+        .task(id: contentLoadID) {
+            let generation = appState.libraryContentGeneration
+            let selectedID = appState.selectedId
             imageZoom.dismiss()
-            await load(id: appState.selectedId)
+            await load(id: selectedID, contentGeneration: generation)
         }
         .toolbar { toolbarItems }
         // The lightbox's backdrop is ordinary content, so the titlebar's own
@@ -95,6 +96,10 @@ struct ArticleDetailView: View {
             HighlightsInspector(readingId: appState.selectedId)
                 .inspectorColumnWidth(min: 220, ideal: 280, max: 420)
         }
+    }
+
+    private var contentLoadID: String {
+        "\(appState.selectedId ?? ""):\(appState.libraryContentGeneration)"
     }
 
     // ── Article content ───────────────────────────────────────────────────

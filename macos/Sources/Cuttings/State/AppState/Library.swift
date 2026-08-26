@@ -3,6 +3,10 @@
 import AppKit
 import Foundation
 
+private struct LibraryBootRecovery {
+    var needsRetry = false
+    var retryImmediately = false
+}
 // ── Library lifecycle ────────────────────────────────────────────────────────
 // Choosing/restoring the library folder, booting the core against it, and
 // keeping the index in sync with on-disk changes (FSEvents).
@@ -11,6 +15,7 @@ extension AppState {
     // ── Onboarding ────────────────────────────────────────────────────────
 
     func chooseLibrary() {
+        guard canChangeLibrary else { return }
         // UI-testing: pick the scripted folder directly — NSOpenPanel is a
         // system dialog XCUITest can't reliably drive.
         if let path = TestHooks.onboardingPickPath {
@@ -28,6 +33,7 @@ extension AppState {
     }
 
     private func pickLibrary(url: URL) async {
+        guard canChangeLibrary else { return }
         do {
             try LibrarySetup.scaffold(at: url)
             WelcomeArticle.seedIfEmpty(in: url)
@@ -39,12 +45,10 @@ extension AppState {
                 stopAccessing()
                 accessedURL = LibraryBookmark.resolve()
             }
-            // Raise the extension-install step *before* boot flips `libraryURL`,
-            // so the main view never flashes in the gap while boot finishes
-            // indexing (boot sets `libraryURL`, then `await`s a refresh — a window
-            // in which the reading list would otherwise render). It's a
-            // first-run-only prompt: skip it once the user has dismissed it, so
-            // re-picking the library from Settings doesn't resurface it. Restoring
+            // Raise the extension-install step before boot publishes the
+            // library, so the main view never flashes ahead of the first-run
+            // prompt. It appears only on first run; once dismissed, re-picking
+            // the library from Settings doesn't resurface it. Restoring
             // a saved library on launch goes straight through `boot`, never here.
             if !hasCompletedExtensionSetup {
                 showExtensionSetup = true
@@ -62,77 +66,259 @@ extension AppState {
 
     // ── Boot ──────────────────────────────────────────────────────────────
 
-    func boot(url: URL) async {
-        visualSearchTask?.cancel()
+    func boot(url: URL, allowsImmediateRecoveryRetry: Bool = true) async {
+        guard canChangeLibrary else { return }
+
+        let previousVisualSearchTask = visualSearchTask
+        previousVisualSearchTask?.cancel()
+        visualSearchTask = nil
+        hasUsableCachedLibrary = false
+        isReconcilingLibrary = true
         isLoading = true
         error = nil
+        let previousSyncTask = beginLibrarySession(at: url)
+        let session = librarySessionGeneration
+        var recovery = LibraryBootRecovery()
+        defer {
+            finishLibraryBoot(libraryURL: url, session: session, recovery: recovery)
+        }
+
+        // Give SwiftUI one main-actor turn to paint the restored window shell
+        // before SQLite open/migration or any library work begins.
+        await Task.yield()
+        await previousSyncTask?.value
+        await previousVisualSearchTask?.value
+
         do {
-            if let delay = TestHooks.libraryHydrationDelayNanoseconds {
-                try await Task<Never, Never>.sleep(nanoseconds: delay)
-            }
-            let bridge = try CoreBridge(libraryPath: url.path, dbPath: Self.dbPath())
-            try await bridge.rebuild()
-            core = bridge
-            libraryURL = url
-            // Host-machine side effects (the ~/.config/cuttings/library file
-            // and the browser native-messaging manifest) are neutralized under
-            // UI testing so runs don't touch the real machine's config.
-            if !TestHooks.isUITesting {
-                writeLibraryPathConfig(url.path)
-                NativeHostInstaller.install()
-            }
-            startWatcher(libraryPath: url.path)
-            await refresh()
-            scheduleVisualSearchReconciliation()
+            try await openAndReconcileLibrary(at: url, session: session)
         } catch {
-            self.error = error.localizedDescription
-            if core == nil {
-                libraryURL = nil
-            }
+            // Retry once before relying on FSEvents, which may still be coalescing.
+            recovery.retryImmediately = allowsImmediateRecoveryRetry
+            recovery.needsRetry = handleLibraryBootFailure(error)
+        }
+    }
+    private func finishLibraryBoot(
+        libraryURL: URL,
+        session: UInt64,
+        recovery: LibraryBootRecovery
+    ) {
+        isLoading = false
+        isRestoringLibrary = false
+        isReconcilingLibrary = false
+        hasUsableCachedLibrary = false
+        if recovery.needsRetry {
+            startRebuildRetryWatcher(
+                libraryURL: libraryURL,
+                session: session,
+                retryImmediately: recovery.retryImmediately
+            )
+        } else {
+            scheduleWatcherSyncIfNeeded(session: session)
+        }
+    }
+
+    private func beginLibrarySession(at url: URL) -> Task<Void, Never>? {
+        librarySessionGeneration &+= 1
+        watcher?.invalidate()
+        watcher = nil
+        watcherSyncPending = false
+        searchTask?.cancel()
+        searchTask = nil
+        readingLoadGeneration &+= 1
+        libraryContentRefreshPending = false
+        let previousSyncTask = watcherSyncTask
+        previousSyncTask?.cancel()
+        watcherSyncTask = nil
+        activeCoreID = nil
+
+        if libraryURL?.standardizedFileURL.path != url.standardizedFileURL.path {
+            core = nil
+            readings = []
+            boardSelection.clear()
+            filters = LibraryFilters()
+        }
+        libraryURL = url
+        return previousSyncTask
+    }
+
+    private func openAndReconcileLibrary(at url: URL, session: UInt64) async throws {
+        try await waitForTestLibraryHydration()
+
+        let databasePath = Self.dbPath()
+        let cacheStatus = IndexCacheTrust.status(
+            libraryURL: url,
+            databasePath: databasePath
+        )
+        let openedBridge = try await CoreBridge.open(
+            libraryPath: url.path,
+            dbPath: databasePath
+        )
+        let useCachedIndex = await canPresentCachedIndex(
+            status: cacheStatus,
+            libraryURL: url,
+            bridge: openedBridge
+        )
+
+        if useCachedIndex {
+            await presentCachedLibrary(at: url, using: openedBridge)
+        }
+
+        // Keep cached reads and interactions on their own actor while the full
+        // file scan occupies a second connection. WAL lets the cached board stay
+        // responsive until the rebuilt snapshot is ready to publish.
+        let reconciliationBridge = try await makeReconciliationBridge(
+            openedBridge: openedBridge,
+            useCachedIndex: useCachedIndex,
+            libraryURL: url,
+            databasePath: databasePath
+        )
+        try await reconcileLibrary(
+            at: url,
+            databasePath: databasePath,
+            using: reconciliationBridge,
+            session: session
+        )
+    }
+
+    private func waitForTestLibraryHydration() async throws {
+        if let delay = TestHooks.libraryHydrationDelayNanoseconds {
+            try await Task<Never, Never>.sleep(nanoseconds: delay)
+        }
+    }
+
+    private func canPresentCachedIndex(
+        status: IndexCacheTrust.Status,
+        libraryURL: URL,
+        bridge: CoreBridge
+    ) async -> Bool {
+        switch status {
+        case .trusted:
+            return true
+        case .legacy:
+            return await IndexCacheTrust.legacyCacheMatches(
+                libraryURL: libraryURL,
+                bridge: bridge
+            )
+        case .unavailable:
+            return false
+        }
+    }
+
+    private func makeReconciliationBridge(
+        openedBridge: CoreBridge,
+        useCachedIndex: Bool,
+        libraryURL: URL,
+        databasePath: String
+    ) async throws -> CoreBridge {
+        guard useCachedIndex else { return openedBridge }
+        return try await CoreBridge.open(
+            libraryPath: libraryURL.path,
+            dbPath: databasePath
+        )
+    }
+
+    private func presentCachedLibrary(at url: URL, using bridge: CoreBridge) async {
+        core = bridge
+        activeCoreID = ObjectIdentifier(bridge)
+        libraryURL = url
+        // Text/label search is already in SQLite. Do not hold the cached first
+        // frame on a fresh Core Spotlight query for a persisted search term.
+        let loadResult = await loadReadings(includeSemanticSearch: false)
+        hasUsableCachedLibrary = loadResult != .failed
+        guard hasUsableCachedLibrary else { return }
+
+        isLoading = false
+        isRestoringLibrary = false
+        TestHooks.recordStartupEvent("cached-readings")
+        if loadResult == .published {
+            TestHooks.recordStartupSnapshot("cached-snapshot", rows: readings)
+        }
+    }
+
+    private func reconcileLibrary(
+        at url: URL,
+        databasePath: String,
+        using bridge: CoreBridge,
+        session: UInt64
+    ) async throws {
+        // Start FSEvents before the scan. Changes that land during rebuild are
+        // coalesced and synced once the rebuilt snapshot becomes active.
+        startWatcher(libraryPath: url.path, session: session)
+        TestHooks.recordStartupEvent("reconcile-started")
+        if let delay = TestHooks.libraryReconciliationDelayNanoseconds {
+            try await Task<Never, Never>.sleep(nanoseconds: delay)
+        }
+
+        // Files remain authoritative. The cache only removes the startup wait.
+        try await bridge.rebuild()
+        core = bridge
+        activeCoreID = ObjectIdentifier(bridge)
+        libraryURL = url
+        libraryContentRefreshPending = true
+
+        let loadResult = await loadReadings()
+        if loadResult == .failed {
+            throw NSError(
+                domain: "is.edmundo.cuttings.library",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: error ?? "Unable to load the rebuilt library."]
+            )
         }
         isLoading = false
         isRestoringLibrary = false
+        if loadResult == .published {
+            TestHooks.recordStartupEvent("reconciled-readings")
+            TestHooks.recordStartupSnapshot("reconciled-snapshot", rows: readings)
+            await Task.yield()
+        }
+
+        performPostReconciliationWork(libraryURL: url, databasePath: databasePath)
+        TestHooks.recordStartupEvent("reconcile-finished")
+    }
+    private func performPostReconciliationWork(libraryURL: URL, databasePath: String) {
+        // Host-machine side effects are neutralized under UI testing so runs do
+        // not touch the real machine's config or browser manifests.
+        if !TestHooks.isUITesting {
+            writeLibraryPathConfig(libraryURL.path)
+            NativeHostInstaller.install()
+        }
+        IndexCacheTrust.record(libraryURL: libraryURL, databasePath: databasePath)
+
+        // Tags are not needed to draw the board. Load their large global
+        // vocabulary only after the first cards are free to render.
+        Task { [weak self] in await self?.loadFilters() }
+        scheduleVisualSearchReconciliation()
+    }
+
+    private func handleLibraryBootFailure(_ bootError: any Error) -> Bool {
+        error = bootError.localizedDescription
+        TestHooks.recordStartupEvent("startup-error", details: bootError.localizedDescription)
+        watcher?.invalidate()
+        watcher = nil
+        watcherSyncPending = false
+        guard !hasUsableCachedLibrary else { return true }
+
+        activeCoreID = nil
+        core = nil
+        readings = []
+        boardSelection.clear()
+        filters = LibraryFilters()
+        libraryURL = nil
+        return false
     }
 
     /// Write the library path to ~/.config/cuttings/library so the native
     /// messaging host can find it without needing a security-scoped bookmark.
     private func writeLibraryPathConfig(_ path: String) {
-        let configDir = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent(".config/cuttings", isDirectory: true)
+        let configURL = Self.libraryPathConfigURL
+        let configDir = configURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(
             at: configDir, withIntermediateDirectories: true
         )
         try? (path + "\n").write(
-            to: configDir.appendingPathComponent("library"),
+            to: configURL,
             atomically: true, encoding: .utf8
         )
-    }
-
-    // ── Incremental sync (FSEvents) ───────────────────────────────────────
-
-    func sync() async {
-        guard let core else { return }
-        do {
-            let changed = try await core.sync()
-            if changed > 0 {
-                await refresh()
-                scheduleVisualSearchReconciliation()
-            }
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    private func startWatcher(libraryPath: String) {
-        // Tear down the previous watcher before replacing it. Reassigning alone
-        // would leak it — the FSEvents stream keeps it alive, still watching the
-        // old folder and firing sync() against the new library. invalidate()
-        // runs while we still hold the strong reference, so the release it
-        // triggers can't deallocate the watcher mid-teardown.
-        watcher?.invalidate()
-        watcher = FolderWatcher(libraryPath: libraryPath) { [weak self] in
-            Task { @MainActor [weak self] in await self?.sync() }
-        }
     }
 
     // ── Security-scoped resource ──────────────────────────────────────────
@@ -143,6 +329,11 @@ extension AppState {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    private static var libraryPathConfigURL: URL {
+        URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".config/cuttings/library")
+    }
 
     static func dbPath() -> String {
         // UI-testing: use the pinned temp DB so the real per-device index is

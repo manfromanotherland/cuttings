@@ -45,7 +45,11 @@ extension AppState {
     func delete(_ rows: [ReadingRow]) async {
         guard let core, !rows.isEmpty, !isDeleting else { return }
         isDeleting = true
-        defer { isDeleting = false }
+        beginLibraryWrite()
+        defer {
+            endLibraryWrite()
+            isDeleting = false
+        }
         let boardOrder = readings.map(\.id)
         let requestedIDs = Set(rows.map(\.id))
         var deletedIDs: Set<String> = []
@@ -91,6 +95,8 @@ extension AppState {
 
     func addTag(id: String, tag: String) async {
         guard let core else { return }
+        beginLibraryWrite()
+        defer { endLibraryWrite() }
         // Mirror the core: trim, dedup on exact match, append (no sort/lowercase),
         // so the optimistic chip lands in the same place the reload confirms.
         let tag = tag.trimmingCharacters(in: .whitespaces)
@@ -105,6 +111,8 @@ extension AppState {
 
     func removeTag(id: String, tag: String) async {
         guard let core else { return }
+        beginLibraryWrite()
+        defer { endLibraryWrite() }
         if let old = readings.first(where: { $0.id == id }), old.tags.contains(tag) {
             var updated = old
             updated.tags.removeAll { $0 == tag }

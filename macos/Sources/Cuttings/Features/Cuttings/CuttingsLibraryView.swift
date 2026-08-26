@@ -72,7 +72,6 @@ extension CuttingsLibraryView {
                     rowsProbe
                 }
             }
-            .task { await appState.loadReadings() }
     }
 
     private var reactiveSurface: some View {
