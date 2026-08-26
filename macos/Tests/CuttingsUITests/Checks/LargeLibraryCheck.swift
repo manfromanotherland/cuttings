@@ -6,6 +6,25 @@ import XCTest
 /// exposes every loaded row to accessibility, so the useful assertions are that
 /// the whole corpus is reachable and shares one continuous masonry layout.
 final class LargeLibraryCheck: UITestCase {
+    func testToolbarAppearsBeforeLibraryHydrationFinishes() throws {
+        try launchAppWithoutWaiting(articles: [Fixtures.standardCorpus[0]]) { options in
+            options.environment["CUTTINGS_TEST_LIBRARY_HYDRATION_DELAY_MS"] = "3000"
+        }
+
+        XCTAssertTrue(
+            list.searchField.waitForExistence(timeout: 1.5),
+            "search should be usable while the library hydrates"
+        )
+        XCTAssertTrue(
+            list.filterGroup.waitForExistence(timeout: 1.5),
+            "the type filter should be usable while the library hydrates"
+        )
+        XCTAssertTrue(
+            app.byId(A11y.List.cardSizeControl).waitForExistence(timeout: 1.5),
+            "zoom controls should be usable while the library hydrates"
+        )
+    }
+
     func testCompleteSnapshotReachesOldestCard() throws {
         try launchApp(articles: Fixtures.bulkCorpus(count: 120))
         XCTAssertTrue(list.row(Fixtures.id(119)).waitExists(), "newest article heads the list")

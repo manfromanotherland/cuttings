@@ -190,11 +190,14 @@ extension CuttingsLibraryView {
         .labelStyle(.iconOnly)
         .accessibilityValue(cardSize.label)
         .accessibilityIdentifier(A11y.List.cardSizeControl)
+        .onAppear {
+            TestHooks.recordStartupEvent("toolbar")
+        }
     }
 
     @ViewBuilder
     private var board: some View {
-        if appState.isLoading {
+        if appState.isLoading || appState.isRestoringLibrary {
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if appState.readings.isEmpty {

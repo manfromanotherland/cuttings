@@ -67,6 +67,9 @@ extension AppState {
         isLoading = true
         error = nil
         do {
+            if let delay = TestHooks.libraryHydrationDelayNanoseconds {
+                try await Task<Never, Never>.sleep(nanoseconds: delay)
+            }
             let bridge = try CoreBridge(libraryPath: url.path, dbPath: Self.dbPath())
             try await bridge.rebuild()
             core = bridge
@@ -83,6 +86,9 @@ extension AppState {
             scheduleVisualSearchReconciliation()
         } catch {
             self.error = error.localizedDescription
+            if core == nil {
+                libraryURL = nil
+            }
         }
         isLoading = false
         isRestoringLibrary = false

@@ -37,10 +37,10 @@ final class AppState {
     var libraryURL: URL?
 
     /// True from launch until the first boot from a persisted bookmark settles.
-    /// `libraryURL` is only set at the end of the async `boot`, so without this
-    /// flag the brief gap between launch and boot would flash the onboarding
-    /// screen even when a saved library exists. Onboarding keys off both:
-    /// show it only when there's no library *and* we aren't restoring one.
+    /// The restored URL is published immediately so the normal window shell and
+    /// toolbar can render while the core hydrates; this flag keeps the board
+    /// itself neutral and prevents onboarding from flashing if restoration fails
+    /// before that first frame.
     var isRestoringLibrary: Bool = false
 
     /// Whether the extension-install step should show ahead of the main view (see
@@ -203,11 +203,14 @@ final class AppState {
             // real library untouched). Boot the pinned temp library if one was
             // given; otherwise fall through to the onboarding screen.
             if let path = TestHooks.libraryPath {
+                let url = URL(fileURLWithPath: path)
+                libraryURL = url
                 isRestoringLibrary = true
-                Task { await boot(url: URL(fileURLWithPath: path)) }
+                Task { await boot(url: url) }
             }
         } else if let url = LibraryBookmark.resolve() {
             accessedURL = url
+            libraryURL = url
             isRestoringLibrary = true
             Task { await boot(url: url) }
         }

@@ -43,6 +43,21 @@ enum TestHooks {
         env("CUTTINGS_TEST_DEFAULTS")
     }
 
+    /// Artificially holds library hydration so UI tests can assert that the
+    /// window shell and toolbar do not depend on indexing completing.
+    static var libraryHydrationDelayNanoseconds: UInt64? {
+        env("CUTTINGS_TEST_LIBRARY_HYDRATION_DELAY_MS")
+            .flatMap(UInt64.init)
+            .map { $0 * 1_000_000 }
+    }
+
+    /// Records a first-frame event for the command-line startup regression
+    /// probe. The path is available only under `--ui-testing`.
+    static func recordStartupEvent(_ event: String) {
+        guard let path = env("CUTTINGS_TEST_STARTUP_EVENT_PATH") else { return }
+        try? event.write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
     /// Reads an environment variable, but only in UI-testing mode, so a
     /// production build can never be redirected by a stray variable.
     private static func env(_ key: String) -> String? {

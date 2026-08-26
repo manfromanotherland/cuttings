@@ -38,6 +38,22 @@ class UITestCase: XCTestCase {
         articles: [ArticleFixture] = [],
         configure: (inout LaunchOptions) -> Void = { _ in }
     ) throws -> XCUIApplication {
+        let app = try launchAppWithoutWaiting(articles: articles, configure: configure)
+        XCTAssertTrue(
+            app.byId(A11y.List.rows).waitForExistence(timeout: 20),
+            "Library board did not appear after launch."
+        )
+        return app
+    }
+
+    /// Launches the real app against a seeded temp library and returns as soon
+    /// as its window exists, without waiting for library hydration to finish.
+    /// Startup checks use this to inspect the first usable frame.
+    @discardableResult
+    func launchAppWithoutWaiting(
+        articles: [ArticleFixture] = [],
+        configure: (inout LaunchOptions) -> Void = { _ in }
+    ) throws -> XCUIApplication {
         let library = try TestLibrary()
         try library.write(articles)
         self.library = library
@@ -46,10 +62,6 @@ class UITestCase: XCTestCase {
         options.defaultsSuite = library.defaultsSuiteName
         configure(&options)
         app = AppLauncher.launch(options)
-        XCTAssertTrue(
-            app.byId(A11y.List.rows).waitForExistence(timeout: 20),
-            "Library board did not appear after launch."
-        )
         return app
     }
 
