@@ -14,6 +14,7 @@ struct CuttingsLibraryView: View {
     @State private var presentationOrder: [String] = []
     @State private var tagTargetID: String?
     @State private var isDropTargeted = false
+    @State private var cardTextMetrics = CuttingsCardTextMetrics()
     @State private var videoPlaybackPositions = VideoPlaybackPositionStore()
 
     var body: some View {
@@ -369,9 +370,7 @@ extension CuttingsLibraryView {
             return width * 9 / 16
         case .quote:
             let text = row.excerpt.flatMap { $0.isEmpty ? nil : $0 } ?? row.displayTitle
-            let charactersPerLine = max(12, Int(width / 11))
-            let lines = min(12, max(1, Int(ceil(Double(text.count) / Double(charactersPerLine)))))
-            return 22 + 24 + 18 + CGFloat(lines * 30) + 18 + 16 + 22
+            return cardTextMetrics.quoteCardHeight(for: text, width: width)
         case .article:
             if row.previewAsset != nil {
                 return width * 2 / 3 + 76

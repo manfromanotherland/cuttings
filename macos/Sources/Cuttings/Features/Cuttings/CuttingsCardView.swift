@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import SwiftUI
 
 struct CuttingsCardView: View {
@@ -143,8 +144,7 @@ struct CuttingsCardView: View {
                 .frame(height: 24)
 
             Text(quoteText)
-                .font(.title2)
-                .italic()
+                .font(Font(CuttingsCardTextMetrics.quoteFont))
                 .lineSpacing(4)
                 .lineLimit(12)
                 .fixedSize(horizontal: false, vertical: true)
@@ -178,7 +178,7 @@ struct CuttingsCardView: View {
             Text(row.displaySite ?? "Saved locally")
                 .lineLimit(1)
         }
-        .font(.caption2.weight(.regular))
+        .font(Font(CuttingsCardTextMetrics.sourceFont))
         .foregroundStyle(foreground)
     }
 
