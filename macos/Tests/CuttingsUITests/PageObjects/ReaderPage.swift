@@ -203,8 +203,12 @@ struct ReaderPage {
 
     // ── Toolbar actions ─────────────────────────────────────────────────────
 
+    var closeButton: XCUIElement {
+        app.byId(A11y.Detail.close)
+    }
+
     func close() {
-        app.byId(A11y.Detail.close).clickWhenReady()
+        closeButton.clickWhenReady()
     }
 
     func openInBrowser() {

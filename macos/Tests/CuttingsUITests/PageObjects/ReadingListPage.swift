@@ -48,7 +48,7 @@ struct ReadingListPage {
         app.byId(A11y.List.row(id))
     }
 
-    /// Selecting a card opens it in the reading overlay.
+    /// Selects a card without opening it.
     func select(_ id: String) {
         // Stay away from the trailing hover menu. SwiftUI can expose the
         // combined card as either a Button or MenuButton depending on hover.
@@ -56,7 +56,7 @@ struct ReadingListPage {
     }
 
     func open(_ id: String) {
-        select(id)
+        row(id).doubleClickWhenReady(at: CGVector(dx: 0.25, dy: 0.5))
     }
 
     /// The ids of the currently loaded rows, in list order — for ordering and
@@ -225,8 +225,8 @@ struct ReadingListPage {
 
     // ── Delete confirmation ───────────────────────────────────────────────
 
-    func confirmDelete() {
-        app.tapDialogButton("Delete")
+    func confirmDelete(count: Int = 1) {
+        app.tapDialogButton(count == 1 ? "Delete item" : "Delete \(count) items")
     }
 
     func cancelDelete() {

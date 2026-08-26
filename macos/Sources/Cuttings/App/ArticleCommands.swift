@@ -5,31 +5,37 @@ import SwiftUI
 /// Menu bar commands that operate on the currently selected item.
 struct ArticleCommands: Commands {
     var appState: AppState
+    @FocusedValue(\.detailNavigationActions) private var detailNavigationActions
 
     var body: some Commands {
         CommandMenu("Item") {
-            if let row = selectedRow {
+            if !selectedRows.isEmpty {
                 Button("Edit Tags…") {
                     appState.showTagSheet = true
                 }
                 .keyboardShortcut(ShortcutCatalog.editTags)
+                .disabled(selectedRows.count != 1 || appState.isDeleting)
 
                 Button(appState.showHighlights ? "Hide Highlights" : "Show Highlights") {
                     appState.showHighlights.toggle()
                 }
                 .keyboardShortcut(ShortcutCatalog.toggleHighlights)
+                .disabled(
+                    selectedRow?.kind != .article
+                        || detailNavigationActions == nil
+                )
 
                 Divider()
 
-                Button("Delete", role: .destructive) {
-                    appState.pendingDelete = row
+                Button(deleteTitle, role: .destructive) {
+                    appState.requestDeleteSelection()
                 }
                 .keyboardShortcut(ShortcutCatalog.delete)
-                .disabled(appState.isEditingText)
+                .disabled(appState.isEditingText || appState.isDeleting)
 
                 Divider()
 
-                if let url = row.sourceURL {
+                if let url = selectedRow?.sourceURL {
                     Button("Open in Browser") {
                         ReadingLink.open(url)
                     }
@@ -42,8 +48,15 @@ struct ArticleCommands: Commands {
         }
     }
 
+    private var selectedRows: [ReadingRow] {
+        appState.selectedRows
+    }
+
     private var selectedRow: ReadingRow? {
-        guard let id = appState.selectedId else { return nil }
-        return appState.readings.first(where: { $0.id == id })
+        selectedRows.count == 1 ? selectedRows.first : nil
+    }
+
+    private var deleteTitle: String {
+        selectedRows.count == 1 ? "Delete" : "Delete \(selectedRows.count) Items"
     }
 }

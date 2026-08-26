@@ -93,10 +93,11 @@ struct CuttingsReadingOverlay: View {
                 }
 
                 Button(role: .destructive) {
-                    appState.pendingDelete = row
+                    appState.requestDelete(row)
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .disabled(appState.isDeleting)
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }

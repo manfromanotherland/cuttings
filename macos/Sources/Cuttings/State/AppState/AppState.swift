@@ -59,7 +59,32 @@ final class AppState {
     }
 
     var readings: [ReadingRow] = []
-    var selectedId: String?
+    var boardSelection = BoardSelection<String>()
+
+    /// The focused card remains the compatibility-facing selection for Gallery
+    /// and the existing single-item reader actions.
+    var selectedId: String? {
+        get { boardSelection.focusedID }
+        set {
+            if let newValue {
+                boardSelection.select(
+                    newValue,
+                    extending: false,
+                    in: readings.map(\.id)
+                )
+            } else {
+                boardSelection.clear()
+            }
+        }
+    }
+
+    var selectedIDs: Set<String> {
+        boardSelection.selectedIDs
+    }
+
+    var selectedRows: [ReadingRow] {
+        readings.filter { selectedIDs.contains($0.id) }
+    }
 
     /// The reading-list search text, persisted across launches so a search the
     /// user left active is restored on reopen. `init` seeds it from the store.
@@ -86,8 +111,8 @@ final class AppState {
         }
     }
 
-    /// Reading awaiting delete confirmation, if any. Drives the confirm dialog.
-    var pendingDelete: ReadingRow?
+    /// Readings awaiting delete confirmation, in their current board order.
+    var pendingDelete: [ReadingRow]?
 
     /// Drives the tag-picker sheet for the open reading. Held here (rather than in
     /// the detail view) so both the toolbar button and the ⌘⇧T menu command can
@@ -117,6 +142,7 @@ final class AppState {
     // ── Status ────────────────────────────────────────────────────────────
     var isLoading: Bool = false
     var error: String?
+    var isDeleting: Bool = false
 
     /// Short, non-modal acknowledgement for paste/drop saves. Errors that stop
     /// the whole operation still use `error`; duplicates and partial results are

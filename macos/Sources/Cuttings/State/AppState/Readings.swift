@@ -39,10 +39,9 @@ extension AppState {
             try? await Task.sleep(for: .milliseconds(150))
             guard let self, !Task.isCancelled else { return }
             // This reload fires ~150ms after the last keystroke, while the search
-            // field is still focused. Re-homing the list selection here moves
-            // first responder to the list, flips `isEditingText` false, and lets
-            // a global shortcut fire instead of editing the search term. Leave
-            // selection put while the field is active.
+            // field is still focused. Preserve an unavailable focused card for
+            // this reload so the state update cannot disturb the field editor and
+            // let a global shortcut fire instead of editing the search term.
             await loadReadings(resetSelectionIfMissing: !isEditingText)
         }
     }
@@ -117,12 +116,10 @@ extension AppState {
         readingLoadGeneration &+= 1
     }
 
-    /// `resetSelectionIfMissing` controls what happens when the current
-    /// selection isn't in the freshly loaded list. Direct (re)loads — filter
-    /// switch, search, first load — pass `true` to re-home onto the first
-    /// row. A `refresh()` after a local mutation passes `false` to leave the
-    /// selection alone (see `refresh()`). An empty selection always defaults to
-    /// the first row either way.
+    /// `resetSelectionIfMissing` controls what happens when the focused card is
+    /// absent from the freshly loaded board. Direct reloads prune it; a
+    /// `refresh()` after a local mutation may preserve an open reading that is
+    /// deliberately outside the current filter (see `refresh()`).
     func loadReadings(resetSelectionIfMissing: Bool = true) async {
         guard let core else { return }
         guard let context = await makeSnapshotContext() else { return }
@@ -131,16 +128,10 @@ extension AppState {
             guard isCurrent(context) else { return }
             readings = rows
 
-            // Open the first reading by default so selection-dependent UI is
-            // available without an extra click. A missing selection is re-homed
-            // to the first item only when the caller asked (direct reloads); a
-            // post-mutation refresh leaves a
-            // deliberately off-list selection — the open reading — in place.
-            if selectedId == nil
-                || (resetSelectionIfMissing && !readings.contains(where: { $0.id == selectedId }))
-            {
-                selectedId = readings.first?.id
-            }
+            boardSelection.reconcile(
+                with: rows.map(\.id),
+                preserveUnavailableFocus: !resetSelectionIfMissing
+            )
         } catch {
             if isCurrent(context) {
                 self.error = error.localizedDescription

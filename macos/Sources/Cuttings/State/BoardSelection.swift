@@ -23,12 +23,7 @@ struct BoardSelection<ID: Hashable & Sendable>: Equatable, Sendable {
         guard let anchorIndex = orderedIDs.firstIndex(of: anchor),
               let focusedIndex = orderedIDs.firstIndex(of: id)
         else {
-            if let focusedID {
-                selectedIDs.insert(focusedID)
-            }
-            selectedIDs.insert(id)
-            focusedID = id
-            anchorID = anchor
+            selectOnly(id)
             return
         }
 
@@ -53,12 +48,15 @@ struct BoardSelection<ID: Hashable & Sendable>: Equatable, Sendable {
 
         if let focusedID, availableIDs.contains(focusedID) {
             selectedIDs.insert(focusedID)
+        } else if let visibleFocus = orderedIDs.first(where: selectedIDs.contains) {
+            focusedID = visibleFocus
         } else if !preserveUnavailableFocus {
-            focusedID = orderedIDs.first(where: selectedIDs.contains)
+            focusedID = nil
         }
 
         if let anchorID, !availableIDs.contains(anchorID) {
-            self.anchorID = focusedID ?? orderedIDs.first(where: selectedIDs.contains)
+            self.anchorID = focusedID.flatMap { availableIDs.contains($0) ? $0 : nil }
+                ?? orderedIDs.first(where: selectedIDs.contains)
         }
     }
 
@@ -77,7 +75,10 @@ struct BoardSelection<ID: Hashable & Sendable>: Equatable, Sendable {
         }
 
         let fallback = removedFocusedIndex.flatMap { index in
-            orderedIDs.dropFirst(index + 1).first { !removedIDs.contains($0) }
+            let selectedFallback = orderedIDs.dropFirst(index + 1).first(where: selectedIDs.contains)
+                ?? orderedIDs[..<index].reversed().first(where: selectedIDs.contains)
+            return selectedFallback
+                ?? orderedIDs.dropFirst(index + 1).first { !removedIDs.contains($0) }
                 ?? orderedIDs[..<index].reversed().first { !removedIDs.contains($0) }
         }
         focusedID = fallback

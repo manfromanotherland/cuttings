@@ -131,6 +131,12 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - Cards have 8–12 pt continuous corners and a semantic separator border. Hover reveals only a
   small standard action menu; cards do not add decorative lift or shadow effects. Tags and actions
   do not permanently clutter the board.
+- A single click selects and focuses a card without opening it. Selection uses a restrained semantic
+  accent outline. Arrow keys move spatially through the masonry columns and minimally scroll the
+  focused card into view; Shift-click and Shift-arrow extend the selection from its anchor.
+- Delete applies to every selected card after one explicit confirmation. Commands that only make
+  sense for one reading, such as editing tags or opening its source, are unavailable while several
+  cards are selected.
 - Every card kind exposes its **origin page** (page URL, canonical URL, title/site, saved date).
   Image/video `media_url` is secondary metadata and never replaces the origin.
 
@@ -144,10 +150,11 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ### Card detail
 
-- Single-click opens a full-window Gallery detail for articles, images, videos, and quotes while
+- Double-click opens a full-window Gallery detail for articles, images, videos, and quotes while
   preserving the board behind the navigation destination. A lightweight link opens its origin in
-  the system browser instead and never enters Gallery. Escape or Back returns to the board;
-  left/right and J/K move through the frozen detail-capable board order, skipping links.
+  the system browser instead and never enters Gallery. Opening collapses a multi-selection to that
+  card. Escape or Back returns focus to the board; left/right and J/K move through the frozen
+  detail-capable board order, skipping links.
 - The selected preview fills the available space above a persistent horizontal filmstrip. Clicking
   a filmstrip thumbnail selects it, and keyboard navigation keeps the selected thumbnail visible.
 - Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.
@@ -423,8 +430,8 @@ still settles on the background refresh — only removal/advance is immediate.
 
 When the open card leaves the active scope, the detail overlay advances with the board to that same
 neighbour (or closes when no card remains). A post-edit refresh then reconciles ordering without a
-second selection jump. Direct reloads — scope switch, search, and first load — may pick the first
-matching card.
+second selection jump. Direct reloads reconcile against the matching cards without inventing a new
+selection; the first load begins unselected.
 
 ## Paste and drop
 

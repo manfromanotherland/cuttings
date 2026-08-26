@@ -57,12 +57,13 @@ struct ArticleToolbar: ToolbarContent {
             }
 
             Button(role: .destructive) {
-                appState.pendingDelete = row
+                appState.requestDelete(row)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
             .help("Permanently delete this item")
             .accessibilityIdentifier(A11y.Toolbar.delete)
+            .disabled(appState.isDeleting)
 
             Button {
                 appState.isFocusMode.toggle()

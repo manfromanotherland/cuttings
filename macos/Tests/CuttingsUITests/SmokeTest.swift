@@ -13,7 +13,15 @@ final class SmokeTest: UITestCase {
         XCTAssertTrue(list.row(Fixtures.Ids.archived).waitExists(), "legacy archived card is visible")
         XCTAssertTrue(app.byId(A11y.Filter.group).exists, "filter control is available")
 
-        // Open a known article and confirm the overlay shows its title.
+        // A single click selects without opening; a double click opens.
+        list.select(Fixtures.Ids.rust)
+        XCTAssertTrue(list.row(Fixtures.Ids.rust).isSelected, "Rust card should be selected")
+        XCTAssertFalse(
+            reader.closeButton.waitForExistence(timeout: 0.5),
+            "Single click should leave the board visible"
+        )
+        XCTAssertTrue(list.row(Fixtures.Ids.rust).isHittable, "Selected card should remain usable")
+
         list.open(Fixtures.Ids.rust)
         XCTAssertTrue(reader.title.waitExists(), "Reader title should appear")
         XCTAssertEqual(reader.titleText, "Understanding Rust Ownership")

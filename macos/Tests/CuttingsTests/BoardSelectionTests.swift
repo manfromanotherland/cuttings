@@ -37,6 +37,17 @@ final class BoardSelectionTests: XCTestCase {
         XCTAssertEqual(selection.selectedIDs, ["b", "d"])
     }
 
+    func testPreservingUnavailableFocusStillPrefersAVisibleSelectedCard() {
+        var selection = BoardSelection<String>()
+        selection.select("b", extending: false, in: ids)
+        selection.select("d", extending: true, in: ids)
+
+        selection.reconcile(with: ["a", "b", "c", "e"], preserveUnavailableFocus: true)
+
+        XCTAssertEqual(selection.focusedID, "b")
+        XCTAssertEqual(selection.selectedIDs, ["b", "c"])
+    }
+
     func testRemovingFocusAdvancesThenFallsBack() {
         var selection = BoardSelection<String>()
         selection.select("c", extending: false, in: ids)
@@ -49,5 +60,29 @@ final class BoardSelectionTests: XCTestCase {
         selection.remove(["e"], from: ["a", "b", "e"])
         XCTAssertEqual(selection.focusedID, "b")
         XCTAssertEqual(selection.selectedIDs, ["b"])
+    }
+
+    func testPartialRemovalKeepsFocusInsideTheRemainingSelection() {
+        var selection = BoardSelection<String>()
+        selection.select("b", extending: false, in: ids)
+        selection.select("d", extending: true, in: ids)
+
+        selection.remove(["d"], from: ids)
+
+        XCTAssertEqual(selection.focusedID, "c")
+        XCTAssertEqual(selection.selectedIDs, ["b", "c"])
+    }
+
+    func testExtendingFromAnUnavailableFocusStartsANewVisibleRange() {
+        var selection = BoardSelection<String>()
+        selection.select("a", extending: false, in: ids)
+        selection.reconcile(with: ["c", "d", "e"], preserveUnavailableFocus: true)
+
+        selection.select("d", extending: true, in: ["c", "d", "e"])
+        XCTAssertEqual(selection.focusedID, "d")
+        XCTAssertEqual(selection.selectedIDs, ["d"])
+
+        selection.select("e", extending: true, in: ["c", "d", "e"])
+        XCTAssertEqual(selection.selectedIDs, ["d", "e"])
     }
 }

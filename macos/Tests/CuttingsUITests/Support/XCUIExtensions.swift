@@ -24,7 +24,7 @@ extension XCUIApplication {
             alertSheet.buttons.matching(matchingLabel).firstMatch,
             dialogs.buttons.matching(matchingLabel).firstMatch,
             sheets.buttons.matching(matchingLabel).firstMatch,
-            buttons.matching(matchingLabel).firstMatch,
+            buttons.matching(matchingLabel).firstMatch
         ]
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
@@ -93,5 +93,15 @@ extension XCUIElement {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
         coordinate(withNormalizedOffset: normalizedOffset).click()
+    }
+
+    /// The coordinate-safe equivalent for cards whose double-click opens detail.
+    func doubleClickWhenReady(at normalizedOffset: CGVector, timeout: TimeInterval = 8) {
+        XCTAssertTrue(waitForExistence(timeout: timeout), "Element '\(identifier)' never appeared to double-click.")
+        let deadline = Date().addingTimeInterval(timeout)
+        while !isHittable, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        coordinate(withNormalizedOffset: normalizedOffset).doubleClick()
     }
 }

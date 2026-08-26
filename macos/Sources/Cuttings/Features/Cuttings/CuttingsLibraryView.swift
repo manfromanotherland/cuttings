@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import LazyLayoutKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -10,12 +11,16 @@ struct CuttingsLibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
 
-    @State private var presentedReading: ReadingRow?
+    @State var presentedReading: ReadingRow?
     @State private var presentationOrder: [String] = []
     @State private var tagTargetID: String?
     @State private var isDropTargeted = false
     @State private var cardTextMetrics = CuttingsCardTextMetrics()
     @State private var videoPlaybackPositions = VideoPlaybackPositionStore()
+    @State var boardPosition = LazyLayoutPosition<String>()
+    @State var boardNavigation = MasonryNavigationCoordinator<ReadingRow, String>()
+    @State var boardModifierKeys: EventModifiers = []
+    @FocusState var boardFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -95,16 +100,16 @@ extension CuttingsLibraryView {
     private var deletionSurface: some View {
         presentedSurface
             .confirmationDialog(
-                "Delete this item?",
+                deleteDialogTitle,
                 isPresented: deleteDialogPresented,
                 presenting: appState.pendingDelete
-            ) { row in
-                Button("Delete", role: .destructive) {
-                    delete(row)
+            ) { rows in
+                Button(deleteButtonTitle(for: rows), role: .destructive) {
+                    delete(rows)
                 }
                 Button("Cancel", role: .cancel) {}
-            } message: { row in
-                Text("“\(row.displayTitle)” and its local files will be permanently deleted.")
+            } message: { rows in
+                deleteDialogMessage(for: rows)
             }
     }
 }
@@ -216,16 +221,25 @@ extension CuttingsLibraryView {
                         trailing: Self.boardSpacing
                     ),
                     configurationID: configurationID,
+                    position: $boardPosition,
+                    navigationCoordinator: boardNavigation,
                     estimatedHeight: estimatedCardHeight,
                     content: { row in
                         CuttingsCardView(
                             row: row,
+                            isSelected: appState.selectedIDs.contains(row.id),
                             playbackPositions: videoPlaybackPositions,
                             viewportSize: proxy.size,
                             previewMaxPixel: previewMaxPixel,
                             autoplayEnabled: presentedReading == nil,
                             reduceMotion: accessibilityReduceMotion,
                             scenePhase: scenePhase,
+                            onSelect: {
+                                select(
+                                    row,
+                                    extending: boardModifierKeys.contains(.shift)
+                                )
+                            },
                             onOpen: { open(row) },
                             onEditTags: { tagTargetID = row.id }
                         )
@@ -233,6 +247,17 @@ extension CuttingsLibraryView {
                         .accessibilityIdentifier(A11y.List.row(row.id))
                     }
                 )
+                .focusable()
+                .focused($boardFocused)
+                .focusEffectDisabled()
+                .onKeyPress(
+                    keys: [.upArrow, .downArrow, .leftArrow, .rightArrow],
+                    phases: [.down, .repeat],
+                    action: moveSelection
+                )
+                .onModifierKeysChanged(mask: .shift) { _, modifiers in
+                    boardModifierKeys = modifiers
+                }
                 .accessibilityIdentifier(A11y.List.table)
             }
         }
@@ -380,6 +405,8 @@ extension CuttingsLibraryView {
     }
 
     private func open(_ row: ReadingRow) {
+        appState.selectReading(id: row.id, extending: false)
+
         if LibraryScope.links.contains(row) {
             if let url = row.sourceURL {
                 ReadingLink.open(url)
@@ -392,14 +419,18 @@ extension CuttingsLibraryView {
                 .filter { !LibraryScope.links.contains($0) }
                 .map(\.id)
         }
-        appState.selectedId = row.id
+        boardFocused = false
         presentedReading = row
     }
 
-    private func closeOverlay() {
+    func closeOverlay() {
         presentedReading = nil
         presentationOrder = []
         appState.showHighlights = false
+        if let id = appState.selectedId {
+            boardPosition.scrollTo(id: id, anchor: .nearest)
+        }
+        boardFocused = true
     }
 
     private func moveOverlay(_ direction: Int) {
@@ -457,13 +488,5 @@ extension CuttingsLibraryView {
         } else {
             closeOverlay()
         }
-    }
-
-    private func delete(_ row: ReadingRow) {
-        appState.pendingDelete = nil
-        if presentedReading?.id == row.id {
-            closeOverlay()
-        }
-        Task { await appState.delete(row) }
     }
 }

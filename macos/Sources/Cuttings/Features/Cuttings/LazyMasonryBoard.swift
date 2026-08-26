@@ -59,10 +59,10 @@ struct CuttingsMasonryLayout: LazyLayoutAlgorithm {
 }
 
 enum BoardNavigationDirection: Sendable {
-    case up
-    case down
-    case left
-    case right
+    case upward
+    case downward
+    case leftward
+    case rightward
 }
 
 /// Stable spatial navigation over the exact frames used by the masonry board.
@@ -113,13 +113,13 @@ struct MasonryNavigationIndex<ID: Hashable & Sendable>: Sendable {
         from current: LayoutRect
     ) -> Bool {
         switch direction {
-        case .up:
+        case .upward:
             candidate.maxY <= current.minY
-        case .down:
+        case .downward:
             candidate.minY >= current.maxY
-        case .left:
+        case .leftward:
             candidate.maxX <= current.minX
-        case .right:
+        case .rightward:
             candidate.minX >= current.maxX
         }
     }
@@ -143,7 +143,7 @@ struct MasonryNavigationIndex<ID: Hashable & Sendable>: Sendable {
         let verticalCenterDistance = abs(midY(candidateFrame) - midY(currentFrame))
 
         switch direction {
-        case .up, .down:
+        case .upward, .downward:
             return [
                 horizontalGap,
                 verticalGap,
@@ -151,7 +151,7 @@ struct MasonryNavigationIndex<ID: Hashable & Sendable>: Sendable {
                 verticalCenterDistance,
                 Double(candidate.sourceIndex)
             ]
-        case .left, .right:
+        case .leftward, .rightward:
             return [
                 horizontalGap,
                 verticalGap,
@@ -196,11 +196,48 @@ struct MasonryNavigationIndex<ID: Hashable & Sendable>: Sendable {
 /// A non-observable cache updated only when the board's layout inputs change.
 /// Selection changes can then query spatial neighbors without solving all
 /// reading frames again for every key repeat.
-final class MasonryNavigationCoordinator<ID: Hashable & Sendable> {
-    private var index = MasonryNavigationIndex<ID>(ids: [], frames: [])
+struct MasonryNavigationConfiguration: Equatable {
+    let layout: CuttingsMasonryLayout
+    let containerWidth: Double
+    let configurationID: AnyHashable
+}
 
-    func update(ids: [ID], frames: [LayoutRect]) {
-        index = MasonryNavigationIndex(ids: ids, frames: frames)
+@MainActor
+final class MasonryNavigationCoordinator<Element: Equatable, ID: Hashable & Sendable> {
+    private var index = MasonryNavigationIndex<ID>(ids: [], frames: [])
+    private var elements: [Element] = []
+    private var ids: [ID] = []
+    private var configuration: MasonryNavigationConfiguration?
+    private var hasSnapshot = false
+
+    func updateIfNeeded(
+        elements: [Element],
+        ids: [ID],
+        configuration: MasonryNavigationConfiguration,
+        estimatedHeight: (Element, CGFloat) -> CGFloat
+    ) {
+        guard !hasSnapshot
+            || self.elements != elements
+            || self.ids != ids
+            || self.configuration != configuration
+        else { return }
+
+        let layout = configuration.layout
+        let containerWidth = configuration.containerWidth
+        let columnWidth = CGFloat(layout.columnWidth(forContainerWidth: containerWidth))
+        let metrics = elements.map { element in
+            ItemMetric.fixedHeight(
+                CuttingsMasonryLayout.normalizedHeight(
+                    estimatedHeight(element, columnWidth)
+                )
+            )
+        }
+        let result = layout.layout(items: metrics, containerWidth: containerWidth)
+        index = MasonryNavigationIndex(ids: ids, frames: result.frames)
+        self.elements = elements
+        self.ids = ids
+        self.configuration = configuration
+        hasSnapshot = true
     }
 
     func neighbor(of id: ID, toward direction: BoardNavigationDirection) -> ID? {
@@ -219,7 +256,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
     private let contentInsets: EdgeInsets
     private let configurationID: AnyHashable
     private let position: Binding<LazyLayoutPosition<ID>>?
-    private let navigationCoordinator: MasonryNavigationCoordinator<ID>?
+    private let navigationCoordinator: MasonryNavigationCoordinator<Element, ID>?
     private let estimatedHeight: (Element, CGFloat) -> CGFloat
     private let content: (Element) -> AnyView
 
@@ -231,7 +268,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         contentInsets: EdgeInsets = .init(),
         configurationID: AnyHashable = 0,
         position: Binding<LazyLayoutPosition<ID>>? = nil,
-        navigationCoordinator: MasonryNavigationCoordinator<ID>? = nil,
+        navigationCoordinator: MasonryNavigationCoordinator<Element, ID>? = nil,
         estimatedHeight: @escaping (Element, CGFloat) -> CGFloat = { _, _ in 180 },
         @ViewBuilder content: @escaping (Element) -> some View
     ) where Data: RandomAccessCollection, Data.Element == Element {
@@ -259,11 +296,18 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         )
 
         GeometryReader { proxy in
-            let inputs = NavigationInputs(
+            let containerWidth = Double(proxy.size.width)
+            // A declaration is required here because this is a ViewBuilder scope.
+            // swiftlint:disable:next redundant_discardable_let
+            let _ = navigationCoordinator?.updateIfNeeded(
                 elements: elements,
-                layout: layout,
-                containerWidth: Double(proxy.size.width),
-                configurationID: configurationID
+                ids: elements.map { $0[keyPath: id] },
+                configuration: MasonryNavigationConfiguration(
+                    layout: layout,
+                    containerWidth: containerWidth,
+                    configurationID: configurationID
+                ),
+                estimatedHeight: estimatedHeight
             )
 
             LazyLayoutView(
@@ -285,38 +329,6 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
             } content: { element in
                 content(element)
             }
-            .onChange(of: inputs, initial: true) { _, newInputs in
-                updateNavigation(using: newInputs)
-            }
         }
-    }
-
-    private struct NavigationInputs: Equatable {
-        let elements: [Element]
-        let layout: CuttingsMasonryLayout
-        let containerWidth: Double
-        let configurationID: AnyHashable
-    }
-
-    private func updateNavigation(using inputs: NavigationInputs) {
-        guard let navigationCoordinator else { return }
-        let columnWidth = CGFloat(
-            inputs.layout.columnWidth(forContainerWidth: inputs.containerWidth)
-        )
-        let metrics = inputs.elements.map { element in
-            ItemMetric.fixedHeight(
-                CuttingsMasonryLayout.normalizedHeight(
-                    estimatedHeight(element, columnWidth)
-                )
-            )
-        }
-        let result = inputs.layout.layout(
-            items: metrics,
-            containerWidth: inputs.containerWidth
-        )
-        navigationCoordinator.update(
-            ids: inputs.elements.map { $0[keyPath: id] },
-            frames: result.frames
-        )
     }
 }

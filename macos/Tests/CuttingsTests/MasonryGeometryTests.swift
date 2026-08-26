@@ -11,11 +11,37 @@ final class MasonryGeometryTests: XCTestCase {
         let ratio: Double
     }
 
+    @MainActor
+    private final class PositionModel: ObservableObject {
+        @Published var position = LazyLayoutPosition<Int>()
+    }
+
+    private struct PositionedBoard: View {
+        @ObservedObject var model: PositionModel
+        let items: [Item]
+        let built: Box<Set<Int>>
+
+        var body: some View {
+            LazyMasonryBoard(
+                items,
+                id: \.id,
+                minimumColumnWidth: CardSize.small.minimumColumnWidth,
+                spacing: 18,
+                contentInsets: EdgeInsets(top: 12, leading: 18, bottom: 18, trailing: 18),
+                position: $model.position,
+                estimatedHeight: { item, width in width / item.ratio },
+                content: { item in
+                    Color.gray
+                        .onAppear { built.value.insert(item.id) }
+                }
+            )
+        }
+    }
+
     func testFiveCardSizesProduceDistinctDefaultWindowDensities() {
         let columnCounts = CardSize.allCases.map { size in
             layout(for: size).columnCount(forContainerWidth: 1064)
         }
-
         XCTAssertEqual(columnCounts, [5, 4, 3, 2, 1])
     }
 
@@ -92,15 +118,15 @@ final class MasonryGeometryTests: XCTestCase {
     func testVerticalNavigationStaysInTheSameMasonryColumn() {
         let index = navigationIndex()
 
-        XCTAssertEqual(index.neighbor(of: 0, toward: .down), 3)
-        XCTAssertEqual(index.neighbor(of: 3, toward: .up), 0)
+        XCTAssertEqual(index.neighbor(of: 0, toward: .downward), 3)
+        XCTAssertEqual(index.neighbor(of: 3, toward: .upward), 0)
     }
 
     func testHorizontalNavigationChoosesTheAdjacentAlignedCard() {
         let index = navigationIndex()
 
-        XCTAssertEqual(index.neighbor(of: 3, toward: .right), 4)
-        XCTAssertEqual(index.neighbor(of: 4, toward: .left), 3)
+        XCTAssertEqual(index.neighbor(of: 3, toward: .rightward), 4)
+        XCTAssertEqual(index.neighbor(of: 4, toward: .leftward), 3)
     }
 
     func testHorizontalNavigationUsesTheTallCardsMidpoint() {
@@ -113,17 +139,17 @@ final class MasonryGeometryTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(index.neighbor(of: 0, toward: .right), 2)
+        XCTAssertEqual(index.neighbor(of: 0, toward: .rightward), 2)
     }
 
     func testNavigationStopsAtEveryOuterEdge() {
         let index = navigationIndex()
 
-        XCTAssertNil(index.neighbor(of: 0, toward: .up))
-        XCTAssertNil(index.neighbor(of: 0, toward: .left))
-        XCTAssertNil(index.neighbor(of: 2, toward: .right))
-        XCTAssertNil(index.neighbor(of: 5, toward: .down))
-        XCTAssertNil(index.neighbor(of: 999, toward: .down))
+        XCTAssertNil(index.neighbor(of: 0, toward: .upward))
+        XCTAssertNil(index.neighbor(of: 0, toward: .leftward))
+        XCTAssertNil(index.neighbor(of: 2, toward: .rightward))
+        XCTAssertNil(index.neighbor(of: 5, toward: .downward))
+        XCTAssertNil(index.neighbor(of: 999, toward: .downward))
     }
 
     @MainActor
@@ -152,6 +178,29 @@ final class MasonryGeometryTests: XCTestCase {
         XCTAssertFalse(built.value.contains(items.count - 1))
     }
 
+    @MainActor
+    func testPositionBindingScrollsToAnUnmaterializedCard() {
+        let items = makeItems(5000)
+        let built = Box<Set<Int>>([])
+        let model = PositionModel()
+        let board = PositionedBoard(model: model, items: items, built: built)
+
+        let (window, materialized) = host(board) { !built.value.isEmpty }
+        defer { window.close() }
+        XCTAssertTrue(materialized)
+        XCTAssertFalse(built.value.contains(items.count - 1))
+
+        model.position.scrollTo(id: items.count - 1, anchor: .nearest)
+        let deadline = Date().addingTimeInterval(5)
+        while !built.value.contains(items.count - 1), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+
+        XCTAssertTrue(built.value.contains(items.count - 1))
+    }
+}
+
+extension MasonryGeometryTests {
     func testSmallCardSizePreservesExistingColumnWidth() {
         XCTAssertEqual(CardSize.small.minimumColumnWidth, 220)
     }

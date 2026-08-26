@@ -12,21 +12,24 @@ struct CuttingsReadingActions: View {
 
     var body: some View {
         Button("Edit Tags…") { onEditTags() }
-            .keyboardShortcut(ShortcutCatalog.editTags)
+            .disabled(disablesSingleReadingActions || appState.isDeleting)
 
         if let url = row.sourceURL {
             Button("Open Source") {
                 ReadingLink.open(url)
             }
-            .keyboardShortcut(ShortcutCatalog.openInBrowser)
+            .disabled(disablesSingleReadingActions)
         }
 
         Divider()
 
         Button("Delete", role: .destructive) {
-            appState.pendingDelete = row
+            appState.requestDelete(row)
         }
-        .keyboardShortcut(ShortcutCatalog.delete)
-        .disabled(appState.isEditingText)
+        .disabled(appState.isEditingText || appState.isDeleting)
+    }
+
+    private var disablesSingleReadingActions: Bool {
+        appState.selectedIDs.contains(row.id) && appState.selectedIDs.count > 1
     }
 }

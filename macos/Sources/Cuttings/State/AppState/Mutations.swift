@@ -4,7 +4,7 @@ import SwiftUI
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 // Tag edits land optimistically, then the core write + `refresh()` reconcile.
-// Deletion remains authoritative because it removes files from disk.
+// Deletion follows the same pattern; the refresh restores any failed rows.
 
 extension AppState {
     /// Optimistically apply an edit so it shows on the next frame, before the
@@ -35,26 +35,57 @@ extension AppState {
               let index = readings.firstIndex(where: { $0.id == id }),
               !rowMatchesCurrentFilter(readings[index]) else { return }
         withAnimation {
-            if selectedId == id {
-                selectedId = ComposedFilter.selectionAfterRemoving(at: index, from: readings)
-            }
+            boardSelection.remove([id], from: readings.map(\.id))
             readings.remove(at: index)
         }
     }
 
-    /// Permanently delete a reading: removes its file and assets from disk and
-    /// its row from the index. Irreversible — callers should confirm first.
-    func delete(_ row: ReadingRow) async {
-        guard let core else { return }
-        do {
-            try await core.deleteReading(id: row.id)
-            if selectedId == row.id {
-                selectedId = nil
+    /// Optimistically remove readings in one motion, then permanently delete
+    /// their files and reconcile once. Callers should confirm the complete set.
+    func delete(_ rows: [ReadingRow]) async {
+        guard let core, !rows.isEmpty, !isDeleting else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+        let boardOrder = readings.map(\.id)
+        let requestedIDs = Set(rows.map(\.id))
+        var deletedIDs: Set<String> = []
+        var failures: [(ReadingRow, Error)] = []
+
+        withAnimation {
+            boardSelection.remove(requestedIDs, from: boardOrder)
+            readings.removeAll { requestedIDs.contains($0.id) }
+        }
+
+        for row in rows {
+            do {
+                try await core.deleteReading(id: row.id)
+                deletedIDs.insert(row.id)
+            } catch {
+                failures.append((row, error))
             }
-            await refresh()
-            scheduleVisualSearchReconciliation()
-        } catch {
-            self.error = error.localizedDescription
+        }
+
+        await refresh()
+        scheduleVisualSearchReconciliation()
+        reportDeleteFailures(failures, deletedCount: deletedIDs.count, requestedCount: rows.count)
+    }
+
+    private func reportDeleteFailures(
+        _ failures: [(ReadingRow, Error)],
+        deletedCount: Int,
+        requestedCount: Int
+    ) {
+        if let firstFailure = failures.first {
+            if deletedCount == 0, failures.count == 1 {
+                error = firstFailure.1.localizedDescription
+            } else if failures.count == 1 {
+                error = "Deleted \(deletedCount) of \(requestedCount) selected items. "
+                    + "Unable to delete “\(firstFailure.0.displayTitle)”; try again."
+            } else {
+                error = "Deleted \(deletedCount) of \(requestedCount) selected items. "
+                    + "Unable to delete \(failures.count), including "
+                    + "“\(firstFailure.0.displayTitle)”; try again."
+            }
         }
     }
 

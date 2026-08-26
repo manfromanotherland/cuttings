@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import AppKit
 import SwiftUI
 
 struct CuttingsCardView: View {
     @Environment(AppState.self) private var appState
 
     let row: ReadingRow
+    let isSelected: Bool
     let playbackPositions: VideoPlaybackPositionStore
     var viewportSize: CGSize = .zero
     var previewMaxPixel: CGFloat = 800
     var autoplayEnabled = true
     var reduceMotion = false
     var scenePhase: ScenePhase = .active
+    var onSelect: () -> Void
     var onOpen: () -> Void
     var onEditTags: () -> Void
 
@@ -20,33 +21,47 @@ struct CuttingsCardView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            cardContent(in: proxy.size)
-                .frame(
-                    width: proxy.size.width,
-                    height: proxy.size.height,
-                    alignment: .topLeading
-                )
-                .background(CuttingsTheme.cardBackground(for: row))
-                .clipShape(cardShape)
-                .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
-                .overlay(alignment: .topTrailing) { hoverMenu }
-                .contentShape(cardShape)
-                .onTapGesture(perform: onOpen)
-                .contextMenu {
-                    CuttingsReadingActions(
-                        row: row,
-                        onEditTags: onEditTags
-                    )
-                }
-                .onHover { hovering in
-                    withAnimation(.easeOut(duration: 0.14)) {
-                        isHovered = hovering
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(accessibilityLabel)
-                .accessibilityAddTraits(.isButton)
+            interactiveCard(in: proxy.size)
         }
+    }
+
+    private func interactiveCard(in size: CGSize) -> some View {
+        accessibleCard(in: size)
+            .contentShape(cardShape)
+            .onTapGesture(count: 2, perform: onOpen)
+            .onTapGesture(perform: onSelect)
+            .contextMenu {
+                CuttingsReadingActions(
+                    row: row,
+                    onEditTags: onEditTags
+                )
+            }
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.14)) {
+                    isHovered = hovering
+                }
+            }
+    }
+
+    private func accessibleCard(in size: CGSize) -> some View {
+        cardSurface(in: size)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(isSelected ? "Selected" : "")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityAction { onSelect() }
+            .accessibilityAction(named: "Open") { onOpen() }
+    }
+
+    private func cardSurface(in size: CGSize) -> some View {
+        cardContent(in: size)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .background(CuttingsTheme.cardBackground(for: row))
+            .clipShape(cardShape)
+            .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
+            .overlay { selectionRing }
+            .overlay(alignment: .topTrailing) { hoverMenu }
     }
 
     @ViewBuilder
@@ -215,6 +230,15 @@ struct CuttingsCardView: View {
         .opacity(isHovered ? 1 : 0)
         .allowsHitTesting(isHovered)
         .accessibilityLabel("More actions")
+    }
+
+    @ViewBuilder
+    private var selectionRing: some View {
+        if isSelected {
+            cardShape
+                .strokeBorder(Color.accentColor, lineWidth: 3)
+                .allowsHitTesting(false)
+        }
     }
 
     private var quoteText: String {
