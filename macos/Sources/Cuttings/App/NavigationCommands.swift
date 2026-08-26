@@ -15,8 +15,10 @@ struct DetailNavigationActions {
 /// presentation or search-focus state into the shared app model.
 struct BoardActions {
     let canOpenSelection: Bool
+    let canQuickLookSelection: Bool
     let canFocusSearch: Bool
     let openSelection: () -> Void
+    let toggleQuickLook: () -> Void
     let focusSearch: () -> Void
 }
 

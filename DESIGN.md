@@ -115,6 +115,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - The selected board scope and search query compose as an intersection. Filtering is performed in
   the Rust core, not on a Swift-side subset, so the complete board snapshot remains correct. Board
   order is fixed: newest saved first when browsing and relevance when searching.
+- `⌘F` focuses the native search field; `/` does the same while the board has keyboard focus.
+  `⌘1`–`⌘5` select All through Quotes in toolbar order, and `⌘[` / `⌘]` cycle the scopes.
 
 ### Masonry cards
 
@@ -134,9 +136,13 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - A single click selects and focuses a card without opening it. Selection uses a restrained semantic
   accent outline. Arrow keys move spatially through the masonry columns and minimally scroll the
   focused card into view; Shift-click and Shift-arrow extend the selection from its anchor.
+- Double-click, `⌘O`, or Return opens the focused card. Space opens system Quick Look for its local
+  media asset, falling back to the source-of-truth `article.md`; Quick Look never receives a remote
+  origin URL. Pinching changes the same five card-size levels as the toolbar and existing keyboard
+  zoom commands.
 - Delete applies to every selected card after one explicit confirmation. Commands that only make
   sense for one reading, such as editing tags or opening its source, are unavailable while several
-  cards are selected.
+  cards are selected. `⌘Delete` requests the same confirmed permanent deletion.
 - Every card kind exposes its **origin page** (page URL, canonical URL, title/site, saved date).
   Image/video `media_url` is secondary metadata and never replaces the origin.
 
@@ -150,11 +156,11 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ### Card detail
 
-- Double-click opens a full-window Gallery detail for articles, images, videos, and quotes while
-  preserving the board behind the navigation destination. A lightweight link opens its origin in
-  the system browser instead and never enters Gallery. Opening collapses a multi-selection to that
-  card. Escape or Back returns focus to the board; left/right and J/K move through the frozen
-  detail-capable board order, skipping links.
+- Double-click, `⌘O`, or Return opens a full-window Gallery detail for articles, images, videos,
+  and quotes while preserving the board behind the navigation destination. A lightweight link
+  opens its origin in the system browser instead and never enters Gallery. Opening collapses a
+  multi-selection to that card. Escape or Back returns focus to the board; left/right and J/K move
+  through the frozen detail-capable board order, skipping links.
 - The selected preview fills the available space above a persistent horizontal filmstrip. Clicking
   a filmstrip thumbnail selects it, and keyboard navigation keeps the selected thumbnail visible.
 - Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.

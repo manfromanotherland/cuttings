@@ -20,8 +20,12 @@ extension CuttingsLibraryView {
     var focusedBoardActions: BoardActions {
         BoardActions(
             canOpenSelection: presentedReading == nil && singleSelectedRow != nil,
+            canQuickLookSelection: presentedReading == nil
+                && singleSelectedRow != nil
+                && appState.libraryURL != nil,
             canFocusSearch: presentedReading == nil && !appState.isFocusMode,
             openSelection: openSelection,
+            toggleQuickLook: toggleQuickLook,
             focusSearch: focusSearch
         )
     }
@@ -52,4 +56,7 @@ extension CuttingsLibraryView {
         guard presentedReading == nil, !appState.isFocusMode else { return }
         searchFocused = true
     }
+
+    static let boardSpacing: CGFloat = 18
+    static let boardTopSpacing: CGFloat = 12
 }

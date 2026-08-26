@@ -17,6 +17,11 @@ struct ArticleCommands: Commands {
                 .keyboardShortcut(ShortcutCatalog.open)
                 .disabled(boardActions?.canOpenSelection != true || appState.isEditingText)
 
+                Button("Quick Look") {
+                    boardActions?.toggleQuickLook()
+                }
+                .disabled(boardActions?.canQuickLookSelection != true || appState.isEditingText)
+
                 Divider()
 
                 Button("Edit Tags…") {

@@ -23,6 +23,12 @@ final class ShortcutCatalogTests: XCTestCase {
         XCTAssertEqual(ShortcutCatalog.focusSearch.displays, ["⌘F", "/"])
     }
 
+    func testQuickLookIsBoardLocalSpace() {
+        XCTAssertTrue(ShortcutCatalog.quickLook.matches(key: .space, modifiers: []))
+        XCTAssertFalse(ShortcutCatalog.quickLook.matches(key: .space, modifiers: .command))
+        XCTAssertEqual(ShortcutCatalog.quickLook.display, "Space")
+    }
+
     func testEveryScopeHasItsOrderedCommandNumber() {
         XCTAssertEqual(
             LibraryScope.allCases.map { ShortcutCatalog.filterShortcut(for: $0).display },

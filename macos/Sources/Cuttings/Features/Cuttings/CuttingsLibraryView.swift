@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import LazyLayoutKit
+import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -21,6 +22,7 @@ struct CuttingsLibraryView: View {
     @State var boardNavigation = MasonryNavigationCoordinator<ReadingRow, String>()
     @State var boardModifierKeys: EventModifiers = []
     @State var pinchStartCardSize: CardSize?
+    @State var quickLookURL: URL?
     @FocusState var boardFocused: Bool
     @FocusState var searchFocused: Bool
 
@@ -32,6 +34,7 @@ struct CuttingsLibraryView: View {
                 }
         }
         .focusedSceneValue(\.boardActions, focusedBoardActions)
+        .quickLookPreview($quickLookURL)
         .alert("Cuttings couldn’t complete that action", isPresented: errorAlertPresented) {
             Button("OK") { appState.error = nil }
         } message: {
@@ -264,7 +267,8 @@ extension CuttingsLibraryView {
                 .onKeyPress(
                     keys: [
                         ShortcutCatalog.openWithReturn.key,
-                        ShortcutCatalog.focusSearchWithSlash.key
+                        ShortcutCatalog.focusSearchWithSlash.key,
+                        ShortcutCatalog.quickLook.primary.key
                     ],
                     phases: [.down],
                     action: performBoardShortcut
@@ -365,9 +369,6 @@ extension CuttingsLibraryView {
             }
         )
     }
-
-    private static let boardSpacing: CGFloat = 18
-    private static let boardTopSpacing: CGFloat = 12
 
     private var tagTargetRow: ReadingRow? {
         let id = tagTargetID ?? (appState.showTagSheet ? appState.selectedId : nil)

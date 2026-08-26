@@ -113,6 +113,7 @@ targets:
       - path: Sources/Cuttings/Features/Cuttings/ReadingRow+MediaGeometry.swift
       - path: Sources/Cuttings/Features/Cuttings/LocalReadingImage.swift
       - path: Sources/Cuttings/Features/Cuttings/LocalReadingFavicon.swift
+      - path: Sources/Cuttings/Features/Cuttings/ReadingQuickLookURLResolver.swift
       - path: Sources/Cuttings/Features/Cuttings/LazyMasonryBoard.swift
       - path: Sources/Cuttings/Features/Cuttings/VideoCardViewport.swift
       - path: Sources/Cuttings/Features/Reader/Markdown/AssetImageLoader.swift

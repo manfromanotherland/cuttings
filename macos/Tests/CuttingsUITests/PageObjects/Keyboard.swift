@@ -16,6 +16,10 @@ struct Keyboard {
         app.typeKey(.return, modifierFlags: [])
     }
 
+    func quickLook() {
+        app.typeKey(.space, modifierFlags: [])
+    }
+
     func editTags() {
         app.typeKey("t", modifierFlags: [.command, .shift])
     } // ⌘⇧T

@@ -48,6 +48,14 @@ extension CuttingsLibraryView {
             return .handled
         }
 
+        if ShortcutCatalog.quickLook.matches(key: press.key, modifiers: press.modifiers) {
+            guard appState.selectedRows.count == 1, appState.libraryURL != nil else {
+                return .ignored
+            }
+            toggleQuickLook()
+            return .handled
+        }
+
         if ShortcutCatalog.focusSearch.matches(key: press.key, modifiers: press.modifiers),
            !appState.isFocusMode
         {
