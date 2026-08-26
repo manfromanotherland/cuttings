@@ -5,9 +5,9 @@ import Vision
 
 /// On-device visual analysis available on Cuttings' macOS 14 baseline.
 struct AppleVisualAnalyzer: VisualAnalyzing, Sendable {
-    static let analyzerVersion = "vision-classify-r2+core-image-kmeans-srgb-v1"
+    static let analyzerVersion = "vision-classify-r2+core-image-kmeans-seeded-srgb-v1"
 
-    private static let maximumPixelDimension = 2_048
+    private static let maximumPixelDimension = 2048
     private let executor: VisualAnalysisExecutor
 
     init(maximumConcurrentAnalyses: Int = 2) {
@@ -42,10 +42,10 @@ struct AppleVisualAnalyzer: VisualAnalyzing, Sendable {
                 return lhs.identifier < rhs.identifier
             }
 
-            return VisualAnalysisResult(
+            return try VisualAnalysisResult(
                 analyzerVersion: Self.analyzerVersion,
                 labels: labels,
-                colors: try VisualPaletteExtractor.clusters(from: image)
+                colors: VisualPaletteExtractor.clusters(from: image)
             )
         }
     }

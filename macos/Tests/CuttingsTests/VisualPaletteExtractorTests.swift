@@ -4,16 +4,10 @@ import CoreGraphics
 import XCTest
 
 final class VisualPaletteExtractorTests: XCTestCase {
-    func testWeightedPaletteUnpremultipliesSaturatedClusterCentres() throws {
+    func testWeightedPalettePreservesClusterCentresIndependentlyOfWeights() throws {
         let colorSpace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
-        let blueColor = try XCTUnwrap(CGColor(
-            colorSpace: colorSpace,
-            components: [0, 0, 1, 1]
-        ))
-        let redColor = try XCTUnwrap(CGColor(
-            colorSpace: colorSpace,
-            components: [1, 0, 0, 1]
-        ))
+        let blueColor = try makeColor([0.2, 0.4, 0.8, 1], colorSpace: colorSpace)
+        let redColor = try makeColor([0.8, 0.25, 0.15, 1], colorSpace: colorSpace)
         let image = try makeImage(width: 100, height: 100) { context in
             context.setFillColor(blueColor)
             context.fill(CGRect(x: 0, y: 0, width: 75, height: 100))
@@ -23,18 +17,31 @@ final class VisualPaletteExtractorTests: XCTestCase {
 
         let clusters = try VisualPaletteExtractor.clusters(from: image)
         let blue = try XCTUnwrap(clusters.first {
-            $0.blue > 0.9 && $0.red < 0.1 && $0.green < 0.1
+            $0.blue > $0.red
         })
         let red = try XCTUnwrap(clusters.first {
-            $0.red > 0.9 && $0.green < 0.1 && $0.blue < 0.1
+            $0.red > $0.blue
         })
 
+        XCTAssertEqual(blue.red, 0.2, accuracy: 0.03)
+        XCTAssertEqual(blue.green, 0.4, accuracy: 0.03)
+        XCTAssertEqual(blue.blue, 0.8, accuracy: 0.03)
         XCTAssertEqual(blue.weight, 0.75, accuracy: 0.03)
+        XCTAssertEqual(red.red, 0.8, accuracy: 0.03)
+        XCTAssertEqual(red.green, 0.25, accuracy: 0.03)
+        XCTAssertEqual(red.blue, 0.15, accuracy: 0.03)
         XCTAssertEqual(red.weight, 0.25, accuracy: 0.03)
         XCTAssertEqual(clusters.reduce(0) { $0 + $1.weight }, 1, accuracy: 0.000_001)
     }
 
-    func testFixedMeansProduceARepeatablePalette() throws {
+    private func makeColor(
+        _ components: [CGFloat],
+        colorSpace: CGColorSpace
+    ) throws -> CGColor {
+        try XCTUnwrap(CGColor(colorSpace: colorSpace, components: components))
+    }
+
+    func testImageDerivedMeansProduceARepeatablePalette() throws {
         let image = try makeImage(width: 32, height: 16) { context in
             context.setFillColor(CGColor(red: 0.2, green: 0.55, blue: 0.85, alpha: 1))
             context.fill(CGRect(x: 0, y: 0, width: 32, height: 16))
@@ -50,6 +57,26 @@ final class VisualPaletteExtractorTests: XCTestCase {
             XCTAssertEqual(lhs.blue, rhs.blue, accuracy: 0.001)
             XCTAssertEqual(lhs.weight, rhs.weight, accuracy: 0.001)
         }
+    }
+
+    func testPaletteSeparatesAPaleSurfaceFromAWhiteCanvas() throws {
+        let image = try makeImage(width: 100, height: 100) { context in
+            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 50, height: 100))
+            context.setFillColor(CGColor(red: 0.82, green: 0.9, blue: 1, alpha: 1))
+            context.fill(CGRect(x: 50, y: 0, width: 50, height: 100))
+        }
+
+        let clusters = try VisualPaletteExtractor.clusters(from: image)
+        let white = clusters.first {
+            $0.red > 0.97 && $0.green > 0.97 && $0.blue > 0.97
+        }
+        let paleBlue = clusters.first {
+            $0.red < 0.9 && $0.green < 0.95 && $0.blue > 0.97
+        }
+
+        XCTAssertEqual(try XCTUnwrap(white).weight, 0.5, accuracy: 0.03)
+        XCTAssertEqual(try XCTUnwrap(paleBlue).weight, 0.5, accuracy: 0.03)
     }
 
     func testTransparentPixelsUseTheFixedWhiteBackground() throws {

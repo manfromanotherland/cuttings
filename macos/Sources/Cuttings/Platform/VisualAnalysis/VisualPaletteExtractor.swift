@@ -7,7 +7,8 @@ import Foundation
 
 /// Deterministic Core Image k-means palette extraction.
 ///
-/// Explicit, fixed seed colours avoid a random initial palette. Near-identical
+/// Image-derived seed colours avoid both random output and the tendency of
+/// fixed colour-cube seeds to collapse pale surfaces into white. Near-identical
 /// output clusters are merged, zero-weight clusters are discarded, and the
 /// remainder is normalised and ordered by descending coverage.
 enum VisualPaletteExtractor {
@@ -64,7 +65,11 @@ enum VisualPaletteExtractor {
         }
 
         let output = try paletteImage(from: image, colorSpace: sRGB)
-        let pixels = try renderedPixels(from: output, colorSpace: sRGB)
+        let pixels = try renderedPixels(
+            from: output.image,
+            clusterCount: output.count,
+            colorSpace: sRGB
+        )
         let rawClusters = clusters(from: pixels)
         guard !rawClusters.isEmpty else {
             throw VisualAnalysisError.paletteExtractionFailed
@@ -75,7 +80,7 @@ enum VisualPaletteExtractor {
     private static func paletteImage(
         from image: CGImage,
         colorSpace: CGColorSpace
-    ) throws -> CIImage {
+    ) throws -> (image: CIImage, count: Int) {
         let input = CIImage(cgImage: image, options: [.colorSpace: colorSpace])
         // Transparent pixels have no intrinsic visible colour. Composite them
         // over a fixed white background so palette weights remain repeatable
@@ -85,8 +90,13 @@ enum VisualPaletteExtractor {
         let filter = CIFilter.kMeans()
         filter.inputImage = opaqueInput
         filter.extent = opaqueInput.extent
-        filter.inputMeans = initialMeans(colorSpace: colorSpace)
-        filter.count = clusterCount
+        let seeds = try VisualPaletteSeedGenerator.palette(
+            from: image,
+            colorSpace: colorSpace,
+            maximumCount: clusterCount
+        )
+        filter.inputMeans = seeds.image
+        filter.count = seeds.count
         filter.passes = passes
         // The perceptual mode emits means encoded in Core Image's internal
         // perceptual space. Keep clustering in the explicitly managed sRGB
@@ -96,11 +106,12 @@ enum VisualPaletteExtractor {
         guard let output = filter.outputImage else {
             throw VisualAnalysisError.paletteExtractionFailed
         }
-        return output
+        return (output, seeds.count)
     }
 
     private static func renderedPixels(
         from output: CIImage,
+        clusterCount: Int,
         colorSpace: CGColorSpace
     ) throws -> [Float] {
         let context = CIContext(options: [
@@ -111,7 +122,13 @@ enum VisualPaletteExtractor {
         var pixels = [Float](repeating: 0, count: clusterCount * 4)
         do {
             try pixels.withUnsafeMutableBytes { buffer in
-                try render(output, into: buffer, colorSpace: colorSpace, context: context)
+                try render(
+                    output,
+                    into: buffer,
+                    clusterCount: clusterCount,
+                    colorSpace: colorSpace,
+                    context: context
+                )
             }
         } catch {
             throw VisualAnalysisError.paletteExtractionFailed
@@ -122,6 +139,7 @@ enum VisualPaletteExtractor {
     private static func render(
         _ output: CIImage,
         into buffer: UnsafeMutableRawBufferPointer,
+        clusterCount: Int,
         colorSpace: CGColorSpace,
         context: CIContext
     ) throws {
@@ -135,7 +153,11 @@ enum VisualPaletteExtractor {
             bytesPerRow: clusterCount * 4 * MemoryLayout<Float>.size,
             format: .RGBAf
         )
-        destination.alphaMode = .unpremultiplied
+        // CIKMeans uses alpha as a semantic cluster weight, not pixel opacity,
+        // while its RGB channels already contain the independent cluster
+        // centre. Preserve those raw channels: an unpremultiplied destination
+        // would divide each centre by its weight and wash pale colours to white.
+        destination.alphaMode = .premultiplied
         destination.colorSpace = colorSpace
         let task = try context.startTask(
             toRender: output,
@@ -161,29 +183,6 @@ enum VisualPaletteExtractor {
                 weight: clamped(weight)
             )
         }
-    }
-
-    private static func initialMeans(colorSpace: CGColorSpace) -> CIImage? {
-        // Fixed corners of sRGB plus middle grey give every run identical
-        // starting conditions while covering the full colour cube.
-        let values: [Float] = [
-            0, 0, 0, 1,
-            1, 1, 1, 1,
-            1, 0, 0, 1,
-            0, 1, 0, 1,
-            0, 0, 1, 1,
-            0, 1, 1, 1,
-            1, 0, 1, 1,
-            0.5, 0.5, 0.5, 1
-        ]
-        let data = values.withUnsafeBytes { Data($0) }
-        return CIImage(
-            bitmapData: data,
-            bytesPerRow: clusterCount * 4 * MemoryLayout<Float>.size,
-            size: CGSize(width: clusterCount, height: 1),
-            format: .RGBAf,
-            colorSpace: colorSpace
-        )
     }
 
     private static func normalized(

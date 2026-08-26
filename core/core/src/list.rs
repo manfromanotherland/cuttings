@@ -114,9 +114,10 @@ pub struct ReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
-    /// Highest-coverage exact sRGB cluster from the current derived visual
-    /// analysis. This is presentation metadata only; the palette cache remains
-    /// disposable and the reading file stays authoritative.
+    /// Representative exact sRGB cluster from the current derived visual
+    /// analysis. A large extreme-neutral canvas may yield to a substantial
+    /// secondary surface colour. This is presentation metadata only; the
+    /// palette cache remains disposable and the reading file stays authoritative.
     pub dominant_color: Option<WeightedColor>,
     pub media_aspect_ratio: Option<f64>,
     pub canonical_url: String,
@@ -578,10 +579,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
                 rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
                 lightweight, has_note, media_aspect_ratio,
-                (SELECT CAST(json_extract(
-                    CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END,
-                    '$[0]'
-                 ) AS TEXT) FROM visual_analysis a
+                (SELECT CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END
+                 FROM visual_analysis a
                  WHERE a.content_hash=readings.visual_asset_hash
                    AND a.analyzer_version=readings.visual_analyzer_version
                    AND a.supported=1)
@@ -679,10 +678,8 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
                 rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
                 lightweight, has_note, media_aspect_ratio,
-                (SELECT CAST(json_extract(
-                    CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END,
-                    '$[0]'
-                 ) AS TEXT) FROM visual_analysis a
+                (SELECT CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END
+                 FROM visual_analysis a
                  WHERE a.content_hash=readings.visual_asset_hash
                    AND a.analyzer_version=readings.visual_analyzer_version
                    AND a.supported=1),
@@ -752,10 +749,8 @@ fn list_readings_search(
                 r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset,
                 r.favicon_asset, r.theme_color, r.lightweight, r.has_note,
                 r.media_aspect_ratio,
-                (SELECT CAST(json_extract(
-                    CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END,
-                    '$[0]'
-                 ) AS TEXT) FROM visual_analysis a
+                (SELECT CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END
+                 FROM visual_analysis a
                  WHERE a.content_hash=r.visual_asset_hash
                    AND a.analyzer_version=r.visual_analyzer_version
                    AND a.supported=1)
@@ -804,10 +799,11 @@ fn list_readings_search(
 fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
     let tags_json: String = row.get(13)?;
     let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
-    let dominant_color_json: Option<String> = row.get(24)?;
-    let dominant_color = dominant_color_json
+    let palette_json: Option<String> = row.get(24)?;
+    let dominant_color = palette_json
         .as_deref()
-        .and_then(|json| serde_json::from_str::<WeightedColor>(json).ok());
+        .and_then(|json| serde_json::from_str::<Vec<WeightedColor>>(json).ok())
+        .and_then(|palette| crate::visual_index::representative_placeholder_color(&palette));
     Ok(ReadingRow {
         id: row.get(0)?,
         title: row.get(1)?,

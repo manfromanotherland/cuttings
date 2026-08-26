@@ -29,6 +29,8 @@ const MIN_LABEL_CONFIDENCE: f64 = 0.15;
 const MAX_LABELS: usize = 32;
 const MAX_CACHED_OBSERVATIONS: usize = 128;
 const MAX_PALETTE_CLUSTERS: usize = 32;
+const MIN_PLACEHOLDER_SURFACE_WEIGHT: f64 = 0.20;
+const MIN_PLACEHOLDER_SURFACE_SHARE: f64 = 0.35;
 const VISUAL_CACHE_DIR: &str = "visual-assets";
 const STAGING_PREFIX: &str = ".stage-";
 const STAGING_SUFFIX: &str = ".tmp";
@@ -754,6 +756,50 @@ fn normalize_identifier(identifier: &str) -> String {
         .join(" ")
 }
 
+/// Choose a stable palette cluster for the flat media placeholder.
+///
+/// A white or black canvas frequently wins raw pixel coverage even when a
+/// substantial tinted surface carries the image's visual identity. Promote
+/// that surface only when it is large enough in absolute and relative terms;
+/// tiny accents must not repaint an otherwise neutral image.
+pub(crate) fn representative_placeholder_color(palette: &[WeightedColor]) -> Option<WeightedColor> {
+    let valid = |sample: &&WeightedColor| sample.weight > 0.0 && validate_color(sample).is_ok();
+    let by_coverage = |lhs: &&WeightedColor, rhs: &&WeightedColor| {
+        lhs.weight
+            .total_cmp(&rhs.weight)
+            .then_with(|| lhs.red.total_cmp(&rhs.red))
+            .then_with(|| lhs.green.total_cmp(&rhs.green))
+            .then_with(|| lhs.blue.total_cmp(&rhs.blue))
+    };
+    let top = palette.iter().filter(valid).max_by(by_coverage)?;
+    if !is_extreme_neutral(top) {
+        return Some(top.clone());
+    }
+
+    let surface = palette
+        .iter()
+        .filter(valid)
+        .filter(|sample| !is_extreme_neutral(sample))
+        .max_by(by_coverage);
+    match surface {
+        Some(surface)
+            if surface.weight >= MIN_PLACEHOLDER_SURFACE_WEIGHT
+                && surface.weight >= top.weight * MIN_PLACEHOLDER_SURFACE_SHARE =>
+        {
+            Some(surface.clone())
+        }
+        _ => Some(top.clone()),
+    }
+}
+
+fn is_extreme_neutral(sample: &WeightedColor) -> bool {
+    let maximum = sample.red.max(sample.green).max(sample.blue);
+    let minimum = sample.red.min(sample.green).min(sample.blue);
+    let chroma = maximum - minimum;
+    let lightness = (maximum + minimum) / 2.0;
+    chroma < 0.08 && (lightness <= 0.10 || lightness >= 0.90)
+}
+
 pub fn predominant_color(palette: &[WeightedColor]) -> Result<Option<PredominantColor>> {
     let mut weights: BTreeMap<&'static str, (PredominantColor, f64)> = BTreeMap::new();
     for sample in palette {
@@ -994,6 +1040,48 @@ mod tests {
     }
 
     #[test]
+    fn placeholder_color_ignores_a_tiny_accent_on_a_white_canvas() {
+        let white = WeightedColor {
+            red: 1.0,
+            green: 1.0,
+            blue: 1.0,
+            weight: 0.92,
+        };
+        let palette = vec![
+            white.clone(),
+            WeightedColor {
+                red: 0.1,
+                green: 0.3,
+                blue: 0.9,
+                weight: 0.08,
+            },
+        ];
+
+        assert_eq!(representative_placeholder_color(&palette), Some(white));
+    }
+
+    #[test]
+    fn placeholder_color_keeps_an_extreme_neutral_when_it_is_the_image() {
+        let black = WeightedColor {
+            red: 0.02,
+            green: 0.02,
+            blue: 0.02,
+            weight: 0.8,
+        };
+        let palette = vec![
+            black.clone(),
+            WeightedColor {
+                red: 0.45,
+                green: 0.45,
+                blue: 0.45,
+                weight: 0.2,
+            },
+        ];
+
+        assert_eq!(representative_placeholder_color(&palette), Some(black));
+    }
+
+    #[test]
     fn scanner_hashes_raw_bytes_and_exposes_only_safe_assets() {
         let (_dir, library, conn, id, cache_root) = setup_image(b"raw preview bytes");
         let assets = current_visual_assets(&conn, &library, &cache_root).unwrap();
@@ -1148,6 +1236,50 @@ mod tests {
         .unwrap();
         assert_eq!(rebuilt.len(), 1);
         assert_eq!(rebuilt[0].dominant_color, chair[0].dominant_color);
+    }
+
+    #[test]
+    fn white_canvas_does_not_hide_a_meaningful_placeholder_color() {
+        let (_dir, library, conn, id, cache_root) = setup_image(b"white canvas image");
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
+            .unwrap()
+            .tasks
+            .pop()
+            .unwrap();
+        let result = VisualAnalysisResult {
+            supported: true,
+            labels: vec![],
+            palette: vec![
+                WeightedColor {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                    weight: 0.7,
+                },
+                WeightedColor {
+                    red: 0.15,
+                    green: 0.35,
+                    blue: 0.85,
+                    weight: 0.3,
+                },
+            ],
+        };
+        assert!(complete_visual_analysis(&conn, &library, &task, &result).unwrap());
+
+        let row = list_readings(&conn, &ListOptions::default())
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(row.id, id);
+        assert_eq!(
+            row.dominant_color,
+            Some(WeightedColor {
+                red: 0.15,
+                green: 0.35,
+                blue: 0.85,
+                weight: 0.3,
+            })
+        );
     }
 
     #[test]
