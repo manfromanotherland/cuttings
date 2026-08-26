@@ -180,15 +180,16 @@ struct CuttingsCardView: View {
     }
 
     private var articleText: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: CuttingsCardTextMetrics.articleFooterSpacing) {
             Text(row.displayTitle)
-                .font(.headline.weight(.semibold))
+                .font(Font(CuttingsCardTextMetrics.articleTitleFont))
                 .foregroundStyle(articlePrimaryForeground)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
             sourceLine(foreground: articleSecondaryForeground)
+                .frame(minHeight: CuttingsCardTextMetrics.articleFooterSourceLineHeight)
         }
-        .padding(15)
+        .padding(CuttingsCardTextMetrics.articleFooterPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

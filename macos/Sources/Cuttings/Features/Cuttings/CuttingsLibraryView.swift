@@ -398,7 +398,10 @@ extension CuttingsLibraryView {
             if row.previewAsset != nil {
                 let previewHeight = row.articlePreviewHeight(for: width)
                     ?? width / ReadingRow.socialPreviewAspectRatio
-                return previewHeight + 76
+                return previewHeight + cardTextMetrics.articleFooterHeight(
+                    for: row.displayTitle,
+                    width: width
+                )
             }
             let titleLines = min(5, max(1, Int(ceil(Double(row.displayTitle.count) / 24))))
             let excerptLines = min(6, max(0, Int(ceil(Double(row.excerpt?.count ?? 0) / 34))))
