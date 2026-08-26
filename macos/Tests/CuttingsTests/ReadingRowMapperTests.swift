@@ -20,6 +20,7 @@ final class ReadingRowMapperTests: XCTestCase {
             previewAsset: "assets/poster.jpg",
             faviconAsset: "assets/favicon.ico",
             themeColor: "#123456",
+            dominantColor: FfiWeightedColor(red: 0.1, green: 0.2, blue: 0.3, weight: 0.6),
             mediaAspectRatio: 16.0 / 9.0,
             canonicalUrl: "https://example.com/article?canonical",
             author: "Ada Lovelace",
@@ -60,6 +61,10 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.previewAsset, ffi.previewAsset)
         XCTAssertEqual(row.faviconAsset, ffi.faviconAsset)
         XCTAssertEqual(row.themeColor, ffi.themeColor)
+        XCTAssertEqual(row.dominantColor?.red, ffi.dominantColor?.red)
+        XCTAssertEqual(row.dominantColor?.green, ffi.dominantColor?.green)
+        XCTAssertEqual(row.dominantColor?.blue, ffi.dominantColor?.blue)
+        XCTAssertEqual(row.dominantColor?.weight, ffi.dominantColor?.weight)
         XCTAssertEqual(row.mediaAspectRatio, ffi.mediaAspectRatio)
     }
 
@@ -71,6 +76,7 @@ final class ReadingRowMapperTests: XCTestCase {
         ffi.previewAsset = nil
         ffi.faviconAsset = nil
         ffi.themeColor = nil
+        ffi.dominantColor = nil
         ffi.mediaAspectRatio = nil
         ffi.author = nil
         ffi.site = nil
@@ -90,6 +96,7 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertNil(row.previewAsset)
         XCTAssertNil(row.faviconAsset)
         XCTAssertNil(row.themeColor)
+        XCTAssertNil(row.dominantColor)
         XCTAssertNil(row.mediaAspectRatio)
         XCTAssertTrue(row.tags.isEmpty)
     }
@@ -109,5 +116,10 @@ final class ReadingRowMapperTests: XCTestCase {
         var mediaRatioChanged = base
         mediaRatioChanged.mediaAspectRatio = 4.0 / 3.0
         XCTAssertNotEqual(base, mediaRatioChanged)
+        var dominantColorChanged = base
+        dominantColorChanged.dominantColor = ReadingColor(
+            red: 0.9, green: 0.8, blue: 0.7, weight: 0.6
+        )
+        XCTAssertNotEqual(base, dominantColorChanged)
     }
 }

@@ -56,8 +56,9 @@ pub use tags::{add_tag, list_tags, remove_tag, MAX_TAG_LEN};
 pub use types::{LibraryRoot, Metadata, Reading, ReadingKind};
 pub use url_norm::normalize_url;
 pub use visual_index::{
-    complete_visual_analysis, current_visual_assets, pending_visual_analysis, PredominantColor,
-    VisualAnalysisResult, VisualAnalysisTask, VisualAsset, VisualLabel, WeightedColor,
+    complete_visual_analysis, current_visual_assets, pending_visual_analysis,
+    PendingVisualAnalysis, PredominantColor, VisualAnalysisResult, VisualAnalysisTask, VisualAsset,
+    VisualLabel, WeightedColor,
 };
 pub use writer::{find_by_media, find_by_url, sha256_hex, write_reading};
 

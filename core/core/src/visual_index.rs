@@ -52,6 +52,12 @@ pub struct VisualAnalysisTask {
     pub analyzer_version: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PendingVisualAnalysis {
+    pub tasks: Vec<VisualAnalysisTask>,
+    pub hydrated_count: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VisualLabel {
     pub identifier: String,
@@ -519,7 +525,7 @@ pub fn pending_visual_analysis(
     cache_root: &Path,
     analyzer_version: &str,
     limit: usize,
-) -> Result<Vec<VisualAnalysisTask>> {
+) -> Result<PendingVisualAnalysis> {
     if analyzer_version.trim().is_empty() {
         bail!("analyzer version must not be blank");
     }
@@ -528,7 +534,7 @@ pub fn pending_visual_analysis(
     // Exact cache hits need no file I/O: the indexed hash was produced by the
     // scanner's safe open, and completion also revalidated it. This makes
     // repeated small batches O(batch), not O(library size) asset reads.
-    conn.execute(
+    let hydrated_count = conn.execute(
         "UPDATE readings SET
            visual_analyzer_version=?1,
            visual_terms=COALESCE((
@@ -591,7 +597,10 @@ pub fn pending_visual_analysis(
             Err(error) => eprintln!("visual index: could not stage task for {id}: {error}"),
         }
     }
-    Ok(pending)
+    Ok(PendingVisualAnalysis {
+        tasks: pending,
+        hydrated_count,
+    })
 }
 
 /// Complete a task only if the same safe path still contains the same bytes.
@@ -717,9 +726,16 @@ fn normalize_palette(palette: &[WeightedColor]) -> Result<Vec<WeightedColor>> {
     let mut palette: Vec<WeightedColor> = palette
         .iter()
         .filter(|sample| sample.weight > 0.0)
-        .take(MAX_PALETTE_CLUSTERS)
         .cloned()
         .collect();
+    palette.sort_by(|a, b| {
+        b.weight
+            .total_cmp(&a.weight)
+            .then_with(|| b.red.total_cmp(&a.red))
+            .then_with(|| b.green.total_cmp(&a.green))
+            .then_with(|| b.blue.total_cmp(&a.blue))
+    });
+    palette.truncate(MAX_PALETTE_CLUSTERS);
     let total: f64 = palette.iter().map(|sample| sample.weight).sum();
     if total > 0.0 {
         for sample in &mut palette {
@@ -867,8 +883,8 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::{
-        apply_diffs, diff, import_image, list_readings, open_index, rebuild, scan_library,
-        view_counts, CountScope, ListOptions, PredominantColor,
+        apply_diffs, diff, get_reading, import_image, list_readings, open_index, rebuild,
+        scan_library, view_counts, CountScope, ListOptions, PredominantColor,
     };
 
     fn setup_image(bytes: &[u8]) -> (TempDir, LibraryRoot, Connection, String, PathBuf) {
@@ -901,16 +917,16 @@ mod tests {
             ],
             palette: vec![
                 WeightedColor {
-                    red: 0.1,
-                    green: 0.25,
-                    blue: 0.9,
-                    weight: 3.0,
-                },
-                WeightedColor {
                     red: 0.9,
                     green: 0.1,
                     blue: 0.1,
                     weight: 1.0,
+                },
+                WeightedColor {
+                    red: 0.1,
+                    green: 0.25,
+                    blue: 0.9,
+                    weight: 3.0,
                 },
             ],
         }
@@ -1027,6 +1043,7 @@ mod tests {
         let (_dir, library, conn, id, cache_root) = setup_image(b"semantic image");
         let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10)
             .unwrap()
+            .tasks
             .pop()
             .unwrap();
         assert!(complete_visual_analysis(&conn, &library, &task, &supported_result()).unwrap());
@@ -1062,6 +1079,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(chair.iter().map(|row| &row.id).collect::<Vec<_>>(), [&id]);
+        assert_eq!(
+            chair[0].dominant_color,
+            Some(WeightedColor {
+                red: 0.1,
+                green: 0.25,
+                blue: 0.9,
+                weight: 0.75,
+            })
+        );
         let blue = list_readings(
             &conn,
             &ListOptions {
@@ -1071,6 +1097,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(blue.iter().map(|row| &row.id).collect::<Vec<_>>(), [&id]);
+        assert_eq!(blue[0].dominant_color, chair[0].dominant_color);
+        assert_eq!(
+            get_reading(&conn, &id).unwrap().unwrap().0.dominant_color,
+            chair[0].dominant_color
+        );
         assert_eq!(
             list_readings(
                 &conn,
@@ -1100,24 +1131,103 @@ mod tests {
         assert!(
             pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10)
                 .unwrap()
+                .tasks
                 .is_empty()
         );
         let cache_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM visual_analysis", [], |row| row.get(0))
             .unwrap();
         assert_eq!(cache_count, 1);
+        let rebuilt = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("dining room".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(rebuilt.len(), 1);
+        assert_eq!(rebuilt[0].dominant_color, chair[0].dominant_color);
+    }
+
+    #[test]
+    fn exact_cache_hit_reports_hydration_and_restores_dominant_color() {
+        let (_dir, library, conn, id, cache_root) = setup_image(b"cached visual analysis");
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
+            .unwrap()
+            .tasks
+            .pop()
+            .unwrap();
+        assert!(complete_visual_analysis(&conn, &library, &task, &supported_result()).unwrap());
+
+        conn.execute(
+            "UPDATE readings SET visual_analyzer_version=NULL,
+                                 visual_terms='',
+                                 predominant_color=NULL
+             WHERE id=?1",
+            params![id],
+        )
+        .unwrap();
         assert_eq!(
-            list_readings(
+            list_readings(&conn, &ListOptions::default()).unwrap()[0].dominant_color,
+            None
+        );
+
+        let pending =
+            pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10).unwrap();
+        assert!(pending.tasks.is_empty());
+        assert_eq!(pending.hydrated_count, 1);
+        assert_eq!(
+            list_readings(&conn, &ListOptions::default()).unwrap()[0].dominant_color,
+            Some(WeightedColor {
+                red: 0.1,
+                green: 0.25,
+                blue: 0.9,
+                weight: 0.75,
+            })
+        );
+
+        let already_hydrated =
+            pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10).unwrap();
+        assert!(already_hydrated.tasks.is_empty());
+        assert_eq!(already_hydrated.hydrated_count, 0);
+    }
+
+    #[test]
+    fn malformed_cached_palette_never_breaks_reading_queries() {
+        let (_dir, library, conn, id, cache_root) = setup_image(b"malformed palette cache");
+        let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
+            .unwrap()
+            .tasks
+            .pop()
+            .unwrap();
+        assert!(complete_visual_analysis(&conn, &library, &task, &supported_result()).unwrap());
+        for malformed_palette in ["{malformed", "[42]"] {
+            conn.execute(
+                "UPDATE visual_analysis SET palette_json=?1
+                 WHERE content_hash=?2 AND analyzer_version=?3",
+                params![malformed_palette, task.content_hash, task.analyzer_version],
+            )
+            .unwrap();
+
+            let listed = list_readings(&conn, &ListOptions::default()).unwrap();
+            assert_eq!(listed.len(), 1);
+            assert_eq!(listed[0].dominant_color, None);
+            let searched = list_readings(
                 &conn,
                 &ListOptions {
-                    query: Some("dining room".into()),
+                    query: Some("chair".into()),
                     ..Default::default()
-                }
+                },
             )
-            .unwrap()
-            .len(),
-            1
-        );
+            .unwrap();
+            assert_eq!(searched.len(), 1);
+            assert_eq!(searched[0].dominant_color, None);
+            assert_eq!(
+                get_reading(&conn, &id).unwrap().unwrap().0.dominant_color,
+                None
+            );
+        }
     }
 
     #[test]
@@ -1125,11 +1235,13 @@ mod tests {
         let (_dir, library, conn, _id, cache_root) = setup_image(b"unsupported image");
         let older = pending_visual_analysis(&conn, &library, &cache_root, "vision-r1", 1)
             .unwrap()
+            .tasks
             .pop()
             .unwrap();
         assert!(complete_visual_analysis(&conn, &library, &older, &supported_result()).unwrap());
         let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
+            .tasks
             .pop()
             .unwrap();
         let unsupported = VisualAnalysisResult {
@@ -1141,15 +1253,21 @@ mod tests {
         assert!(
             pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
                 .unwrap()
+                .tasks
                 .is_empty()
         );
         assert_eq!(
             pending_visual_analysis(&conn, &library, &cache_root, "vision-r3", 1)
                 .unwrap()
+                .tasks
                 .len(),
             1
         );
         rebuild(&conn, &library).unwrap();
+        assert_eq!(
+            list_readings(&conn, &ListOptions::default()).unwrap()[0].dominant_color,
+            None
+        );
         assert!(list_readings(
             &conn,
             &ListOptions {
@@ -1167,6 +1285,7 @@ mod tests {
         let old_scan = scan_library(&library).unwrap();
         let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
+            .tasks
             .pop()
             .unwrap();
         let old_staged_path = task.absolute_file_path.clone();
@@ -1177,6 +1296,7 @@ mod tests {
         assert!(!complete_visual_analysis(&conn, &library, &task, &supported_result()).unwrap());
         let replacement = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
+            .tasks
             .pop()
             .unwrap();
         let replacement_staged_path = replacement.absolute_file_path.clone();
@@ -1230,6 +1350,7 @@ mod tests {
         );
         let task = pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 1)
             .unwrap()
+            .tasks
             .pop()
             .unwrap();
         assert_eq!(task.absolute_file_path, asset.absolute_file_path);
@@ -1246,6 +1367,7 @@ mod tests {
         assert!(
             pending_visual_analysis(&conn, &library, &cache_root, "vision-r2", 10)
                 .unwrap()
+                .tasks
                 .is_empty()
         );
         assert!(!Path::new(&asset.absolute_file_path).exists());

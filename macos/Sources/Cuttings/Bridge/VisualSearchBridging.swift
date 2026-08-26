@@ -11,6 +11,52 @@ struct VisualAnalysisWorkItem: Equatable, Sendable {
     let analyzerVersion: String
 }
 
+/// Work still requiring Vision plus exact cache hits applied to reading rows.
+struct PendingVisualAnalysis: Equatable, Sendable {
+    let tasks: [VisualAnalysisWorkItem]
+    let hydratedCount: Int
+}
+
+struct VisualSearchReconciliation: Equatable, Sendable {
+    let analyzedCount: Int
+    let hydratedAnalysisCount: Int
+    let spotlightIndexedCount: Int
+    let spotlightDeletedCount: Int
+    let analysisPublicationToken: UInt64
+    private let searchStateMayHaveChanged: Bool
+
+    init(
+        analyzedCount: Int,
+        hydratedAnalysisCount: Int = 0,
+        spotlightIndexedCount: Int,
+        spotlightDeletedCount: Int,
+        analysisPublicationToken: UInt64 = 0,
+        searchStateMayHaveChanged: Bool = false
+    ) {
+        self.analyzedCount = analyzedCount
+        self.hydratedAnalysisCount = hydratedAnalysisCount
+        self.spotlightIndexedCount = spotlightIndexedCount
+        self.spotlightDeletedCount = spotlightDeletedCount
+        self.analysisPublicationToken = analysisPublicationToken
+        self.searchStateMayHaveChanged = searchStateMayHaveChanged
+    }
+
+    var changedSearchResults: Bool {
+        searchStateMayHaveChanged
+            || changedCardPresentation
+            || spotlightIndexedCount > 0
+            || spotlightDeletedCount > 0
+    }
+
+    var changedCardPresentation: Bool {
+        analyzedCount > 0 || hydratedAnalysisCount > 0
+    }
+
+    func shouldReloadReadings(hasActiveSearch: Bool) -> Bool {
+        changedCardPresentation || (changedSearchResults && hasActiveSearch)
+    }
+}
+
 /// One current staged visual asset that can be donated to platform search.
 struct VisualAssetSnapshot: Equatable, Sendable {
     let readingID: String
@@ -49,7 +95,7 @@ struct VisualAnalysisCompletion: Equatable, Sendable {
 protocol VisualSearchCore: Sendable {
     func pendingVisualAnalysis(
         analyzerVersion: String, limit: UInt32
-    ) async throws -> [VisualAnalysisWorkItem]
+    ) async throws -> PendingVisualAnalysis
     @discardableResult func completeVisualAnalysis(
         task: VisualAnalysisWorkItem, result: VisualAnalysisCompletion
     ) async throws -> Bool
@@ -75,6 +121,13 @@ extension VisualAnalysisWorkItem {
             contentHash: contentHash,
             analyzerVersion: analyzerVersion
         )
+    }
+}
+
+extension PendingVisualAnalysis {
+    init(_ pending: FfiPendingVisualAnalysis) {
+        tasks = pending.tasks.map(VisualAnalysisWorkItem.init)
+        hydratedCount = Int(pending.hydratedCount)
     }
 }
 

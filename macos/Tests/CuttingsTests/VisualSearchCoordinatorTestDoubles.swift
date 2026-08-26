@@ -13,16 +13,19 @@ actor CoordinatorFakeVisualCore: VisualSearchCore {
     }
 
     private let tasks: [VisualAnalysisWorkItem]
+    private let hydratedCount: Int
     private let failsPendingAnalysis: Bool
     private let failingCompletionReadingIDs: Set<String>
     private var completions: [Completion] = []
 
     init(
         tasks: [VisualAnalysisWorkItem] = [],
+        hydratedCount: Int = 0,
         failsPendingAnalysis: Bool = false,
         failingCompletionReadingIDs: Set<String> = []
     ) {
         self.tasks = tasks
+        self.hydratedCount = hydratedCount
         self.failsPendingAnalysis = failsPendingAnalysis
         self.failingCompletionReadingIDs = failingCompletionReadingIDs
     }
@@ -30,11 +33,11 @@ actor CoordinatorFakeVisualCore: VisualSearchCore {
     func pendingVisualAnalysis(
         analyzerVersion _: String,
         limit _: UInt32
-    ) async throws -> [VisualAnalysisWorkItem] {
+    ) async throws -> PendingVisualAnalysis {
         if failsPendingAnalysis {
             throw CoordinatorVisualCoreError.failed
         }
-        return tasks
+        return PendingVisualAnalysis(tasks: tasks, hydratedCount: hydratedCount)
     }
 
     func completeVisualAnalysis(
@@ -170,9 +173,9 @@ actor CoordinatorGenerationCore: VisualSearchCore {
     func pendingVisualAnalysis(
         analyzerVersion _: String,
         limit _: UInt32
-    ) async throws -> [VisualAnalysisWorkItem] {
+    ) async throws -> PendingVisualAnalysis {
         pendingReadCount += 1
-        return []
+        return PendingVisualAnalysis(tasks: [], hydratedCount: 0)
     }
 
     func completeVisualAnalysis(

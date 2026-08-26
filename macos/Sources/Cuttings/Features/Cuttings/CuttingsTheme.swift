@@ -93,6 +93,27 @@ enum CuttingsTheme {
         articlePalette(for: row)?.background.color ?? card
     }
 
+    static func previewPalette(for row: ReadingRow) -> CardThemePalette? {
+        if let color = row.dominantColor {
+            return CardThemePalette(
+                background: CardSRGBColor(red: color.red, green: color.green, blue: color.blue)
+            )
+        }
+        return articlePalette(for: row)
+    }
+
+    static func previewBackgroundColor(for row: ReadingRow) -> CardSRGBColor? {
+        previewPalette(for: row)?.background
+    }
+
+    static func previewPlaceholderBackground(for row: ReadingRow) -> Color {
+        previewBackgroundColor(for: row)?.color ?? card
+    }
+
+    static func previewPlaceholderForeground(for row: ReadingRow) -> Color {
+        previewPalette(for: row)?.foreground.color ?? .secondary
+    }
+
     static func cardTint(for _: String) -> Color {
         card
     }

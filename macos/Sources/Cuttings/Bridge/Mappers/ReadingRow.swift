@@ -30,6 +30,26 @@ enum ReadingKind: String, CaseIterable, Sendable {
     }
 }
 
+/// The highest-coverage exact sRGB cluster from derived visual analysis.
+/// It is cached per device and never becomes part of the Markdown contract.
+struct ReadingColor: Equatable, Sendable {
+    let red: Double
+    let green: Double
+    let blue: Double
+    let weight: Double
+
+    init(red: Double, green: Double, blue: Double, weight: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.weight = weight
+    }
+
+    init(_ color: FfiWeightedColor) {
+        self.init(red: color.red, green: color.green, blue: color.blue, weight: color.weight)
+    }
+}
+
 /// A board/search presentation snapshot of a reading, kept apart from the
 /// `FfiReadingRow` boundary DTO so feature code speaks app language rather than
 /// "this came from the Rust FFI" (see ADR 0001). It mirrors the boundary fields
@@ -61,6 +81,7 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var previewAsset: String?
     var faviconAsset: String?
     var themeColor: String?
+    var dominantColor: ReadingColor?
     var mediaAspectRatio: Double?
 }
 
@@ -90,6 +111,7 @@ extension ReadingRow {
         previewAsset = row.previewAsset
         faviconAsset = row.faviconAsset
         themeColor = row.themeColor
+        dominantColor = row.dominantColor.map(ReadingColor.init)
         mediaAspectRatio = row.mediaAspectRatio
     }
 }

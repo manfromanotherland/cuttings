@@ -35,12 +35,12 @@ actor CoreBridge {
 
     func pendingVisualAnalysis(
         analyzerVersion: String, limit: UInt32
-    ) throws -> [VisualAnalysisWorkItem] {
-        try database.pendingVisualAnalysis(
+    ) throws -> PendingVisualAnalysis {
+        try PendingVisualAnalysis(database.pendingVisualAnalysis(
             libraryPath: libraryPath,
             analyzerVersion: analyzerVersion,
             limit: limit
-        ).map(VisualAnalysisWorkItem.init)
+        ))
     }
 
     @discardableResult

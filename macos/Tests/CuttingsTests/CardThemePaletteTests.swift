@@ -46,6 +46,39 @@ final class CardThemePaletteTests: XCTestCase {
         XCTAssertNil(CuttingsTheme.articlePalette(for: row))
     }
 
+    func testImagePreviewUsesItsExactDominantColor() throws {
+        let dominant = ReadingColor(red: 0.12, green: 0.34, blue: 0.56, weight: 0.72)
+        let row = makeReadingRow(kind: .image, dominantColor: dominant)
+
+        let color = try XCTUnwrap(CuttingsTheme.previewBackgroundColor(for: row))
+        XCTAssertEqual(color.red, dominant.red)
+        XCTAssertEqual(color.green, dominant.green)
+        XCTAssertEqual(color.blue, dominant.blue)
+    }
+
+    func testExactDominantColorTakesPrecedenceOverArticleThemeColor() throws {
+        let dominant = ReadingColor(red: 0.12, green: 0.34, blue: 0.56, weight: 0.72)
+        var article = makeReadingRow(kind: .article, dominantColor: dominant)
+        article.themeColor = "#abcdef"
+
+        let color = try XCTUnwrap(CuttingsTheme.previewBackgroundColor(for: article))
+        XCTAssertEqual(color.red, dominant.red)
+        XCTAssertEqual(color.green, dominant.green)
+        XCTAssertEqual(color.blue, dominant.blue)
+    }
+
+    func testPreviewWithoutAnalysisKeepsTheExistingFallback() throws {
+        let image = makeReadingRow(kind: .image)
+        XCTAssertNil(CuttingsTheme.previewBackgroundColor(for: image))
+
+        var article = makeReadingRow()
+        article.themeColor = "#123456"
+        XCTAssertEqual(
+            try XCTUnwrap(CuttingsTheme.previewBackgroundColor(for: article)),
+            CardSRGBColor(hex: "#123456")
+        )
+    }
+
     func testChosenForegroundMeetsTextContrastAcrossSRGBSamples() {
         for red in stride(from: 0, through: 255, by: 17) {
             for green in stride(from: 0, through: 255, by: 17) {

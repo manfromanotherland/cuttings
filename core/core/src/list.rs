@@ -3,7 +3,7 @@
 use anyhow::Result;
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 
-use crate::{PredominantColor, ReadingKind};
+use crate::{PredominantColor, ReadingKind, WeightedColor};
 
 /// Smart-view filter applied when listing readings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +114,10 @@ pub struct ReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
+    /// Highest-coverage exact sRGB cluster from the current derived visual
+    /// analysis. This is presentation metadata only; the palette cache remains
+    /// disposable and the reading file stays authoritative.
+    pub dominant_color: Option<WeightedColor>,
     pub media_aspect_ratio: Option<f64>,
     pub canonical_url: String,
     pub author: Option<String>,
@@ -573,7 +577,14 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
                 rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
-                lightweight, has_note, media_aspect_ratio
+                lightweight, has_note, media_aspect_ratio,
+                (SELECT CAST(json_extract(
+                    CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END,
+                    '$[0]'
+                 ) AS TEXT) FROM visual_analysis a
+                 WHERE a.content_hash=readings.visual_asset_hash
+                   AND a.analyzer_version=readings.visual_analyzer_version
+                   AND a.supported=1)
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
@@ -667,13 +678,21 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
                 rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
-                lightweight, has_note, media_aspect_ratio, body_text
+                lightweight, has_note, media_aspect_ratio,
+                (SELECT CAST(json_extract(
+                    CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END,
+                    '$[0]'
+                 ) AS TEXT) FROM visual_analysis a
+                 WHERE a.content_hash=readings.visual_asset_hash
+                   AND a.analyzer_version=readings.visual_analyzer_version
+                   AND a.supported=1),
+                body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(24)?;
+        let body: String = row.get(25)?;
         Ok((row_data, body))
     })?;
 
@@ -732,7 +751,14 @@ fn list_readings_search(
                 (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
                 r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset,
                 r.favicon_asset, r.theme_color, r.lightweight, r.has_note,
-                r.media_aspect_ratio
+                r.media_aspect_ratio,
+                (SELECT CAST(json_extract(
+                    CASE WHEN json_valid(a.palette_json) THEN a.palette_json ELSE '[]' END,
+                    '$[0]'
+                 ) AS TEXT) FROM visual_analysis a
+                 WHERE a.content_hash=r.visual_asset_hash
+                   AND a.analyzer_version=r.visual_analyzer_version
+                   AND a.supported=1)
          FROM matched m JOIN readings r ON r.rowid=m.rowid
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
@@ -778,6 +804,10 @@ fn list_readings_search(
 fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
     let tags_json: String = row.get(13)?;
     let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+    let dominant_color_json: Option<String> = row.get(24)?;
+    let dominant_color = dominant_color_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<WeightedColor>(json).ok());
     Ok(ReadingRow {
         id: row.get(0)?,
         title: row.get(1)?,
@@ -789,6 +819,7 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         preview_asset: row.get(18)?,
         favicon_asset: row.get(19)?,
         theme_color: row.get(20)?,
+        dominant_color,
         media_aspect_ratio: row.get(23)?,
         canonical_url: row.get(3)?,
         author: row.get(4)?,
@@ -1629,6 +1660,7 @@ mod tests {
             Some("https://cdn.example.com/photo.jpg")
         );
         assert_eq!(row.preview_asset.as_deref(), Some("assets/photo.png"));
+        assert_eq!(row.dominant_color, None);
         assert_eq!(row.media_aspect_ratio, Some(1900.0 / 2468.0));
 
         let search_row = list_readings(

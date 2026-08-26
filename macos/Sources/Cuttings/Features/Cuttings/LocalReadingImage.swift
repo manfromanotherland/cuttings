@@ -39,12 +39,12 @@ struct LocalReadingImage: View {
 
     private var placeholder: some View {
         ZStack {
-            CuttingsTheme.cardBackground(for: row)
-            Image(systemName: failed ? "photo.badge.exclamationmark" : row.kind.symbol)
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(
-                    CuttingsTheme.articlePalette(for: row)?.foreground.color ?? .secondary
-                )
+            CuttingsTheme.previewPlaceholderBackground(for: row)
+            if failed {
+                Image(systemName: "photo.badge.exclamationmark")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(CuttingsTheme.previewPlaceholderForeground(for: row))
+            }
         }
     }
 
@@ -60,6 +60,7 @@ struct LocalReadingImage: View {
     @MainActor
     private func load() async {
         failed = false
+        image = nil
         let baseURL = AssetImageLoader.readingFolderURL(
             libraryURL: libraryURL, readingID: row.id
         )
@@ -81,7 +82,7 @@ struct LocalReadingImage: View {
                 at: url, maxPixel: maxPixel
             )
         } else {
-            image = nil
+            failed = true
             return
         }
         guard !Task.isCancelled else { return }

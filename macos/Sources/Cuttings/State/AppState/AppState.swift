@@ -100,6 +100,7 @@ final class AppState {
     @ObservationIgnored var searchTask: Task<Void, Never>?
     @ObservationIgnored var saveNoticeTask: Task<Void, Never>?
     @ObservationIgnored var visualSearchTask: Task<Void, Never>?
+    @ObservationIgnored var visualSearchRerunPending = false
     @ObservationIgnored var readingLoadGeneration: UInt64 = 0
 
     /// The active library scope. Always exactly one; `.all` is the unfiltered

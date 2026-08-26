@@ -46,6 +46,7 @@ pub struct FfiReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
+    pub dominant_color: Option<FfiWeightedColor>,
     pub media_aspect_ratio: Option<f64>,
     pub canonical_url: String,
     pub author: Option<String>,
@@ -125,6 +126,12 @@ pub struct FfiVisualAnalysisTask {
     pub absolute_file_path: String,
     pub content_hash: String,
     pub analyzer_version: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct FfiPendingVisualAnalysis {
+    pub tasks: Vec<FfiVisualAnalysisTask>,
+    pub hydrated_count: u32,
 }
 
 #[derive(uniffi::Record)]
@@ -251,6 +258,12 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             preview_asset: r.preview_asset,
             favicon_asset: r.favicon_asset,
             theme_color: r.theme_color,
+            dominant_color: r.dominant_color.map(|color| FfiWeightedColor {
+                red: color.red,
+                green: color.green,
+                blue: color.blue,
+                weight: color.weight,
+            }),
             media_aspect_ratio: r.media_aspect_ratio,
             canonical_url: r.canonical_url,
             author: r.author,
@@ -563,7 +576,7 @@ impl Database {
         library_path: String,
         analyzer_version: String,
         limit: u32,
-    ) -> Result<Vec<FfiVisualAnalysisTask>, CoreError> {
+    ) -> Result<FfiPendingVisualAnalysis, CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::pending_visual_analysis(
@@ -574,7 +587,10 @@ impl Database {
             limit as usize,
         )
         .map_err(e)
-        .map(|tasks| tasks.into_iter().map(Into::into).collect())
+        .map(|pending| FfiPendingVisualAnalysis {
+            tasks: pending.tasks.into_iter().map(Into::into).collect(),
+            hydrated_count: pending.hydrated_count.min(u32::MAX as usize) as u32,
+        })
     }
 
     /// Cache a platform result only when its reading, path, and raw bytes still
@@ -945,6 +961,71 @@ mod tests {
 
         let row = database.get_reading_row(imported.id).unwrap().unwrap();
         assert_eq!(row.media_aspect_ratio, Some(1900.0 / 2468.0));
+    }
+
+    #[test]
+    fn dominant_color_crosses_the_ffi_boundary() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let imported = database
+            .import_image(
+                library_path.clone(),
+                b"ffi palette image".to_vec(),
+                "image/png".into(),
+                "Palette".into(),
+            )
+            .unwrap();
+        let task = database
+            .pending_visual_analysis(library_path.clone(), "vision-r2".into(), 1)
+            .unwrap()
+            .tasks
+            .pop()
+            .unwrap();
+        assert!(database
+            .complete_visual_analysis(
+                library_path.clone(),
+                task,
+                FfiVisualAnalysisResult {
+                    supported: true,
+                    labels: vec![],
+                    palette: vec![FfiWeightedColor {
+                        red: 0.2,
+                        green: 0.4,
+                        blue: 0.8,
+                        weight: 1.0,
+                    }],
+                },
+            )
+            .unwrap());
+
+        let color = database
+            .get_reading_row(imported.id.clone())
+            .unwrap()
+            .unwrap()
+            .dominant_color
+            .unwrap();
+        assert_eq!(color.red, 0.2);
+        assert_eq!(color.green, 0.4);
+        assert_eq!(color.blue, 0.8);
+        assert_eq!(color.weight, 1.0);
+
+        database
+            .conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE readings SET visual_analyzer_version=NULL WHERE id=?1",
+                rusqlite::params![imported.id],
+            )
+            .unwrap();
+        let pending = database
+            .pending_visual_analysis(library_path, "vision-r2".into(), 1)
+            .unwrap();
+        assert!(pending.tasks.is_empty());
+        assert_eq!(pending.hydrated_count, 1);
     }
 
     #[test]

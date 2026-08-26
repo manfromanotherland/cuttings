@@ -2,32 +2,6 @@
 
 import Foundation
 
-struct VisualSearchReconciliation: Equatable, Sendable {
-    let analyzedCount: Int
-    let spotlightIndexedCount: Int
-    let spotlightDeletedCount: Int
-    private let searchStateMayHaveChanged: Bool
-
-    init(
-        analyzedCount: Int,
-        spotlightIndexedCount: Int,
-        spotlightDeletedCount: Int,
-        searchStateMayHaveChanged: Bool = false
-    ) {
-        self.analyzedCount = analyzedCount
-        self.spotlightIndexedCount = spotlightIndexedCount
-        self.spotlightDeletedCount = spotlightDeletedCount
-        self.searchStateMayHaveChanged = searchStateMayHaveChanged
-    }
-
-    var changedSearchResults: Bool {
-        searchStateMayHaveChanged
-            || analyzedCount > 0
-            || spotlightIndexedCount > 0
-            || spotlightDeletedCount > 0
-    }
-}
-
 private struct VisualSearchSpotlightOutcome: Sendable {
     let indexedCount: Int
     let deletedCount: Int
@@ -43,14 +17,9 @@ private struct VisualSearchSpotlightOutcome: Sendable {
 }
 
 private enum VisualAnalysisPassOutcome: Sendable {
-    case completed(Int)
+    case completed
     case failed
     case cancelled
-
-    var completedCount: Int {
-        guard case let .completed(count) = self else { return 0 }
-        return count
-    }
 
     var wasCancelled: Bool {
         guard case .cancelled = self else { return false }
@@ -58,23 +27,40 @@ private enum VisualAnalysisPassOutcome: Sendable {
     }
 }
 
-/// Joins the disposable Rust visual-analysis cache to Apple's local platform
-/// services. It owns no library truth: every pass starts from assets the core
-/// has copied into immutable, content-addressed snapshots, and every completion
-/// is revalidated against the live library by core.
+private struct CandidateCacheKey: Hashable {
+    let query: String
+    let limit: Int
+
+    init(query: String, limit: Int) {
+        self.query = query
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .lowercased()
+        self.limit = limit
+    }
+}
+
+private enum AnalysisOutcome: Sendable {
+    case analyzed(VisualAnalysisWorkItem, VisualAnalysisResult)
+    case unsupported(VisualAnalysisWorkItem)
+    case failed
+    case cancelled
+}
+
+private extension VisualAssetSnapshot {
+    var spotlightAsset: SpotlightVisualAsset {
+        SpotlightVisualAsset(
+            readingID: readingID,
+            assetHash: contentHash,
+            assetURL: fileURL,
+            displayTitle: title
+        )
+    }
+}
+
+/// Coordinates Apple's local visual services with the disposable Rust cache.
+/// Every pass uses core-staged snapshots and core revalidates each completion.
 actor VisualSearchCoordinator {
-    private struct CandidateCacheKey: Hashable {
-        let query: String
-        let limit: Int
-    }
-
-    private enum AnalysisOutcome: Sendable {
-        case analyzed(VisualAnalysisWorkItem, VisualAnalysisResult)
-        case unsupported(VisualAnalysisWorkItem)
-        case failed
-        case cancelled
-    }
-
     private let analyzer: any VisualAnalyzing
     private let analyzerVersion: String
     private let spotlight: any SpotlightVisualIndexing
@@ -82,7 +68,13 @@ actor VisualSearchCoordinator {
 
     private var candidateGeneration: UInt64 = 0
     private var candidateCache: [CandidateCacheKey: [String]] = [:]
+    private var nextReconciliationRequest: UInt64 = 0
     private var reconciliationGeneration: UInt64 = 0
+    private var activeAnalysisGenerations: Set<UInt64> = []
+    private var analysisCompletionWaiters: [CheckedContinuation<Void, Never>] = []
+    private var unpublishedAnalyzedCount = 0
+    private var unpublishedHydratedCount = 0
+    private var analysisPublicationToken: UInt64 = 0
 
     init(
         analyzer: any VisualAnalyzing,
@@ -101,29 +93,28 @@ actor VisualSearchCoordinator {
     /// independently disposable, so one platform failure does not suppress the
     /// other path.
     func reconcile(core: any VisualSearchCore) async throws -> VisualSearchReconciliation {
-        reconciliationGeneration &+= 1
-        let generation = reconciliationGeneration
+        nextReconciliationRequest &+= 1
+        let generation = nextReconciliationRequest
         let assets = try await core.currentVisualAssets()
+        try Task.checkCancellation()
+        guard generation > reconciliationGeneration else { throw CancellationError() }
+        reconciliationGeneration = generation
         try ensureCurrentReconciliation(generation)
-        let spotlightAssets = assets.map {
-            SpotlightVisualAsset(
-                readingID: $0.readingID,
-                assetHash: $0.contentHash,
-                assetURL: $0.fileURL,
-                displayTitle: $0.title
-            )
-        }
+        let spotlightAssets = assets.map(\.spotlightAsset)
 
         async let spotlightResult = reconcileSpotlight(spotlightAssets)
         async let analysisResult = reconcileAnalysis(with: core, generation: generation)
         let (spotlightOutcome, analysisOutcome) = await (spotlightResult, analysisResult)
+        await waitForEarlierAnalysisPasses(before: generation)
         try ensureCurrentReconciliation(generation)
         guard !spotlightOutcome.wasCancelled,
               !analysisOutcome.wasCancelled else { throw CancellationError() }
         let result = VisualSearchReconciliation(
-            analyzedCount: analysisOutcome.completedCount,
+            analyzedCount: unpublishedAnalyzedCount,
+            hydratedAnalysisCount: unpublishedHydratedCount,
             spotlightIndexedCount: spotlightOutcome.indexedCount,
             spotlightDeletedCount: spotlightOutcome.deletedCount,
+            analysisPublicationToken: analysisPublicationToken,
             searchStateMayHaveChanged: spotlightOutcome.searchStateMayHaveChanged
         )
         if result.changedSearchResults {
@@ -137,7 +128,7 @@ actor VisualSearchCoordinator {
     /// ranking until the donated asset generation changes.
     func candidates(for query: String, limit: Int) async throws -> [String] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let key = CandidateCacheKey(query: Self.normalizedQuery(trimmed), limit: limit)
+        let key = CandidateCacheKey(query: trimmed, limit: limit)
         guard !key.query.isEmpty, limit > 0 else { return [] }
         if let cached = candidateCache[key] {
             return cached
@@ -157,6 +148,12 @@ actor VisualSearchCoordinator {
     func invalidateCandidateCache() {
         candidateGeneration &+= 1
         candidateCache.removeAll(keepingCapacity: true)
+    }
+
+    func acknowledgeAnalysisPresentation(_ token: UInt64) {
+        guard token == analysisPublicationToken else { return }
+        unpublishedAnalyzedCount = 0
+        unpublishedHydratedCount = 0
     }
 
     private func reconcileSpotlight(
@@ -190,8 +187,11 @@ actor VisualSearchCoordinator {
         with core: any VisualSearchCore,
         generation: UInt64
     ) async -> VisualAnalysisPassOutcome {
+        activeAnalysisGenerations.insert(generation)
+        defer { finishAnalysisPass(generation) }
         do {
-            return try await .completed(analyzePendingAssets(with: core, generation: generation))
+            try await analyzePendingAssets(with: core, generation: generation)
+            return .completed
         } catch is CancellationError {
             return .cancelled
         } catch {
@@ -203,41 +203,43 @@ actor VisualSearchCoordinator {
 
     private func analyzePendingAssets(
         with core: any VisualSearchCore, generation: UInt64
-    ) async throws -> Int {
-        let tasks = try await core.pendingVisualAnalysis(
+    ) async throws {
+        let pending = try await core.pendingVisualAnalysis(
             analyzerVersion: analyzerVersion,
             limit: .max
         )
+        if pending.hydratedCount > 0 {
+            unpublishedHydratedCount += pending.hydratedCount
+            analysisPublicationToken &+= 1
+        }
         try ensureCurrentReconciliation(generation)
 
-        var total = 0
         let batchSize = Int(analysisBatchSize)
-        for start in stride(from: 0, to: tasks.count, by: batchSize) {
+        for start in stride(from: 0, to: pending.tasks.count, by: batchSize) {
             try ensureCurrentReconciliation(generation)
-            let end = min(start + batchSize, tasks.count)
-            total += try await analyze(
-                Array(tasks[start ..< end]),
+            let end = min(start + batchSize, pending.tasks.count)
+            try await analyze(
+                Array(pending.tasks[start ..< end]),
                 with: core,
                 generation: generation
             )
         }
         try Task.checkCancellation()
-        return total
     }
 
     private func analyze(
         _ tasks: [VisualAnalysisWorkItem],
         with core: any VisualSearchCore,
         generation: UInt64
-    ) async throws -> Int {
+    ) async throws {
         let outcomes = await analysisOutcomes(for: tasks)
-        var accepted = 0
         for outcome in outcomes {
             try ensureCurrentReconciliation(generation)
             guard let completion = Self.completion(for: outcome) else { continue }
             do {
                 if try await core.completeVisualAnalysis(task: completion.0, result: completion.1) {
-                    accepted += 1
+                    unpublishedAnalyzedCount += 1
+                    analysisPublicationToken &+= 1
                 }
             } catch is CancellationError {
                 throw CancellationError()
@@ -247,7 +249,21 @@ actor VisualSearchCoordinator {
                 continue
             }
         }
-        return accepted
+    }
+
+    private func waitForEarlierAnalysisPasses(before generation: UInt64) async {
+        while activeAnalysisGenerations.contains(where: { $0 < generation }) {
+            await withCheckedContinuation { continuation in
+                analysisCompletionWaiters.append(continuation)
+            }
+        }
+    }
+
+    private func finishAnalysisPass(_ generation: UInt64) {
+        activeAnalysisGenerations.remove(generation)
+        let waiters = analysisCompletionWaiters
+        analysisCompletionWaiters.removeAll(keepingCapacity: true)
+        waiters.forEach { $0.resume() }
     }
 
     private func analysisOutcomes(
@@ -323,12 +339,5 @@ actor VisualSearchCoordinator {
     private func ensureCurrentReconciliation(_ generation: UInt64) throws {
         guard generation == reconciliationGeneration else { throw CancellationError() }
         try Task.checkCancellation()
-    }
-
-    private static func normalizedQuery(_ query: String) -> String {
-        query
-            .split(whereSeparator: { $0.isWhitespace })
-            .joined(separator: " ")
-            .lowercased()
     }
 }

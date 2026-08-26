@@ -69,9 +69,7 @@ extension AppState {
     func boot(url: URL, allowsImmediateRecoveryRetry: Bool = true) async {
         guard canChangeLibrary else { return }
 
-        let previousVisualSearchTask = visualSearchTask
-        previousVisualSearchTask?.cancel()
-        visualSearchTask = nil
+        let previousVisualSearchTask = cancelVisualSearchReconciliation()
         hasUsableCachedLibrary = false
         isReconcilingLibrary = true
         isLoading = true
