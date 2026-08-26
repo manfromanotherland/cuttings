@@ -83,8 +83,17 @@ where
     let updated = parse_reading(&updated_content)?;
     let modified_at = std::fs::metadata(&updated_path)?.modified()?;
     let visual_asset = updated.metadata.preview_asset.as_deref().and_then(|path| {
-        crate::visual_index::inspect_asset(library, &updated.metadata.id, path).ok()
+        if updated.metadata.kind == crate::ReadingKind::Image {
+            crate::visual_index::inspect_image_asset(library, &updated.metadata.id, path).ok()
+        } else {
+            crate::visual_index::inspect_asset(library, &updated.metadata.id, path).ok()
+        }
     });
+    let media_aspect_ratio = crate::scanner::inspect_media_aspect_ratio(
+        library,
+        &updated.metadata,
+        visual_asset.as_ref(),
+    );
 
     let scanned = ScannedReading {
         id: updated.metadata.id.clone(),
@@ -93,6 +102,7 @@ where
         path: updated_path,
         has_note: crate::scanner::note_file_exists(library, &updated.metadata.id),
         visual_asset,
+        media_aspect_ratio,
         body: updated.body,
         metadata: updated.metadata,
     };

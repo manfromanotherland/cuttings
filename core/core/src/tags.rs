@@ -153,8 +153,17 @@ fn sync_index(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> 
     let reading = parse_reading(&content)?;
     let modified_at = std::fs::metadata(&path)?.modified()?;
     let visual_asset = reading.metadata.preview_asset.as_deref().and_then(|asset| {
-        crate::visual_index::inspect_asset(library, &reading.metadata.id, asset).ok()
+        if reading.metadata.kind == crate::ReadingKind::Image {
+            crate::visual_index::inspect_image_asset(library, &reading.metadata.id, asset).ok()
+        } else {
+            crate::visual_index::inspect_asset(library, &reading.metadata.id, asset).ok()
+        }
     });
+    let media_aspect_ratio = crate::scanner::inspect_media_aspect_ratio(
+        library,
+        &reading.metadata,
+        visual_asset.as_ref(),
+    );
 
     let scanned = ScannedReading {
         id: reading.metadata.id.clone(),
@@ -163,6 +172,7 @@ fn sync_index(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> 
         path,
         has_note: crate::scanner::note_file_exists(library, &reading.metadata.id),
         visual_asset,
+        media_aspect_ratio,
         body: reading.body,
         metadata: reading.metadata,
     };

@@ -114,6 +114,7 @@ pub struct ReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
+    pub media_aspect_ratio: Option<f64>,
     pub canonical_url: String,
     pub author: Option<String>,
     pub site: Option<String>,
@@ -572,7 +573,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
                 rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
-                lightweight, has_note
+                lightweight, has_note, media_aspect_ratio
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
@@ -666,13 +667,13 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
                 rating, read_at, kind, media_url, preview_asset, favicon_asset, theme_color,
-                lightweight, has_note, body_text
+                lightweight, has_note, media_aspect_ratio, body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(23)?;
+        let body: String = row.get(24)?;
         Ok((row_data, body))
     })?;
 
@@ -730,7 +731,8 @@ fn list_readings_search(
          SELECT r.id, r.title, r.url, r.canonical_url, r.author, r.site, r.saved_at,
                 (r.read_at IS NOT NULL), r.archived, r.favorite, r.excerpt, r.word_count,
                 r.lang, r.tags_json, r.rating, r.read_at, r.kind, r.media_url, r.preview_asset,
-                r.favicon_asset, r.theme_color, r.lightweight, r.has_note
+                r.favicon_asset, r.theme_color, r.lightweight, r.has_note,
+                r.media_aspect_ratio
          FROM matched m JOIN readings r ON r.rowid=m.rowid
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
@@ -787,6 +789,7 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         preview_asset: row.get(18)?,
         favicon_asset: row.get(19)?,
         theme_color: row.get(20)?,
+        media_aspect_ratio: row.get(23)?,
         canonical_url: row.get(3)?,
         author: row.get(4)?,
         site: row.get(5)?,
@@ -866,6 +869,16 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let conn = open(&dir.path().join("index.db")).unwrap();
         (dir, conn)
+    }
+
+    fn portrait_png() -> Vec<u8> {
+        let mut bytes = vec![
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R',
+        ];
+        bytes.extend_from_slice(&1900_u32.to_be_bytes());
+        bytes.extend_from_slice(&2468_u32.to_be_bytes());
+        bytes.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        bytes
     }
 
     #[test]
@@ -1600,8 +1613,10 @@ mod tests {
         let mut metadata = meta(&id, "https://example.com/gallery", "Photo");
         metadata.kind = ReadingKind::Image;
         metadata.media_url = Some("https://cdn.example.com/photo.jpg".into());
-        metadata.preview_asset = Some("assets/photo.jpg".into());
-        write_reading(&lib, metadata, "![Photo](assets/photo.jpg)".into()).unwrap();
+        metadata.preview_asset = Some("assets/photo.png".into());
+        write_reading(&lib, metadata, "![Photo](assets/photo.png)".into()).unwrap();
+        fs::create_dir_all(lib.assets_dir(&id)).unwrap();
+        fs::write(lib.assets_dir(&id).join("photo.png"), portrait_png()).unwrap();
         rebuild(&conn, &lib).unwrap();
 
         let row = list_readings(&conn, &ListOptions::default())
@@ -1613,7 +1628,23 @@ mod tests {
             row.media_url.as_deref(),
             Some("https://cdn.example.com/photo.jpg")
         );
-        assert_eq!(row.preview_asset.as_deref(), Some("assets/photo.jpg"));
+        assert_eq!(row.preview_asset.as_deref(), Some("assets/photo.png"));
+        assert_eq!(row.media_aspect_ratio, Some(1900.0 / 2468.0));
+
+        let search_row = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("Photo".into()),
+                ..ListOptions::default()
+            },
+        )
+        .unwrap()
+        .pop()
+        .unwrap();
+        assert_eq!(search_row.media_aspect_ratio, row.media_aspect_ratio);
+
+        let (single_row, _) = get_reading(&conn, &id).unwrap().unwrap();
+        assert_eq!(single_row.media_aspect_ratio, row.media_aspect_ratio);
     }
 
     #[test]

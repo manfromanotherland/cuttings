@@ -52,6 +52,28 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 5 {
         migrate_v5(conn)?;
     }
+    if version < 6 {
+        migrate_v6(conn)?;
+    }
+    Ok(())
+}
+
+/// v6: cache display-oriented media geometry for deterministic masonry frames.
+///
+/// The ratio is derived from local asset headers during reconciliation and can
+/// always be rebuilt; it is not part of the synced library contract.
+fn migrate_v6(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings ADD COLUMN media_aspect_ratio REAL
+            CHECK (media_aspect_ratio IS NULL OR media_aspect_ratio > 0);
+
+        PRAGMA user_version = 6;
+        COMMIT;
+        ",
+    )?;
     Ok(())
 }
 
@@ -331,7 +353,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
 
         // readings table exists
         let count: i64 = conn
@@ -467,6 +489,7 @@ mod tests {
             "visual_analyzer_version",
             "visual_terms",
             "predominant_color",
+            "media_aspect_ratio",
         ] {
             assert!(columns.contains(&col.to_string()), "missing column: {col}");
         }
@@ -476,6 +499,21 @@ mod tests {
             !columns.contains(&"read".to_string()),
             "legacy `read` column should be dropped"
         );
+    }
+
+    #[test]
+    fn media_aspect_ratio_accepts_only_positive_values() {
+        let (_dir, conn) = open_temp();
+
+        let result = conn.execute(
+            "INSERT INTO readings
+             (id, url, canonical_url, title, saved_at, source_hash, media_aspect_ratio)
+             VALUES ('ratio', 'https://example.com', 'https://example.com', 'Ratio',
+                     '2026-06-13T15:00:00Z', 'sha256:ratio', -1)",
+            [],
+        );
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -506,7 +544,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -548,7 +586,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
 
         let values: (i64, i64, String) = conn
             .query_row(

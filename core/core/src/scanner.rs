@@ -18,6 +18,9 @@ pub struct ScannedReading {
     pub has_note: bool,
     /// Safely opened preview bytes, identified by their raw SHA-256 hash.
     pub visual_asset: Option<VisualAsset>,
+    /// Display width divided by display height for standalone local media.
+    /// Derived from headers during reconciliation; never synced or authoritative.
+    pub media_aspect_ratio: Option<f64>,
     /// Raw Markdown body (after stripping frontmatter), stored for FTS indexing.
     pub body: String,
 }
@@ -100,11 +103,20 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                     .preview_asset
                     .as_deref()
                     .and_then(|relative_path| {
-                        match crate::visual_index::inspect_asset(
-                            library,
-                            &reading.metadata.id,
-                            relative_path,
-                        ) {
+                        let inspected = if reading.metadata.kind == crate::ReadingKind::Image {
+                            crate::visual_index::inspect_image_asset(
+                                library,
+                                &reading.metadata.id,
+                                relative_path,
+                            )
+                        } else {
+                            crate::visual_index::inspect_asset(
+                                library,
+                                &reading.metadata.id,
+                                relative_path,
+                            )
+                        };
+                        match inspected {
                             Ok(asset) => Some(asset),
                             Err(error) => {
                                 eprintln!(
@@ -116,6 +128,9 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                         }
                     });
 
+            let media_aspect_ratio =
+                inspect_media_aspect_ratio(library, &reading.metadata, visual_asset.as_ref());
+
             results.push(ScannedReading {
                 id: reading.metadata.id.clone(),
                 source_hash: reading.metadata.source_hash.clone(),
@@ -123,6 +138,7 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                 path,
                 has_note: note_file_exists(library, &reading.metadata.id),
                 visual_asset,
+                media_aspect_ratio,
                 metadata: reading.metadata,
                 body: reading.body,
             });
@@ -130,6 +146,35 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
     }
 
     Ok(results)
+}
+
+pub(crate) fn inspect_media_aspect_ratio(
+    library: &LibraryRoot,
+    metadata: &Metadata,
+    visual_asset: Option<&VisualAsset>,
+) -> Option<f64> {
+    let inspected = match metadata.kind {
+        crate::ReadingKind::Image => {
+            return visual_asset
+                .and_then(|asset| asset.media_dimensions)
+                .and_then(|dimensions| dimensions.aspect_ratio());
+        }
+        crate::ReadingKind::Video => metadata.media_url.as_deref().map(|media_url| {
+            crate::visual_index::inspect_video_dimensions(library, &metadata.id, media_url)
+        }),
+        crate::ReadingKind::Article | crate::ReadingKind::Quote => None,
+    }?;
+
+    match inspected {
+        Ok(dimensions) => dimensions.and_then(|value| value.aspect_ratio()),
+        Err(error) => {
+            eprintln!(
+                "scanner: could not inspect media dimensions for {}: {error}",
+                metadata.id
+            );
+            None
+        }
+    }
 }
 
 /// Diff two snapshots, using body hash, frontmatter metadata, and note presence
@@ -152,7 +197,8 @@ pub fn diff(old: &[ScannedReading], new: &[ScannedReading]) -> Vec<ScanDiff> {
                 if old_reading.source_hash != reading.source_hash
                     || old_reading.metadata != reading.metadata
                     || old_reading.has_note != reading.has_note
-                    || old_reading.visual_asset != reading.visual_asset =>
+                    || old_reading.visual_asset != reading.visual_asset
+                    || old_reading.media_aspect_ratio != reading.media_aspect_ratio =>
             {
                 diffs.push(ScanDiff::Changed(reading.clone()))
             }

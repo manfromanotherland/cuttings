@@ -65,8 +65,8 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
           theme_color, canonical_url, title, author, site, saved_at, read_at, archived,
           favorite, rating, source_hash, excerpt, word_count, lang, tags_json, tags_text,
           body_text, visual_asset_path, visual_asset_hash, visual_analyzer_version,
-          visual_terms, predominant_color)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30)",
+          visual_terms, predominant_color, media_aspect_ratio)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31)",
         params![
             r.metadata.id,
             r.metadata.kind.as_str(),
@@ -98,6 +98,7 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             projection.analyzer_version,
             projection.visual_terms,
             projection.predominant_color,
+            r.media_aspect_ratio,
         ],
     )?;
     Ok(())
@@ -117,7 +118,8 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
          site=?13, saved_at=?14, read_at=?15, archived=?16, favorite=?17, rating=?18,
          source_hash=?19, excerpt=?20, word_count=?21, lang=?22, tags_json=?23,
          tags_text=?24, body_text=?25, visual_asset_path=?26, visual_asset_hash=?27,
-         visual_analyzer_version=?28, visual_terms=?29, predominant_color=?30
+         visual_analyzer_version=?28, visual_terms=?29, predominant_color=?30,
+         media_aspect_ratio=?31
          WHERE id=?1",
         params![
             r.metadata.id,
@@ -150,6 +152,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             projection.analyzer_version,
             projection.visual_terms,
             projection.predominant_color,
+            r.media_aspect_ratio,
         ],
     )?;
     Ok(())
@@ -257,16 +260,25 @@ mod tests {
         let mut metadata = sample_meta(&id, "https://example.com/gallery");
         metadata.kind = crate::ReadingKind::Image;
         metadata.media_url = Some("https://cdn.example.com/photo.jpg".into());
-        metadata.preview_asset = Some("assets/photo.jpg".into());
-        write_reading(&lib, metadata, "![Photo](assets/photo.jpg)".into()).unwrap();
+        metadata.preview_asset = Some("assets/photo.png".into());
+        write_reading(&lib, metadata, "![Photo](assets/photo.png)".into()).unwrap();
+        let mut png = vec![
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R',
+        ];
+        png.extend_from_slice(&1900_u32.to_be_bytes());
+        png.extend_from_slice(&2468_u32.to_be_bytes());
+        png.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        fs::create_dir_all(lib.assets_dir(&id)).unwrap();
+        fs::write(lib.assets_dir(&id).join("photo.png"), png).unwrap();
 
         rebuild(&conn, &lib).unwrap();
 
-        let values: (String, Option<String>, Option<String>) = conn
+        let values: (String, Option<String>, Option<String>, Option<f64>) = conn
             .query_row(
-                "SELECT kind, media_url, preview_asset FROM readings WHERE id = ?1",
+                "SELECT kind, media_url, preview_asset, media_aspect_ratio
+                 FROM readings WHERE id = ?1",
                 params![id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .unwrap();
         assert_eq!(
@@ -274,7 +286,8 @@ mod tests {
             (
                 "image".into(),
                 Some("https://cdn.example.com/photo.jpg".into()),
-                Some("assets/photo.jpg".into())
+                Some("assets/photo.png".into()),
+                Some(1900.0 / 2468.0)
             )
         );
     }
