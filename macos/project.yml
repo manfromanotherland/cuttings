@@ -108,6 +108,7 @@ targets:
       - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
       - path: Sources/Cuttings/Features/Cuttings/CuttingsTheme.swift
       - path: Sources/Cuttings/Features/Cuttings/CuttingsCardTextMetrics.swift
+      - path: Sources/Cuttings/Features/Cuttings/ReadingRow+MediaGeometry.swift
       - path: Sources/Cuttings/Features/Cuttings/LocalReadingImage.swift
       - path: Sources/Cuttings/Features/Cuttings/LocalReadingFavicon.swift
       - path: Sources/Cuttings/Features/Cuttings/LazyMasonryBoard.swift

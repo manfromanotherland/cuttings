@@ -66,7 +66,9 @@ struct CuttingsCardView: View {
     private func imageCard(in size: CGSize) -> some View {
         LocalReadingImage(
             row: row, libraryURL: appState.libraryURL,
-            fallbackAspectRatio: 4 / 3, maxPixel: previewMaxPixel, contentMode: .fill
+            fallbackAspectRatio: row.standaloneMediaAspectRatio ?? 4 / 3,
+            maxPixel: previewMaxPixel,
+            contentMode: .fit
         )
         .frame(width: size.width, height: size.height)
         .clipped()

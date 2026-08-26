@@ -26,9 +26,9 @@ struct AutoplayVideoCard: View {
         LocalReadingImage(
             row: row,
             libraryURL: libraryURL,
-            fallbackAspectRatio: 16 / 9,
+            fallbackAspectRatio: row.standaloneMediaAspectRatio ?? 16 / 9,
             maxPixel: maxPixel,
-            contentMode: .fill
+            contentMode: .fit
         )
         .frame(width: cardSize.width, height: cardSize.height)
         .clipped()
@@ -218,7 +218,7 @@ private struct CardVideoPlayerLayer: NSViewRepresentable {
 
         override func makeBackingLayer() -> CALayer {
             let layer = AVPlayerLayer()
-            layer.videoGravity = .resizeAspectFill
+            layer.videoGravity = .resizeAspect
             return layer
         }
 

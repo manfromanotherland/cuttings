@@ -364,10 +364,8 @@ extension CuttingsLibraryView {
 
     private func estimatedCardHeight(_ row: ReadingRow, width: CGFloat) -> CGFloat {
         switch row.kind {
-        case .image:
-            return width * 3 / 4
-        case .video:
-            return width * 9 / 16
+        case .image, .video:
+            return row.standaloneMediaHeight(for: width) ?? width
         case .quote:
             let text = row.excerpt.flatMap { $0.isEmpty ? nil : $0 } ?? row.displayTitle
             return cardTextMetrics.quoteCardHeight(for: text, width: width)

@@ -106,5 +106,8 @@ final class ReadingRowMapperTests: XCTestCase {
         var favoriteFlipped = base
         favoriteFlipped.favorite.toggle()
         XCTAssertNotEqual(base, favoriteFlipped)
+        var mediaRatioChanged = base
+        mediaRatioChanged.mediaAspectRatio = 4.0 / 3.0
+        XCTAssertNotEqual(base, mediaRatioChanged)
     }
 }
