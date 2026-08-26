@@ -3,6 +3,8 @@
 import CoreGraphics
 
 extension ReadingRow {
+    static let socialPreviewAspectRatio: CGFloat = 1200 / 630
+
     /// The display ratio used by both LazyLayoutKit and the standalone media view.
     /// Keeping one value authoritative prevents decoded media from changing an
     /// already placed card's frame while the user scrolls.
@@ -17,9 +19,22 @@ extension ReadingRow {
         }
     }
 
+    var articlePreviewAspectRatio: CGFloat? {
+        guard kind == .article, previewAsset != nil else { return nil }
+        return validMediaAspectRatio ?? Self.socialPreviewAspectRatio
+    }
+
+    func articlePreviewHeight(for width: CGFloat) -> CGFloat? {
+        height(for: width, aspectRatio: articlePreviewAspectRatio)
+    }
+
     func standaloneMediaHeight(for width: CGFloat) -> CGFloat? {
+        height(for: width, aspectRatio: standaloneMediaAspectRatio)
+    }
+
+    private func height(for width: CGFloat, aspectRatio: CGFloat?) -> CGFloat? {
         guard width.isFinite, width > 0,
-              let aspectRatio = standaloneMediaAspectRatio
+              let aspectRatio
         else {
             return nil
         }

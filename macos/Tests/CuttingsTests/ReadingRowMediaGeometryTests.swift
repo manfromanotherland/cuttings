@@ -29,12 +29,43 @@ final class ReadingRowMediaGeometryTests: XCTestCase {
         XCTAssertEqual(video.standaloneMediaAspectRatio, 16.0 / 9.0)
     }
 
+    func testArticlePreviewUsesStandardSocialAspectRatio() throws {
+        let row = makeReadingRow(kind: .article, previewAsset: "assets/social.jpg")
+
+        let height = try XCTUnwrap(row.articlePreviewHeight(for: 400))
+
+        XCTAssertEqual(row.articlePreviewAspectRatio, ReadingRow.socialPreviewAspectRatio)
+        XCTAssertEqual(
+            height,
+            400 / ReadingRow.socialPreviewAspectRatio,
+            accuracy: 0.0001
+        )
+    }
+
+    func testArticlePreviewUsesIndexedRatioWhenAvailable() throws {
+        let aspectRatio = 2.0
+        let row = makeReadingRow(
+            kind: .article,
+            previewAsset: "assets/social.jpg",
+            mediaAspectRatio: aspectRatio
+        )
+
+        XCTAssertEqual(row.articlePreviewAspectRatio, CGFloat(aspectRatio))
+        XCTAssertEqual(try XCTUnwrap(row.articlePreviewHeight(for: 400)), 200)
+    }
+
     func testInvalidIndexedRatiosUseStableFallbacks() {
         let invalidRatios = [Double.nan, .infinity, 0, -1]
 
         for aspectRatio in invalidRatios {
             let image = makeReadingRow(kind: .image, mediaAspectRatio: aspectRatio)
+            let article = makeReadingRow(
+                kind: .article,
+                previewAsset: "assets/social.jpg",
+                mediaAspectRatio: aspectRatio
+            )
             XCTAssertEqual(image.standaloneMediaAspectRatio, 4.0 / 3.0)
+            XCTAssertEqual(article.articlePreviewAspectRatio, ReadingRow.socialPreviewAspectRatio)
         }
     }
 
@@ -42,8 +73,12 @@ final class ReadingRowMediaGeometryTests: XCTestCase {
         let article = makeReadingRow(kind: .article, mediaAspectRatio: 2)
         let quote = makeReadingRow(kind: .quote, mediaAspectRatio: 2)
 
+        XCTAssertNil(article.articlePreviewAspectRatio)
+        XCTAssertNil(article.articlePreviewHeight(for: 320))
         XCTAssertNil(article.standaloneMediaAspectRatio)
         XCTAssertNil(article.standaloneMediaHeight(for: 320))
+        XCTAssertNil(quote.articlePreviewAspectRatio)
+        XCTAssertNil(quote.articlePreviewHeight(for: 320))
         XCTAssertNil(quote.standaloneMediaAspectRatio)
         XCTAssertNil(quote.standaloneMediaHeight(for: 320))
     }

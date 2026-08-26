@@ -115,12 +115,18 @@ struct CuttingsCardView: View {
     }
 
     private func previewArticleCard(in size: CGSize) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let aspectRatio = row.articlePreviewAspectRatio ?? ReadingRow.socialPreviewAspectRatio
+        let previewHeight = row.articlePreviewHeight(for: size.width)
+            ?? size.width / ReadingRow.socialPreviewAspectRatio
+
+        return VStack(alignment: .leading, spacing: 0) {
             LocalReadingImage(
                 row: row, libraryURL: appState.libraryURL,
-                fallbackAspectRatio: 3 / 2, maxPixel: previewMaxPixel, contentMode: .fill
+                fallbackAspectRatio: aspectRatio,
+                maxPixel: previewMaxPixel,
+                contentMode: .fit
             )
-            .frame(width: size.width, height: size.width * 2 / 3)
+            .frame(width: size.width, height: previewHeight)
             .clipped()
 
             articleText

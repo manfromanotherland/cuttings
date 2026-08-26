@@ -12,6 +12,7 @@ func makeReadingRow(
     lightweight: Bool = false,
     wordCount: UInt32? = nil,
     kind: ReadingKind = .article,
+    previewAsset: String? = nil,
     mediaAspectRatio: Double? = nil
 ) -> ReadingRow {
     ReadingRow(
@@ -33,7 +34,7 @@ func makeReadingRow(
         kind: kind,
         lightweight: lightweight,
         mediaUrl: nil,
-        previewAsset: nil,
+        previewAsset: previewAsset,
         faviconAsset: nil,
         themeColor: nil,
         mediaAspectRatio: mediaAspectRatio
