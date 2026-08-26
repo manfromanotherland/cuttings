@@ -23,6 +23,10 @@ struct CuttingsCardView: View {
         GeometryReader { proxy in
             interactiveCard(in: proxy.size)
         }
+        .onAppear {
+            TestHooks.recordStartupEvent("card")
+            TestHooks.recordVisibleCard(id: row.id)
+        }
     }
 
     private func interactiveCard(in size: CGSize) -> some View {

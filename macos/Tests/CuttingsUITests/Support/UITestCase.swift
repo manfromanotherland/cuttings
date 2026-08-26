@@ -94,15 +94,25 @@ class UITestCase: XCTestCase {
     /// the NSArgumentDomain).
     @discardableResult
     func relaunchApp(configure: (inout LaunchOptions) -> Void = { _ in }) -> XCUIApplication {
+        let app = relaunchAppWithoutWaiting(configure: configure)
+        XCTAssertTrue(
+            app.byId(A11y.List.rows).waitForExistence(timeout: 20),
+            "Library board did not appear after relaunch."
+        )
+        return app
+    }
+
+    /// Relaunches against the same files/index and returns when the window
+    /// exists, allowing warm-start checks to observe the cached first frame.
+    @discardableResult
+    func relaunchAppWithoutWaiting(
+        configure: (inout LaunchOptions) -> Void = { _ in }
+    ) -> XCUIApplication {
         app?.terminate()
         var options = LaunchOptions(libraryPath: library.libraryURL.path, dbPath: library.dbURL.path)
         options.defaultsSuite = library.defaultsSuiteName
         configure(&options)
         app = AppLauncher.launch(options)
-        XCTAssertTrue(
-            app.byId(A11y.List.rows).waitForExistence(timeout: 20),
-            "Library board did not appear after relaunch."
-        )
         return app
     }
 

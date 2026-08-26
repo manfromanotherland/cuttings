@@ -25,6 +25,21 @@ final class LargeLibraryCheck: UITestCase {
         )
     }
 
+    func testWarmLaunchShowsCachedCardBeforeReconciliation() throws {
+        let expected = Fixtures.standardCorpus[0]
+        try launchApp(articles: [expected])
+
+        relaunchAppWithoutWaiting { options in
+            options.environment["CUTTINGS_TEST_TRUSTED_CACHE_LIBRARY"] = library.libraryURL.path
+            options.environment["CUTTINGS_TEST_LIBRARY_RECONCILIATION_DELAY_MS"] = "3000"
+        }
+
+        XCTAssertTrue(
+            list.row(expected.id).waitForExistence(timeout: 1.5),
+            "a warm launch should show the cached card before file reconciliation"
+        )
+    }
+
     func testCompleteSnapshotReachesOldestCard() throws {
         try launchApp(articles: Fixtures.bulkCorpus(count: 120))
         XCTAssertTrue(list.row(Fixtures.id(119)).waitExists(), "newest article heads the list")

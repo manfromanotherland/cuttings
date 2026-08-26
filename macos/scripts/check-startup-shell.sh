@@ -57,4 +57,5 @@ for _ in {1..30}; do
 done
 
 print -u2 "FAIL: toolbar did not appear within 1.5 seconds"
+sed -n '1,120p' "$probe_root/app.log" >&2
 exit 1
