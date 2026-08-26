@@ -89,6 +89,43 @@ final class MasonryGeometryTests: XCTestCase {
         XCTAssertLessThan(snapshot.visibleItems(in: viewport).count, 100)
     }
 
+    func testVerticalNavigationStaysInTheSameMasonryColumn() {
+        let index = navigationIndex()
+
+        XCTAssertEqual(index.neighbor(of: 0, toward: .down), 3)
+        XCTAssertEqual(index.neighbor(of: 3, toward: .up), 0)
+    }
+
+    func testHorizontalNavigationChoosesTheAdjacentAlignedCard() {
+        let index = navigationIndex()
+
+        XCTAssertEqual(index.neighbor(of: 3, toward: .right), 4)
+        XCTAssertEqual(index.neighbor(of: 4, toward: .left), 3)
+    }
+
+    func testHorizontalNavigationUsesTheTallCardsMidpoint() {
+        let index = MasonryNavigationIndex(
+            ids: [0, 1, 2],
+            frames: [
+                LayoutRect(x: 0, y: 0, width: 100, height: 300),
+                LayoutRect(x: 118, y: 0, width: 100, height: 100),
+                LayoutRect(x: 118, y: 118, width: 100, height: 100)
+            ]
+        )
+
+        XCTAssertEqual(index.neighbor(of: 0, toward: .right), 2)
+    }
+
+    func testNavigationStopsAtEveryOuterEdge() {
+        let index = navigationIndex()
+
+        XCTAssertNil(index.neighbor(of: 0, toward: .up))
+        XCTAssertNil(index.neighbor(of: 0, toward: .left))
+        XCTAssertNil(index.neighbor(of: 2, toward: .right))
+        XCTAssertNil(index.neighbor(of: 5, toward: .down))
+        XCTAssertNil(index.neighbor(of: 999, toward: .down))
+    }
+
     @MainActor
     func testLargeBoardMaterializesOnlyAViewportWindow() {
         let items = makeItems(5000)
@@ -177,6 +214,20 @@ final class MasonryGeometryTests: XCTestCase {
         (0 ..< count).map { index in
             Item(id: index, ratio: 0.6 + Double(index % 15) * 0.1)
         }
+    }
+
+    private func navigationIndex() -> MasonryNavigationIndex<Int> {
+        MasonryNavigationIndex(
+            ids: Array(0 ... 5),
+            frames: [
+                LayoutRect(x: 0, y: 0, width: 100, height: 100),
+                LayoutRect(x: 118, y: 0, width: 100, height: 140),
+                LayoutRect(x: 236, y: 0, width: 100, height: 80),
+                LayoutRect(x: 0, y: 118, width: 100, height: 120),
+                LayoutRect(x: 118, y: 158, width: 100, height: 80),
+                LayoutRect(x: 236, y: 98, width: 100, height: 140)
+            ]
+        )
     }
 
     @MainActor

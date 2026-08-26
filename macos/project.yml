@@ -96,6 +96,7 @@ targets:
       - path: Sources/Cuttings/State/SidebarItem.swift
       - path: Sources/Cuttings/State/SidebarCounts.swift
       - path: Sources/Cuttings/State/ComposedFilter.swift
+      - path: Sources/Cuttings/State/BoardSelection.swift
       - path: Sources/Cuttings/State/ReadingSort.swift
       - path: Sources/Cuttings/Bridge/ReadingQuery.swift
       - path: Sources/Cuttings/Shared/Formatting/ReadingTime.swift
