@@ -29,8 +29,6 @@ const MIN_LABEL_CONFIDENCE: f64 = 0.15;
 const MAX_LABELS: usize = 32;
 const MAX_CACHED_OBSERVATIONS: usize = 128;
 const MAX_PALETTE_CLUSTERS: usize = 32;
-const MIN_PLACEHOLDER_SURFACE_WEIGHT: f64 = 0.20;
-const MIN_PLACEHOLDER_SURFACE_SHARE: f64 = 0.35;
 const VISUAL_CACHE_DIR: &str = "visual-assets";
 const STAGING_PREFIX: &str = ".stage-";
 const STAGING_SUFFIX: &str = ".tmp";
@@ -758,10 +756,9 @@ fn normalize_identifier(identifier: &str) -> String {
 
 /// Choose a stable palette cluster for the flat media placeholder.
 ///
-/// A white or black canvas frequently wins raw pixel coverage even when a
-/// substantial tinted surface carries the image's visual identity. Promote
-/// that surface only when it is large enough in absolute and relative terms;
-/// tiny accents must not repaint an otherwise neutral image.
+/// Neutral canvas colours are not useful highlights. Aggregate the remaining
+/// clusters through the same colour-family classifier used by visual search,
+/// then return the largest exact cluster inside the winning family.
 pub(crate) fn representative_placeholder_color(palette: &[WeightedColor]) -> Option<WeightedColor> {
     let valid = |sample: &&WeightedColor| sample.weight > 0.0 && validate_color(sample).is_ok();
     let by_coverage = |lhs: &&WeightedColor, rhs: &&WeightedColor| {
@@ -771,36 +768,29 @@ pub(crate) fn representative_placeholder_color(palette: &[WeightedColor]) -> Opt
             .then_with(|| lhs.green.total_cmp(&rhs.green))
             .then_with(|| lhs.blue.total_cmp(&rhs.blue))
     };
-    let top = palette.iter().filter(valid).max_by(by_coverage)?;
-    if !is_extreme_neutral(top) {
-        return Some(top.clone());
-    }
-
-    let surface = palette
+    let highlight_family = predominant_color_matching(palette, is_chromatic)
+        .ok()
+        .flatten();
+    palette
         .iter()
         .filter(valid)
-        .filter(|sample| !is_extreme_neutral(sample))
-        .max_by(by_coverage);
-    match surface {
-        Some(surface)
-            if surface.weight >= MIN_PLACEHOLDER_SURFACE_WEIGHT
-                && surface.weight >= top.weight * MIN_PLACEHOLDER_SURFACE_SHARE =>
-        {
-            Some(surface.clone())
-        }
-        _ => Some(top.clone()),
-    }
-}
-
-fn is_extreme_neutral(sample: &WeightedColor) -> bool {
-    let maximum = sample.red.max(sample.green).max(sample.blue);
-    let minimum = sample.red.min(sample.green).min(sample.blue);
-    let chroma = maximum - minimum;
-    let lightness = (maximum + minimum) / 2.0;
-    chroma < 0.08 && (lightness <= 0.10 || lightness >= 0.90)
+        .filter(|sample| {
+            highlight_family
+                .is_some_and(|family| color_family(sample.red, sample.green, sample.blue) == family)
+        })
+        .max_by(by_coverage)
+        .or_else(|| palette.iter().filter(valid).max_by(by_coverage))
+        .cloned()
 }
 
 pub fn predominant_color(palette: &[WeightedColor]) -> Result<Option<PredominantColor>> {
+    predominant_color_matching(palette, |_| true)
+}
+
+fn predominant_color_matching(
+    palette: &[WeightedColor],
+    include: fn(PredominantColor) -> bool,
+) -> Result<Option<PredominantColor>> {
     let mut weights: BTreeMap<&'static str, (PredominantColor, f64)> = BTreeMap::new();
     for sample in palette {
         validate_color(sample)?;
@@ -808,6 +798,9 @@ pub fn predominant_color(palette: &[WeightedColor]) -> Result<Option<Predominant
             continue;
         }
         let family = color_family(sample.red, sample.green, sample.blue);
+        if !include(family) {
+            continue;
+        }
         weights
             .entry(family.as_str())
             .and_modify(|(_, weight)| *weight += sample.weight)
@@ -820,6 +813,13 @@ pub fn predominant_color(palette: &[WeightedColor]) -> Result<Option<Predominant
                 .then_with(|| b.0.as_str().cmp(a.0.as_str()))
         })
         .map(|(family, _)| family))
+}
+
+fn is_chromatic(family: PredominantColor) -> bool {
+    !matches!(
+        family,
+        PredominantColor::Black | PredominantColor::Gray | PredominantColor::White
+    )
 }
 
 fn validate_color(sample: &WeightedColor) -> Result<()> {
@@ -1040,28 +1040,64 @@ mod tests {
     }
 
     #[test]
-    fn placeholder_color_ignores_a_tiny_accent_on_a_white_canvas() {
-        let white = WeightedColor {
-            red: 1.0,
-            green: 1.0,
-            blue: 1.0,
-            weight: 0.92,
+    fn placeholder_color_uses_the_chromatic_highlight_over_a_white_canvas() {
+        let blue = WeightedColor {
+            red: 0.1,
+            green: 0.3,
+            blue: 0.9,
+            weight: 0.08,
         };
         let palette = vec![
-            white.clone(),
             WeightedColor {
-                red: 0.1,
-                green: 0.3,
-                blue: 0.9,
-                weight: 0.08,
+                red: 1.0,
+                green: 1.0,
+                blue: 1.0,
+                weight: 0.92,
             },
+            blue.clone(),
         ];
 
-        assert_eq!(representative_placeholder_color(&palette), Some(white));
+        assert_eq!(representative_placeholder_color(&palette), Some(blue));
     }
 
     #[test]
-    fn placeholder_color_keeps_an_extreme_neutral_when_it_is_the_image() {
+    fn placeholder_color_uses_the_largest_cluster_in_the_winning_chromatic_family() {
+        let strongest_blue = WeightedColor {
+            red: 0.1,
+            green: 0.3,
+            blue: 0.9,
+            weight: 0.25,
+        };
+        let palette = vec![
+            WeightedColor {
+                red: 0.9,
+                green: 0.1,
+                blue: 0.1,
+                weight: 0.30,
+            },
+            strongest_blue.clone(),
+            WeightedColor {
+                red: 0.15,
+                green: 0.35,
+                blue: 0.8,
+                weight: 0.23,
+            },
+            WeightedColor {
+                red: 0.2,
+                green: 0.4,
+                blue: 0.85,
+                weight: 0.22,
+            },
+        ];
+
+        assert_eq!(
+            representative_placeholder_color(&palette),
+            Some(strongest_blue)
+        );
+    }
+
+    #[test]
+    fn placeholder_color_keeps_a_neutral_when_the_image_has_no_chromatic_family() {
         let black = WeightedColor {
             red: 0.02,
             green: 0.02,
