@@ -18,55 +18,64 @@ struct CuttingsCardView: View {
     @State private var isHovered = false
 
     var body: some View {
-        cardContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(CuttingsTheme.cardBackground(for: row))
-            .clipShape(cardShape)
-            .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
-            .overlay(alignment: .topTrailing) { hoverMenu }
-            .contentShape(cardShape)
-            .onTapGesture(perform: onOpen)
-            .contextMenu {
-                CuttingsReadingActions(
-                    row: row,
-                    onEditTags: onEditTags
+        GeometryReader { proxy in
+            cardContent(in: proxy.size)
+                .frame(
+                    width: proxy.size.width,
+                    height: proxy.size.height,
+                    alignment: .topLeading
                 )
-            }
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.14)) {
-                    isHovered = hovering
+                .background(CuttingsTheme.cardBackground(for: row))
+                .clipShape(cardShape)
+                .overlay(cardShape.stroke(CuttingsTheme.border, lineWidth: 1))
+                .overlay(alignment: .topTrailing) { hoverMenu }
+                .contentShape(cardShape)
+                .onTapGesture(perform: onOpen)
+                .contextMenu {
+                    CuttingsReadingActions(
+                        row: row,
+                        onEditTags: onEditTags
+                    )
                 }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityAddTraits(.isButton)
-    }
-
-    @ViewBuilder
-    private var cardContent: some View {
-        switch row.kind {
-        case .image:
-            imageCard
-        case .video:
-            videoCard
-        case .quote:
-            quoteCard
-        case .article:
-            articleCard
+                .onHover { hovering in
+                    withAnimation(.easeOut(duration: 0.14)) {
+                        isHovered = hovering
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityAddTraits(.isButton)
         }
     }
 
-    private var imageCard: some View {
-        LocalReadingImage(
-            row: row, libraryURL: appState.libraryURL,
-            fallbackAspectRatio: 4 / 3, maxPixel: previewMaxPixel, contentMode: .fit
-        )
+    @ViewBuilder
+    private func cardContent(in size: CGSize) -> some View {
+        switch row.kind {
+        case .image:
+            imageCard(in: size)
+        case .video:
+            videoCard(in: size)
+        case .quote:
+            quoteCard
+        case .article:
+            articleCard(in: size)
+        }
     }
 
-    private var videoCard: some View {
+    private func imageCard(in size: CGSize) -> some View {
+        LocalReadingImage(
+            row: row, libraryURL: appState.libraryURL,
+            fallbackAspectRatio: 4 / 3, maxPixel: previewMaxPixel, contentMode: .fill
+        )
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    private func videoCard(in size: CGSize) -> some View {
         AutoplayVideoCard(
             row: row,
             libraryURL: appState.libraryURL,
+            cardSize: size,
             viewportSize: viewportSize,
             playbackPositions: playbackPositions,
             maxPixel: previewMaxPixel,
@@ -74,40 +83,56 @@ struct CuttingsCardView: View {
             reduceMotion: reduceMotion,
             scenePhase: scenePhase
         )
+        .frame(width: size.width, height: size.height)
+        .clipped()
     }
 
     @ViewBuilder
-    private var articleCard: some View {
+    private func articleCard(in size: CGSize) -> some View {
         if row.previewAsset != nil {
-            VStack(alignment: .leading, spacing: 0) {
-                LocalReadingImage(
-                    row: row, libraryURL: appState.libraryURL,
-                    fallbackAspectRatio: 3 / 2, maxPixel: previewMaxPixel, contentMode: .fill
-                )
-                articleText
-            }
+            previewArticleCard(in: size)
         } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(row.displayTitle)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(articlePrimaryForeground)
-                    .lineLimit(5)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let excerpt = row.excerpt, !excerpt.isEmpty {
-                    Text(excerpt)
-                        .font(.callout)
-                        .foregroundStyle(articleSecondaryForeground)
-                        .lineLimit(6)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                sourceLine(foreground: articleSecondaryForeground)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(CuttingsTheme.cardBackground(for: row))
+            textArticleCard
         }
+    }
+
+    private func previewArticleCard(in size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            LocalReadingImage(
+                row: row, libraryURL: appState.libraryURL,
+                fallbackAspectRatio: 3 / 2, maxPixel: previewMaxPixel, contentMode: .fill
+            )
+            .frame(width: size.width, height: size.width * 2 / 3)
+            .clipped()
+
+            articleText
+                .layoutPriority(1)
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .clipped()
+    }
+
+    private var textArticleCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(row.displayTitle)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(articlePrimaryForeground)
+                .lineLimit(5)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let excerpt = row.excerpt, !excerpt.isEmpty {
+                Text(excerpt)
+                    .font(.callout)
+                    .foregroundStyle(articleSecondaryForeground)
+                    .lineLimit(6)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            sourceLine(foreground: articleSecondaryForeground)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(CuttingsTheme.cardBackground(for: row))
     }
 
     private var quoteCard: some View {

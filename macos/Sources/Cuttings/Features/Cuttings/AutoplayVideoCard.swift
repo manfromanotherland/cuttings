@@ -10,6 +10,7 @@ import SwiftUI
 struct AutoplayVideoCard: View {
     let row: ReadingRow
     let libraryURL: URL?
+    let cardSize: CGSize
     let viewportSize: CGSize
     let playbackPositions: VideoPlaybackPositionStore
     var maxPixel: CGFloat = 800
@@ -29,6 +30,8 @@ struct AutoplayVideoCard: View {
             maxPixel: maxPixel,
             contentMode: .fill
         )
+        .frame(width: cardSize.width, height: cardSize.height)
+        .clipped()
         .overlay {
             if let playback {
                 CardVideoPlayerLayer(player: playback.player)
@@ -36,6 +39,7 @@ struct AutoplayVideoCard: View {
                     .accessibilityHidden(true)
             }
         }
+        .clipped()
         .onGeometryChange(for: Bool.self) { proxy in
             VideoCardViewport.containsVisibleArea(
                 of: proxy.frame(in: .scrollView(axis: .vertical)),

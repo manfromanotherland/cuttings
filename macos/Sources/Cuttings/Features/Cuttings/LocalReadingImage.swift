@@ -26,7 +26,7 @@ struct LocalReadingImage: View {
                     .aspectRatio(imageAspectRatio(image), contentMode: contentMode)
             } else {
                 placeholder
-                    .aspectRatio(fallbackAspectRatio, contentMode: .fit)
+                    .aspectRatio(fallbackAspectRatio, contentMode: contentMode)
             }
         }
         .task(id: loadKey) {
