@@ -103,7 +103,10 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
                     .preview_asset
                     .as_deref()
                     .and_then(|relative_path| {
-                        let inspected = if reading.metadata.kind == crate::ReadingKind::Image {
+                        let inspected = if matches!(
+                            reading.metadata.kind,
+                            crate::ReadingKind::Article | crate::ReadingKind::Image
+                        ) {
                             crate::visual_index::inspect_image_asset(
                                 library,
                                 &reading.metadata.id,
@@ -154,7 +157,7 @@ pub(crate) fn inspect_media_aspect_ratio(
     visual_asset: Option<&VisualAsset>,
 ) -> Option<f64> {
     let inspected = match metadata.kind {
-        crate::ReadingKind::Image => {
+        crate::ReadingKind::Article | crate::ReadingKind::Image => {
             return visual_asset
                 .and_then(|asset| asset.media_dimensions)
                 .and_then(|dimensions| dimensions.aspect_ratio());
@@ -162,7 +165,7 @@ pub(crate) fn inspect_media_aspect_ratio(
         crate::ReadingKind::Video => metadata.media_url.as_deref().map(|media_url| {
             crate::visual_index::inspect_video_dimensions(library, &metadata.id, media_url)
         }),
-        crate::ReadingKind::Article | crate::ReadingKind::Quote => None,
+        crate::ReadingKind::Quote => None,
     }?;
 
     match inspected {
@@ -342,6 +345,28 @@ mod tests {
         let results = scan_library(&lib).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].source_hash, reading.metadata.source_hash);
+    }
+
+    #[test]
+    fn scan_reads_article_preview_aspect_ratio_from_local_asset() {
+        let dir = TempDir::new().unwrap();
+        let lib = make_library(&dir);
+        let id = new_id();
+        let mut metadata = sample_metadata(&id, "https://example.com/article");
+        metadata.preview_asset = Some("assets/social.png".into());
+        write_reading(&lib, metadata, "body".into()).unwrap();
+        let mut png = vec![
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R',
+        ];
+        png.extend_from_slice(&1200_u32.to_be_bytes());
+        png.extend_from_slice(&800_u32.to_be_bytes());
+        png.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        fs::create_dir_all(lib.assets_dir(&id)).unwrap();
+        fs::write(lib.assets_dir(&id).join("social.png"), png).unwrap();
+
+        let results = scan_library(&lib).unwrap();
+
+        assert_eq!(results[0].media_aspect_ratio, Some(3.0 / 2.0));
     }
 
     #[test]

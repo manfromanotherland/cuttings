@@ -1648,6 +1648,27 @@ mod tests {
     }
 
     #[test]
+    fn list_row_carries_article_preview_aspect_ratio() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let id = new_id();
+        let mut metadata = meta(&id, "https://example.com/article", "Article");
+        metadata.preview_asset = Some("assets/social.png".into());
+        write_reading(&lib, metadata, "Article body".into()).unwrap();
+        fs::create_dir_all(lib.assets_dir(&id)).unwrap();
+        fs::write(lib.assets_dir(&id).join("social.png"), portrait_png()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let row = list_readings(&conn, &ListOptions::default())
+            .unwrap()
+            .pop()
+            .unwrap();
+
+        assert_eq!(row.kind, ReadingKind::Article);
+        assert_eq!(row.media_aspect_ratio, Some(1900.0 / 2468.0));
+    }
+
+    #[test]
     fn kind_filter_is_applied_before_pagination() {
         let (dir, conn) = setup();
         let lib = make_library(&dir);

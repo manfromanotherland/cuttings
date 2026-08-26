@@ -83,7 +83,10 @@ where
     let updated = parse_reading(&updated_content)?;
     let modified_at = std::fs::metadata(&updated_path)?.modified()?;
     let visual_asset = updated.metadata.preview_asset.as_deref().and_then(|path| {
-        if updated.metadata.kind == crate::ReadingKind::Image {
+        if matches!(
+            updated.metadata.kind,
+            crate::ReadingKind::Article | crate::ReadingKind::Image
+        ) {
             crate::visual_index::inspect_image_asset(library, &updated.metadata.id, path).ok()
         } else {
             crate::visual_index::inspect_asset(library, &updated.metadata.id, path).ok()

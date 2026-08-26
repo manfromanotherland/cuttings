@@ -153,7 +153,10 @@ fn sync_index(library: &LibraryRoot, conn: &Connection, id: &str) -> Result<()> 
     let reading = parse_reading(&content)?;
     let modified_at = std::fs::metadata(&path)?.modified()?;
     let visual_asset = reading.metadata.preview_asset.as_deref().and_then(|asset| {
-        if reading.metadata.kind == crate::ReadingKind::Image {
+        if matches!(
+            reading.metadata.kind,
+            crate::ReadingKind::Article | crate::ReadingKind::Image
+        ) {
             crate::visual_index::inspect_image_asset(library, &reading.metadata.id, asset).ok()
         } else {
             crate::visual_index::inspect_asset(library, &reading.metadata.id, asset).ok()
