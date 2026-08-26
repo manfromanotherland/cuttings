@@ -5,7 +5,7 @@ import Vision
 
 /// On-device visual analysis available on Cuttings' macOS 14 baseline.
 struct AppleVisualAnalyzer: VisualAnalyzing, Sendable {
-    static let analyzerVersion = "vision-classify-r2+core-image-kmeans-seeded-srgb-v1"
+    static let analyzerVersion = "vision-classify-r2+core-image-kmeans-srgb-v2"
 
     private static let maximumPixelDimension = 2048
     private let executor: VisualAnalysisExecutor
