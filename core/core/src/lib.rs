@@ -12,6 +12,7 @@ pub mod index;
 mod ingest;
 pub mod list;
 mod locking;
+mod media_dimensions;
 pub mod notes;
 pub mod rating;
 pub mod reconcile;

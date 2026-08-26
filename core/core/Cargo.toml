@@ -19,6 +19,8 @@ sha2 = "0.10"
 hex = "0.4"
 fs2 = "0.4"
 anyhow = "1"
+imagesize = "=0.14.0"
+nom-exif = "=3.6.2"
 rusqlite = { version = "0.32", features = ["bundled", "trace"] }
 rustix = { version = "1", features = ["fs"] }
 thiserror = "1"

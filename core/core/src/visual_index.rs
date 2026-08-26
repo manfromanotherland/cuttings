@@ -10,7 +10,7 @@
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::{Read as _, Write as _},
+    io::{Read as _, Seek as _, SeekFrom, Write as _},
     path::{Path, PathBuf},
 };
 
@@ -40,6 +40,7 @@ pub struct VisualAsset {
     pub relative_path: String,
     pub absolute_file_path: String,
     pub content_hash: String,
+    pub(crate) media_dimensions: Option<crate::media_dimensions::MediaDimensions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -209,7 +210,30 @@ pub(crate) fn inspect_asset(
     reading_id: &str,
     relative_path: &str,
 ) -> Result<VisualAsset> {
+    inspect_asset_inner(library, reading_id, relative_path, false)
+}
+
+/// Hash an image preview and read its display dimensions from one pinned file
+/// descriptor, so an external replacement cannot mix two asset versions.
+pub(crate) fn inspect_image_asset(
+    library: &LibraryRoot,
+    reading_id: &str,
+    relative_path: &str,
+) -> Result<VisualAsset> {
+    inspect_asset_inner(library, reading_id, relative_path, true)
+}
+
+fn inspect_asset_inner(
+    library: &LibraryRoot,
+    reading_id: &str,
+    relative_path: &str,
+    include_dimensions: bool,
+) -> Result<VisualAsset> {
     let mut file = open_source_asset(library, reading_id, relative_path)?;
+    let media_dimensions = include_dimensions
+        .then(|| crate::media_dimensions::image_dimensions(&mut file))
+        .flatten();
+    file.seek(SeekFrom::Start(0))?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
@@ -226,13 +250,54 @@ pub(crate) fn inspect_asset(
         relative_path: relative_path.to_string(),
         absolute_file_path: absolute.to_string_lossy().into_owned(),
         content_hash: hex::encode(hasher.finalize()),
+        media_dimensions,
     })
+}
+
+/// Read display-oriented dimensions from a reading's local movie asset.
+/// `media_url` must retain the exact `cuttings-asset:assets/<file>` binding
+/// found in the pinned article metadata before any bytes are inspected.
+pub(crate) fn inspect_video_dimensions(
+    library: &LibraryRoot,
+    reading_id: &str,
+    media_url: &str,
+) -> Result<Option<crate::media_dimensions::MediaDimensions>> {
+    let relative_path = media_url
+        .strip_prefix("cuttings-asset:")
+        .ok_or_else(|| anyhow::anyhow!("video media is not a local asset for {reading_id}"))?;
+    let mut file = open_bound_asset(
+        library,
+        reading_id,
+        relative_path,
+        AssetBinding::Media(media_url),
+    )?;
+    Ok(crate::media_dimensions::video_dimensions(&mut file))
 }
 
 fn open_source_asset(
     library: &LibraryRoot,
     reading_id: &str,
     relative_path: &str,
+) -> Result<fs::File> {
+    open_bound_asset(
+        library,
+        reading_id,
+        relative_path,
+        AssetBinding::Preview(relative_path),
+    )
+}
+
+#[derive(Clone, Copy)]
+enum AssetBinding<'a> {
+    Preview(&'a str),
+    Media(&'a str),
+}
+
+fn open_bound_asset(
+    library: &LibraryRoot,
+    reading_id: &str,
+    relative_path: &str,
+    binding: AssetBinding<'_>,
 ) -> Result<fs::File> {
     validate_reading_id(reading_id)?;
     let file_name = validate_asset_path(relative_path)?;
@@ -262,8 +327,12 @@ fn open_source_asset(
     let mut markdown = String::new();
     article.read_to_string(&mut markdown)?;
     let metadata = crate::parse_reading(&markdown)?.metadata;
-    if metadata.id != reading_id || metadata.preview_asset.as_deref() != Some(relative_path) {
-        bail!("preview asset no longer belongs to reading {reading_id}");
+    let binding_matches = match binding {
+        AssetBinding::Preview(expected) => metadata.preview_asset.as_deref() == Some(expected),
+        AssetBinding::Media(expected) => metadata.media_url.as_deref() == Some(expected),
+    };
+    if metadata.id != reading_id || !binding_matches {
+        bail!("asset no longer belongs to reading {reading_id}");
     }
 
     let assets = rustix::fs::openat(&reading_dir, "assets", directory_flags, Mode::empty())?;
@@ -375,6 +444,7 @@ fn staged_asset_record(
         relative_path: relative_path.to_string(),
         absolute_file_path: cache_root.join(content_hash).to_string_lossy().into_owned(),
         content_hash: content_hash.to_string(),
+        media_dimensions: None,
     }
 }
 
