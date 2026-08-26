@@ -46,6 +46,7 @@ pub struct FfiReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
+    pub media_aspect_ratio: Option<f64>,
     pub canonical_url: String,
     pub author: Option<String>,
     pub site: Option<String>,
@@ -250,6 +251,7 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             preview_asset: r.preview_asset,
             favicon_asset: r.favicon_asset,
             theme_color: r.theme_color,
+            media_aspect_ratio: r.media_aspect_ratio,
             canonical_url: r.canonical_url,
             author: r.author,
             site: r.site,
@@ -841,6 +843,16 @@ impl Database {
 mod tests {
     use super::*;
 
+    fn portrait_png() -> Vec<u8> {
+        let mut bytes = vec![
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R',
+        ];
+        bytes.extend_from_slice(&1900_u32.to_be_bytes());
+        bytes.extend_from_slice(&2468_u32.to_be_bytes());
+        bytes.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        bytes
+    }
+
     fn list_options(view: FfiView) -> FfiListOptions {
         FfiListOptions {
             view,
@@ -914,6 +926,25 @@ mod tests {
             std::fs::read(asset.absolute_file_path).unwrap(),
             b"ffi staged image"
         );
+    }
+
+    #[test]
+    fn media_aspect_ratio_crosses_the_ffi_boundary() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let imported = database
+            .import_image(
+                library_dir.path().display().to_string(),
+                portrait_png(),
+                "image/png".into(),
+                "Portrait".into(),
+            )
+            .unwrap();
+
+        let row = database.get_reading_row(imported.id).unwrap().unwrap();
+        assert_eq!(row.media_aspect_ratio, Some(1900.0 / 2468.0));
     }
 
     #[test]

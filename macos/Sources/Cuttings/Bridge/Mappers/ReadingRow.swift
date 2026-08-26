@@ -61,6 +61,7 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var previewAsset: String?
     var faviconAsset: String?
     var themeColor: String?
+    var mediaAspectRatio: Double?
 }
 
 extension ReadingRow {
@@ -89,6 +90,7 @@ extension ReadingRow {
         previewAsset = row.previewAsset
         faviconAsset = row.faviconAsset
         themeColor = row.themeColor
+        mediaAspectRatio = row.mediaAspectRatio
     }
 }
 

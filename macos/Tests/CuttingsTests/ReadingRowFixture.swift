@@ -34,6 +34,7 @@ func makeReadingRow(
         mediaUrl: nil,
         previewAsset: nil,
         faviconAsset: nil,
-        themeColor: nil
+        themeColor: nil,
+        mediaAspectRatio: nil
     )
 }

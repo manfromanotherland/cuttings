@@ -20,6 +20,7 @@ final class ReadingRowMapperTests: XCTestCase {
             previewAsset: "assets/poster.jpg",
             faviconAsset: "assets/favicon.ico",
             themeColor: "#123456",
+            mediaAspectRatio: 16.0 / 9.0,
             canonicalUrl: "https://example.com/article?canonical",
             author: "Ada Lovelace",
             site: "example.com",
@@ -59,6 +60,7 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.previewAsset, ffi.previewAsset)
         XCTAssertEqual(row.faviconAsset, ffi.faviconAsset)
         XCTAssertEqual(row.themeColor, ffi.themeColor)
+        XCTAssertEqual(row.mediaAspectRatio, ffi.mediaAspectRatio)
     }
 
     func testOptionalFieldsPreserveNil() {
@@ -69,6 +71,7 @@ final class ReadingRowMapperTests: XCTestCase {
         ffi.previewAsset = nil
         ffi.faviconAsset = nil
         ffi.themeColor = nil
+        ffi.mediaAspectRatio = nil
         ffi.author = nil
         ffi.site = nil
         ffi.excerpt = nil
@@ -87,6 +90,7 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertNil(row.previewAsset)
         XCTAssertNil(row.faviconAsset)
         XCTAssertNil(row.themeColor)
+        XCTAssertNil(row.mediaAspectRatio)
         XCTAssertTrue(row.tags.isEmpty)
     }
 
