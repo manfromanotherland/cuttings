@@ -63,4 +63,29 @@ enum CardSize: String, CaseIterable, Identifiable {
         case .small: .medium
         }
     }
+
+    /// Convert a trackpad pinch into the same discrete density levels used by
+    /// the toolbar and keyboard commands. Each 20% scale step advances one
+    /// level; large gestures may cross several levels but always clamp to the
+    /// existing range.
+    func zoomed(by magnification: CGFloat) -> Self {
+        guard magnification.isFinite, magnification > 0,
+              let startingIndex = Self.allCases.firstIndex(of: self)
+        else { return self }
+
+        let scalePerStep: CGFloat = 1.2
+        var remainingScale = magnification
+        var targetIndex = startingIndex
+
+        while remainingScale >= scalePerStep, targetIndex < Self.allCases.count - 1 {
+            targetIndex += 1
+            remainingScale /= scalePerStep
+        }
+        while remainingScale <= 1 / scalePerStep, targetIndex > 0 {
+            targetIndex -= 1
+            remainingScale *= scalePerStep
+        }
+
+        return Self.allCases[targetIndex]
+    }
 }

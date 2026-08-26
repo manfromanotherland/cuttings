@@ -9,6 +9,13 @@ struct Keyboard {
     let app: XCUIApplication
 
     /// ── Article actions (act on the current selection) ────────────────────
+    func open() {
+        app.typeKey("o", modifierFlags: .command)
+    } // ⌘O
+    func openWithReturn() {
+        app.typeKey(.return, modifierFlags: [])
+    }
+
     func editTags() {
         app.typeKey("t", modifierFlags: [.command, .shift])
     } // ⌘⇧T
@@ -16,16 +23,20 @@ struct Keyboard {
         app.typeKey("h", modifierFlags: [.command, .shift])
     } // ⌘⇧H
     func delete() {
-        app.typeKey(.delete, modifierFlags: [.command, .option])
-    } // ⌘⌥⌫
+        app.typeKey(.delete, modifierFlags: .command)
+    } // ⌘⌫
     func openInBrowser() {
         app.typeKey("o", modifierFlags: [.command, .shift])
     } // ⌘⇧O
 
     /// ── View / navigation ─────────────────────────────────────────────────
     func focusSearch() {
-        app.typeKey("k", modifierFlags: .command)
-    } // ⌘K
+        app.typeKey("f", modifierFlags: .command)
+    } // ⌘F
+    func focusSearchWithSlash() {
+        app.typeKey("/", modifierFlags: [])
+    }
+
     func toggleFocusMode() {
         app.typeKey("r", modifierFlags: [.command, .shift])
     } // ⌘⇧R
@@ -40,6 +51,18 @@ struct Keyboard {
 
     func arrowLeft() {
         app.typeKey(.leftArrow, modifierFlags: [])
+    }
+
+    func selectFilter(number: String) {
+        app.typeKey(number, modifierFlags: .command)
+    }
+
+    func previousFilter() {
+        app.typeKey("[", modifierFlags: .command)
+    }
+
+    func nextFilter() {
+        app.typeKey("]", modifierFlags: .command)
     }
 
     func arrowRight() {

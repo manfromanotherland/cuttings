@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import AppKit
 import Foundation
 import Observation
 import SwiftUI
@@ -9,7 +8,7 @@ import SwiftUI
 // concern: Library.swift (onboarding, boot, sync), Readings.swift (list
 // loading, search, filter reloads), Mutations.swift (row edits with
 // optimistic UI) and Highlights.swift. This file holds the stored state,
-// `init`, and the AppKit focus helpers.
+// `init`, and lifecycle plumbing.
 @MainActor
 @Observable
 final class AppState {
@@ -272,30 +271,5 @@ final class AppState {
     func completeExtensionSetup() {
         AppDefaults.store.set(true, forKey: ExtensionSetupKey.completed)
         showExtensionSetup = false
-    }
-
-    // ── Search focus ──────────────────────────────────────────────────────────
-
-    /// Focus the native searchable field (⌘K). SwiftUI exposes no focus binding
-    /// for toolbar search on macOS, so reach its `NSSearchField` through AppKit.
-    func focusSearchField() {
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
-        // The toolbar is hosted alongside `contentView`, not within it, so search
-        // from the frame view (their shared ancestor) to reach the field.
-        let root = window.contentView?.superview ?? window.contentView
-        guard let root, let field = Self.firstSearchField(in: root) else { return }
-        window.makeFirstResponder(field)
-    }
-
-    private static func firstSearchField(in view: NSView) -> NSSearchField? {
-        if let field = view as? NSSearchField {
-            return field
-        }
-        for subview in view.subviews {
-            if let field = firstSearchField(in: subview) {
-                return field
-            }
-        }
-        return nil
     }
 }

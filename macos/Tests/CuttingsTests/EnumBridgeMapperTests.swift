@@ -31,6 +31,14 @@ final class EnumBridgeMapperTests: XCTestCase {
         )
     }
 
+    func testLibraryScopeNavigationWrapsInToolbarOrder() {
+        XCTAssertEqual(LibraryScope.all.previous, .quotes)
+        XCTAssertEqual(LibraryScope.all.next, .media)
+        XCTAssertEqual(LibraryScope.articles.previous, .media)
+        XCTAssertEqual(LibraryScope.articles.next, .links)
+        XCTAssertEqual(LibraryScope.quotes.next, .all)
+    }
+
     func testReadingSortMapsEverySortCase() {
         XCTAssertEqual(ReadingSort.relevance.ffiSort, .relevance)
         XCTAssertEqual(ReadingSort.savedAt.ffiSort, .savedAt)

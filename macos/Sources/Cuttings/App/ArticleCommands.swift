@@ -6,10 +6,19 @@ import SwiftUI
 struct ArticleCommands: Commands {
     var appState: AppState
     @FocusedValue(\.detailNavigationActions) private var detailNavigationActions
+    @FocusedValue(\.boardActions) private var boardActions
 
     var body: some Commands {
         CommandMenu("Item") {
             if !selectedRows.isEmpty {
+                Button("Open") {
+                    boardActions?.openSelection()
+                }
+                .keyboardShortcut(ShortcutCatalog.open)
+                .disabled(boardActions?.canOpenSelection != true || appState.isEditingText)
+
+                Divider()
+
                 Button("Edit Tags…") {
                     appState.showTagSheet = true
                 }

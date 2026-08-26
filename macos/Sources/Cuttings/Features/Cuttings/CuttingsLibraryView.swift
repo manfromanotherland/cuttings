@@ -9,7 +9,7 @@ struct CuttingsLibraryView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.displayScale) private var displayScale
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
+    @AppStorage("cardSize", store: AppDefaults.store) var cardSize: CardSize = .small
 
     @State var presentedReading: ReadingRow?
     @State private var presentationOrder: [String] = []
@@ -20,7 +20,9 @@ struct CuttingsLibraryView: View {
     @State var boardPosition = LazyLayoutPosition<String>()
     @State var boardNavigation = MasonryNavigationCoordinator<ReadingRow, String>()
     @State var boardModifierKeys: EventModifiers = []
+    @State var pinchStartCardSize: CardSize?
     @FocusState var boardFocused: Bool
+    @FocusState var searchFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -29,6 +31,7 @@ struct CuttingsLibraryView: View {
                     overlay
                 }
         }
+        .focusedSceneValue(\.boardActions, focusedBoardActions)
         .alert("Cuttings couldn’t complete that action", isPresented: errorAlertPresented) {
             Button("OK") { appState.error = nil }
         } message: {
@@ -129,6 +132,7 @@ extension CuttingsLibraryView {
                     placement: .toolbar,
                     prompt: "Search Cuttings"
                 )
+                .searchFocused($searchFocused)
                 .toolbar { boardToolbar }
         }
     }
@@ -257,9 +261,18 @@ extension CuttingsLibraryView {
                     phases: [.down, .repeat],
                     action: moveSelection
                 )
+                .onKeyPress(
+                    keys: [
+                        ShortcutCatalog.openWithReturn.key,
+                        ShortcutCatalog.focusSearchWithSlash.key
+                    ],
+                    phases: [.down],
+                    action: performBoardShortcut
+                )
                 .onModifierKeysChanged(mask: .shift) { _, modifiers in
                     boardModifierKeys = modifiers
                 }
+                .simultaneousGesture(boardMagnifyGesture)
                 .accessibilityIdentifier(A11y.List.table)
             }
         }
@@ -353,20 +366,6 @@ extension CuttingsLibraryView {
         )
     }
 
-    private var searchQuery: Binding<String> {
-        Binding(
-            get: { appState.searchQuery },
-            set: { appState.searchQuery = $0 }
-        )
-    }
-
-    private var scopeSelection: Binding<LibraryScope> {
-        Binding(
-            get: { appState.activeScope },
-            set: { appState.selectScope($0) }
-        )
-    }
-
     private static let boardSpacing: CGFloat = 18
     private static let boardTopSpacing: CGFloat = 12
 
@@ -411,7 +410,7 @@ extension CuttingsLibraryView {
         }
     }
 
-    private func open(_ row: ReadingRow) {
+    func open(_ row: ReadingRow) {
         appState.selectReading(id: row.id, extending: false)
 
         if LibraryScope.links.contains(row) {

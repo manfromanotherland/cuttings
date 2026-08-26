@@ -11,14 +11,32 @@ struct DetailNavigationActions {
     let toggleInspector: () -> Void
 }
 
+/// View-local actions that menu commands can invoke without moving board
+/// presentation or search-focus state into the shared app model.
+struct BoardActions {
+    let canOpenSelection: Bool
+    let canFocusSearch: Bool
+    let openSelection: () -> Void
+    let focusSearch: () -> Void
+}
+
 private struct DetailNavigationActionsKey: FocusedValueKey {
     typealias Value = DetailNavigationActions
+}
+
+private struct BoardActionsKey: FocusedValueKey {
+    typealias Value = BoardActions
 }
 
 extension FocusedValues {
     var detailNavigationActions: DetailNavigationActions? {
         get { self[DetailNavigationActionsKey.self] }
         set { self[DetailNavigationActionsKey.self] = newValue }
+    }
+
+    var boardActions: BoardActions? {
+        get { self[BoardActionsKey.self] }
+        set { self[BoardActionsKey.self] = newValue }
     }
 }
 
@@ -27,18 +45,45 @@ struct NavigationCommands: Commands {
     var appState: AppState
     @AppStorage("cardSize", store: AppDefaults.store) private var cardSize: CardSize = .small
     @FocusedValue(\.detailNavigationActions) private var detailNavigationActions
+    @FocusedValue(\.boardActions) private var boardActions
 
     var body: some Commands {
         CommandGroup(replacing: .sidebar) {
             Button("Focus Search") {
-                appState.focusSearchField()
+                boardActions?.focusSearch()
             }
             .keyboardShortcut(ShortcutCatalog.focusSearch)
+            .disabled(boardActions?.canFocusSearch != true)
 
             Button(appState.isFocusMode ? "Exit Focus Mode" : "Focus Mode") {
                 appState.isFocusMode.toggle()
             }
             .keyboardShortcut(ShortcutCatalog.toggleFocusMode)
+
+            Divider()
+
+            Menu("Filter") {
+                ForEach(LibraryScope.allCases) { scope in
+                    Button(scope.label) {
+                        appState.selectScope(scope)
+                    }
+                    .keyboardShortcut(ShortcutCatalog.filterShortcut(for: scope))
+                    .disabled(appState.activeScope == scope)
+                }
+
+                Divider()
+
+                Button("Previous Filter") {
+                    appState.selectScope(appState.activeScope.previous)
+                }
+                .keyboardShortcut(ShortcutCatalog.previousFilter)
+
+                Button("Next Filter") {
+                    appState.selectScope(appState.activeScope.next)
+                }
+                .keyboardShortcut(ShortcutCatalog.nextFilter)
+            }
+            .disabled(detailNavigationActions != nil || appState.isEditingText)
 
             Divider()
 

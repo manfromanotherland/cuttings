@@ -32,6 +32,14 @@ enum LibraryScope: String, CaseIterable, Identifiable {
         }
     }
 
+    var previous: Self {
+        adjacent(by: -1)
+    }
+
+    var next: Self {
+        adjacent(by: 1)
+    }
+
     /// Whether `row` belongs in this library scope. `.all` deliberately includes
     /// cards carrying a legacy archived flag: archive remains readable metadata
     /// for format compatibility, but no longer changes presentation behavior.
@@ -43,5 +51,12 @@ enum LibraryScope: String, CaseIterable, Identifiable {
         case .links: row.kind == .article && row.lightweight
         case .quotes: row.kind == .quote
         }
+    }
+
+    private func adjacent(by offset: Int) -> Self {
+        let scopes = Self.allCases
+        guard let index = scopes.firstIndex(of: self) else { return self }
+        let wrappedIndex = (index + offset + scopes.count) % scopes.count
+        return scopes[wrappedIndex]
     }
 }

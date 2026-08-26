@@ -39,6 +39,27 @@ extension CuttingsLibraryView {
         return .handled
     }
 
+    func performBoardShortcut(_ press: KeyPress) -> KeyPress.Result {
+        guard !appState.isEditingText, presentedReading == nil else { return .ignored }
+
+        if ShortcutCatalog.open.matches(key: press.key, modifiers: press.modifiers) {
+            guard appState.selectedRows.count == 1 else { return .ignored }
+            openSelection()
+            return .handled
+        }
+
+        if ShortcutCatalog.focusSearch.matches(key: press.key, modifiers: press.modifiers),
+           !appState.isFocusMode
+        {
+            // The menu command and this board-local `/` path share SwiftUI's
+            // native `.searchFocused` binding.
+            focusSearch()
+            return .handled
+        }
+
+        return .ignored
+    }
+
     private func navigationDirection(for key: KeyEquivalent) -> BoardNavigationDirection? {
         switch key {
         case .upArrow:

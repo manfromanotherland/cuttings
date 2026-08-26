@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import SwiftUI
+import XCTest
+
+final class ShortcutCatalogTests: XCTestCase {
+    func testPrimaryActionShortcutsFollowMacConventions() {
+        XCTAssertTrue(ShortcutCatalog.open.matches(key: "o", modifiers: .command))
+        XCTAssertTrue(ShortcutCatalog.open.matches(key: .return, modifiers: []))
+        XCTAssertTrue(ShortcutCatalog.delete.matches(key: .delete, modifiers: .command))
+        XCTAssertFalse(
+            ShortcutCatalog.delete.matches(
+                key: .delete,
+                modifiers: [.command, .option]
+            )
+        )
+    }
+
+    func testSearchSupportsCommandFAndBoardLocalSlash() {
+        XCTAssertTrue(ShortcutCatalog.focusSearch.matches(key: "f", modifiers: .command))
+        XCTAssertTrue(ShortcutCatalog.focusSearch.matches(key: "/", modifiers: []))
+        XCTAssertFalse(ShortcutCatalog.focusSearch.matches(key: "/", modifiers: .command))
+        XCTAssertEqual(ShortcutCatalog.focusSearch.displays, ["⌘F", "/"])
+    }
+
+    func testEveryScopeHasItsOrderedCommandNumber() {
+        XCTAssertEqual(
+            LibraryScope.allCases.map { ShortcutCatalog.filterShortcut(for: $0).display },
+            ["⌘1", "⌘2", "⌘3", "⌘4", "⌘5"]
+        )
+    }
+}

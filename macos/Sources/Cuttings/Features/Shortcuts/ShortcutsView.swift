@@ -29,7 +29,11 @@ struct ShortcutsView: View {
                                 HStack(spacing: 12) {
                                     Text(shortcut.title)
                                     Spacer(minLength: 16)
-                                    KeyCap(shortcut.display)
+                                    HStack(spacing: 4) {
+                                        ForEach(shortcut.displays, id: \.self) { display in
+                                            KeyCap(display)
+                                        }
+                                    }
                                 }
                             }
                         }
