@@ -90,6 +90,7 @@ struct CuttingsReadingOverlay: View {
                     } label: {
                         Label("Open Source", systemImage: "safari")
                     }
+                    .keyboardShortcut(ShortcutCatalog.openInBrowser)
                 }
 
                 Button(role: .destructive) {
@@ -97,6 +98,7 @@ struct CuttingsReadingOverlay: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .keyboardShortcut(ShortcutCatalog.delete)
                 .disabled(appState.isDeleting)
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
