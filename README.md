@@ -28,6 +28,11 @@ or paste a web link, text, image, or MP4/MOV video anywhere on the board. Local 
 videos are copied into the library; a pasted link starts as a lightweight card that a later browser
 save can enrich with the cleaned article.
 
+On iPhone, use the [Save to Cuttings Shortcut](docs/ios-shortcut.md) from the share
+sheet. It saves into your iCloud library's `inbox` folder; the Mac app imports
+the capture and removes the Inbox copy only after a verified save. No iOS app
+or extension is required.
+
 Web cards retain their origin page URL, canonical URL, page title/site, and save date. Image and
 video cards additionally retain a durable media URL when the browser exposes one; session-local
 video streams receive a compact stable capture reference instead. Captured and locally pasted

@@ -9,6 +9,10 @@ and versions track the app's `CFBundleShortVersionString`. See
 
 ### Added
 
+- Inbox imports images, videos, text, and links from the library's `inbox` folder
+  while Cuttings is open. The iOS **Save to Cuttings** Shortcut keeps available
+  source details with each capture in iCloud Drive. Successful inputs are removed
+  only after the saved content is verified; failed inputs remain for retry.
 - Links, text, images, videos, and local `.txt`/`.md` files can now be saved by dropping
   them on the card board or pasting with ⌘V. URL-only saves remain explicitly
   lightweight until a later browser capture upgrades them in place. Local videos are copied into
