@@ -30,10 +30,10 @@ index is a disposable, per-device cache.
 ```
 
 The extension toolbar can extract and clean the current article, save a lightweight link, or capture
-the visible page as a screenshot. The context menu also captures a right-clicked image, saves a
-right-clicked video as a local movie, or turns selected text into a quote. Ordinary captures hand
-Markdown, metadata, and image bytes to a small native host; every video uses the bounded stream
-below. The host writes both paths into the library folder.
+the full scrollable page as one long screenshot. The context menu also captures a right-clicked
+image, saves a right-clicked video as a local movie, or turns selected text into a quote. Ordinary
+captures hand Markdown, metadata, and image bytes to a small native host; every video uses the
+bounded stream below. The host writes both paths into the library folder.
 Article and link saves retain live Open Graph/Twitter metadata plus local social-preview and favicon
 assets without injecting those head assets into the cleaned Markdown body. When a website declares
 a usable theme colour, the core stores it as normalized `theme_color` card-presentation metadata.
@@ -68,8 +68,9 @@ Rust core. Keeping them in one Git history lets protocol and format changes land
 every affected component.
 
 ### Browser extension (`extension`)
-- **Responsibility:** expose toolbar actions for an article, lightweight link, or visible screenshot;
-  capture a selected image; record a selected video and poster; or capture selected text as a quote.
+- **Responsibility:** expose toolbar actions for an article, lightweight link, or full-page
+  screenshot; capture a selected image; record a selected video and poster; or capture selected
+  text as a quote.
   Every path produces Markdown plus origin metadata and any local image bytes needed by the card.
 - **Why cleanup happens here:** the extension has the *live, rendered DOM*, so it sees JS-rendered
   content and pages the user is logged into. The engine never sees the page.

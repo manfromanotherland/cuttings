@@ -35,14 +35,21 @@ export function isToolbarSaveMessage(value: unknown): value is ToolbarSaveMessag
   );
 }
 
-/** True when captureVisibleTab remained on one settled browser document. */
+/** True when one visible-tile capture remained on the same settled browser document. */
 export function isStableScreenshotDocument(
   before: Pick<chrome.tabs.Tab, "id" | "url" | "pendingUrl">,
   after: Pick<chrome.tabs.Tab, "id" | "url" | "pendingUrl">,
 ): boolean {
   return (
-    before.id === after.id && before.url === after.url && !before.pendingUrl && !after.pendingUrl
+    before.id === after.id &&
+    urlWithoutFragment(before.url) === urlWithoutFragment(after.url) &&
+    !before.pendingUrl &&
+    !after.pendingUrl
   );
+}
+
+function urlWithoutFragment(value: string | undefined): string | undefined {
+  return value?.split("#", 1)[0];
 }
 
 /** Build a lightweight-link request from metadata/assets read from the live DOM. */
@@ -85,7 +92,7 @@ export function buildFallbackLinkCapture(
 }
 
 /**
- * Turn captureVisibleTab's PNG data URL into a normal standalone-image
+ * Turn the assembled full-page PNG data URL into a normal standalone-image
  * capture. The raw-byte hash is used as the media identity so data URLs never
  * leak into frontmatter and repeat captures deduplicate deterministically.
  */

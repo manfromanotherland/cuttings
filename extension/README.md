@@ -11,9 +11,9 @@
 # Browser extension
 
 The Manifest V3 browser extension for **Cuttings**, the local-first native macOS library. Its toolbar
-saves a cleaned article, a lightweight link, or a visible-page screenshot. The context menu also
-saves right-clicked images/videos and selected-text quotes. Article and link saves retain live page
-metadata, social previews, and favicons as local assets. Captures travel through the
+saves a cleaned article, a lightweight link, or one long screenshot of the full scrollable page. The
+context menu also saves right-clicked images/videos and selected-text quotes. Article and link saves
+retain live page metadata, social previews, and favicons as local assets. Captures travel through the
 `is.edmundo.cuttings.host` native messaging host and become Markdown plus local assets in your
 library folder.
 
@@ -65,8 +65,12 @@ After editing source, re-run `npm run package` and click the **reload ↻** icon
 card. Dia/Chrome keeps the same unpacked path and stable development extension ID.
 
 Click the Cuttings toolbar button and choose **Save article**, **Save link**, or **Save screenshot**.
-The screenshot action captures the currently visible viewport. The existing keyboard shortcut saves
-the full article directly.
+The screenshot action captures the full scrollable page as one long screenshot. The existing
+keyboard shortcut saves the full article directly.
+
+On app-style pages, Cuttings can follow one scrolling surface that fills the browser viewport. If a
+page has multiple large, independently scrolling panes, capture stops with an error rather than
+saving a misleading one-viewport image.
 
 **Firefox**
 

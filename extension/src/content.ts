@@ -10,6 +10,11 @@ import type {
   SaveResponse,
   VideoImportMetadata,
 } from "./protocol.js";
+import {
+  handleScreenshotPageMessage,
+  isScreenshotPageMessage,
+  ScreenshotPageCaptureController,
+} from "./screenshot-page.js";
 import { importVideo, type VideoImportOptions, VideoImportError } from "./video-import.js";
 
 /** An optional action button on a toast. Clicking it messages the background
@@ -86,7 +91,14 @@ interface CaptureQuoteMessage {
   pageUrl: string;
 }
 
+const screenshotPageCapture = new ScreenshotPageCaptureController(document, window);
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (isScreenshotPageMessage(msg)) {
+    void handleScreenshotPageMessage(screenshotPageCapture, msg).then(sendResponse);
+    return true;
+  }
+
   if (msg?.action === "extract") {
     void (async () => {
       const result = extractPage(document, window.location.href);

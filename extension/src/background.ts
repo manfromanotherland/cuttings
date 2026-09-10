@@ -22,6 +22,23 @@ import { HOST_ID, isHostMissing } from "./host.js";
 import { log } from "./log.js";
 import { isSessionLocalVideoUrl } from "./media.js";
 import { isPreparePageVideoBridgeMessage, PREPARE_PAGE_VIDEO_BRIDGE } from "./page-video-source.js";
+import {
+  captureFullPageScreenshot,
+  composeFullPageScreenshot,
+  MINIMUM_SCREENSHOT_CAPTURE_INTERVAL_MS,
+  type ScreenshotPageState,
+} from "./full-page-screenshot.js";
+import {
+  SCREENSHOT_PAGE_BEGIN_ACTION,
+  SCREENSHOT_PAGE_FINISH_ACTION,
+  SCREENSHOT_PAGE_MEASURE_ACTION,
+  SCREENSHOT_PAGE_SCROLL_ACTION,
+  type ScreenshotPageBeginMessage,
+  type ScreenshotPageFinishMessage,
+  type ScreenshotPageMeasureMessage,
+  type ScreenshotPageResponse,
+  type ScreenshotPageScrollMessage,
+} from "./screenshot-page.js";
 import { relayVideoImportPort, type RelayPort } from "./video-import-relay.js";
 import { VIDEO_IMPORT_PORT_NAME } from "./video-import.js";
 import {
@@ -38,6 +55,8 @@ const NOTIF_HOST_MISSING = "host-missing";
 /** Cap on the total decoded image bytes inlined into one save message. Images
  *  beyond this stay as remote-URL placeholders so a save can't buffer unbounded. */
 const MAX_TOTAL_IMAGE_BYTES = 40 * 1024 * 1024;
+let activeScreenshotTabId: number | undefined;
+let lastVisibleTabCaptureStartedAt: number | undefined;
 
 // ── Icon ──────────────────────────────────────────────────────────────────────
 
@@ -130,27 +149,24 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
  * message fails, inject the script programmatically (allowed by the `<all_urls>`
  * host permission) and retry once.
  */
-async function requestContentCapture(
-  tabId: number,
-  message: object,
-): Promise<PageCapture | { error: string }> {
+async function requestContentResponse<T>(tabId: number, message: object): Promise<T> {
   try {
-    return await chrome.tabs.sendMessage(tabId, message);
+    return (await chrome.tabs.sendMessage(tabId, message)) as T;
   } catch {
     await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] });
-    return await chrome.tabs.sendMessage(tabId, message);
+    return (await chrome.tabs.sendMessage(tabId, message)) as T;
   }
 }
 
 function requestExtraction(tabId: number): Promise<PageCapture | { error: string }> {
-  return requestContentCapture(tabId, { action: "extract" });
+  return requestContentResponse(tabId, { action: "extract" });
 }
 
 function requestLinkCapture(
   tabId: number,
   pageUrl: string,
 ): Promise<PageCapture | { error: string }> {
-  return requestContentCapture(tabId, { action: "capture-link", pageUrl });
+  return requestContentResponse(tabId, { action: "capture-link", pageUrl });
 }
 
 function requestMediaCapture(
@@ -159,7 +175,7 @@ function requestMediaCapture(
   kind: "image" | "video",
   mediaUrl: string,
 ): Promise<StandaloneMediaCaptureResponse> {
-  return requestContentCapture(tabId, {
+  return requestContentResponse(tabId, {
     action: "capture-media",
     kind,
     mediaUrl,
@@ -172,11 +188,41 @@ function requestQuoteCapture(
   pageUrl: string,
   text: string,
 ): Promise<PageCapture | { error: string }> {
-  return requestContentCapture(tabId, {
+  return requestContentResponse(tabId, {
     action: "capture-quote",
     pageUrl,
     text,
   });
+}
+
+async function requestScreenshotPageState(
+  tabId: number,
+  message: ScreenshotPageBeginMessage | ScreenshotPageScrollMessage | ScreenshotPageMeasureMessage,
+): Promise<ScreenshotPageState> {
+  const response = await requestContentResponse<ScreenshotPageResponse>(tabId, message);
+  if (!response || typeof response !== "object") {
+    throw new Error("The page returned an invalid screenshot response.");
+  }
+  if ("error" in response) throw new Error(response.error);
+  if (!("sessionId" in response)) {
+    throw new Error("The page returned an invalid screenshot response.");
+  }
+  return response;
+}
+
+async function finishScreenshotPage(tabId: number, sessionId: string): Promise<void> {
+  const message: ScreenshotPageFinishMessage = {
+    action: SCREENSHOT_PAGE_FINISH_ACTION,
+    sessionId,
+  };
+  const response = await requestContentResponse<ScreenshotPageResponse>(tabId, message);
+  if (!response || typeof response !== "object") {
+    throw new Error("The page returned an invalid screenshot response.");
+  }
+  if ("error" in response) throw new Error(response.error);
+  if (!("ok" in response) || response.ok !== true) {
+    throw new Error("The page did not finish the screenshot session.");
+  }
 }
 
 async function savePage(tab: chrome.tabs.Tab): Promise<void> {
@@ -287,33 +333,92 @@ async function saveScreenshot(tab: chrome.tabs.Tab): Promise<void> {
     return;
   }
 
+  if (activeScreenshotTabId !== undefined) {
+    await showToast(
+      tabId,
+      "error",
+      "Couldn't save screenshot",
+      "A full-page screenshot is already in progress.",
+    );
+    return;
+  }
+  activeScreenshotTabId = tabId;
+
   let capture: PageCapture;
   try {
-    const [beforeCapture] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
-    if (beforeCapture?.id !== tabId) {
-      throw new Error("The active tab changed before the screenshot could be captured.");
-    }
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    await waitForVisibleTabCaptureWindow();
+    const dataUrl = await captureFullPageScreenshot({
+      begin: () =>
+        requestScreenshotPageState(tabId, {
+          action: SCREENSHOT_PAGE_BEGIN_ACTION,
+        }),
+      scrollTo: (sessionId, scrollY, hideFixed) =>
+        requestScreenshotPageState(tabId, {
+          action: SCREENSHOT_PAGE_SCROLL_ACTION,
+          sessionId,
+          scrollY,
+          hideFixed,
+        }),
+      captureViewport: () => captureStableViewport(tab),
+      measure: (sessionId) =>
+        requestScreenshotPageState(tabId, {
+          action: SCREENSHOT_PAGE_MEASURE_ACTION,
+          sessionId,
+        }),
+      compose: composeFullPageScreenshot,
+      finish: (sessionId) => finishScreenshotPage(tabId, sessionId),
+    });
     const [afterCapture] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
-    if (!afterCapture || !isStableScreenshotDocument(beforeCapture, afterCapture)) {
+    if (!afterCapture || !isStableScreenshotDocument(tab, afterCapture)) {
       throw new Error("The active page changed while the screenshot was being captured.");
     }
-    capture = await buildScreenshotCapture(afterCapture, dataUrl);
+    capture = await buildScreenshotCapture(tab, dataUrl);
   } catch (err) {
     await showBadge(tabId, "error");
     await showToast(
       tabId,
       "error",
       "Couldn't save screenshot",
-      err instanceof Error ? err.message : "The visible page couldn't be captured.",
+      err instanceof Error ? err.message : "The full page couldn't be captured.",
     );
     await log("error", "Screenshot capture failed", { url: tab.url, error: err });
     return;
+  } finally {
+    if (activeScreenshotTabId === tabId) activeScreenshotTabId = undefined;
   }
 
   await log("info", "Save triggered", { kind: "screenshot", url: tab.url });
   await showToast(tabId, "loading", "Saving screenshot…");
   await saveCapture(tab, capture, "screenshot");
+}
+
+async function captureStableViewport(tab: chrome.tabs.Tab): Promise<string> {
+  await waitForVisibleTabCaptureWindow();
+  const [beforeCapture] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
+  if (!beforeCapture || !isStableScreenshotDocument(tab, beforeCapture)) {
+    throw new Error("The active tab changed before the screenshot could be captured.");
+  }
+
+  lastVisibleTabCaptureStartedAt = Date.now();
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  const [afterCapture] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
+  if (
+    !afterCapture ||
+    !isStableScreenshotDocument(beforeCapture, afterCapture) ||
+    !isStableScreenshotDocument(tab, afterCapture)
+  ) {
+    throw new Error("The active page changed while the screenshot was being captured.");
+  }
+  return dataUrl;
+}
+
+async function waitForVisibleTabCaptureWindow(): Promise<void> {
+  if (lastVisibleTabCaptureStartedAt === undefined) return;
+  const remaining =
+    MINIMUM_SCREENSHOT_CAPTURE_INTERVAL_MS - (Date.now() - lastVisibleTabCaptureStartedAt);
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
+  }
 }
 
 async function saveMedia(

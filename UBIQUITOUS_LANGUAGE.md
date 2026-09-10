@@ -100,7 +100,7 @@ host, and macOS app.
 
 | Term | Definition |
 |------|------------|
-| Extension | Browser extension that saves a cleaned article, lightweight link, or visible screenshot from its toolbar, and captures a clicked image/video or selected-text quote from its context menu. It sends ordinary captures as Markdown, origin metadata, and optional image bytes; every video instead uses the acknowledged browser video import stream. |
+| Extension | Browser extension that saves a cleaned article, lightweight link, or one long screenshot of the full scrollable page from its toolbar, and captures a clicked image/video or selected-text quote from its context menu. It sends ordinary captures as Markdown, origin metadata, and optional image bytes; every video instead uses the acknowledged browser video import stream. |
 | Browser video import | Protocol-v4 transfer used by every browser video save. The extension streams readable source bytes or records one rendered loop as compatible H.264 MP4 when the source cannot be fetched, then sends acknowledged chunks through the native host; the core commits a content-addressed local asset and cleans incomplete staging. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |

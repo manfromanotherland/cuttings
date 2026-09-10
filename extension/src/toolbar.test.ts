@@ -42,9 +42,12 @@ describe("toolbar popup", () => {
     expect(isToolbarSaveMessage({ action: "toolbar-save", kind: "article" })).toBe(false);
   });
 
-  it("accepts only a stable document around visible-tab capture", () => {
+  it("accepts only a stable document around each screenshot tile", () => {
     const before = { id: 42, url: "https://example.com/one", pendingUrl: undefined };
     expect(isStableScreenshotDocument(before, { ...before })).toBe(true);
+    expect(isStableScreenshotDocument(before, { ...before, url: `${before.url}#section` })).toBe(
+      true,
+    );
     expect(isStableScreenshotDocument(before, { ...before, id: 43 })).toBe(false);
     expect(isStableScreenshotDocument(before, { ...before, url: "https://example.com/two" })).toBe(
       false,
