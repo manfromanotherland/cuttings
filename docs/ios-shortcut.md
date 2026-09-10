@@ -37,7 +37,7 @@ personal paths or folder bookmarks.
 | Safari webpage | Page URL, page title, and selected text when Safari supplies it. With no selection, this becomes a lightweight link. |
 | URL | A lightweight link. No page or media is downloaded. |
 | Plain or rich text | A quote, or a lightweight link when the entire text is an HTTP(S) URL. Rich text is converted to plain text. |
-| Image or video | The file representation and filename supplied by the sharing app, with a checksum. |
+| Image or video | The file representation and display name supplied by the sharing app, with a checksum. |
 
 Every capture records its share time. Apps choose what they send to Shortcuts:
 an image from Photos generally has no webpage URL, and a social app may share a
@@ -107,7 +107,24 @@ shortcuts sign --mode anyone \
 The generator uses only Foundation. The developer validator uses Apple's local
 Shortcuts action registry to check action identifiers, parameter names, enum
 values, retained variable references, If subjects, balanced control flow, and the
-destination import question. It does not install or run the Shortcut. Signing
+destination import question. It also guards two native execution pitfalls:
+**Make Archive** can ignore its name field, so the archive is explicitly renamed;
+**Set Dictionary Value** unwraps a one-item List, so the attachments array is
+created by parsing JSON before setting the other manifest fields.
+
+The validator does not install or run the Shortcut. Signing
 uses Apple's `shortcuts sign` helper and may require access outside a restricted
 terminal sandbox. A successful signature does not replace the iPhone checks
 above.
+
+The generated workflow was also run in Mac Shortcuts with typed text, a URL,
+and a PNG. Two runs produced six archives with correct names and JSON types.
+The current Rust importer saved three items, recognized the other three as
+duplicates, and cleared only the successfully imported temporary Inbox copies.
+Replaying all six produced six duplicates and no extra items. The test verified
+the source URL, Unicode and line breaks, image display name, and identical source,
+archive, and imported-image checksums. Safari, Photos, video sharing, and iCloud
+delivery on iPhone still need the device checks above.
+
+The running Mac app's iCloud Inbox watcher also completed a duplicate handoff
+automatically after the file settled, without altering the existing reading.

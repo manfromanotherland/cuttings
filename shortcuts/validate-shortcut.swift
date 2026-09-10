@@ -95,6 +95,22 @@ for (index, serialized) in actions.enumerated() {
             errors.append("Save File must use the configured folder and must not overwrite existing captures.")
         }
         if parameters["WFFolder"] != nil { errors.append("Reusable Shortcut contains a machine-specific destination.") }
+        if index == 0 {
+            errors.append("Save File needs an explicitly named capture archive.")
+        } else {
+            let previous = actions[index - 1]
+            let rename = previous["WFWorkflowActionParameters"] as? [String: Any] ?? [:]
+            let name = (rename["WFName"] as? [String: Any])?["Value"] as? [String: Any]
+            let input = (parameters["WFInput"] as? [String: Any])?["Value"] as? [String: Any]
+            if previous["WFWorkflowActionIdentifier"] as? String != "is.workflow.actions.setitemname"
+                || !(name?["string"] as? String ?? "").hasSuffix(".cuttingscapture.zip")
+                || input?["OutputUUID"] as? String != rename["UUID"] as? String {
+                errors.append("Save File must receive the explicitly renamed .cuttingscapture.zip file; Make Archive can ignore its name field.")
+            }
+        }
+    }
+    if identifier == "is.workflow.actions.setvalueforkey", parameters["WFDictionaryKey"] as? String == "attachments" {
+        errors.append("Do not assign attachments through Set Dictionary Value: Shortcuts unwraps a singleton List into an object.")
     }
     if identifier.contains("download") || identifier.contains("runjavascript") || identifier.contains("url.getcontents") {
         errors.append("Unexpected network or script action: \(identifier)")
@@ -105,6 +121,10 @@ let questions = workflow["WFWorkflowImportQuestions"] as! [[String: Any]]
 if questions.count != 1 || questions.first?["ParameterKey"] as? String != "WFFolder" {
     errors.append("The destination folder must be selected during import.")
 }
+if let index = questions.first?["ActionIndex"] as? Int, actions.indices.contains(index),
+   actions[index]["WFWorkflowActionIdentifier"] as? String == "is.workflow.actions.documentpicker.save" {
+    // Keep setup pointed at Save File when the generated action count changes.
+} else { errors.append("The destination setup question does not point to Save File.") }
 if errors.isEmpty {
     print("Validated \(actions.count) actions, action parameters, control flow, and destination setup.")
     print("Signing and on-device Share Sheet execution remain separate checks.")

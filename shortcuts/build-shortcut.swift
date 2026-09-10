@@ -130,7 +130,6 @@ let originalFile = action("gettypeaction", ["WFInput": attachment(repeatItem), "
 json([:], named: "Origin")
 field("title", action("properties.files", ["WFInput": attachment(originalFile),
                                            "WFContentItemPropertyName": "Name"]), in: "Origin")
-field("origin", variable("Origin"))
 let fileExtension = action("properties.files", ["WFInput": attachment(originalFile),
                                                 "WFContentItemPropertyName": "File Extension"])
 let payloadName = action("gettext", ["WFTextActionText": text("payload.", fileExtension)])
@@ -143,8 +142,15 @@ let digest = action("hash", ["WFInput": attachment(payload), "WFHashType": "SHA2
 json([:], named: "Attachment")
 field("path", payloadName, in: "Attachment")
 field("sha256", digest, in: "Attachment")
-let attachments = action("list", ["WFItems": [["WFItemType": 0, "WFValue": text(variable("Attachment"))]]])
-field("attachments", attachments)
+// Set Dictionary Value unwraps a one-item List into its single object. Parse
+// the array from JSON instead, then add the other fields without touching it.
+// Attachment itself is serialized by Shortcuts, so its values remain escaped.
+let mediaManifest = action("gettext", ["WFTextActionText": text(
+    "{\"version\":1,\"attachments\":[", variable("Attachment"), "]}")])
+set("Manifest", action("detect.dictionary", ["WFInput": attachment(mediaManifest)]))
+field("capture_id", variable("Capture ID"))
+field("captured_at", variable("Captured at"))
+field("origin", variable("Origin"))
 endIf(rich)
 endIf(plain)
 endIf(url)
@@ -155,10 +161,14 @@ let manifestFile = action("setitemname", ["WFInput": attachment(manifestText),
                                           "WFName": "manifest.json", "WFDontIncludeFileExtension": false])
 action("appendvariable", ["WFVariableName": "Capture files", "WFInput": attachment(manifestFile)])
 let archive = action("makezip", ["WFInput": attachment(variable("Capture files")),
-                                 "WFArchiveFormat": "zip",
-                                 "WFZIPName": text(variable("Capture ID"), ".cuttingscapture")])
+                                 "WFArchiveFormat": "zip"])
+// Make Archive's name field is ignored in some native execution paths. Rename
+// the resulting file explicitly, as we do for manifest.json and payload files.
+let captureFile = action("setitemname", ["WFInput": attachment(archive),
+    "WFName": text(variable("Capture ID"), ".cuttingscapture.zip"),
+    "WFDontIncludeFileExtension": false])
 let saveActionIndex = actions.count
-action("documentpicker.save", ["WFInput": attachment(archive), "WFAskWhereToSave": false,
+action("documentpicker.save", ["WFInput": attachment(captureFile), "WFAskWhereToSave": false,
                                 "WFSaveFileOverwrite": false])
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 2])
 action("notification", ["WFNotificationActionTitle": "Cuttings",
