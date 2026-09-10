@@ -8,6 +8,7 @@ mod frontmatter;
 pub mod highlights;
 mod id;
 mod images;
+pub mod inbox;
 pub mod index;
 mod ingest;
 pub mod list;
@@ -33,6 +34,7 @@ pub use highlights::{
 };
 pub use id::{media_id, new_id, quote_id, url_id};
 pub use images::{first_local_image_asset, write_images, ImageBytes};
+pub use inbox::{process_inbox, InboxIssue, InboxReport};
 pub use index::open as open_index;
 pub use ingest::{
     begin_browser_video_import, import_image, import_image_from_origin_with_options,

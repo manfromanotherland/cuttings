@@ -25,7 +25,10 @@ rusqlite = { version = "0.32", features = ["bundled", "trace"] }
 rustix = { version = "1", features = ["fs"] }
 thiserror = "1"
 uniffi = "0.29"
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
+plist = "1"
+time = { version = "0.3", features = ["parsing", "formatting"] }
+tempfile = "3"
 
 [dev-dependencies]
 proptest = "1"
-tempfile = "3"

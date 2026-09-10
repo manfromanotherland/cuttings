@@ -1,0 +1,1926 @@
+// SPDX-License-Identifier: MIT
+
+//! An at-least-once file handoff into the canonical reading importer.
+//!
+//! External writers publish ordinary files or sealed `.cuttingscapture.zip`
+//! archives. We work from a private, bounded snapshot, keep failures in place,
+//! and only remove the unchanged input after verifying the saved reading.
+//! No network requests, index writes, or recursive directory imports occur here.
+
+use std::{
+    collections::HashSet,
+    fs::{self, File, Metadata},
+    io::{self, Cursor, Read, Seek, SeekFrom, Write},
+    os::unix::fs::MetadataExt,
+    path::Path,
+    time::{Duration, SystemTime},
+};
+
+use anyhow::{bail, ensure, Context, Result};
+use rustix::fs::{open, openat, renameat_with, unlinkat, AtFlags, Mode, OFlags, RenameFlags};
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use tempfile::NamedTempFile;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
+
+use crate::{
+    begin_browser_video_import, import_image_with_options, import_link_with_options,
+    import_reading, import_text_with_options, import_video_file_with_options, parse_reading,
+    save_link_capture, BrowserVideoImportInput, ImportOptions, ImportedReadingState, LibraryRoot,
+    ReadingKind, SaveDisposition, SaveInput, SaveLinkInput, SaveOutcome, MAX_BROWSER_VIDEO_BYTES,
+};
+
+const QUIET_PERIOD: Duration = Duration::from_secs(2);
+const MAX_SMALL_BYTES: u64 = 40 * 1024 * 1024;
+const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+const MAX_CAPTURE_BYTES: u64 = MAX_BROWSER_VIDEO_BYTES + 2 * MAX_MANIFEST_BYTES;
+const MAX_ARCHIVE_ENTRIES: usize = 128;
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct InboxReport {
+    pub saved: u32,
+    pub duplicates: u32,
+    pub pending: u32,
+    pub issues: Vec<InboxIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InboxIssue {
+    pub name: String,
+    pub message: String,
+}
+
+/// Process currently available direct children of `inbox/`.
+///
+/// A platform adapter may defer exact basenames whose cloud copies are not
+/// current. Missing/changed/unreadable sources remain pending. Stable invalid
+/// sources remain untouched and are reported for the user to inspect. A crash
+/// after saving but before removing input is safe: the next pass deduplicates.
+pub fn process_inbox(library: &LibraryRoot, deferred_names: &[String]) -> Result<InboxReport> {
+    process_inbox_at(library, deferred_names, SystemTime::now())
+}
+
+fn process_inbox_at(
+    library: &LibraryRoot,
+    deferred_names: &[String],
+    now: SystemTime,
+) -> Result<InboxReport> {
+    let inbox = library.inbox_dir();
+    match fs::symlink_metadata(&inbox) {
+        Ok(metadata) => ensure!(
+            metadata.file_type().is_dir(),
+            "Inbox must be a real directory"
+        ),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => fs::create_dir(&inbox)?,
+        Err(error) => return Err(error.into()),
+    }
+    let directory = open_regular_directory(&inbox)?;
+    let directory_metadata = directory.metadata()?;
+    let mut entries = fs::read_dir(&inbox)?.collect::<io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    let mut report = InboxReport::default();
+    for entry in entries {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        // Never follow arbitrary folders, symlinks, or provider staging files.
+        if name.starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_file() => metadata,
+            Ok(_) => continue,
+            Err(_) => {
+                report.pending += 1;
+                continue;
+            }
+        };
+        if deferred_names.iter().any(|deferred| deferred == name)
+            || is_dataless(&metadata)
+            || metadata
+                .modified()
+                .ok()
+                .and_then(|modified| now.duration_since(modified).ok())
+                .is_none_or(|age| age < QUIET_PERIOD)
+        {
+            report.pending += 1;
+            continue;
+        }
+        if metadata.len() > MAX_CAPTURE_BYTES {
+            report
+                .issues
+                .push(issue(name, "The file exceeds the 1 GiB Inbox limit."));
+            continue;
+        }
+        let mut snapshot = match Snapshot::read(&path, &metadata) {
+            Ok(Some(snapshot)) => snapshot,
+            Ok(None) | Err(_) => {
+                report.pending += 1;
+                continue;
+            }
+        };
+        // Pinning the source descriptor cannot pin its parent pathname. Detect
+        // a replaced Inbox before writes and again before removing any input.
+        if !directory_is_unchanged(&inbox, &directory_metadata) {
+            report.pending += 1;
+            continue;
+        }
+        let mut outcomes = Vec::new();
+        let result = if name.to_ascii_lowercase().ends_with(".cuttingscapture.zip") {
+            import_capture(library, &mut snapshot.file, &mut outcomes)
+        } else {
+            import_payload(
+                library,
+                snapshot.file.path(),
+                name,
+                &Origin::default(),
+                None,
+            )
+            .map(|outcome| outcomes.push(outcome))
+        };
+        // A multi-item capture can encounter a later storage failure after
+        // earlier readings were committed. Report those writes immediately,
+        // retain the whole capture, and deduplicate them on the next retry.
+        for outcome in outcomes {
+            match outcome.disposition {
+                SaveDisposition::Duplicate => report.duplicates += 1,
+                SaveDisposition::Saved | SaveDisposition::Upgraded => report.saved += 1,
+            }
+        }
+        match result {
+            Ok(()) => {
+                let removed = directory_is_unchanged(&inbox, &directory_metadata)
+                    && snapshot
+                        .remove_if_unchanged(&directory, name)
+                        .unwrap_or(false);
+                if !removed {
+                    report.pending += 1;
+                }
+            }
+            Err(error) => report.issues.push(issue(name, &format!("{error:#}"))),
+        }
+    }
+    Ok(report)
+}
+
+fn issue(name: &str, message: &str) -> InboxIssue {
+    InboxIssue {
+        name: name.to_string(),
+        message: message.to_string(),
+    }
+}
+
+fn open_regular_directory(path: &Path) -> io::Result<File> {
+    Ok(open(
+        path,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )?
+    .into())
+}
+
+fn open_regular_file(path: &Path) -> io::Result<File> {
+    let file: File = open(
+        path,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK,
+        Mode::empty(),
+    )?
+    .into();
+    if !file.metadata()?.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    Ok(file)
+}
+
+fn open_regular_file_at(directory: &File, name: &str) -> io::Result<File> {
+    let file: File = openat(
+        directory,
+        name,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK,
+        Mode::empty(),
+    )?
+    .into();
+    if !file.metadata()?.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    Ok(file)
+}
+
+fn directory_is_unchanged(path: &Path, before: &Metadata) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|after| {
+        after.file_type().is_dir() && before.dev() == after.dev() && before.ino() == after.ino()
+    })
+}
+
+fn same_file(before: &Metadata, after: &Metadata) -> bool {
+    same_file_contents(before, after)
+        && before.ctime() == after.ctime()
+        && before.ctime_nsec() == after.ctime_nsec()
+}
+
+fn same_file_contents(before: &Metadata, after: &Metadata) -> bool {
+    after.file_type().is_file()
+        && before.dev() == after.dev()
+        && before.ino() == after.ino()
+        && before.len() == after.len()
+        && before.mtime() == after.mtime()
+        && before.mtime_nsec() == after.mtime_nsec()
+}
+
+#[cfg(target_os = "macos")]
+fn is_dataless(metadata: &Metadata) -> bool {
+    use std::os::macos::fs::MetadataExt as _;
+    metadata.st_flags() & 0x4000_0000 != 0 // UF_DATALESS: ask File Provider to hydrate first.
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_dataless(_: &Metadata) -> bool {
+    false
+}
+
+struct Snapshot {
+    file: NamedTempFile,
+    metadata: Metadata,
+    sha256: String,
+}
+
+enum SourceClaim {
+    Missing,
+    Changed,
+    Claimed(String),
+}
+
+fn recovery_name(name: &str) -> String {
+    let prefix = format!("recovered-{}-", crate::new_id());
+    // Preserve the complete transport suffix and stay within NAME_MAX even
+    // when the original filename is already at the filesystem's byte limit.
+    let suffix_start = if name.to_ascii_lowercase().ends_with(".cuttingscapture.zip") {
+        name.len() - ".cuttingscapture.zip".len()
+    } else {
+        name.rfind('.').unwrap_or(name.len())
+    };
+    let (stem, suffix) = name.split_at(suffix_start);
+    let mut length = stem
+        .len()
+        .min(255_usize.saturating_sub(prefix.len() + suffix.len()));
+    while !stem.is_char_boundary(length) {
+        length -= 1;
+    }
+    format!("{prefix}{}{suffix}", &stem[..length])
+}
+
+impl Snapshot {
+    fn read(path: &Path, expected: &Metadata) -> Result<Option<Self>> {
+        let mut source = open_regular_file(path)?;
+        if !same_file(expected, &source.metadata()?) {
+            return Ok(None);
+        }
+        let mut file = NamedTempFile::new()?;
+        let (size, sha256) = copy_hashed(&mut source, &mut file, MAX_CAPTURE_BYTES)?;
+        if size != expected.len() || !same_file(expected, &source.metadata()?) {
+            return Ok(None);
+        }
+        file.flush()?;
+        Ok(Some(Self {
+            file,
+            metadata: expected.clone(),
+            sha256,
+        }))
+    }
+
+    fn remove_if_unchanged(&self, directory: &File, name: &str) -> Result<bool> {
+        match self.claim_source(directory, name, || {})? {
+            SourceClaim::Missing => Ok(true),
+            SourceClaim::Changed => Ok(false),
+            SourceClaim::Claimed(name) => self.remove_claimed_if_unchanged(directory, &name),
+        }
+    }
+
+    /// The callback is an internal seam for deterministic replacement tests.
+    /// Production callers perform no work between the preflight and claim.
+    fn claim_source(
+        &self,
+        directory: &File,
+        name: &str,
+        before_claim: impl FnOnce(),
+    ) -> Result<SourceClaim> {
+        let source = match open_regular_file_at(directory, name) {
+            Ok(source) => source,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(SourceClaim::Missing)
+            }
+            Err(_) => return Ok(SourceClaim::Changed),
+        };
+        if !same_file(&self.metadata, &source.metadata()?) {
+            return Ok(SourceClaim::Changed);
+        }
+        before_claim();
+        let recovery = recovery_name(name);
+        match renameat_with(
+            directory,
+            name,
+            directory,
+            &recovery,
+            RenameFlags::NOREPLACE,
+        ) {
+            Ok(()) => {}
+            Err(rustix::io::Errno::NOENT) => return Ok(SourceClaim::Missing),
+            Err(error) => return Err(error.into()),
+        }
+        // A crash from this point leaves a visible, normally importable input.
+        // Never restore with an overwriting rename: a new arrival can already
+        // own the original name. All further operations use the pinned parent.
+        directory.sync_all()?;
+        Ok(SourceClaim::Claimed(recovery))
+    }
+
+    fn remove_claimed_if_unchanged(&self, directory: &File, name: &str) -> Result<bool> {
+        let mut source = match open_regular_file_at(directory, name) {
+            Ok(source) => source,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(true),
+            Err(_) => return Ok(false),
+        };
+        let claimed_metadata = source.metadata()?;
+        // Rename changes ctime. Match the original identity/size/mtime, then
+        // require the new ctime to stay fixed throughout checksum verification.
+        if !same_file_contents(&self.metadata, &claimed_metadata) {
+            return Ok(false);
+        }
+        let (size, hash) = copy_hashed(&mut source, &mut io::sink(), MAX_CAPTURE_BYTES)?;
+        if size != self.metadata.len()
+            || hash != self.sha256
+            || !same_file(&claimed_metadata, &source.metadata()?)
+            || !open_regular_file_at(directory, name)
+                .and_then(|file| file.metadata())
+                .is_ok_and(|after| same_file(&claimed_metadata, &after))
+        {
+            return Ok(false);
+        }
+        match unlinkat(directory, name, AtFlags::empty()) {
+            Ok(()) => {
+                directory.sync_all()?;
+                Ok(true)
+            }
+            Err(rustix::io::Errno::NOENT) => Ok(true),
+            Err(error) => Err(error.into()),
+        }
+    }
+}
+
+fn copy_hashed(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    limit: u64,
+) -> Result<(u64, String)> {
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut hasher = Sha256::new();
+    let mut size = 0;
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        size += count as u64;
+        ensure!(size <= limit, "The file exceeds its supported size limit.");
+        hasher.update(&buffer[..count]);
+        writer.write_all(&buffer[..count])?;
+    }
+    Ok((size, hex::encode(hasher.finalize())))
+}
+
+#[derive(Default, Deserialize)]
+struct Origin {
+    url: Option<String>,
+    title: Option<String>,
+    canonical_url: Option<String>,
+    site_name: Option<String>,
+}
+
+impl Origin {
+    fn url(&self) -> Result<Option<String>> {
+        self.url
+            .as_deref()
+            .filter(|url| !url.trim().is_empty())
+            .map(http_url)
+            .transpose()
+    }
+    fn canonical_url(&self, origin: &str) -> String {
+        self.canonical_url
+            .as_deref()
+            .and_then(|url| http_url(url).ok())
+            .unwrap_or_else(|| origin.to_string())
+    }
+    fn title(&self, fallback: &str) -> String {
+        self.title
+            .as_deref()
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+            .unwrap_or(fallback)
+            .to_string()
+    }
+    fn site(&self, origin: &str) -> Option<String> {
+        self.site_name
+            .clone()
+            .filter(|site| !site.trim().is_empty())
+            .or_else(|| {
+                url::Url::parse(origin)
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_string))
+            })
+    }
+}
+
+#[derive(Deserialize)]
+struct Manifest {
+    version: u32,
+    capture_id: String,
+    captured_at: String,
+    #[serde(default)]
+    origin: Origin,
+    text: Option<String>,
+    #[serde(default)]
+    attachments: Vec<Attachment>,
+}
+
+#[derive(Deserialize)]
+struct Attachment {
+    path: String,
+    byte_count: Option<u64>,
+    sha256: Option<String>,
+}
+
+fn safe_archive_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.contains('\\')
+        && !name.contains('\0')
+        && !name.starts_with('/')
+        && name
+            .trim_end_matches('/')
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+        && !name.contains(':')
+}
+
+fn import_capture(
+    library: &LibraryRoot,
+    snapshot: &mut NamedTempFile,
+    outcomes: &mut Vec<SaveOutcome>,
+) -> Result<()> {
+    snapshot.rewind()?;
+    let mut archive =
+        zip::ZipArchive::new(snapshot).context("The capture archive is incomplete or invalid.")?;
+    ensure!(
+        archive.len() <= MAX_ARCHIVE_ENTRIES,
+        "The capture contains too many files."
+    );
+    let mut names = HashSet::new();
+    let mut total = 0_u64;
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index)?;
+        ensure!(
+            safe_archive_name(entry.name()),
+            "The capture contains an unsafe file path."
+        );
+        ensure!(
+            names.insert(entry.name().to_string()),
+            "The capture contains duplicate file paths."
+        );
+        let file_type = entry.unix_mode().map(|mode| mode & 0o170000);
+        ensure!(
+            file_type.is_none_or(|kind| matches!(kind, 0 | 0o100000 | 0o040000)),
+            "The capture contains a symbolic link or special file."
+        );
+        ensure!(
+            if entry.is_dir() {
+                entry.size() == 0 && file_type.is_none_or(|kind| matches!(kind, 0 | 0o040000))
+            } else {
+                file_type != Some(0o040000)
+            },
+            "The capture contains an invalid directory entry."
+        );
+        total = total
+            .checked_add(entry.size())
+            .context("Invalid archive size.")?;
+        ensure!(
+            total <= MAX_CAPTURE_BYTES,
+            "The expanded capture exceeds the 1 GiB limit."
+        );
+    }
+    let manifest: Manifest = {
+        let mut entry = archive
+            .by_name("manifest.json")
+            .context("The capture has no manifest.json.")?;
+        ensure!(
+            entry.size() <= MAX_MANIFEST_BYTES,
+            "The capture manifest is too large."
+        );
+        let mut bytes = Vec::new();
+        copy_hashed(&mut entry, &mut bytes, MAX_MANIFEST_BYTES)?;
+        serde_json::from_slice(&bytes).context("The capture manifest is invalid.")?
+    };
+    ensure!(
+        manifest.version == 1,
+        "This capture format is not supported."
+    );
+    ensure!(
+        !manifest.capture_id.trim().is_empty() && manifest.capture_id.len() <= 128,
+        "The capture identifier is invalid."
+    );
+    let captured_at = OffsetDateTime::parse(&manifest.captured_at, &Rfc3339)
+        .context("The capture date must be an ISO-8601 timestamp.")?
+        .to_offset(UtcOffset::UTC);
+    // Match the library's fixed-width UTC timestamp contract so lexical date
+    // sorting does not depend on the precision or timezone used by Shortcuts.
+    let saved_at = format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        captured_at.year(),
+        captured_at.month() as u8,
+        captured_at.day(),
+        captured_at.hour(),
+        captured_at.minute(),
+        captured_at.second(),
+        captured_at.millisecond()
+    );
+    let origin_url = manifest.origin.url()?;
+    ensure!(
+        manifest.attachments.len() <= 64,
+        "The capture contains too many attachments."
+    );
+    let mut attachments = Vec::new();
+    let mut referenced = HashSet::new();
+    // Validate and extract every payload to private, generated filenames before
+    // importing anything. ZIP paths are never passed to filesystem writes.
+    for attachment in &manifest.attachments {
+        ensure!(
+            safe_archive_name(&attachment.path)
+                && attachment.path != "manifest.json"
+                && referenced.insert(attachment.path.clone()),
+            "The capture attachment path is invalid."
+        );
+        let mut entry = archive
+            .by_name(&attachment.path)
+            .context("A capture attachment is missing.")?;
+        ensure!(!entry.is_dir(), "A capture attachment is not a file.");
+        let expected = entry.size();
+        let mut file = NamedTempFile::new()?;
+        let (actual, hash) = copy_hashed(&mut entry, &mut file, MAX_BROWSER_VIDEO_BYTES)?;
+        ensure!(
+            actual == expected && attachment.byte_count.is_none_or(|size| size == actual),
+            "A capture attachment has an unexpected size."
+        );
+        ensure!(
+            attachment
+                .sha256
+                .as_ref()
+                .is_none_or(|expected| expected.eq_ignore_ascii_case(&hash)),
+            "A capture attachment has an unexpected checksum."
+        );
+        file.flush()?;
+        attachments.push((file, attachment.path.as_str()));
+    }
+    // Unreferenced regular data is rejected rather than silently discarded when
+    // the archive is removed after success (harmless directory entries are OK).
+    ensure!(
+        names.iter().all(|name| name == "manifest.json"
+            || name.ends_with('/')
+            || referenced.contains(name)),
+        "The capture contains files that are not described in its manifest."
+    );
+    ensure!(
+        !attachments.is_empty()
+            || manifest
+                .text
+                .as_deref()
+                .is_some_and(|text| !text.trim().is_empty())
+            || origin_url.is_some(),
+        "The capture contains no supported content."
+    );
+    for (file, name) in attachments {
+        outcomes.push(import_payload(
+            library,
+            file.path(),
+            name,
+            &manifest.origin,
+            Some(&saved_at),
+        )?);
+    }
+    if let Some(text) = manifest
+        .text
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+    {
+        outcomes.push(import_text_capture(
+            library,
+            text,
+            &manifest.origin,
+            Some(&saved_at),
+        )?);
+    } else if outcomes.is_empty() {
+        outcomes.push(import_text_capture(
+            library,
+            "",
+            &manifest.origin,
+            Some(&saved_at),
+        )?);
+    }
+    Ok(())
+}
+
+fn import_payload(
+    library: &LibraryRoot,
+    path: &Path,
+    name: &str,
+    origin: &Origin,
+    saved_at: Option<&str>,
+) -> Result<SaveOutcome> {
+    let extension = Path::new(name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mut file = open_regular_file(path)?;
+    let size = file.metadata()?.len();
+    let fallback = Path::new(name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("Saved item");
+    let options = ImportOptions {
+        title: Some(origin.title(fallback)),
+        saved_at: saved_at.map(str::to_string),
+        ..ImportOptions::default()
+    };
+    let outcome = match extension.as_str() {
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "heic" | "heif" => {
+            ensure!(size <= MAX_SMALL_BYTES, "Images must be 40 MiB or smaller.");
+            let mut bytes = Vec::new();
+            copy_hashed(&mut file, &mut bytes, MAX_SMALL_BYTES)?;
+            let content_type =
+                image_type(&bytes).context("The image is unsupported or incomplete.")?;
+            let outcome = if let Some(url) = origin.url()? {
+                let extension = crate::images::image_extension(content_type, "");
+                let media = format!(
+                    "cuttings-asset:assets/{}.{extension}",
+                    crate::sha256_hex(&bytes)
+                );
+                import_reading(
+                    library,
+                    SaveInput {
+                        quote_identity_markdown: None,
+                        kind: ReadingKind::Image,
+                        lightweight: false,
+                        url: url.clone(),
+                        media_url: Some(media.clone()),
+                        canonical_url: origin.canonical_url(&url),
+                        title: origin.title(fallback),
+                        author: None,
+                        site: origin.site(&url),
+                        saved_at: saved_at
+                            .map(str::to_string)
+                            .unwrap_or_else(crate::time::now_utc_iso),
+                        markdown: format!("![Imported image]({media})"),
+                        images: vec![crate::ImageBytes {
+                            url: media,
+                            content_type: content_type.to_string(),
+                            bytes: bytes.clone(),
+                        }],
+                        preview_url: None,
+                        favicon_url: None,
+                        theme_color: None,
+                        excerpt: None,
+                        word_count: None,
+                        lang: None,
+                    },
+                    ImportedReadingState::default(),
+                )?
+            } else {
+                import_image_with_options(library, bytes.clone(), content_type, options)?
+            };
+            verify_saved(
+                library,
+                &outcome,
+                SavedContent::MediaHash(&crate::sha256_hex(&bytes)),
+            )?;
+            outcome
+        }
+        "mp4" | "mov" | "m4v" => {
+            ensure!(
+                size <= MAX_BROWSER_VIDEO_BYTES,
+                "Videos must be 1 GiB or smaller."
+            );
+            ensure!(
+                complete_iso_boxes(&mut file)?
+                    && crate::media_dimensions::video_dimensions(&mut file).is_some(),
+                "The video is unsupported or incomplete."
+            );
+            file.rewind()?;
+            let (_, hash) = copy_hashed(&mut file, &mut io::sink(), MAX_BROWSER_VIDEO_BYTES)?;
+            let content_type = if extension == "mov" {
+                "video/quicktime"
+            } else {
+                "video/mp4"
+            };
+            let outcome = if let Some(url) = origin.url()? {
+                let mut import = begin_browser_video_import(
+                    library,
+                    BrowserVideoImportInput {
+                        content_type: content_type.to_string(),
+                        expected_bytes: Some(size),
+                        origin_url: url.clone(),
+                        canonical_url: origin.canonical_url(&url),
+                        title: origin.title(fallback),
+                        author: None,
+                        site: origin.site(&url),
+                        theme_color: None,
+                        lang: None,
+                        excerpt: None,
+                        word_count: None,
+                        saved_at: saved_at
+                            .map(str::to_string)
+                            .unwrap_or_else(crate::time::now_utc_iso),
+                    },
+                )?;
+                file.rewind()?;
+                let mut buffer = [0_u8; 256 * 1024];
+                loop {
+                    let count = file.read(&mut buffer)?;
+                    if count == 0 {
+                        break;
+                    }
+                    import.append(&buffer[..count])?;
+                }
+                import.finish()?
+            } else {
+                import_video_file_with_options(library, path, content_type, options)?
+            };
+            verify_saved(library, &outcome, SavedContent::MediaHash(&hash))?;
+            outcome
+        }
+        "txt" | "md" | "text" | "url" | "webloc" => {
+            ensure!(
+                size <= MAX_SMALL_BYTES,
+                "Text files must be 40 MiB or smaller."
+            );
+            let mut bytes = Vec::new();
+            copy_hashed(&mut file, &mut bytes, MAX_SMALL_BYTES)?;
+            let text = if extension == "webloc" {
+                let value = plist::Value::from_reader(Cursor::new(bytes))
+                    .context("The web link file is invalid.")?;
+                value
+                    .as_dictionary()
+                    .and_then(|dict| dict.get("URL"))
+                    .and_then(plist::Value::as_string)
+                    .context("The web link file has no URL.")?
+                    .to_string()
+            } else {
+                let text = String::from_utf8(bytes).context("Text must use UTF-8 encoding.")?;
+                if extension == "url" {
+                    text.lines()
+                        .find_map(|line| {
+                            line.split_once('=')
+                                .filter(|(key, _)| key.trim().eq_ignore_ascii_case("URL"))
+                                .map(|(_, value)| value.trim().to_string())
+                        })
+                        .context("The internet shortcut file has no URL.")?
+                } else {
+                    text
+                }
+            };
+            if extension == "url" || extension == "webloc" {
+                http_url(&text)?;
+            }
+            import_text_capture(library, &text, origin, saved_at)?
+        }
+        _ => bail!("This file type is not supported. Use an image, video, UTF-8 text, or link."),
+    };
+    Ok(outcome)
+}
+
+fn import_text_capture(
+    library: &LibraryRoot,
+    text: &str,
+    origin: &Origin,
+    saved_at: Option<&str>,
+) -> Result<SaveOutcome> {
+    ensure!(
+        text.len() as u64 <= MAX_SMALL_BYTES,
+        "Text must be 40 MiB or smaller."
+    );
+    let saved_at = saved_at
+        .map(str::to_string)
+        .unwrap_or_else(crate::time::now_utc_iso);
+    let text = text.trim().trim_start_matches('\u{feff}');
+    let origin_url = origin.url()?;
+    let text_url = http_url(text).ok();
+    let is_link = match &origin_url {
+        Some(url) => text.is_empty() || text_url.as_ref() == Some(url),
+        None => text_url.is_some(),
+    };
+    let outcome = if let Some(url) = origin_url {
+        if is_link {
+            save_link_capture(
+                library,
+                SaveLinkInput {
+                    url: url.clone(),
+                    canonical_url: origin.canonical_url(&url),
+                    title: origin.title(&url),
+                    author: None,
+                    site: origin.site(&url),
+                    saved_at,
+                    images: vec![],
+                    preview_url: None,
+                    favicon_url: None,
+                    theme_color: None,
+                    excerpt: None,
+                    lang: None,
+                },
+            )?
+        } else {
+            let text = text.replace("\r\n", "\n").replace('\r', "\n");
+            let identity = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            import_reading(
+                library,
+                SaveInput {
+                    quote_identity_markdown: Some(identity.clone()),
+                    kind: ReadingKind::Quote,
+                    lightweight: false,
+                    url: url.clone(),
+                    media_url: None,
+                    canonical_url: origin.canonical_url(&url),
+                    title: origin.title("Saved quote"),
+                    author: None,
+                    site: origin.site(&url),
+                    saved_at,
+                    markdown: text
+                        .lines()
+                        .map(|line| format!("> {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    images: vec![],
+                    preview_url: None,
+                    favicon_url: None,
+                    theme_color: None,
+                    excerpt: Some(identity.chars().take(600).collect()),
+                    word_count: Some(identity.split_whitespace().count() as u32),
+                    lang: None,
+                },
+                ImportedReadingState::default(),
+            )?
+        }
+    } else if let Some(url) = text_url {
+        import_link_with_options(
+            library,
+            &url,
+            ImportOptions {
+                title: origin.title.clone(),
+                saved_at: Some(saved_at),
+                ..ImportOptions::default()
+            },
+        )?
+    } else {
+        import_text_with_options(
+            library,
+            text,
+            ImportOptions {
+                title: origin.title.clone(),
+                saved_at: Some(saved_at),
+                ..ImportOptions::default()
+            },
+        )?
+    };
+    verify_saved(
+        library,
+        &outcome,
+        if is_link {
+            SavedContent::Link
+        } else {
+            SavedContent::QuoteText(text)
+        },
+    )?;
+    Ok(outcome)
+}
+
+fn http_url(value: &str) -> Result<String> {
+    let value = value.trim();
+    ensure!(
+        !value.chars().any(char::is_whitespace),
+        "The source must be one HTTP(S) URL."
+    );
+    let parsed = url::Url::parse(value)?;
+    ensure!(
+        matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some(),
+        "The source must be an HTTP(S) URL."
+    );
+    crate::normalize_url(value)
+}
+
+fn image_type(bytes: &[u8]) -> Option<&'static str> {
+    let content_type =
+        if bytes.starts_with(b"\x89PNG\r\n\x1a\n") && bytes.ends_with(b"\0\0\0\0IEND\xaeB`\x82") {
+            "image/png"
+        } else if bytes.starts_with(b"\xff\xd8\xff") && bytes.ends_with(b"\xff\xd9") {
+            "image/jpeg"
+        } else if (bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"))
+            && bytes.ends_with(b";")
+        {
+            "image/gif"
+        } else if bytes.len() >= 12
+            && &bytes[..4] == b"RIFF"
+            && &bytes[8..12] == b"WEBP"
+            && u32::from_le_bytes(bytes[4..8].try_into().ok()?) as usize + 8 == bytes.len()
+        {
+            "image/webp"
+        } else if bytes.len() >= 12
+            && &bytes[4..8] == b"ftyp"
+            && complete_iso_boxes(&mut Cursor::new(bytes)).ok()?
+        {
+            match &bytes[8..12] {
+                b"heic" | b"heix" | b"hevc" | b"hevx" | b"mif1" | b"msf1" => "image/heic",
+                _ => return None,
+            }
+        } else {
+            return None;
+        };
+    crate::media_dimensions::image_dimensions(&mut Cursor::new(bytes))?;
+    Some(content_type)
+}
+
+fn complete_iso_boxes(reader: &mut (impl Read + Seek)) -> Result<bool> {
+    let end = reader.seek(SeekFrom::End(0))?;
+    let mut offset = 0_u64;
+    let mut boxes = 0;
+    while offset < end {
+        if end - offset < 8 {
+            return Ok(false);
+        }
+        reader.seek(SeekFrom::Start(offset))?;
+        let mut header = [0_u8; 8];
+        reader.read_exact(&mut header)?;
+        let size = u32::from_be_bytes(header[..4].try_into().unwrap());
+        let (size, minimum) = match size {
+            0 => (end - offset, 8),
+            1 => {
+                let mut bytes = [0_u8; 8];
+                reader.read_exact(&mut bytes)?;
+                (u64::from_be_bytes(bytes), 16)
+            }
+            size => (size as u64, 8),
+        };
+        if size < minimum || size > end - offset {
+            return Ok(false);
+        }
+        offset += size;
+        boxes += 1;
+        if boxes > 1_000_000 {
+            return Ok(false);
+        }
+    }
+    Ok(boxes > 0)
+}
+
+enum SavedContent<'a> {
+    MediaHash(&'a str),
+    QuoteText(&'a str),
+    Link,
+}
+
+fn verify_saved(
+    library: &LibraryRoot,
+    outcome: &SaveOutcome,
+    expected: SavedContent<'_>,
+) -> Result<()> {
+    // Existing readings may be corrupt or partially synchronized. A duplicate
+    // ID alone is not permission to discard the only complete Inbox copy.
+    let article = library.article_path(&outcome.id);
+    for directory in [
+        library.articles_dir(),
+        library
+            .reading_dir(&outcome.id)
+            .parent()
+            .unwrap()
+            .to_path_buf(),
+        library.reading_dir(&outcome.id),
+    ] {
+        ensure!(
+            fs::symlink_metadata(directory)?.file_type().is_dir(),
+            "The saved reading has an unsafe directory."
+        );
+    }
+    let mut file = open_regular_file(&article)?;
+    let mut content = Vec::new();
+    copy_hashed(&mut file, &mut content, MAX_SMALL_BYTES)?;
+    let reading = parse_reading(std::str::from_utf8(&content)?)?;
+    ensure!(
+        reading.metadata.id == outcome.id,
+        "The saved reading has an unexpected identity."
+    );
+    match expected {
+        SavedContent::QuoteText(text) => {
+            // Quote IDs outlive user edits and can also survive a truncated
+            // body with valid frontmatter. Never consume the original text
+            // just because a file still carries its old ID. Remove exactly
+            // the wrapper added by import_text/import_text_capture; literal
+            // '>' characters in the selection remain part of its identity.
+            let body = reading
+                .body
+                .trim_end_matches(['\r', '\n'])
+                .lines()
+                .map(|line| {
+                    let line = line.strip_prefix('>')?;
+                    Some(line.strip_prefix(' ').unwrap_or(line))
+                })
+                .collect::<Option<Vec<_>>>()
+                .map(|lines| lines.join("\n"));
+            ensure!(
+                reading.metadata.kind == ReadingKind::Quote
+                    && body.as_ref().is_some_and(|body| {
+                        body.split_whitespace().eq(text.split_whitespace())
+                    })
+                    && crate::quote_id(&reading.metadata.url, text)
+                        .is_ok_and(|id| id == outcome.id),
+                "The saved quote has different or incomplete text. The Inbox copy was kept."
+            );
+        }
+        SavedContent::Link => {
+            // A full article may already occupy this link's URL-derived ID.
+            // Its title and body can be user-edited; the retained URL is the
+            // content this lightweight capture needs to preserve.
+            ensure!(
+                reading.metadata.kind == ReadingKind::Article
+                    && crate::url_id(&reading.metadata.url).is_ok_and(|id| id == outcome.id),
+                "The saved link has an unexpected source. The Inbox copy was kept."
+            );
+        }
+        SavedContent::MediaHash(hash) => {
+            let valid_identity = if reading.metadata.kind == ReadingKind::Video
+                && reading.metadata.url == format!("cuttings://local/video/{hash}")
+            {
+                // Source-less videos use the shared importer's byte-derived
+                // identity rather than a synthetic-origin media_id.
+                outcome.id == crate::sha256_hex(format!("video\0{hash}").as_bytes())
+            } else {
+                reading.metadata.kind.is_media()
+                    && reading.metadata.media_url.as_deref().is_some_and(|media| {
+                        crate::media_id(reading.metadata.kind, &reading.metadata.url, media)
+                            .is_ok_and(|id| id == outcome.id)
+                    })
+            };
+            ensure!(
+                valid_identity,
+                "The saved media has an unexpected source. The Inbox copy was kept."
+            );
+        }
+    }
+    file.sync_all()?;
+    if let SavedContent::MediaHash(expected_hash) = expected {
+        let relative = match reading.metadata.kind {
+            ReadingKind::Image => crate::first_local_image_asset(&reading.body),
+            ReadingKind::Video => reading
+                .metadata
+                .media_url
+                .as_deref()
+                .and_then(|url| url.strip_prefix("cuttings-asset:"))
+                .map(str::to_string),
+            _ => None,
+        }
+        .context("The saved reading does not contain its media asset. The Inbox copy was kept.")?;
+        let filename = relative
+            .strip_prefix("assets/")
+            .filter(|name| {
+                !name.is_empty()
+                    && !name.contains('/')
+                    && !name.contains('\\')
+                    && *name != "."
+                    && *name != ".."
+            })
+            .context("The saved media asset path is unsafe.")?;
+        ensure!(
+            fs::symlink_metadata(library.assets_dir(&outcome.id))?
+                .file_type()
+                .is_dir(),
+            "The saved asset directory is unsafe."
+        );
+        let mut asset = open_regular_file(&library.assets_dir(&outcome.id).join(filename))
+            .context("The saved media asset is unavailable. The Inbox copy was kept.")?;
+        let (_, actual) = copy_hashed(&mut asset, &mut io::sink(), MAX_BROWSER_VIDEO_BYTES)?;
+        ensure!(
+            actual == expected_hash,
+            "The saved media asset has different contents. The Inbox copy was kept."
+        );
+        asset.sync_all()?;
+    }
+    // Flush directory entries from the asset upward before removing the only
+    // input. A successful rename alone is not a durable commit after a crash.
+    for directory in [
+        library.assets_dir(&outcome.id),
+        library.reading_dir(&outcome.id),
+        library
+            .reading_dir(&outcome.id)
+            .parent()
+            .unwrap()
+            .to_path_buf(),
+        library.articles_dir(),
+        library.path().to_path_buf(),
+    ] {
+        open_regular_directory(&directory)?.sync_all()?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
+    fn library() -> (TempDir, LibraryRoot) {
+        let temp = TempDir::new().unwrap();
+        let library = LibraryRoot::new(temp.path()).unwrap();
+        fs::create_dir(library.inbox_dir()).unwrap();
+        (temp, library)
+    }
+
+    fn process(library: &LibraryRoot) -> InboxReport {
+        process_inbox_at(library, &[], SystemTime::now() + Duration::from_secs(60)).unwrap()
+    }
+
+    fn readings(library: &LibraryRoot) -> Vec<crate::Reading> {
+        crate::scan_library(library)
+            .unwrap()
+            .into_iter()
+            .map(|item| {
+                parse_reading(&fs::read_to_string(library.article_path(&item.id)).unwrap()).unwrap()
+            })
+            .collect()
+    }
+
+    fn png() -> Vec<u8> {
+        hex::decode("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082").unwrap()
+    }
+
+    fn movie() -> Vec<u8> {
+        fn atom(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+            let mut bytes = ((body.len() + 8) as u32).to_be_bytes().to_vec();
+            bytes.extend_from_slice(kind);
+            bytes.extend_from_slice(body);
+            bytes
+        }
+        let mut header = vec![0_u8; 40];
+        for value in [0x0001_0000_i32, 0, 0, 0, 0x0001_0000, 0, 0, 0, 0x4000_0000] {
+            header.extend_from_slice(&value.to_be_bytes());
+        }
+        header.extend_from_slice(&(640_u32 << 16).to_be_bytes());
+        header.extend_from_slice(&(480_u32 << 16).to_be_bytes());
+        let mut handler = vec![0_u8; 8];
+        handler.extend_from_slice(b"vide");
+        let mut track = atom(b"tkhd", &header);
+        track.extend_from_slice(&atom(b"mdia", &atom(b"hdlr", &handler)));
+        let mut bytes = atom(b"ftyp", b"isom\0\0\0\0isommp42");
+        bytes.extend_from_slice(&atom(b"moov", &atom(b"trak", &track)));
+        bytes.extend_from_slice(&atom(b"mdat", &[0; 32]));
+        bytes
+    }
+
+    fn manifest() -> serde_json::Value {
+        json!({"version": 1, "capture_id": "test-capture", "captured_at": "2026-09-10T12:34:56+01:00"})
+    }
+
+    fn archive(
+        library: &LibraryRoot,
+        manifest: &serde_json::Value,
+        entries: &[(&str, &[u8])],
+    ) -> std::path::PathBuf {
+        let path = library.inbox_dir().join("test.cuttingscapture.zip");
+        let mut zip = ZipWriter::new(File::create(&path).unwrap());
+        zip.start_file("manifest.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&serde_json::to_vec(manifest).unwrap())
+            .unwrap();
+        for (name, bytes) in entries {
+            zip.start_file(*name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(bytes).unwrap();
+        }
+        zip.finish().unwrap();
+        path
+    }
+
+    #[test]
+    fn creates_missing_inbox_without_reading_other_library_files() {
+        let temp = TempDir::new().unwrap();
+        let library = LibraryRoot::new(temp.path()).unwrap();
+        fs::write(temp.path().join("leave.txt"), "leave me").unwrap();
+        assert_eq!(process(&library), InboxReport::default());
+        assert!(library.inbox_dir().is_dir());
+        assert!(temp.path().join("leave.txt").exists());
+    }
+
+    #[test]
+    fn saves_image_text_and_link_then_removes_only_successful_inputs() {
+        let (_temp, library) = library();
+        fs::write(library.inbox_dir().join("photo.PNG"), png()).unwrap();
+        fs::write(library.inbox_dir().join("quote.txt"), "Keep this\nline too").unwrap();
+        fs::write(
+            library.inbox_dir().join("link.txt"),
+            "https://example.com/story?utm_source=phone",
+        )
+        .unwrap();
+        fs::write(library.inbox_dir().join("unsupported.pdf"), "not supported").unwrap();
+        let report = process(&library);
+        assert_eq!(report.saved, 3, "{report:?}");
+        assert_eq!(report.issues.len(), 1);
+        assert_eq!(fs::read_dir(library.inbox_dir()).unwrap().count(), 1);
+        let readings = readings(&library);
+        assert!(readings
+            .iter()
+            .any(|reading| reading.metadata.kind == ReadingKind::Image));
+        assert!(readings
+            .iter()
+            .any(|reading| reading.metadata.kind == ReadingKind::Quote));
+        assert!(readings.iter().any(|reading| reading.metadata.lightweight
+            && reading.metadata.url == "https://example.com/story"));
+    }
+
+    #[test]
+    fn defers_young_and_cloud_excluded_files_without_blocking_ready_files() {
+        let (_temp, library) = library();
+        fs::write(library.inbox_dir().join("ready.txt"), "ready").unwrap();
+        fs::write(
+            library.inbox_dir().join("cloud.txt"),
+            "outdated local bytes",
+        )
+        .unwrap();
+        let young = process_inbox(&library, &[]).unwrap();
+        assert_eq!(young.pending, 2);
+        assert_eq!(young.saved, 0);
+        let report = process_inbox_at(
+            &library,
+            &["cloud.txt".to_string(), "missing.txt".to_string()],
+            SystemTime::now() + Duration::from_secs(60),
+        )
+        .unwrap();
+        assert_eq!(report.pending, 1);
+        assert_eq!(report.saved, 1);
+        assert!(library.inbox_dir().join("cloud.txt").exists());
+    }
+
+    #[test]
+    fn ignores_symlinks_hidden_files_and_arbitrary_directories() {
+        let (_temp, library) = library();
+        fs::write(library.path().join("outside.txt"), "outside").unwrap();
+        symlink(
+            library.path().join("outside.txt"),
+            library.inbox_dir().join("link.txt"),
+        )
+        .unwrap();
+        fs::write(library.inbox_dir().join(".partial.txt"), "partial").unwrap();
+        fs::create_dir(library.inbox_dir().join("folder")).unwrap();
+        fs::write(library.inbox_dir().join("folder/inside.txt"), "inside").unwrap();
+        assert_eq!(process(&library), InboxReport::default());
+        assert!(library.path().join("outside.txt").exists());
+    }
+
+    #[test]
+    fn refuses_symlinked_inbox() {
+        let temp = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let library = LibraryRoot::new(temp.path()).unwrap();
+        symlink(outside.path(), library.inbox_dir()).unwrap();
+        assert!(process_inbox(&library, &[]).is_err());
+    }
+
+    #[test]
+    fn consumes_exact_duplicate_only_after_verifying_local_image() {
+        let (_temp, library) = library();
+        let source = library.inbox_dir().join("photo.png");
+        fs::write(&source, png()).unwrap();
+        assert_eq!(process(&library).saved, 1);
+        fs::write(&source, png()).unwrap();
+        let report = process(&library);
+        assert_eq!(report.duplicates, 1, "{report:?}");
+        assert!(!source.exists());
+        assert_eq!(readings(&library).len(), 1);
+    }
+
+    #[test]
+    fn retains_image_when_existing_duplicate_is_missing_or_corrupt() {
+        let (_temp, library) = library();
+        let source = library.inbox_dir().join("photo.png");
+        fs::write(&source, png()).unwrap();
+        assert_eq!(process(&library).saved, 1);
+        let reading = readings(&library).pop().unwrap();
+        let asset = library
+            .reading_dir(&reading.metadata.id)
+            .join(crate::first_local_image_asset(&reading.body).unwrap());
+        fs::remove_file(&asset).unwrap();
+        fs::write(&source, png()).unwrap();
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(source.exists());
+        fs::write(&asset, "wrong bytes").unwrap();
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(source.exists());
+    }
+
+    #[test]
+    fn retains_text_when_duplicate_quote_body_is_missing_or_edited() {
+        for body in ["", "> A deliberate edit that must also be preserved"] {
+            let (_temp, library) = library();
+            let source = library.inbox_dir().join("note.txt");
+            let text = "The original thought\n> with a literal quote marker";
+            fs::write(&source, text).unwrap();
+            assert_eq!(process(&library).saved, 1);
+            let mut reading = readings(&library).pop().unwrap();
+            reading.body = body.to_string();
+            let changed = crate::render_reading(&reading).unwrap();
+            fs::write(library.article_path(&reading.metadata.id), &changed).unwrap();
+
+            fs::write(&source, text).unwrap();
+            let report = process(&library);
+            assert_eq!(report.issues.len(), 1, "{report:?}");
+            assert_eq!(report.saved + report.duplicates, 0);
+            assert_eq!(fs::read_to_string(source).unwrap(), text);
+            assert_eq!(
+                fs::read_to_string(library.article_path(&reading.metadata.id)).unwrap(),
+                changed
+            );
+        }
+    }
+
+    #[test]
+    fn retains_sourced_quote_archive_when_body_or_source_has_changed() {
+        for change_source in [false, true] {
+            let (_temp, library) = library();
+            let mut manifest = manifest();
+            manifest["origin"] = json!({"url":"https://example.com/source"});
+            manifest["text"] = json!("Selected words from the original page");
+            archive(&library, &manifest, &[]);
+            assert_eq!(process(&library).saved, 1);
+            let mut reading = readings(&library).pop().unwrap();
+            if change_source {
+                reading.metadata.url = "https://example.com/different-page".to_string();
+            } else {
+                reading.body.clear();
+            }
+            let changed = crate::render_reading(&reading).unwrap();
+            fs::write(library.article_path(&reading.metadata.id), &changed).unwrap();
+            let source = archive(&library, &manifest, &[]);
+
+            assert_eq!(process(&library).issues.len(), 1);
+            assert!(source.exists());
+            assert_eq!(
+                fs::read_to_string(library.article_path(&reading.metadata.id)).unwrap(),
+                changed
+            );
+        }
+    }
+
+    #[test]
+    fn quote_verification_preserves_literal_markers_and_whitespace_deduplication() {
+        for sourced in [false, true] {
+            let (_temp, library) = library();
+            let mut manifest = manifest();
+            if sourced {
+                manifest["origin"] = json!({"url":"https://example.com/source"});
+            }
+            manifest["text"] = json!("First line\n\n> literal marker\n>> two markers");
+            archive(&library, &manifest, &[]);
+            assert_eq!(process(&library).saved, 1);
+            let mut reading = readings(&library).pop().unwrap();
+            reading.metadata.title = "My edited title".to_string();
+            let changed = crate::render_reading(&reading).unwrap();
+            fs::write(library.article_path(&reading.metadata.id), &changed).unwrap();
+            manifest["text"] = json!("First line  > literal marker\t>> two markers");
+            let source = archive(&library, &manifest, &[]);
+
+            let report = process(&library);
+            assert_eq!(report.duplicates, 1, "{report:?}");
+            assert!(!source.exists());
+            assert_eq!(
+                fs::read_to_string(library.article_path(&reading.metadata.id)).unwrap(),
+                changed
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_link_preserves_edited_title_and_article_body() {
+        for lightweight in [false, true] {
+            let (_temp, library) = library();
+            let mut manifest = manifest();
+            manifest["origin"] = json!({"url":"https://example.com/source", "title":"Page title"});
+            archive(&library, &manifest, &[]);
+            assert_eq!(process(&library).saved, 1);
+            let mut reading = readings(&library).pop().unwrap();
+            reading.metadata.title = "My edited title".to_string();
+            reading.metadata.lightweight = lightweight;
+            reading.body = "My existing content".to_string();
+            let changed = crate::render_reading(&reading).unwrap();
+            fs::write(library.article_path(&reading.metadata.id), &changed).unwrap();
+            let source = archive(&library, &manifest, &[]);
+
+            let report = process(&library);
+            assert_eq!(report.duplicates, 1, "{report:?}");
+            assert!(!source.exists());
+            assert_eq!(
+                fs::read_to_string(library.article_path(&reading.metadata.id)).unwrap(),
+                changed
+            );
+        }
+    }
+
+    #[test]
+    fn incomplete_or_mislabeled_images_are_retained() {
+        let (_temp, library) = library();
+        let mut partial = png();
+        partial.truncate(partial.len() - 12);
+        fs::write(library.inbox_dir().join("partial.png"), partial).unwrap();
+        fs::write(library.inbox_dir().join("fake.jpg"), "not a JPEG").unwrap();
+        let report = process(&library);
+        assert_eq!(report.issues.len(), 2);
+        assert_eq!(report.saved, 0);
+    }
+
+    #[test]
+    fn snapshot_will_not_delete_replaced_or_edited_source() {
+        let (_temp, library) = library();
+        let directory = open_regular_directory(&library.inbox_dir()).unwrap();
+        let path = library.inbox_dir().join("note.txt");
+        fs::write(&path, "first content").unwrap();
+        let snapshot = Snapshot::read(&path, &fs::metadata(&path).unwrap())
+            .unwrap()
+            .unwrap();
+        fs::write(&path, "other content").unwrap();
+        assert!(!snapshot
+            .remove_if_unchanged(&directory, "note.txt")
+            .unwrap());
+        fs::remove_file(&path).unwrap();
+        fs::write(&path, "first content").unwrap();
+        assert!(!snapshot
+            .remove_if_unchanged(&directory, "note.txt")
+            .unwrap());
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn cleanup_keeps_replacement_arriving_between_preflight_and_claim() {
+        let (_temp, library) = library();
+        let directory = open_regular_directory(&library.inbox_dir()).unwrap();
+        let path = library.inbox_dir().join("note.txt");
+        fs::write(&path, "first content").unwrap();
+        let snapshot = Snapshot::read(&path, &fs::metadata(&path).unwrap())
+            .unwrap()
+            .unwrap();
+        let replacement = library.path().join("replacement.txt");
+        fs::write(&replacement, "the new original must survive").unwrap();
+
+        let claim = snapshot
+            .claim_source(&directory, "note.txt", || {
+                fs::rename(&replacement, &path).unwrap();
+            })
+            .unwrap();
+        let SourceClaim::Claimed(name) = claim else {
+            panic!("expected the replacement to be claimed")
+        };
+        assert!(name.starts_with("recovered-"));
+        assert!(name.ends_with("-note.txt"));
+        assert!(!snapshot
+            .remove_claimed_if_unchanged(&directory, &name)
+            .unwrap());
+        assert_eq!(
+            fs::read_to_string(library.inbox_dir().join(&name)).unwrap(),
+            "the new original must survive"
+        );
+
+        assert_eq!(process(&library).saved, 1);
+        assert!(readings(&library)[0]
+            .body
+            .contains("the new original must survive"));
+    }
+
+    #[test]
+    fn crash_after_claim_leaves_visible_archive_for_deduplicated_retry() {
+        let (_temp, library) = library();
+        let directory = open_regular_directory(&library.inbox_dir()).unwrap();
+        let mut manifest = manifest();
+        manifest["text"] = json!("Already saved before the interrupted cleanup");
+        let path = archive(&library, &manifest, &[]);
+        let mut snapshot = Snapshot::read(&path, &fs::metadata(&path).unwrap())
+            .unwrap()
+            .unwrap();
+        import_capture(&library, &mut snapshot.file, &mut Vec::new()).unwrap();
+        let SourceClaim::Claimed(name) = snapshot
+            .claim_source(
+                &directory,
+                path.file_name().unwrap().to_str().unwrap(),
+                || {},
+            )
+            .unwrap()
+        else {
+            panic!("expected an interrupted cleanup claim")
+        };
+        drop(snapshot); // Simulate losing in-memory state after the durable rename.
+
+        assert!(name.starts_with("recovered-"));
+        assert!(name.ends_with(".cuttingscapture.zip"));
+        assert!(library.inbox_dir().join(name).is_file());
+        let report = process(&library);
+        assert_eq!(report.duplicates, 1, "{report:?}");
+        assert!(report.issues.is_empty());
+        assert_eq!(readings(&library).len(), 1);
+        assert_eq!(fs::read_dir(library.inbox_dir()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn cleanup_does_not_remove_new_arrival_at_original_name_after_claim() {
+        let (_temp, library) = library();
+        let directory = open_regular_directory(&library.inbox_dir()).unwrap();
+        let path = library.inbox_dir().join("note.txt");
+        fs::write(&path, "saved content").unwrap();
+        let snapshot = Snapshot::read(&path, &fs::metadata(&path).unwrap())
+            .unwrap()
+            .unwrap();
+        let SourceClaim::Claimed(name) = snapshot
+            .claim_source(&directory, "note.txt", || {})
+            .unwrap()
+        else {
+            panic!("expected a cleanup claim")
+        };
+        fs::write(&path, "next arrival").unwrap();
+
+        assert!(snapshot
+            .remove_claimed_if_unchanged(&directory, &name)
+            .unwrap());
+        assert_eq!(fs::read_to_string(path).unwrap(), "next arrival");
+    }
+
+    #[test]
+    fn cleanup_stays_with_pinned_directory_when_inbox_path_is_replaced() {
+        let (_temp, library) = library();
+        let directory = open_regular_directory(&library.inbox_dir()).unwrap();
+        let path = library.inbox_dir().join("note.txt");
+        fs::write(&path, "saved content").unwrap();
+        let snapshot = Snapshot::read(&path, &fs::metadata(&path).unwrap())
+            .unwrap()
+            .unwrap();
+        let old_inbox = library.path().join("previous-inbox");
+        fs::rename(library.inbox_dir(), &old_inbox).unwrap();
+        fs::create_dir(library.inbox_dir()).unwrap();
+        fs::write(&path, "new directory content").unwrap();
+
+        assert!(snapshot
+            .remove_if_unchanged(&directory, "note.txt")
+            .unwrap());
+        assert_eq!(fs::read_to_string(path).unwrap(), "new directory content");
+        assert_eq!(fs::read_dir(old_inbox).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn recovery_names_preserve_supported_extensions_with_bounded_utf8_names() {
+        for suffix in [".txt", ".cuttingscapture.zip"] {
+            let original = format!("{}{suffix}", "é".repeat(110));
+            let recovered = recovery_name(&original);
+            assert!(recovered.len() <= 255);
+            assert!(recovered.starts_with("recovered-"));
+            assert!(recovered.ends_with(suffix));
+        }
+    }
+
+    #[test]
+    fn imports_windows_and_xml_and_binary_mac_link_files() {
+        let (_temp, library) = library();
+        fs::write(
+            library.inbox_dir().join("windows.url"),
+            "[InternetShortcut]\r\nURL=https://example.com/windows\r\n",
+        )
+        .unwrap();
+        let mut dict = plist::Dictionary::new();
+        dict.insert(
+            "URL".into(),
+            plist::Value::String("https://example.com/mac".into()),
+        );
+        let value = plist::Value::Dictionary(dict);
+        value
+            .to_file_xml(library.inbox_dir().join("mac.webloc"))
+            .unwrap();
+        value
+            .to_file_binary(library.inbox_dir().join("same.webloc"))
+            .unwrap();
+        let report = process(&library);
+        assert_eq!(report.saved, 2, "{report:?}");
+        assert_eq!(report.duplicates, 1);
+    }
+
+    #[test]
+    fn safari_link_capture_keeps_origin_title_canonical_site_and_capture_date() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["origin"] = json!({"url":"https://example.com/source?utm_source=share", "title":"Page title", "canonical_url":"https://example.com/canonical", "site_name":"Example publication"});
+        let path = archive(&library, &manifest, &[]);
+        let report = process(&library);
+        assert_eq!(report.saved, 1, "{report:?}");
+        assert!(!path.exists());
+        let reading = readings(&library).pop().unwrap();
+        assert_eq!(reading.metadata.url, "https://example.com/source");
+        assert_eq!(
+            reading.metadata.canonical_url,
+            "https://example.com/canonical"
+        );
+        assert_eq!(reading.metadata.title, "Page title");
+        assert_eq!(
+            reading.metadata.site.as_deref(),
+            Some("Example publication")
+        );
+        assert_eq!(reading.metadata.saved_at, "2026-09-10T11:34:56.000Z");
+        assert!(reading.metadata.lightweight);
+    }
+
+    #[test]
+    fn safari_selection_becomes_quote_with_origin_not_a_link() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["origin"] = json!({"url":"https://example.com/source", "title":"Article"});
+        manifest["text"] = json!("A selected thought\nwith another line.");
+        archive(&library, &manifest, &[]);
+        assert_eq!(process(&library).saved, 1);
+        let reading = readings(&library).pop().unwrap();
+        assert_eq!(reading.metadata.kind, ReadingKind::Quote);
+        assert_eq!(reading.metadata.url, "https://example.com/source");
+        assert!(reading
+            .body
+            .contains("> A selected thought\n> with another line."));
+    }
+
+    #[test]
+    fn media_capture_keeps_origin_and_verifies_declared_size_and_hash() {
+        let (_temp, library) = library();
+        let bytes = png();
+        let mut manifest = manifest();
+        manifest["origin"] = json!({"url":"https://example.com/source", "canonical_url":"https://example.com/canonical", "site_name":"Example", "title":"Source image"});
+        manifest["attachments"] = json!([{"path":"payload/image.png", "byte_count":bytes.len(), "sha256":crate::sha256_hex(&bytes)}]);
+        archive(&library, &manifest, &[("payload/image.png", &bytes)]);
+        assert_eq!(process(&library).saved, 1);
+        let reading = readings(&library).pop().unwrap();
+        assert_eq!(reading.metadata.url, "https://example.com/source");
+        assert_eq!(
+            reading.metadata.canonical_url,
+            "https://example.com/canonical"
+        );
+        assert_eq!(reading.metadata.site.as_deref(), Some("Example"));
+        manifest["attachments"][0]["sha256"] = json!("incorrect");
+        let path = archive(&library, &manifest, &[("payload/image.png", &bytes)]);
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn invalid_version_missing_payload_and_extra_files_are_retained() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["version"] = json!(2);
+        manifest["text"] = json!("hello");
+        let path = archive(&library, &manifest, &[]);
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(path.exists());
+        manifest["version"] = json!(1);
+        manifest["attachments"] = json!([{"path":"missing.png"}]);
+        archive(&library, &manifest, &[]);
+        assert_eq!(process(&library).issues.len(), 1);
+        manifest["attachments"] = json!([]);
+        archive(
+            &library,
+            &manifest,
+            &[("unlisted.txt", b"do not lose this")],
+        );
+        assert_eq!(process(&library).issues.len(), 1);
+        assert_eq!(readings(&library).len(), 0);
+    }
+
+    #[test]
+    fn unsafe_archive_paths_and_truncated_archives_are_retained() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["text"] = json!("hello");
+        let path = archive(&library, &manifest, &[("../escape.txt", b"bad path")]);
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(path.exists());
+        assert!(!library.path().join("escape.txt").exists());
+        let bytes = fs::read(&path).unwrap();
+        fs::write(&path, &bytes[..bytes.len() - 15]).unwrap();
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn partial_capture_success_is_counted_and_retry_deduplicates() {
+        let (_temp, library) = library();
+        let bytes = png();
+        let mut manifest = manifest();
+        manifest["attachments"] = json!([{"path":"image.png"}, {"path":"unsupported.pdf"}]);
+        let path = archive(
+            &library,
+            &manifest,
+            &[("image.png", &bytes), ("unsupported.pdf", b"unsupported")],
+        );
+        let report = process(&library);
+        assert_eq!(report.saved, 1, "{report:?}");
+        assert_eq!(report.issues.len(), 1);
+        assert!(path.exists());
+        let retry = process(&library);
+        assert_eq!(retry.saved, 0);
+        assert_eq!(retry.duplicates, 1);
+        assert_eq!(readings(&library).len(), 1);
+    }
+
+    #[test]
+    fn archive_symlink_entries_are_rejected() {
+        let (_temp, library) = library();
+        let path = library.inbox_dir().join("symlink.cuttingscapture.zip");
+        let mut zip = ZipWriter::new(File::create(&path).unwrap());
+        zip.add_symlink("link", "/etc/passwd", SimpleFileOptions::default())
+            .unwrap();
+        zip.finish().unwrap();
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn unreferenced_directory_entries_cannot_hide_payload_bytes() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["text"] = json!("Keep both this text and the unlisted bytes");
+        let path = archive(&library, &manifest, &[("unlisted/", b"do not discard")]);
+        let original = fs::read(&path).unwrap();
+
+        let report = process(&library);
+        assert_eq!(report.issues.len(), 1, "{report:?}");
+        assert_eq!(report.saved, 0);
+        assert_eq!(fs::read(path).unwrap(), original);
+    }
+
+    #[test]
+    fn directory_entry_types_must_match_their_names() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["text"] = json!("Do not consume a malformed archive");
+        // start_file marks this as a regular file, even though its name has a
+        // trailing slash. Empty bytes alone must not make it a valid directory.
+        let path = archive(&library, &manifest, &[("not-a-directory/", b"")]);
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn ordinary_empty_archive_directories_are_accepted() {
+        let (_temp, library) = library();
+        let mut manifest = manifest();
+        manifest["text"] = json!("A complete capture with an empty payload directory");
+        let path = library.inbox_dir().join("directories.cuttingscapture.zip");
+        let mut zip = ZipWriter::new(File::create(&path).unwrap());
+        zip.add_directory("payload/", SimpleFileOptions::default())
+            .unwrap();
+        zip.start_file("manifest.json", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(&serde_json::to_vec(&manifest).unwrap())
+            .unwrap();
+        zip.finish().unwrap();
+
+        let report = process(&library);
+        assert_eq!(report.saved, 1, "{report:?}");
+        assert!(report.issues.is_empty());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn media_verification_rejects_changed_origin_with_the_original_id() {
+        for (name, bytes) in [("image.png", png()), ("video.mov", movie())] {
+            let (_temp, library) = library();
+            let source = library.inbox_dir().join(name);
+            fs::write(&source, &bytes).unwrap();
+            assert_eq!(process(&library).saved, 1);
+            let mut reading = readings(&library).pop().unwrap();
+            reading.metadata.url = "https://example.com/not-the-original-source".to_string();
+            fs::write(
+                library.article_path(&reading.metadata.id),
+                crate::render_reading(&reading).unwrap(),
+            )
+            .unwrap();
+            // Exercise verification directly: some shared save paths repair a
+            // mismatched metadata identity before they return their outcome.
+            let outcome = SaveOutcome {
+                disposition: SaveDisposition::Duplicate,
+                id: reading.metadata.id,
+                path: String::new(),
+            };
+            let error = verify_saved(
+                &library,
+                &outcome,
+                SavedContent::MediaHash(&crate::sha256_hex(&bytes)),
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("unexpected source"));
+        }
+    }
+
+    #[test]
+    fn raw_video_and_sourced_video_keep_local_assets_and_deduplicate() {
+        let (_temp, library) = library();
+        let bytes = movie();
+        let source = library.inbox_dir().join("movie.mp4");
+        fs::write(&source, &bytes).unwrap();
+        let report = process(&library);
+        assert_eq!(report.saved, 1, "{report:?}");
+        assert!(!source.exists());
+        fs::write(&source, &bytes).unwrap();
+        assert_eq!(process(&library).duplicates, 1);
+        let mut manifest = manifest();
+        manifest["origin"] = json!({"url":"https://example.com/movie", "canonical_url":"https://example.com/original", "site_name":"Example", "title":"A film"});
+        manifest["attachments"] = json!([{"path":"payload.mov"}]);
+        archive(&library, &manifest, &[("payload.mov", &bytes)]);
+        let report = process(&library);
+        assert_eq!(report.saved, 1, "{report:?}");
+        let readings = readings(&library);
+        assert_eq!(readings.len(), 2);
+        let sourced = readings
+            .iter()
+            .find(|reading| reading.metadata.url == "https://example.com/movie")
+            .unwrap();
+        assert_eq!(sourced.metadata.kind, ReadingKind::Video);
+        assert_eq!(
+            sourced.metadata.canonical_url,
+            "https://example.com/original"
+        );
+        assert_eq!(sourced.metadata.site.as_deref(), Some("Example"));
+        let asset = sourced
+            .metadata
+            .media_url
+            .as_deref()
+            .unwrap()
+            .strip_prefix("cuttings-asset:")
+            .unwrap();
+        assert_eq!(
+            fs::read(library.reading_dir(&sourced.metadata.id).join(asset)).unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
+    fn rejects_truncated_video_and_oversized_sparse_input() {
+        let (_temp, library) = library();
+        let mut bytes = movie();
+        bytes.pop();
+        fs::write(library.inbox_dir().join("partial.mp4"), bytes).unwrap();
+        File::create(library.inbox_dir().join("huge.mov"))
+            .unwrap()
+            .set_len(MAX_CAPTURE_BYTES + 1)
+            .unwrap();
+        let report = process(&library);
+        assert_eq!(report.issues.len(), 2);
+        assert_eq!(report.saved, 0);
+    }
+
+    #[test]
+    fn crc_mismatch_retains_capture_without_importing_payload() {
+        let (_temp, library) = library();
+        let bytes = png();
+        let mut manifest = manifest();
+        manifest["attachments"] = json!([{"path":"payload.png"}]);
+        let path = archive(&library, &manifest, &[("payload.png", &bytes)]);
+        let mut archive_bytes = fs::read(&path).unwrap();
+        let position = archive_bytes
+            .windows(bytes.len())
+            .position(|window| window == bytes)
+            .unwrap();
+        archive_bytes[position + 20] ^= 1;
+        fs::write(&path, archive_bytes).unwrap();
+        let report = process(&library);
+        assert_eq!(report.issues.len(), 1, "{report:?}");
+        assert_eq!(report.saved, 0);
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn symlinked_duplicate_asset_is_not_consumed() {
+        let (_temp, library) = library();
+        let source = library.inbox_dir().join("photo.png");
+        fs::write(&source, png()).unwrap();
+        assert_eq!(process(&library).saved, 1);
+        let reading = readings(&library).pop().unwrap();
+        let asset = library
+            .reading_dir(&reading.metadata.id)
+            .join(crate::first_local_image_asset(&reading.body).unwrap());
+        fs::remove_file(&asset).unwrap();
+        let outside = library.path().join("outside.png");
+        fs::write(&outside, png()).unwrap();
+        symlink(&outside, &asset).unwrap();
+        fs::write(&source, png()).unwrap();
+        assert_eq!(process(&library).issues.len(), 1);
+        assert!(source.exists());
+        assert_eq!(fs::read(outside).unwrap(), png());
+    }
+}

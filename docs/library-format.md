@@ -18,6 +18,7 @@ land them across all affected components in the same monorepo commit.
       <sha256-id>.lock        # empty; one stable lock inode per reading id
   .cuttings-imports/          # persistent staging directory for streamed video imports
     video-<ulid>.tmp          # transient; removed after success, duplicate, or failure
+  inbox/                     # queued files/captures; removed only after verified import
   articles/
     <prefix>/                 # first 2 chars of the id — a fan-out bucket
       <id>/                   # one self-contained folder per reading
@@ -36,6 +37,9 @@ land them across all affected components in the same monorepo commit.
 - The per-device SQLite index lives **outside** this folder (e.g.
   `~/Library/Application Support/Cuttings/`) and is **never synced**.
 - Paths stored in the database must be **relative to the library root** — never absolute.
+- `inbox/` is an optional capture handoff, not canonical reading data. Its independently
+  versioned [capture transport](inbox-format.md) feeds the same Rust reading importer.
+  Failed or incomplete inputs remain available; the index never treats them as readings.
 - `.cuttings-locks/` contains empty advisory-lock sidecars used to serialize Cuttings writers that
   share a library on one machine. They live outside reading folders so deleting a reading cannot
   replace its lock inode while another process is waiting. Sidecars deliberately persist after an

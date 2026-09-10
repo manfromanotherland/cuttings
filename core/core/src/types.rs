@@ -121,6 +121,11 @@ impl LibraryRoot {
         self.0.join("articles")
     }
 
+    /// Unprocessed files and sealed captures, populated by external writers.
+    pub fn inbox_dir(&self) -> PathBuf {
+        self.0.join("inbox")
+    }
+
     /// The self-contained folder that holds everything for one reading:
     /// `articles/<prefix>/<id>/`. The article file, its assets, and its
     /// highlights all live inside it, so a reading is one movable/deletable unit.

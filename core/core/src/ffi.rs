@@ -108,6 +108,23 @@ pub struct FfiImportResult {
     pub path: String,
 }
 
+/// One Inbox item retained for the user to inspect or retry.
+#[derive(uniffi::Record)]
+pub struct FfiInboxIssue {
+    pub name: String,
+    pub message: String,
+}
+
+/// A batch result, independent of the disposable index. The caller reconciles
+/// once after processing the Inbox, not once for every imported reading.
+#[derive(uniffi::Record)]
+pub struct FfiInboxReport {
+    pub saved: u32,
+    pub duplicates: u32,
+    pub pending: u32,
+    pub issues: Vec<FfiInboxIssue>,
+}
+
 #[derive(uniffi::Record)]
 pub struct FfiVisualAsset {
     pub reading_id: String,
@@ -610,6 +627,30 @@ impl Database {
 
     // ── Imports ───────────────────────────────────────────────────────────
 
+    /// Consume complete Inbox inputs through the shared reading importer.
+    /// Does not reconcile the index: callers follow the batch with `sync`.
+    pub fn process_inbox(
+        &self,
+        library_path: String,
+        deferred_names: Vec<String>,
+    ) -> Result<FfiInboxReport, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let report = crate::process_inbox(&lib, &deferred_names).map_err(e)?;
+        Ok(FfiInboxReport {
+            saved: report.saved,
+            duplicates: report.duplicates,
+            pending: report.pending,
+            issues: report
+                .issues
+                .into_iter()
+                .map(|issue| FfiInboxIssue {
+                    name: issue.name,
+                    message: issue.message,
+                })
+                .collect(),
+        })
+    }
+
     /// Add an HTTP(S) link as a lightweight article placeholder. A later full
     /// browser capture upgrades it in place because both use the same id.
     pub fn import_link(
@@ -885,6 +926,47 @@ mod tests {
             limit: 50,
             offset: 0,
         }
+    }
+
+    #[test]
+    fn inbox_batch_is_reconciled_once_by_the_caller() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let inbox = library_dir.path().join("inbox");
+        std::fs::create_dir(&inbox).unwrap();
+        let path = inbox.join("link.txt");
+        std::fs::write(&path, "https://example.com/from-ios").unwrap();
+        std::fs::File::open(&path)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(10))
+            .unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let library_path = library_dir.path().display().to_string();
+
+        let deferred = database
+            .process_inbox(library_path.clone(), vec!["link.txt".to_string()])
+            .unwrap();
+        assert_eq!(deferred.pending, 1);
+        assert!(path.exists());
+
+        let report = database
+            .process_inbox(library_path.clone(), vec![])
+            .unwrap();
+        assert_eq!(report.saved, 1);
+        assert!(report.issues.is_empty());
+        assert!(!path.exists());
+        assert!(database
+            .list_readings(list_options(FfiView::All))
+            .unwrap()
+            .is_empty());
+
+        assert_eq!(database.sync(library_path.clone()).unwrap(), 1);
+        let rows = database.list_readings(list_options(FfiView::All)).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].url, "https://example.com/from-ios");
+        assert!(rows[0].lightweight);
+        assert_eq!(database.sync(library_path).unwrap(), 0);
     }
 
     #[test]
