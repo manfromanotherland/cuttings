@@ -2,7 +2,7 @@
 
 import Foundation
 
-/// Watches `articles/` inside the library root with FSEvents and invokes
+/// Watches `articles/` and `inbox/` inside the library root with FSEvents and invokes
 /// `onChange` whenever files are created, modified, or deleted — including
 /// files arriving via iCloud or other sync services.
 ///
@@ -15,8 +15,11 @@ final class FolderWatcher: @unchecked Sendable {
 
     init(libraryPath: String, onChange: @escaping @Sendable () -> Void) {
         self.onChange = onChange
-        let watchPath = (libraryPath as NSString).appendingPathComponent("articles")
-        start(path: watchPath)
+        start(paths: Self.watchPaths(libraryPath: libraryPath))
+    }
+
+    static func watchPaths(libraryPath: String) -> [String] {
+        LibrarySetup.subdirectories.map { (libraryPath as NSString).appendingPathComponent($0) }
     }
 
     deinit { stop() }
@@ -37,7 +40,7 @@ final class FolderWatcher: @unchecked Sendable {
 
     // ── Private ───────────────────────────────────────────────────────────
 
-    private func start(path: String) {
+    private func start(paths: [String]) {
         // `passRetained` keeps self alive for the duration of the stream; the
         // `release` callback balances it when the stream is torn down in stop().
         // Hold the token so the create-failure path below can balance it by hand
@@ -61,7 +64,7 @@ final class FolderWatcher: @unchecked Sendable {
 
         stream = FSEventStreamCreate(
             nil, callback, &ctx,
-            [path] as CFArray,
+            paths as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
             0.5, // seconds of latency / coalescing
             flags

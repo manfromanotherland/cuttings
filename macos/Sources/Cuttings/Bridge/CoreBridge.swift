@@ -111,6 +111,21 @@ actor CoreBridge {
 
     // ── Imports ───────────────────────────────────────────────────────────
 
+    /// Inbox ingestion only writes library files, not the database. Release
+    /// this actor while the batch copies and verifies media so existing reader
+    /// and search queries remain responsive. The caller serializes Inbox passes
+    /// and reconciles the index once after the batch finishes.
+    func processInbox() async throws -> FfiInboxReport {
+        try await Task.detached(priority: .utility) { [database, libraryPath] in
+            let libraryURL = URL(fileURLWithPath: libraryPath, isDirectory: true)
+            try LibrarySetup.scaffold(at: libraryURL)
+            let deferredNames = try InboxFileAvailability.deferredNames(
+                in: libraryURL.appendingPathComponent("inbox", isDirectory: true)
+            )
+            return try database.processInbox(libraryPath: libraryPath, deferredNames: deferredNames)
+        }.value
+    }
+
     func importLink(url: String) throws -> FfiImportResult {
         try database.importLink(libraryPath: libraryPath, url: url)
     }

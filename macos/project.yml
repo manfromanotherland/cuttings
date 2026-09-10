@@ -122,6 +122,8 @@ targets:
       - path: Sources/Cuttings/Bridge/Mappers/SidebarItem+FFI.swift
       - path: Sources/Cuttings/Bridge/Mappers/ReadingSort+FFI.swift
       - path: Sources/Cuttings/Platform/Library/LibrarySetup.swift
+      - path: Sources/Cuttings/Platform/Library/FolderWatcher.swift
+      - path: Sources/Cuttings/Platform/Library/InboxFileAvailability.swift
       - path: Sources/Cuttings/Platform/Ingestion
       - path: Sources/Cuttings/Platform/NativeHost/NativeHostInstaller.swift
       - path: Sources/Cuttings/Platform/Spotlight

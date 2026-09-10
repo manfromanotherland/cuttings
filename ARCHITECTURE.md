@@ -44,6 +44,15 @@ full browser capture upgrades them. The app watches the folder and indexes every
 masonry board, full-text search, type filters, and tags — so browser saves, in-app saves, and files
 delivered by sync reconcile through the same index path.
 
+The iOS **Save to Cuttings** Shortcut publishes sealed captures into `inbox/`
+inside the user's synced library. The Mac requests any missing iCloud bytes and
+passes ready files to the shared Rust Inbox importer. Rust validates private
+snapshots, calls the existing reading importer, verifies durable results, and
+removes only unchanged successful inputs. It then yields to a single index
+reconcile. Inbox processing starts after the existing board is published and
+runs only while the Mac app is open. See [the capture contract](docs/inbox-format.md)
+and [Shortcut setup](docs/ios-shortcut.md).
+
 Every card kind records its origin page in `url`/`canonical_url` plus its page title/site and save
 date. A browser-saved video's `media_url` is always a content-addressed local `cuttings-asset:`
 reference. The extension streams readable HTTP(S), `data:`, and document-scoped `blob:` bytes; if

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import Foundation
 
 // ── Incremental sync (FSEvents) ─────────────────────────────────────────────
@@ -20,10 +21,10 @@ extension AppState {
               activeCoreID == ObjectIdentifier(bridge) else { return }
 
         watcherSyncPending = false
-        watcherSyncTask = Task { @MainActor [weak self] in
+        watcherSyncTask = Task(priority: .utility) { @MainActor [weak self] in
             guard let self else { return }
-            await self.sync(using: bridge, session: session)
-            self.finishWatcherSync(session: session)
+            await sync(using: bridge, session: session)
+            finishWatcherSync(session: session)
         }
     }
 
@@ -38,6 +39,10 @@ extension AppState {
               activeCoreID == ObjectIdentifier(bridge),
               !Task.isCancelled else { return }
         let bridgeID = ObjectIdentifier(bridge)
+        await processInbox(using: bridge, session: session)
+        guard session == librarySessionGeneration,
+              activeCoreID == bridgeID,
+              !Task.isCancelled else { return }
         do {
             let changed = try await bridge.sync()
             guard session == librarySessionGeneration,
@@ -50,10 +55,79 @@ extension AppState {
         } catch {
             if session == librarySessionGeneration,
                activeCoreID == bridgeID,
-               !Task.isCancelled {
+               !Task.isCancelled
+            {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    private func processInbox(using bridge: CoreBridge, session: UInt64) async {
+        isProcessingInbox = true
+        beginLibraryWrite()
+        defer {
+            endLibraryWrite()
+            if session == librarySessionGeneration {
+                isProcessingInbox = false
+            }
+        }
+        do {
+            let report = try await bridge.processInbox()
+            guard session == librarySessionGeneration,
+                  activeCoreID == ObjectIdentifier(bridge),
+                  !Task.isCancelled else { return }
+            inboxPendingCount = report.pending
+            inboxIssues = report.issues
+            inboxError = nil
+            scheduleInboxRetry(session: session, pending: report.pending)
+            if report.saved > 0 {
+                let message = report.saved == 1
+                    ? "Saved 1 item from Inbox"
+                    : "Saved \(report.saved) items from Inbox"
+                presentSaveNotice(message, systemImage: "checkmark.circle.fill")
+            }
+        } catch {
+            guard session == librarySessionGeneration,
+                  activeCoreID == ObjectIdentifier(bridge),
+                  !Task.isCancelled else { return }
+            // A broken Inbox must not prevent ordinary library reconciliation.
+            // Keep persistent feedback beside its controls instead of showing
+            // the same modal error on every provider event.
+            inboxError = error.localizedDescription
+            scheduleInboxRetry(session: session, pending: 0)
+        }
+    }
+
+    private func scheduleInboxRetry(session: UInt64, pending: UInt32) {
+        guard pending > 0 else {
+            inboxRetryTask?.cancel()
+            inboxRetryTask = nil
+            inboxRetryAttempt = 0
+            return
+        }
+        guard inboxRetryTask == nil else { return }
+        let delay = InboxRetrySchedule.delay(attempt: inboxRetryAttempt)
+        inboxRetryAttempt = min(inboxRetryAttempt + 1, 3)
+        inboxRetryTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            guard let self,
+                  session == librarySessionGeneration,
+                  !Task.isCancelled else { return }
+            inboxRetryTask = nil
+            requestWatcherSync(session: session)
+        }
+    }
+
+    func checkInbox() {
+        inboxRetryTask?.cancel()
+        inboxRetryTask = nil
+        inboxRetryAttempt = 0
+        requestWatcherSync(session: librarySessionGeneration)
+    }
+
+    func openInbox() {
+        guard let libraryURL else { return }
+        NSWorkspace.shared.open(libraryURL.appendingPathComponent("inbox", isDirectory: true))
     }
 
     func startWatcher(libraryPath: String, session: UInt64) {
@@ -103,7 +177,8 @@ extension AppState {
         allowsImmediateRecoveryRetry: Bool
     ) async {
         while session == librarySessionGeneration,
-              activeLibraryWriteCount > 0 || isSaving {
+              activeLibraryWriteCount > 0 || isSaving
+        {
             try? await Task.sleep(for: .milliseconds(100))
         }
         guard session == librarySessionGeneration, canChangeLibrary else { return }

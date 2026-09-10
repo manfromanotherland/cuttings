@@ -23,6 +23,7 @@ protocol CoreBridging: VisualSearchCore {
     func getBody(id: String) async throws -> String?
 
     func importLink(url: String) async throws -> FfiImportResult
+    func processInbox() async throws -> FfiInboxReport
     func importText(text: String, title: String?) async throws -> FfiImportResult
     func importImage(data: Data, contentType: String, title: String) async throws -> FfiImportResult
     func importVideoFile(

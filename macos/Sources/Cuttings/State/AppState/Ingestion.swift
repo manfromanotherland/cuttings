@@ -156,7 +156,7 @@ extension AppState {
         return SaveNotice(message: parts.joined(separator: " · "), systemImage: symbol)
     }
 
-    private func presentSaveNotice(_ message: String, systemImage: String) {
+    func presentSaveNotice(_ message: String, systemImage: String) {
         let notice = SaveNotice(message: message, systemImage: systemImage)
         saveNotice = notice
         AccessibilityNotification.Announcement(message).post()

@@ -111,6 +111,9 @@ extension AppState {
                 retryImmediately: recovery.retryImmediately
             )
         } else {
+            // Publish the existing board before starting any Inbox work. This
+            // also picks up captures that arrived while Cuttings was closed.
+            watcherSyncPending = true
             scheduleWatcherSyncIfNeeded(session: session)
         }
     }
@@ -120,6 +123,13 @@ extension AppState {
         watcher?.invalidate()
         watcher = nil
         watcherSyncPending = false
+        inboxRetryTask?.cancel()
+        inboxRetryTask = nil
+        inboxRetryAttempt = 0
+        isProcessingInbox = false
+        inboxPendingCount = 0
+        inboxIssues = []
+        inboxError = nil
         searchTask?.cancel()
         searchTask = nil
         readingLoadGeneration &+= 1
@@ -239,6 +249,13 @@ extension AppState {
         using bridge: CoreBridge,
         session: UInt64
     ) async throws {
+        // Existing libraries predate Inbox. Scaffold off the main actor before
+        // registering the watcher, after any trusted cache has been published.
+        await Task.detached(priority: .utility) {
+            // Inbox errors are reported independently by its first check. They
+            // must not keep the existing library from opening.
+            try? LibrarySetup.scaffold(at: url)
+        }.value
         // Start FSEvents before the scan. Changes that land during rebuild are
         // coalesced and synced once the rebuilt snapshot becomes active.
         startWatcher(libraryPath: url.path, session: session)

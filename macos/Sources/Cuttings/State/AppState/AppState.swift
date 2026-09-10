@@ -170,6 +170,11 @@ final class AppState {
     var saveNotice: SaveNotice?
     var isSaving: Bool = false
 
+    var isProcessingInbox = false
+    var inboxPendingCount: UInt32 = 0
+    var inboxIssues: [FfiInboxIssue] = []
+    var inboxError: String?
+
     /// True while the user is editing a text field (the toolbar search field, the
     /// tag picker, …). macOS dispatches menu/context-menu key-equivalents *before*
     /// the focused field editor, so global shortcuts can fire mid-edit instead of
@@ -190,6 +195,8 @@ final class AppState {
     @ObservationIgnored var libraryContentRefreshPending = false
     @ObservationIgnored var watcherSyncTask: Task<Void, Never>?
     @ObservationIgnored var watcherSyncPending = false
+    @ObservationIgnored var inboxRetryTask: Task<Void, Never>?
+    @ObservationIgnored var inboxRetryAttempt = 0
     var accessedURL: URL?
     var watcher: FolderWatcher?
     let visualSearchCoordinator: VisualSearchCoordinator?

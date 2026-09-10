@@ -149,6 +149,48 @@ private struct LibrarySettingsTab: View {
             }
             .disabled(!appState.canChangeLibrary)
             .accessibilityIdentifier(A11y.Settings.changeLibrary)
+
+            if appState.libraryURL != nil {
+                Section {
+                    HStack {
+                        Button("Open Inbox") { appState.openInbox() }
+                        Button("Check Inbox") { appState.checkInbox() }
+                            .disabled(appState.isProcessingInbox || appState.isReconcilingLibrary)
+                    }
+                    if let error = appState.inboxError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if appState.isProcessingInbox {
+                        Text("Checking Inbox…")
+                            .foregroundStyle(.secondary)
+                    } else if appState.inboxPendingCount > 0 {
+                        Text(appState.inboxPendingCount == 1
+                            ? "1 item waiting for files to finish arriving."
+                            : "\(appState.inboxPendingCount) items waiting for files to finish arriving.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(appState.inboxIssues.prefix(3).enumerated()), id: \.offset) { _, issue in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(issue.name)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text(issue.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if appState.inboxIssues.count > 3 {
+                        Text("\(appState.inboxIssues.count - 3) more items need attention.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Inbox")
+                } footer: {
+                    Text("Shared files are saved to your library while Cuttings is open, then removed from Inbox. Files that need attention stay in Inbox.")
+                }
+            }
         }
         .formStyle(.grouped)
         .frame(minHeight: 120)

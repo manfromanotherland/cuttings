@@ -3,7 +3,7 @@
 import XCTest
 
 /// `LibrarySetup` scaffolds the library's on-disk layout: it creates the
-/// `articles` subdirectory under the chosen root (assets live inside each
+/// `articles` and `inbox` subdirectories under the chosen root (assets live inside each
 /// reading's folder, so there is no top-level `assets/`) and is safe to re-run.
 /// Exercised against a throwaway temp directory, never a real library.
 final class LibrarySetupTests: XCTestCase {
@@ -37,6 +37,33 @@ final class LibrarySetupTests: XCTestCase {
             FileManager.default.fileExists(atPath: root.appendingPathComponent("assets").path),
             "there should be no top-level assets/ directory"
         )
+    }
+
+    func testScaffoldCreatesInbox() throws {
+        try LibrarySetup.scaffold(at: root)
+
+        let values = try root.appendingPathComponent("inbox")
+            .resourceValues(forKeys: [.isDirectoryKey])
+        XCTAssertEqual(values.isDirectory, true)
+    }
+
+    func testScaffoldDoesNotAcceptInboxSymlink() throws {
+        let target = root.appendingPathComponent("elsewhere", isDirectory: true)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("inbox"), withDestinationURL: target
+        )
+
+        XCTAssertThrowsError(try LibrarySetup.scaffold(at: root))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: target.path).isEmpty)
+    }
+
+    func testScaffoldDoesNotReplaceAFileNamedInbox() throws {
+        let inbox = root.appendingPathComponent("inbox")
+        try Data("keep".utf8).write(to: inbox)
+
+        XCTAssertThrowsError(try LibrarySetup.scaffold(at: root))
+        XCTAssertEqual(try String(contentsOf: inbox, encoding: .utf8), "keep")
     }
 
     func testScaffoldIsIdempotent() throws {
