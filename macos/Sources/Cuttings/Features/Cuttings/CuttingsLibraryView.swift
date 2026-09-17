@@ -211,13 +211,6 @@ extension CuttingsLibraryView {
         } else {
             GeometryReader { proxy in
                 let previewMaxPixel = cardSize.previewMaxPixel(displayScale: displayScale)
-                let configurationID = [
-                    appState.libraryURL?.path ?? "",
-                    String(Int(previewMaxPixel)),
-                    String(presentedReading == nil),
-                    String(accessibilityReduceMotion),
-                    String(describing: scenePhase)
-                ].joined(separator: ":")
                 LazyMasonryBoard(
                     appState.readings,
                     id: \.id,
@@ -229,7 +222,6 @@ extension CuttingsLibraryView {
                         bottom: Self.boardSpacing,
                         trailing: Self.boardSpacing
                     ),
-                    configurationID: configurationID,
                     position: $boardPosition,
                     navigationCoordinator: boardNavigation,
                     estimatedHeight: estimatedCardHeight,
