@@ -67,13 +67,16 @@ enum AssetImageLoader {
     /// because ImageIO does not support them. Smaller raster images are left
     /// as-is (no upscaling). Returns `nil` if the file can't be read or decoded.
     nonisolated static func downsampledImage(at url: URL, maxPixel: CGFloat) -> Decoded? {
+        let sourceOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: false
+        ]
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel.rounded())
         ]
-        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+        if let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary),
            let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
         {
             let size = NSSize(width: cgImage.width, height: cgImage.height)

@@ -4,6 +4,40 @@ import AppKit
 import XCTest
 
 final class AssetImageLoaderTests: XCTestCase {
+    func testRasterAssetsDownsampleToRequestedPixelBounds() throws {
+        let context = try XCTUnwrap(CGContext(
+            data: nil,
+            width: 400,
+            height: 200,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(NSColor.systemPink.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: 400, height: 200))
+
+        let sourceImage = try XCTUnwrap(context.makeImage())
+        let data = try XCTUnwrap(
+            NSBitmapImageRep(cgImage: sourceImage).representation(using: .png, properties: [:])
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cuttings-raster-asset-\(UUID().uuidString).png")
+        try data.write(to: url, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let image = try XCTUnwrap(
+            AssetImageLoader.downsampledImage(at: url, maxPixel: 80)?.image
+        )
+        var proposedRect = NSRect(origin: .zero, size: image.size)
+        let downsampled = try XCTUnwrap(
+            image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil)
+        )
+
+        XCTAssertLessThanOrEqual(max(downsampled.width, downsampled.height), 80)
+        XCTAssertEqual(Double(downsampled.width) / Double(downsampled.height), 2, accuracy: 0.01)
+    }
+
     func testSVGAssetsDecodeThroughAssetLoader() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("cuttings-svg-asset-\(UUID().uuidString).svg")
