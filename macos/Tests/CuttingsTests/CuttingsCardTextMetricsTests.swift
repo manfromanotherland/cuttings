@@ -5,6 +5,23 @@ import XCTest
 
 @MainActor
 final class CuttingsCardTextMetricsTests: XCTestCase {
+    func testWidthScopedCacheEvictsThePreviousWidth() {
+        var cache = WidthScopedHeightCache<String>()
+        var calculations = 0
+
+        func height(at width: Int) -> CGFloat {
+            cache.value(for: "same text", width: width) {
+                calculations += 1
+                return CGFloat(calculations)
+            }
+        }
+
+        XCTAssertEqual(height(at: 440), 1)
+        XCTAssertEqual(height(at: 440), 1)
+        XCTAssertEqual(height(at: 806), 2)
+        XCTAssertEqual(height(at: 440), 3)
+    }
+
     func testArticleFooterHeightUsesRenderedTitleWidth() {
         let metrics = CuttingsCardTextMetrics()
         let title = "Swell Wall Catchall by Anna Dawson — Sculptural Organizer & Hanger"

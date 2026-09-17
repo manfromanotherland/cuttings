@@ -2,6 +2,29 @@
 
 import AppKit
 
+struct WidthScopedHeightCache<Key: Hashable> {
+    private var activeWidth: Int?
+    private var values: [Key: CGFloat] = [:]
+
+    mutating func value(
+        for key: Key,
+        width: Int,
+        calculate: () -> CGFloat
+    ) -> CGFloat {
+        if activeWidth != width {
+            activeWidth = width
+            values.removeAll(keepingCapacity: true)
+        }
+        if let cached = values[key] {
+            return cached
+        }
+
+        let value = calculate()
+        values[key] = value
+        return value
+    }
+}
+
 /// Native text measurements for the fixed card frames supplied to
 /// LazyLayoutKit. Measurements are cached at the active column width and never
 /// read assets or construct offscreen card views.
@@ -22,58 +45,38 @@ final class CuttingsCardTextMetrics {
     static let articleFooterSpacing: CGFloat = 8
     static let articleFooterSourceLineHeight = max(14, sourceLineHeight)
 
-    private struct ArticleTitleKey: Hashable {
-        let text: String
-        let halfPointWidth: Int
-    }
-
-    private struct QuoteKey: Hashable {
-        let text: String
-        let halfPointWidth: Int
-    }
-
-    private var articleFooterHeights: [ArticleTitleKey: CGFloat] = [:]
-    private var quoteHeights: [QuoteKey: CGFloat] = [:]
+    private var articleFooterHeights = WidthScopedHeightCache<String>()
+    private var quoteHeights = WidthScopedHeightCache<String>()
 
     func articleFooterHeight(for title: String, width: CGFloat) -> CGFloat {
         let textWidth = max(1, width - Self.articleFooterPadding * 2)
         let halfPointWidth = Int((textWidth * 2).rounded())
-        let key = ArticleTitleKey(text: title, halfPointWidth: halfPointWidth)
-        if let cached = articleFooterHeights[key] {
-            return cached
+        return articleFooterHeights.value(for: title, width: halfPointWidth) {
+            let measured = Self.measuredArticleTitleHeight(
+                title,
+                width: CGFloat(halfPointWidth) / 2
+            )
+            return Self.articleFooterPadding * 2
+                + measured
+                + Self.articleFooterSpacing
+                + Self.articleFooterSourceLineHeight
         }
-
-        let measured = Self.measuredArticleTitleHeight(
-            title,
-            width: CGFloat(halfPointWidth) / 2
-        )
-        let height = Self.articleFooterPadding * 2
-            + measured
-            + Self.articleFooterSpacing
-            + Self.articleFooterSourceLineHeight
-        articleFooterHeights[key] = height
-        return height
     }
 
     func quoteCardHeight(for text: String, width: CGFloat) -> CGFloat {
         let textWidth = max(1, width - Self.horizontalPadding)
         let halfPointWidth = Int((textWidth * 2).rounded())
-        let key = QuoteKey(text: text, halfPointWidth: halfPointWidth)
-        if let cached = quoteHeights[key] {
-            return cached
+        return quoteHeights.value(for: text, width: halfPointWidth) {
+            let measured = Self.measuredQuoteHeight(
+                text,
+                width: CGFloat(halfPointWidth) / 2
+            )
+            return Self.verticalPadding
+                + Self.quoteMarkHeight
+                + Self.stackSpacing
+                + measured
+                + Self.sourceLineHeight
         }
-
-        let measured = Self.measuredQuoteHeight(
-            text,
-            width: CGFloat(halfPointWidth) / 2
-        )
-        let height = Self.verticalPadding
-            + Self.quoteMarkHeight
-            + Self.stackSpacing
-            + measured
-            + Self.sourceLineHeight
-        quoteHeights[key] = height
-        return height
     }
 
     private static func measuredQuoteHeight(_ text: String, width: CGFloat) -> CGFloat {
