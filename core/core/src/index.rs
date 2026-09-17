@@ -55,6 +55,29 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 6 {
         migrate_v6(conn)?;
     }
+    if version < 7 {
+        migrate_v7(conn)?;
+    }
+    Ok(())
+}
+
+/// v7: serve the board's fixed newest-first order directly from the index.
+///
+/// The macOS board loads one complete, immutable snapshot for LazyLayoutKit.
+/// Keeping that snapshot in `saved_at DESC, id DESC` order avoids building a
+/// temporary SQLite sort tree on every cached launch, refresh, and scope change.
+fn migrate_v7(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        CREATE INDEX readings_saved_at_id_idx
+            ON readings(saved_at DESC, id DESC);
+
+        PRAGMA user_version = 7;
+        COMMIT;
+        ",
+    )?;
     Ok(())
 }
 
@@ -353,7 +376,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 7);
 
         // readings table exists
         let count: i64 = conn
@@ -417,6 +440,67 @@ mod tests {
         // Open twice — second open should not fail.
         open(&db_path).unwrap();
         open(&db_path).unwrap();
+    }
+
+    #[test]
+    fn v7_indexes_existing_readings_without_changing_board_order() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            migrate_v1(&conn).unwrap();
+            migrate_v2(&conn).unwrap();
+            migrate_v3(&conn).unwrap();
+            migrate_v4(&conn).unwrap();
+            migrate_v5(&conn).unwrap();
+            migrate_v6(&conn).unwrap();
+            for (id, saved_at) in [
+                ("older", "2026-06-13T15:00:00Z"),
+                ("newer", "2026-06-14T15:00:00Z"),
+            ] {
+                conn.execute(
+                    "INSERT INTO readings
+                     (id, url, canonical_url, title, saved_at, source_hash)
+                     VALUES (?1, ?2, ?2, ?1, ?3, ?1)",
+                    rusqlite::params![id, format!("https://example.com/{id}"), saved_at],
+                )
+                .unwrap();
+            }
+        }
+
+        let conn = open(&db_path).unwrap();
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 7);
+
+        let mut stmt = conn
+            .prepare("SELECT id FROM readings ORDER BY saved_at DESC, id DESC")
+            .unwrap();
+        let ids: Vec<String> = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(ids, vec!["newer", "older"]);
+
+        let mut plan = conn
+            .prepare(
+                "EXPLAIN QUERY PLAN
+                 SELECT id FROM readings ORDER BY saved_at DESC, id DESC",
+            )
+            .unwrap();
+        let details: Vec<String> = plan
+            .query_map([], |row| row.get(3))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(
+            details
+                .iter()
+                .any(|detail| detail.contains("readings_saved_at_id_idx")),
+            "board query should use the saved-order index: {details:?}"
+        );
     }
 
     #[test]
@@ -544,7 +628,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 7);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -586,7 +670,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 7);
 
         let values: (i64, i64, String) = conn
             .query_row(
