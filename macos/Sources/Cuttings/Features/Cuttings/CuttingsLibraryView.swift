@@ -43,6 +43,16 @@ struct CuttingsLibraryView: View {
     }
 }
 
+private struct SearchQueryChangeModifier: ViewModifier {
+    @Environment(AppState.self) private var appState
+
+    func body(content: Content) -> some View {
+        content.onChange(of: appState.searchQuery) { _, _ in
+            appState.searchDidChange()
+        }
+    }
+}
+
 extension CuttingsLibraryView {
     private var layeredSurface: some View {
         ZStack {
@@ -82,9 +92,7 @@ extension CuttingsLibraryView {
 
     private var reactiveSurface: some View {
         ingestibleSurface
-            .onChange(of: appState.searchQuery) { _, _ in
-                appState.searchDidChange()
-            }
+            .modifier(SearchQueryChangeModifier())
             .onChange(of: appState.readings) { _, rows in
                 guard let id = presentedReading?.id else { return }
                 if let refreshed = rows.first(where: { $0.id == id }) {
