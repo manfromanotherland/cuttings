@@ -51,17 +51,17 @@ final class AssetImageLoaderTests: XCTestCase {
 
         XCTAssertNotNil(NSImage(contentsOf: url), "The SVG fixture must be valid to AppKit")
 
-        let decoded = AssetImageLoader.downsampledImage(at: url, maxPixel: 800)
+        let decoded = AssetImageLoader.downsampledImage(at: url, maxPixel: 80)
         guard let image = decoded?.image else {
             XCTFail("A valid local SVG must produce a board preview")
             return
         }
 
-        var proposedRect = NSRect(x: 0, y: 0, width: 128, height: 64)
-        XCTAssertNotNil(
-            image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil),
-            "The decoded SVG must render through AppKit"
+        var proposedRect = NSRect(origin: .zero, size: image.size)
+        let rasterized = try XCTUnwrap(
+            image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil)
         )
+        XCTAssertLessThanOrEqual(max(rasterized.width, rasterized.height), 80)
     }
 }
 
@@ -150,6 +150,102 @@ final class AssetPreviewDecodeQueueTests: XCTestCase {
         }
     }
 
+    func testReplacementRequestSharesActiveDecodeAfterCancellation() async {
+        let queue = AssetPreviewDecodeQueue(limit: 3)
+        let gate = AsyncGate()
+        let counter = AsyncCounter()
+        let url = URL(fileURLWithPath: "/tmp/cuttings-coalesced-preview.png")
+        let key = AssetPreviewDecodeKey(kind: .image, url: url, maxPixel: 800)
+        let decoded = AssetImageLoader.Decoded(image: NSImage(size: NSSize(width: 800, height: 500)))
+
+        let original = Task {
+            await queue.decode(key: key) {
+                await counter.increment()
+                await gate.wait()
+                return decoded
+            }
+        }
+        let originalStarted = await waitForState(queue) { $0.active == 1 }
+        XCTAssertTrue(originalStarted)
+
+        let replacement = Task {
+            await queue.decode(key: key) {
+                await counter.increment()
+                return decoded
+            }
+        }
+        let replacementCoalesced = await waitForState(queue) {
+            $0.active == 1 && $0.coalescedWaiters == 1
+        }
+        XCTAssertTrue(replacementCoalesced)
+        original.cancel()
+
+        await gate.open()
+        let originalResult = await original.value
+        let replacementResult = await replacement.value
+        let invocationCount = await counter.value()
+        XCTAssertNotNil(originalResult)
+        XCTAssertNotNil(replacementResult)
+        XCTAssertEqual(invocationCount, 1)
+    }
+
+    func testCancelledSoleSubscriberDropsQueuedDecode() async {
+        let queue = AssetPreviewDecodeQueue(limit: 1)
+        let permitGate = AsyncGate()
+        let counter = AsyncCounter()
+        let holder = Task {
+            await queue.withPermit {
+                await permitGate.wait()
+                return true
+            }
+        }
+        let holderStarted = await waitForState(queue) { $0.active == 1 }
+        XCTAssertTrue(holderStarted)
+
+        let url = URL(fileURLWithPath: "/tmp/cuttings-cancelled-preview.png")
+        let key = AssetPreviewDecodeKey(kind: .image, url: url, maxPixel: 160)
+        let request = Task {
+            await queue.decode(key: key) {
+                await counter.increment()
+                return nil
+            }
+        }
+        let requestQueued = await waitForState(queue) {
+            $0.waiting == 1 && $0.inFlightDecodes == 1
+        }
+        XCTAssertTrue(requestQueued)
+
+        request.cancel()
+        let requestDrained = await waitForState(queue) {
+            $0.waiting == 0 && $0.inFlightDecodes == 0
+        }
+        XCTAssertTrue(requestDrained)
+        await permitGate.open()
+
+        _ = await holder.value
+        let requestResult = await request.value
+        let invocationCount = await counter.value()
+        XCTAssertNil(requestResult)
+        XCTAssertEqual(invocationCount, 0)
+    }
+
+    func testCompletedDecodeIsCachedBeforeTheInFlightJobEnds() async throws {
+        let url = try makeTemporaryRasterURL()
+        let key = AssetPreviewDecodeKey(kind: .image, url: url, maxPixel: 80)
+        let queue = AssetPreviewDecodeQueue(limit: 3)
+
+        let first = await queue.image(at: url, maxPixel: 80)
+        XCTAssertNotNil(first)
+        XCTAssertNotNil(AssetPreviewImageCache.shared.entry(for: key))
+
+        try FileManager.default.removeItem(at: url)
+        let reused = await AssetPreviewDecodeQueue(limit: 3).image(at: url, maxPixel: 80)
+        let differentSize = await AssetPreviewDecodeQueue(limit: 3).image(at: url, maxPixel: 81)
+
+        XCTAssertNotNil(reused, "A replacement request must reuse the completed exact-size decode")
+        XCTAssertNil(differentSize, "A detail or board size must not contaminate another cache key")
+    }
+
     private func waitForState(
         _ queue: AssetPreviewDecodeQueue,
         predicate: @escaping @Sendable (AssetPreviewDecodeQueue.State) -> Bool
@@ -161,6 +257,40 @@ final class AssetPreviewDecodeQueueTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(5))
         }
         return false
+    }
+}
+
+private func makeTemporaryRasterURL() throws -> URL {
+    let context = try XCTUnwrap(CGContext(
+        data: nil,
+        width: 80,
+        height: 40,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ))
+    context.setFillColor(NSColor.systemPink.cgColor)
+    context.fill(CGRect(x: 0, y: 0, width: 80, height: 40))
+    let sourceImage = try XCTUnwrap(context.makeImage())
+    let data = try XCTUnwrap(
+        NSBitmapImageRep(cgImage: sourceImage).representation(using: .png, properties: [:])
+    )
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("cuttings-cached-preview-\(UUID().uuidString).png")
+    try data.write(to: url, options: .atomic)
+    return url
+}
+
+private actor AsyncCounter {
+    private var count = 0
+
+    func increment() {
+        count += 1
+    }
+
+    func value() -> Int {
+        count
     }
 }
 

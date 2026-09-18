@@ -111,12 +111,14 @@ targets:
       - path: Sources/Cuttings/Features/Cuttings/CuttingsTheme.swift
       - path: Sources/Cuttings/Features/Cuttings/CuttingsCardTextMetrics.swift
       - path: Sources/Cuttings/Features/Cuttings/ReadingRow+MediaGeometry.swift
+      - path: Sources/Cuttings/Features/Cuttings/AssetPreviewPipeline.swift
       - path: Sources/Cuttings/Features/Cuttings/LocalReadingImage.swift
       - path: Sources/Cuttings/Features/Cuttings/LocalReadingFavicon.swift
       - path: Sources/Cuttings/Features/Cuttings/ReadingQuickLookURLResolver.swift
       - path: Sources/Cuttings/Features/Cuttings/LazyMasonryBoard.swift
       - path: Sources/Cuttings/Features/Cuttings/VideoCardViewport.swift
       - path: Sources/Cuttings/Features/Reader/Markdown/AssetImageLoader.swift
+      - path: Sources/Cuttings/Features/Reader/Markdown/AssetPreviewDecodeQueue.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarCountModels.swift
       - path: Sources/Cuttings/Bridge/Mappers/HighlightRow.swift
       - path: Sources/Cuttings/Bridge/Mappers/SidebarItem+FFI.swift

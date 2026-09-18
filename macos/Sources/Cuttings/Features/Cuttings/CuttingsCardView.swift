@@ -9,7 +9,8 @@ struct CuttingsCardView: View {
     let isSelected: Bool
     let playbackPositions: VideoPlaybackPositionStore
     var viewportSize: CGSize = .zero
-    var previewMaxPixel: CGFloat = 800
+    var displayScale: CGFloat = 1
+    let scrollState: BoardScrollState
     var autoplayEnabled = true
     var reduceMotion = false
     var scenePhase: ScenePhase = .active
@@ -18,11 +19,19 @@ struct CuttingsCardView: View {
     var onEditTags: () -> Void
 
     @State private var isHovered = false
+    @State private var isInViewport = false
 
     var body: some View {
         GeometryReader { proxy in
             interactiveCard(in: proxy.size)
         }
+        .modifier(CardViewportVisibilityModifier(
+            isEnabled: row.previewAsset != nil
+                || row.localVideoAssetReference != nil
+                || row.faviconAsset != nil,
+            viewportSize: viewportSize,
+            isVisible: $isInViewport
+        ))
         .onAppear {
             TestHooks.recordStartupEvent("card")
             TestHooks.recordVisibleCard(id: row.id)
@@ -86,8 +95,13 @@ struct CuttingsCardView: View {
         LocalReadingImage(
             row: row, libraryURL: appState.libraryURL,
             fallbackAspectRatio: row.standaloneMediaAspectRatio ?? 4 / 3,
-            maxPixel: previewMaxPixel,
-            contentMode: .fit
+            maxPixel: AssetPreviewLoadPlan.displayMaxPixel(
+                for: size, displayScale: displayScale
+            ),
+            contentMode: .fit,
+            loadsProgressively: true,
+            isVisible: isInViewport,
+            scrollState: scrollState
         )
         .frame(width: size.width, height: size.height)
         .clipped()
@@ -98,9 +112,12 @@ struct CuttingsCardView: View {
             row: row,
             libraryURL: appState.libraryURL,
             cardSize: size,
-            viewportSize: viewportSize,
             playbackPositions: playbackPositions,
-            maxPixel: previewMaxPixel,
+            maxPixel: AssetPreviewLoadPlan.displayMaxPixel(
+                for: size, displayScale: displayScale
+            ),
+            isInViewport: isInViewport,
+            scrollState: scrollState,
             autoplayEnabled: autoplayEnabled,
             reduceMotion: reduceMotion,
             scenePhase: scenePhase
@@ -127,8 +144,14 @@ struct CuttingsCardView: View {
             LocalReadingImage(
                 row: row, libraryURL: appState.libraryURL,
                 fallbackAspectRatio: aspectRatio,
-                maxPixel: previewMaxPixel,
-                contentMode: .fit
+                maxPixel: AssetPreviewLoadPlan.displayMaxPixel(
+                    for: CGSize(width: size.width, height: previewHeight),
+                    displayScale: displayScale
+                ),
+                contentMode: .fit,
+                loadsProgressively: true,
+                isVisible: isInViewport,
+                scrollState: scrollState
             )
             .frame(width: size.width, height: previewHeight)
             .clipped()
@@ -196,11 +219,17 @@ struct CuttingsCardView: View {
         .padding(CuttingsCardTextMetrics.articleFooterPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
+private extension CuttingsCardView {
     private func sourceLine(foreground: Color) -> some View {
         HStack(spacing: 6) {
             if row.kind == .article, row.faviconAsset != nil {
-                LocalReadingFavicon(row: row, libraryURL: appState.libraryURL)
+                LocalReadingFavicon(
+                    row: row,
+                    libraryURL: appState.libraryURL,
+                    isVisible: isInViewport
+                )
             }
 
             Text(row.displaySite ?? "Saved locally")

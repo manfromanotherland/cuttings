@@ -11,14 +11,14 @@ struct AutoplayVideoCard: View {
     let row: ReadingRow
     let libraryURL: URL?
     let cardSize: CGSize
-    let viewportSize: CGSize
     let playbackPositions: VideoPlaybackPositionStore
     var maxPixel: CGFloat = 800
+    var isInViewport = false
+    let scrollState: BoardScrollState
     var autoplayEnabled = true
     var reduceMotion = false
     var scenePhase: ScenePhase = .active
 
-    @State private var isInViewport = false
     @State private var loadedMediaKey: String?
     @State private var playback: CardVideoPlayback?
 
@@ -28,37 +28,36 @@ struct AutoplayVideoCard: View {
             libraryURL: libraryURL,
             fallbackAspectRatio: row.standaloneMediaAspectRatio ?? 16 / 9,
             maxPixel: maxPixel,
-            contentMode: .fit
+            contentMode: .fit,
+            loadsProgressively: true,
+            isVisible: isInViewport,
+            scrollState: scrollState
         )
         .frame(width: cardSize.width, height: cardSize.height)
         .clipped()
         .overlay {
-            if let playback {
+            if let playback, !scrollState.isScrolling {
                 CardVideoPlayerLayer(player: playback.player)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
         }
         .clipped()
-        .onGeometryChange(for: Bool.self) { proxy in
-            VideoCardViewport.containsVisibleArea(
-                of: proxy.frame(in: .scrollView(axis: .vertical)),
-                in: CGRect(origin: .zero, size: viewportSize)
-            )
-        } action: { visible in
-            isInViewport = visible
-        }
         .task(id: playbackTaskID) {
             await synchronizePlayback()
         }
         .onDisappear {
-            isInViewport = false
             pausePlayback()
             releasePlayback()
         }
     }
 
     private var shouldAutoplay: Bool {
+        shouldRetainPlayback
+            && !scrollState.isScrolling
+    }
+
+    private var shouldRetainPlayback: Bool {
         autoplayEnabled
             && isInViewport
             && !reduceMotion
@@ -66,7 +65,7 @@ struct AutoplayVideoCard: View {
     }
 
     private var playbackTaskID: String {
-        "\(mediaKey):autoplay=\(shouldAutoplay)"
+        "\(mediaKey):retain=\(shouldRetainPlayback):autoplay=\(shouldAutoplay)"
     }
 
     private var mediaKey: String {
@@ -82,9 +81,13 @@ struct AutoplayVideoCard: View {
             loadedMediaKey = requestedMediaKey
         }
 
-        guard shouldAutoplay else {
+        guard shouldRetainPlayback else {
             pausePlayback()
             releasePlayback()
+            return
+        }
+        guard shouldAutoplay else {
+            pausePlayback()
             return
         }
 

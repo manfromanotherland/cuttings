@@ -11,6 +11,7 @@ struct LocalReadingFavicon: View {
     let libraryURL: URL?
     var size: CGFloat = 14
     var maxPixel: CGFloat = 64
+    var isVisible = true
 
     @State private var image: NSImage?
 
@@ -36,7 +37,7 @@ struct LocalReadingFavicon: View {
     }
 
     private var loadKey: String {
-        "\(row.id):\(row.faviconAsset ?? ""):\(Int(maxPixel))"
+        "\(libraryURL?.path ?? ""):\(row.id):\(row.faviconAsset ?? ""):\(Int(maxPixel)):\(isVisible)"
     }
 
     private var assetURL: URL? {
@@ -54,12 +55,16 @@ struct LocalReadingFavicon: View {
 
     @MainActor
     private func load() async {
-        guard let url = assetURL else {
-            image = nil
+        image = nil
+        guard isVisible, let url = assetURL else { return }
+        let key = AssetPreviewDecodeKey(kind: .image, url: url, maxPixel: maxPixel)
+        if let cached = AssetPreviewImageCache.shared.entry(for: key) {
+            image = cached.image
             return
         }
+
         let loaded = await AssetPreviewDecodeQueue.shared.image(at: url, maxPixel: maxPixel)
-        guard !Task.isCancelled else { return }
-        image = loaded?.image
+        guard !Task.isCancelled, isVisible, let loaded else { return }
+        image = loaded.image
     }
 }

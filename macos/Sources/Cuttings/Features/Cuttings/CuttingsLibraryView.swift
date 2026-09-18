@@ -21,11 +21,11 @@ struct CuttingsLibraryView: View {
     @State var boardPosition = LazyLayoutPosition<String>()
     @State var boardNavigation = MasonryNavigationCoordinator<ReadingRow, String>()
     @State var boardModifierKeys: EventModifiers = []
+    @State private var boardScrollState = BoardScrollState()
     @State var pinchStartCardSize: CardSize?
     @State var quickLookURL: URL?
     @FocusState var boardFocused: Bool
     @FocusState var searchFocused: Bool
-
     var body: some View {
         NavigationStack {
             deletionSurface
@@ -218,7 +218,6 @@ extension CuttingsLibraryView {
             emptyState
         } else {
             GeometryReader { proxy in
-                let previewMaxPixel = cardSize.previewMaxPixel(displayScale: displayScale)
                 LazyMasonryBoard(
                     appState.readings,
                     id: \.id,
@@ -239,7 +238,8 @@ extension CuttingsLibraryView {
                             isSelected: appState.selectedIDs.contains(row.id),
                             playbackPositions: videoPlaybackPositions,
                             viewportSize: proxy.size,
-                            previewMaxPixel: previewMaxPixel,
+                            displayScale: displayScale,
+                            scrollState: boardScrollState,
                             autoplayEnabled: presentedReading == nil,
                             reduceMotion: accessibilityReduceMotion,
                             scenePhase: scenePhase,
@@ -256,6 +256,7 @@ extension CuttingsLibraryView {
                         .accessibilityIdentifier(A11y.List.row(row.id))
                     }
                 )
+                .modifier(BoardScrollTrackingModifier(scrollState: boardScrollState))
                 .focusable()
                 .focused($boardFocused)
                 .focusEffectDisabled()

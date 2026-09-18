@@ -63,7 +63,7 @@ enum AssetImageLoader {
 
     /// Decode `url` into an image whose largest dimension is at most `maxPixel`
     /// device pixels. Raster images use ImageIO so the full-resolution bitmap is
-    /// never materialized; SVGs retain AppKit's scalable vector representation
+    /// never materialized; SVGs use AppKit for an equivalently bounded raster
     /// because ImageIO does not support them. Smaller raster images are left
     /// as-is (no upscaling). Returns `nil` if the file can't be read or decoded.
     nonisolated static func downsampledImage(at url: URL, maxPixel: CGFloat) -> Decoded? {
@@ -83,18 +83,63 @@ enum AssetImageLoader {
             return Decoded(image: NSImage(cgImage: cgImage, size: size))
         }
 
-        return svgImage(at: url)
+        return svgImage(at: url, maxPixel: maxPixel)
     }
 
     /// ImageIO can create a source for an SVG but cannot decode an image from
-    /// it. AppKit's registered SVG representation can, while keeping the asset
-    /// vector-backed rather than materializing an unbounded raster bitmap.
-    private nonisolated static func svgImage(at url: URL) -> Decoded? {
+    /// it. AppKit's registered SVG representation can rasterize into the same
+    /// requested pixel bound, keeping vector complexity off the scrolling path.
+    private nonisolated static func svgImage(at url: URL, maxPixel: CGFloat) -> Decoded? {
         guard url.pathExtension.caseInsensitiveCompare("svg") == .orderedSame,
               let data = try? Data(contentsOf: url),
-              let image = NSImage(data: data)
+              let image = NSImage(data: data),
+              image.size.width.isFinite,
+              image.size.height.isFinite,
+              image.size.width > 0,
+              image.size.height > 0
         else { return nil }
-        return Decoded(image: image)
+
+        let scale = maxPixel / max(image.size.width, image.size.height)
+        let pixelWidth = max(1, Int((image.size.width * scale).rounded(.up)))
+        let pixelHeight = max(1, Int((image.size.height * scale).rounded(.up)))
+        let pixelSize = NSSize(
+            width: CGFloat(pixelWidth),
+            height: CGFloat(pixelHeight)
+        )
+        guard let bounded = boundedBitmap(from: image, pixelSize: pixelSize) else { return nil }
+        return Decoded(image: NSImage(cgImage: bounded, size: pixelSize))
+    }
+
+    private nonisolated static func boundedBitmap(
+        from image: NSImage,
+        pixelSize: NSSize
+    ) -> CGImage? {
+        var proposedRect = NSRect(origin: .zero, size: pixelSize)
+        guard let rendered = image.cgImage(
+            forProposedRect: &proposedRect,
+            context: nil,
+            hints: [.interpolation: NSImageInterpolation.high]
+        ), let context = CGContext(
+            data: nil,
+            width: Int(pixelSize.width),
+            height: Int(pixelSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.interpolationQuality = .high
+        context.draw(
+            rendered,
+            in: CGRect(
+                x: 0,
+                y: 0,
+                width: pixelSize.width,
+                height: pixelSize.height
+            )
+        )
+        return context.makeImage()
     }
 
     /// Decode a display-oriented first frame for a locally saved video without
@@ -112,119 +157,5 @@ enum AssetImageLoader {
         } catch {
             return nil
         }
-    }
-}
-
-/// Bounds board preview work so opening a page cannot decode dozens of large
-/// images simultaneously. A permit is handed directly to the next waiter,
-/// keeping at most four ImageIO/AVFoundation decodes live at once.
-actor AssetPreviewDecodeQueue {
-    static let shared = AssetPreviewDecodeQueue(limit: 4)
-
-    private let limit: Int
-    private var active = 0
-    private var nextWaiterID = 0
-    private var waiters: [Int: CheckedContinuation<Bool, Never>] = [:]
-    private var waiterOrder: [Int] = []
-    private var waiterHead = 0
-
-    init(limit: Int) {
-        self.limit = max(1, limit)
-    }
-
-    func image(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
-        guard let decoded = await withPermit({
-            await Task.detached(priority: .utility) {
-                AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
-            }.value
-        }) else { return nil }
-        return decoded
-    }
-
-    func videoThumbnail(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
-        guard let decoded = await withPermit({
-            await AssetImageLoader.videoThumbnail(at: url, maxPixel: maxPixel)
-        }) else { return nil }
-        return decoded
-    }
-
-    func state() -> State {
-        let queuedSlots = waiterOrder.count - waiterHead
-        return State(
-            active: active,
-            waiting: waiters.count,
-            queuedSlots: queuedSlots
-        )
-    }
-
-    func withPermit<T: Sendable>(
-        _ operation: @Sendable () async -> T
-    ) async -> T? {
-        guard await acquire() else { return nil }
-        defer { release() }
-        guard !Task.isCancelled else { return nil }
-        let result = await operation()
-        return Task.isCancelled ? nil : result
-    }
-
-    private func acquire() async -> Bool {
-        guard !Task.isCancelled else { return false }
-        if active < limit {
-            active += 1
-            return true
-        }
-
-        let id = nextWaiterID
-        nextWaiterID += 1
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard !Task.isCancelled else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                waiters[id] = continuation
-                waiterOrder.append(id)
-            }
-        } onCancel: {
-            Task { await self.cancelWaiter(id) }
-        }
-    }
-
-    private func release() {
-        while waiterHead < waiterOrder.count {
-            let id = waiterOrder[waiterHead]
-            waiterHead += 1
-            guard let continuation = waiters.removeValue(forKey: id) else { continue }
-            continuation.resume(returning: true)
-            compactWaiterOrderIfNeeded()
-            return
-        }
-        active = max(0, active - 1)
-        compactWaiterOrderIfNeeded()
-    }
-
-    private func cancelWaiter(_ id: Int) {
-        waiters.removeValue(forKey: id)?.resume(returning: false)
-        compactWaiterOrderIfNeeded()
-    }
-
-    private func compactWaiterOrderIfNeeded() {
-        let queuedSlots = waiterOrder.count - waiterHead
-        let tombstones = queuedSlots - waiters.count
-        guard waiters.isEmpty || (queuedSlots >= 64 && tombstones * 2 >= queuedSlots)
-        else { return }
-
-        if waiters.isEmpty {
-            waiterOrder.removeAll(keepingCapacity: true)
-        } else {
-            waiterOrder = waiterOrder[waiterHead...].filter { waiters[$0] != nil }
-        }
-        waiterHead = 0
-    }
-
-    struct State: Sendable {
-        let active: Int
-        let waiting: Int
-        let queuedSlots: Int
     }
 }
