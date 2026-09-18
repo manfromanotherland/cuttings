@@ -109,8 +109,13 @@ field("url", action("properties.safariwebpage", ["WFInput": attachment(repeatIte
 field("title", action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
                                                   "WFContentItemPropertyName": "Name"]), in: "Origin")
 field("origin", variable("Origin"))
-field("text", action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
-                                                 "WFContentItemPropertyName": "Page Selection"]))
+let selection = action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
+                                                   "WFContentItemPropertyName": "Page Selection"])
+// A whole-page share has no selection. Set Dictionary Value rejects a missing
+// value on iOS; omit the optional text field so this remains a lightweight link.
+let hasSelection = beginIf(selection)
+field("text", selection)
+endIf(hasSelection)
 otherwise(safari)
 let url = beginIf(itemType, equals: "URL")
 json([:], named: "Origin")
