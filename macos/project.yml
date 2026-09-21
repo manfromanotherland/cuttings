@@ -1,4 +1,4 @@
-name: Cuttings
+name: Oia
 options:
   bundleIdPrefix: is.edmundo
   deploymentTarget:
@@ -21,15 +21,15 @@ packages:
     from: "2.9.4"
 
 targets:
-  Cuttings:
+  Oia:
     type: application
     platform: macOS
     sources:
-      - Sources/Cuttings
+      - Sources/Oia
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:
-      - framework: Frameworks/CuttingsCore.xcframework
+      - framework: Frameworks/OiaCore.xcframework
         embed: false
       - sdk: SystemConfiguration.framework
       - sdk: AVFoundation.framework
@@ -46,17 +46,19 @@ targets:
         SWIFT_VERSION: "6.0"
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings
-        PRODUCT_NAME: Cuttings
-        ASSETCATALOG_COMPILER_APPICON_NAME: Cuttings
-        INFOPLIST_FILE: Sources/Cuttings/App/Info.plist
+        PRODUCT_NAME: Óia
+        PRODUCT_MODULE_NAME: Oia
+        EXECUTABLE_NAME: Oia
+        ASSETCATALOG_COMPILER_APPICON_NAME: Oia
+        INFOPLIST_FILE: Sources/Oia/App/Info.plist
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
-        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/cuttings_coreFFI.modulemap
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/oia_coreFFI.modulemap
     entitlements:
-      path: Sources/Cuttings/App/Cuttings.entitlements
+      path: Sources/Oia/App/Oia.entitlements
     preBuildScripts:
-      - name: Build and copy cuttings-native-host
+      - name: Build and copy oia-native-host
         basedOnDependencyAnalysis: false
         script: |
           set -e
@@ -67,75 +69,75 @@ targets:
           fi
           export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/rustup/bin:$PATH"
           CORE="${SRCROOT}/../core"
-          cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin cuttings-native-host
-          SRC="${CORE}/target/release/cuttings-native-host"
-          DST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/cuttings-native-host"
+          cargo build --release --manifest-path "${CORE}/Cargo.toml" --bin oia-native-host
+          SRC="${CORE}/target/release/oia-native-host"
+          DST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/oia-native-host"
           cp "${SRC}" "${DST}"
           chmod +x "${DST}"
         inputFiles:
           - $(SRCROOT)/../core/native-host/src/main.rs
         outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/cuttings-native-host
+          - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/oia-native-host
 
   # Fast unit tests for app logic and the in-process virtualized board host:
   # library-scope membership,
   # content-length formatting, and the FFI-to-presentation ReadingRow mapper. It
   # compiles the specific files under test directly — the same way
-  # CuttingsUITests shares AccessibilityID.swift — rather than hosting in the
+  # OiaUITests shares AccessibilityID.swift — rather than hosting in the
   # app. The board performance regression uses an isolated test
-  # window; the suite never launches Cuttings or touches the dev's real library
+  # window; the suite never launches Oia or touches the dev's real library
   # or defaults. The generated bindings and the static core
   # framework are linked because the code under test still meets the FFI
   # boundary: the mapper takes an `FfiReadingRow` and `LibraryScope.ffiView`
   # returns an `FfiView`.
-  CuttingsTests:
+  OiaTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/CuttingsTests
-      - path: Sources/Cuttings/State/SidebarItem.swift
-      - path: Sources/Cuttings/State/SidebarCounts.swift
-      - path: Sources/Cuttings/State/ComposedFilter.swift
-      - path: Sources/Cuttings/State/BoardSelection.swift
-      - path: Sources/Cuttings/State/ReadingSort.swift
-      - path: Sources/Cuttings/App/Shortcuts.swift
-      - path: Sources/Cuttings/Bridge/ReadingQuery.swift
-      - path: Sources/Cuttings/Shared/Formatting/ReadingTime.swift
-      - path: Sources/Cuttings/Features/Tags/TagRules.swift
+      - path: Tests/OiaTests
+      - path: Sources/Oia/State/SidebarItem.swift
+      - path: Sources/Oia/State/SidebarCounts.swift
+      - path: Sources/Oia/State/ComposedFilter.swift
+      - path: Sources/Oia/State/BoardSelection.swift
+      - path: Sources/Oia/State/ReadingSort.swift
+      - path: Sources/Oia/App/Shortcuts.swift
+      - path: Sources/Oia/Bridge/ReadingQuery.swift
+      - path: Sources/Oia/Shared/Formatting/ReadingTime.swift
+      - path: Sources/Oia/Features/Tags/TagRules.swift
       # Reader typography: the preference vocabulary and the theme that derives
       # every measure/leading value from it. Pure value types, no FFI.
-      - path: Sources/Cuttings/Shared/Preferences/TypographySettings.swift
-      - path: Sources/Cuttings/Shared/Preferences/CardSize.swift
-      - path: Sources/Cuttings/Features/Reader/Markdown/MarkdownTheme.swift
-      - path: Sources/Cuttings/Bridge/Mappers/ReadingRow.swift
-      - path: Sources/Cuttings/Features/Cuttings/CuttingsTheme.swift
-      - path: Sources/Cuttings/Features/Cuttings/CuttingsCardTextMetrics.swift
-      - path: Sources/Cuttings/Features/Cuttings/ReadingRow+MediaGeometry.swift
-      - path: Sources/Cuttings/Features/Cuttings/AssetPreviewPipeline.swift
-      - path: Sources/Cuttings/Features/Cuttings/LocalReadingImage.swift
-      - path: Sources/Cuttings/Features/Cuttings/LocalReadingFavicon.swift
-      - path: Sources/Cuttings/Features/Cuttings/ReadingQuickLookURLResolver.swift
-      - path: Sources/Cuttings/Features/Cuttings/LazyMasonryBoard.swift
-      - path: Sources/Cuttings/Features/Cuttings/VideoCardViewport.swift
-      - path: Sources/Cuttings/Features/Reader/Markdown/AssetImageLoader.swift
-      - path: Sources/Cuttings/Features/Reader/Markdown/AssetPreviewDecodeQueue.swift
-      - path: Sources/Cuttings/Bridge/Mappers/SidebarCountModels.swift
-      - path: Sources/Cuttings/Bridge/Mappers/HighlightRow.swift
-      - path: Sources/Cuttings/Bridge/Mappers/SidebarItem+FFI.swift
-      - path: Sources/Cuttings/Bridge/Mappers/ReadingSort+FFI.swift
-      - path: Sources/Cuttings/Platform/Library/LibrarySetup.swift
-      - path: Sources/Cuttings/Platform/Library/FolderWatcher.swift
-      - path: Sources/Cuttings/Platform/Library/InboxFileAvailability.swift
-      - path: Sources/Cuttings/Platform/Ingestion
-      - path: Sources/Cuttings/Platform/NativeHost/NativeHostInstaller.swift
-      - path: Sources/Cuttings/Platform/Spotlight
-      - path: Sources/Cuttings/Platform/VisualAnalysis
-      - path: Sources/Cuttings/Bridge/VisualSearchBridging.swift
-      - path: Sources/Cuttings/State/VisualSearchCoordinator.swift
+      - path: Sources/Oia/Shared/Preferences/TypographySettings.swift
+      - path: Sources/Oia/Shared/Preferences/CardSize.swift
+      - path: Sources/Oia/Features/Reader/Markdown/MarkdownTheme.swift
+      - path: Sources/Oia/Bridge/Mappers/ReadingRow.swift
+      - path: Sources/Oia/Features/Oia/OiaTheme.swift
+      - path: Sources/Oia/Features/Oia/OiaCardTextMetrics.swift
+      - path: Sources/Oia/Features/Oia/ReadingRow+MediaGeometry.swift
+      - path: Sources/Oia/Features/Oia/AssetPreviewPipeline.swift
+      - path: Sources/Oia/Features/Oia/LocalReadingImage.swift
+      - path: Sources/Oia/Features/Oia/LocalReadingFavicon.swift
+      - path: Sources/Oia/Features/Oia/ReadingQuickLookURLResolver.swift
+      - path: Sources/Oia/Features/Oia/LazyMasonryBoard.swift
+      - path: Sources/Oia/Features/Oia/VideoCardViewport.swift
+      - path: Sources/Oia/Features/Reader/Markdown/AssetImageLoader.swift
+      - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewDecodeQueue.swift
+      - path: Sources/Oia/Bridge/Mappers/SidebarCountModels.swift
+      - path: Sources/Oia/Bridge/Mappers/HighlightRow.swift
+      - path: Sources/Oia/Bridge/Mappers/SidebarItem+FFI.swift
+      - path: Sources/Oia/Bridge/Mappers/ReadingSort+FFI.swift
+      - path: Sources/Oia/Platform/Library/LibrarySetup.swift
+      - path: Sources/Oia/Platform/Library/FolderWatcher.swift
+      - path: Sources/Oia/Platform/Library/InboxFileAvailability.swift
+      - path: Sources/Oia/Platform/Ingestion
+      - path: Sources/Oia/Platform/NativeHost/NativeHostInstaller.swift
+      - path: Sources/Oia/Platform/Spotlight
+      - path: Sources/Oia/Platform/VisualAnalysis
+      - path: Sources/Oia/Bridge/VisualSearchBridging.swift
+      - path: Sources/Oia/State/VisualSearchCoordinator.swift
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:
-      - framework: Frameworks/CuttingsCore.xcframework
+      - framework: Frameworks/OiaCore.xcframework
         embed: false
       - sdk: SystemConfiguration.framework
       - sdk: AVFoundation.framework
@@ -151,16 +153,16 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings.tests
         GENERATE_INFOPLIST_FILE: YES
         HEADER_SEARCH_PATHS: $(SRCROOT)/GeneratedBindings
-        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/cuttings_coreFFI.modulemap
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/GeneratedBindings/oia_coreFFI.modulemap
 
   # XCUITest end-to-end suite. Drives the real app as a separate process, and is
   # dependency-free (only Xcode + the macOS SDK). The app stays on Swift 6; this
   # target uses 5.0 to avoid strict-concurrency friction in XCTest code.
-  CuttingsUITests:
+  OiaUITests:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - path: Tests/CuttingsUITests
+      - path: Tests/OiaUITests
         excludes:
           - Checks/HighlightActionCheck.swift
           - Journeys/ComposedFiltersJourney.swift
@@ -177,27 +179,27 @@ targets:
           - PageObjects/SettingsPage.swift
           - PageObjects/ShortcutsSheetPage.swift
           - PageObjects/SidebarPage.swift
-      # Shared with the app target (it also lives under Sources/Cuttings/) so
+      # Shared with the app target (it also lives under Sources/Oia/) so
       # tests and app compile the same accessibility identifiers.
-      - path: Sources/Cuttings/AccessibilityID.swift
+      - path: Sources/Oia/AccessibilityID.swift
     dependencies:
-      - target: Cuttings
+      - target: Oia
     settings:
       base:
         SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         PRODUCT_BUNDLE_IDENTIFIER: is.edmundo.cuttings.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Cuttings
+        TEST_TARGET_NAME: Oia
 
-# A shared scheme so `xcodebuild -scheme Cuttings` works from the command line
+# A shared scheme so `xcodebuild -scheme Oia` works from the command line
 # and CI. Without this, xcodegen emits no scheme and only Xcode.app auto-creates
 # a throwaway one under xcuserdata (not committed, wiped by `make clean`).
 schemes:
-  Cuttings:
+  Oia:
     build:
       targets:
-        Cuttings: all
+        Oia: all
     # Serial: UI tests steal keyboard focus, so parallel runs are flaky.
     # Per-test temp libraries keep future sharding open.
     test:
@@ -205,8 +207,8 @@ schemes:
       targets:
         # Unit tests first: they're fast and hostless, so a logic regression
         # fails the run before the slow UI suite even launches the app.
-        - name: CuttingsTests
-        - name: CuttingsUITests
+        - name: OiaTests
+        - name: OiaUITests
           parallelizable: false
     run:
       config: Debug

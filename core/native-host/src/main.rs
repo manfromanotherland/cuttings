@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|a| a == "--version") {
-        println!("cuttings-native-host v{}", cuttings_core::version());
+        println!("oia-native-host v{}", oia_core::version());
         return Ok(());
     }
 
@@ -480,9 +480,8 @@ mod integration_tests {
             let id = responses[3]["id"].as_str().unwrap();
             let article_path = dir.path().join(responses[3]["path"].as_str().unwrap());
             let reading =
-                cuttings_core::parse_reading(&std::fs::read_to_string(article_path).unwrap())
-                    .unwrap();
-            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Video);
+                oia_core::parse_reading(&std::fs::read_to_string(article_path).unwrap()).unwrap();
+            assert_eq!(reading.metadata.kind, oia_core::ReadingKind::Video);
             assert_eq!(
                 reading.metadata.canonical_url,
                 "https://example.com/canonical/exact"
@@ -877,7 +876,7 @@ mod integration_tests {
             );
 
             let content = std::fs::read_to_string(&article_path).unwrap();
-            let reading = cuttings_core::parse_reading(&content).unwrap();
+            let reading = oia_core::parse_reading(&content).unwrap();
             assert_eq!(reading.metadata.theme_color.as_deref(), Some("#123456"));
             assert!(
                 content.contains("format_version: 1"),
@@ -941,7 +940,7 @@ mod integration_tests {
             let link_content =
                 std::fs::read_to_string(dir.path().join(link_response.path.as_deref().unwrap()))
                     .unwrap();
-            let link = cuttings_core::parse_reading(&link_content).unwrap();
+            let link = oia_core::parse_reading(&link_content).unwrap();
             assert!(link.metadata.lightweight);
             assert_eq!(link.metadata.title, "Link title");
             assert_eq!(link.metadata.excerpt.as_deref(), Some("Link description"));
@@ -978,7 +977,7 @@ mod integration_tests {
             assert_eq!(response.id, link_response.id);
             assert_eq!(response.error, None);
 
-            let reading = cuttings_core::parse_reading(
+            let reading = oia_core::parse_reading(
                 &std::fs::read_to_string(dir.path().join(response.path.unwrap())).unwrap(),
             )
             .unwrap();
@@ -1064,12 +1063,12 @@ mod integration_tests {
                 .join(&id[..2])
                 .join(id)
                 .join("assets")
-                .join(format!("{}.png", cuttings_core::sha256_hex(bytes)));
+                .join(format!("{}.png", oia_core::sha256_hex(bytes)));
             assert_eq!(std::fs::read(&asset).unwrap(), bytes);
-            let reading = cuttings_core::parse_reading(&content).unwrap();
+            let reading = oia_core::parse_reading(&content).unwrap();
             assert_eq!(
                 reading.metadata.preview_asset,
-                Some(format!("assets/{}.png", cuttings_core::sha256_hex(bytes)))
+                Some(format!("assets/{}.png", oia_core::sha256_hex(bytes)))
             );
             // The unsupplied image keeps its remote URL as a placeholder.
             assert!(
@@ -1107,9 +1106,8 @@ mod integration_tests {
 
             let first_path = dir.path().join(first_response.path.unwrap());
             let reading =
-                cuttings_core::parse_reading(&std::fs::read_to_string(first_path).unwrap())
-                    .unwrap();
-            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Image);
+                oia_core::parse_reading(&std::fs::read_to_string(first_path).unwrap()).unwrap();
+            assert_eq!(reading.metadata.kind, oia_core::ReadingKind::Image);
             assert_eq!(reading.metadata.url, source);
             assert_eq!(reading.metadata.canonical_url, source);
             assert_eq!(reading.metadata.site.as_deref(), Some("example.com"));
@@ -1199,11 +1197,11 @@ mod integration_tests {
             assert!(different.ok);
             assert_ne!(first.id, different.id);
 
-            let reading = cuttings_core::parse_reading(
+            let reading = oia_core::parse_reading(
                 &std::fs::read_to_string(dir.path().join(first.path.unwrap())).unwrap(),
             )
             .unwrap();
-            assert_eq!(reading.metadata.kind, cuttings_core::ReadingKind::Quote);
+            assert_eq!(reading.metadata.kind, oia_core::ReadingKind::Quote);
             assert_eq!(reading.metadata.url, source);
             assert_eq!(reading.metadata.media_url, None);
             assert_eq!(reading.body, "A selected\npassage.\n");

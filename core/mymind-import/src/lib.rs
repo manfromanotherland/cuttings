@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Offline adapter from mymind's exported `cards.csv` and media files into
-//! Cuttings' shared Rust import pipeline.
+//! Óia' shared Rust import pipeline.
 
 mod link_metadata;
 
@@ -16,7 +16,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use cuttings_core::{
+use oia_core::{
     delete_unenriched_link_files_if_unchanged, import_image_from_origin_with_options,
     import_image_with_options, import_link_capture, import_link_capture_if_unchanged,
     import_link_with_options, import_reading, import_text_with_options,
@@ -47,7 +47,7 @@ const ERROR_DELETE: &str = "dead links that could not be removed safely";
 const WARN_UNREACHABLE_GUARD: &str =
     "unreachable links retained because failures looked network-wide";
 
-const SKIP_DOCUMENT: &str = "documents (PDF is not a Cuttings card kind)";
+const SKIP_DOCUMENT: &str = "documents (PDF is not a Óia card kind)";
 const SKIP_EMPTY_QUOTATION: &str = "quotations without content";
 const SKIP_PLACEHOLDER: &str = "placeholder rows";
 const SKIP_SCREENSHOT: &str = "screenshots without an HTTP(S) source";
@@ -64,7 +64,7 @@ const SKIP_SYMLINK: &str = "symbolic links";
 pub struct RunOptions {
     pub export: PathBuf,
     pub library: PathBuf,
-    /// `false` is a read-only preview; `true` writes through `cuttings-core`.
+    /// `false` is a read-only preview; `true` writes through `oia-core`.
     pub write: bool,
     /// Include one line per reading, identified only by opaque IDs.
     pub verbose: bool,
@@ -471,7 +471,7 @@ fn enrich_existing_links_with_fetcher(
     injected_fetcher: Option<Arc<dyn LinkMetadataFetcher>>,
 ) -> Result<EnrichExistingReport> {
     if !options.library.is_dir() {
-        bail!("Cuttings library is not a directory");
+        bail!("Óia library is not a directory");
     }
     let library_path = options
         .library
@@ -719,7 +719,7 @@ fn validate_roots(export: &Path, library: &Path) -> Result<(PathBuf, PathBuf)> {
         bail!("mymind export is not a directory");
     }
     if !library.is_dir() {
-        bail!("Cuttings library is not a directory");
+        bail!("Óia library is not a directory");
     }
     let requested_export = export
         .canonicalize()
@@ -1643,9 +1643,9 @@ fn execute_origin_quote(
     origin: &str,
     content: &str,
     options: ImportOptions,
-) -> std::result::Result<SaveOutcome, cuttings_core::SaveError> {
+) -> std::result::Result<SaveOutcome, oia_core::SaveError> {
     let parsed = Url::parse(origin).map_err(|_| {
-        cuttings_core::SaveError::InvalidRequest("invalid imported quote origin".to_string())
+        oia_core::SaveError::InvalidRequest("invalid imported quote origin".to_string())
     })?;
     let markdown = quote_markdown(content);
     let identity_text = normalized_identity_text(content);
@@ -1895,7 +1895,7 @@ fn opaque_row_label(id: &str, ordinal: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cuttings_core::{get_note, import_link, scan_library, set_note, write_reading, ImageBytes};
+    use oia_core::{get_note, import_link, scan_library, set_note, write_reading, ImageBytes};
     use tempfile::TempDir;
 
     struct FixtureLinkMetadataFetcher;

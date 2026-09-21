@@ -1,6 +1,6 @@
 # Architecture
 
-Cuttings is three apps that share one data format and one Rust core: a browser **extension**
+Óia is three apps that share one data format and one Rust core: a browser **extension**
 captures cleaned articles, standalone media, and selected-text quotes; a **native messaging host**
 writes them into a plain-file library; and the **macOS app** (embedding the core) both accepts
 paste/drop saves and shows the library as a visual card board. Files are the source of truth; the
@@ -44,7 +44,7 @@ full browser capture upgrades them. The app watches the folder and indexes every
 masonry board, full-text search, type filters, and tags — so browser saves, in-app saves, and files
 delivered by sync reconcile through the same index path.
 
-The iOS **Save to Cuttings** Shortcut publishes sealed captures into `inbox/`
+The iOS **Save to Óia** Shortcut publishes sealed captures into `inbox/`
 inside the user's synced library. The Mac requests any missing iCloud bytes and
 passes ready files to the shared Rust Inbox importer. Rust validates private
 snapshots, calls the existing reading importer, verifies durable results, and

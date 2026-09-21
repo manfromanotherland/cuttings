@@ -445,7 +445,7 @@ async function saveMedia(
     const result = await requestMediaCapture(tabId, tab.url, kind, mediaUrl);
     if (result && "error" in result && result.error) {
       if (result.error_code === "native_connection" && isHostMissing(new Error(result.error))) {
-        await log("warn", "Cuttings app not installed", { error: result.error });
+        await log("warn", "Óia app not installed", { error: result.error });
         await notifyHostMissing(tabId);
         return;
       }
@@ -708,7 +708,7 @@ async function persistSave(
     response = await sendNativeMessage<NativeSaveRequest, SaveResponse>(request);
   } catch (err) {
     if (err instanceof Error && isHostMissing(err)) {
-      await log("warn", "Cuttings app not installed", { error: err });
+      await log("warn", "Óia app not installed", { error: err });
       await notifyHostMissing(tabId);
     } else {
       await showBadge(tabId, "error");
@@ -716,9 +716,9 @@ async function persistSave(
         tabId,
         "error",
         `Couldn't save ${feedback.item}`,
-        "The Cuttings app returned an error.",
+        "The Óia app returned an error.",
       );
-      await log("error", "Cuttings app error", { url: tab.url, error: err });
+      await log("error", "Óia app error", { url: tab.url, error: err });
     }
     return;
   }
@@ -733,7 +733,7 @@ async function presentSaveResponse(
 ): Promise<void> {
   const tabId = tab.id!;
   if (response.ok) {
-    await showToast(tabId, "ok", "Saved to Cuttings", feedback.title);
+    await showToast(tabId, "ok", "Saved to Óia", feedback.title);
     if (feedback.kind === "article") {
       markSaved(tabId, tab.url!, feedback.canonicalUrl);
     }
@@ -744,7 +744,7 @@ async function presentSaveResponse(
       title: feedback.title,
     });
   } else if (response.error === "duplicate") {
-    await showToast(tabId, "ok", "Already in Cuttings", feedback.title);
+    await showToast(tabId, "ok", "Already in Óia", feedback.title);
     if (feedback.kind === "article") {
       markSaved(tabId, tab.url!, feedback.canonicalUrl);
     }
@@ -843,9 +843,9 @@ async function notifyHostMissing(tabId: number): Promise<void> {
   await showToast(
     tabId,
     "error",
-    "Cuttings isn't installed",
-    "You need the Cuttings app to save items to your library.",
-    { label: "Get Cuttings", command: "open-install" },
+    "Óia isn't installed",
+    "You need the Óia app to save items to your library.",
+    { label: "Get Óia", command: "open-install" },
   );
   // A desktop notification is a fallback for pages where no toast can render
   // (chrome:// pages, the web store, PDFs — the content script can't run there).
@@ -853,8 +853,8 @@ async function notifyHostMissing(tabId: number): Promise<void> {
     await chrome.notifications.create(NOTIF_HOST_MISSING, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
-      title: "Cuttings isn't installed",
-      message: "You need the Cuttings app to save items. Click here to learn how to install it.",
+      title: "Óia isn't installed",
+      message: "You need the Óia app to save items. Click here to learn how to install it.",
       requireInteraction: true,
     });
   } catch (err) {

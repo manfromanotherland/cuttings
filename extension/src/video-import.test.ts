@@ -419,7 +419,7 @@ describe("browser video import", () => {
     },
   );
 
-  it("returns a duplicate finish response so the worker can show Already in Cuttings", async () => {
+  it("returns a duplicate finish response so the worker can show Already in Óia", async () => {
     const bytes = Uint8Array.from([
       0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
     ]);

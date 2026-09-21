@@ -4,7 +4,7 @@
 # Chrome doesn't warn about a key in the unpacked dir. Never commit it.
 *.pem
 
-# The legacy website is deliberately not part of the Cuttings monorepo.
+# The legacy website is deliberately not part of the Oia monorepo.
 /website/
 sandbox-build.log
 sandbox-build-*.log

@@ -2,5 +2,5 @@
   "protocol_version": 4,
   "ok": false,
   "error": "library_not_configured",
-  "message": "No library folder has been set. Open the Cuttings app to configure one."
+  "message": "No library folder has been set. Open the Óia app to configure one."
 }

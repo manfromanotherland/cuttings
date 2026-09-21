@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 export const PREPARE_PAGE_VIDEO_BRIDGE = "prepare-page-video-bridge";
-export const OPEN_PAGE_VIDEO_SOURCE = "cuttings:open-page-video-source:v1";
+export const OPEN_PAGE_VIDEO_SOURCE = "oia:open-page-video-source:v1";
 
 interface PageVideoReadyMessage {
   type: "ready";

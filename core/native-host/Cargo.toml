@@ -1,17 +1,17 @@
 [package]
-name = "cuttings-native-host"
-description = "Native messaging host binary for the Cuttings browser extension."
+name = "oia-native-host"
+description = "Native messaging host binary for the Óia browser extension."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "cuttings-native-host"
+name = "oia-native-host"
 path = "src/main.rs"
 
 [dependencies]
-cuttings-core = { path = "../core" }
+oia-core = { path = "../core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"

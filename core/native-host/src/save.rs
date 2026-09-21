@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use base64::Engine;
-use cuttings_core::{
+use oia_core::{
     save_capture, ImageBytes, LibraryRoot, ReadingKind, SaveDisposition, SaveError, SaveInput,
 };
 
@@ -35,7 +35,7 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         Err(_) => {
             return Ok(SaveResponse::error(
                 "library_not_configured",
-                "No library folder has been set. Open the Cuttings app to configure one.",
+                "No library folder has been set. Open the Óia app to configure one.",
             ))
         }
     };

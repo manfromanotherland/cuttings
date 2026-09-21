@@ -78,7 +78,7 @@ describe("content media capture", () => {
       response: { ok: true, id: "saved-video-id" },
     });
     expect(result).not.toHaveProperty("markdown");
-    expect(JSON.stringify(result)).not.toContain("cuttings-video:");
+    expect(JSON.stringify(result)).not.toContain("oia-video:");
     expect(JSON.stringify(result)).not.toContain(blobUrl);
   });
 

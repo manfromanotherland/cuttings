@@ -1,7 +1,7 @@
 {
-  "name": "cuttings-extension",
+  "name": "oia-extension",
   "version": "0.1.0",
-  "description": "Browser extension for the Cuttings app.",
+  "description": "Browser extension for the Óia app.",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 [package]
-name = "cuttings-core"
-description = "Engine library for Cuttings."
+name = "oia-core"
+description = "Engine library for Óia."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

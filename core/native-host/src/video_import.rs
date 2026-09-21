@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use base64::Engine;
-use cuttings_core::{
+use oia_core::{
     begin_browser_video_import, BrowserVideoImport, BrowserVideoImportInput, LibraryRoot,
     ReadingKind, SaveDisposition, SaveError,
 };
@@ -59,7 +59,7 @@ impl VideoImportSession {
             Err(_) => {
                 return SaveResponse::error(
                     "library_not_configured",
-                    "No library folder has been set. Open the Cuttings app to configure one.",
+                    "No library folder has been set. Open the Óia app to configure one.",
                 )
             }
         };

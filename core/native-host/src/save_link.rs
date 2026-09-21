@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use anyhow::Result;
-use cuttings_core::{save_link_capture, LibraryRoot, SaveDisposition, SaveError, SaveLinkInput};
+use oia_core::{save_link_capture, LibraryRoot, SaveDisposition, SaveError, SaveLinkInput};
 
 use crate::{
     protocol::{SaveLinkRequest, SaveResponse, PROTOCOL_VERSION},
@@ -21,7 +21,7 @@ pub fn handle(request: SaveLinkRequest) -> Result<SaveResponse> {
             &format!("unknown action: {}", request.action),
         ));
     }
-    if request.metadata.kind != cuttings_core::ReadingKind::Article {
+    if request.metadata.kind != oia_core::ReadingKind::Article {
         return Ok(SaveResponse::error(
             "invalid_request",
             "save_link requires article metadata",
@@ -33,7 +33,7 @@ pub fn handle(request: SaveLinkRequest) -> Result<SaveResponse> {
         Err(_) => {
             return Ok(SaveResponse::error(
                 "library_not_configured",
-                "No library folder has been set. Open the Cuttings app to configure one.",
+                "No library folder has been set. Open the Óia app to configure one.",
             ))
         }
     };

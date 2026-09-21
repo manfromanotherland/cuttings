@@ -94,7 +94,7 @@ describe("background screenshot save", () => {
         onStartup: event(),
         onConnect: event(),
         onMessage: event(runtimeMessageListeners),
-        getURL: (path: string) => `chrome-extension://cuttings/${path}`,
+        getURL: (path: string) => `chrome-extension://oia/${path}`,
         sendNativeMessage: vi.fn(
           (_host: string, request: object, callback: (response: object) => void) => {
             nativeRequests.push(request);

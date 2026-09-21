@@ -319,7 +319,7 @@ describe("rendered video recorder", () => {
       recordVideoElement(fixture.doc, blobUrl, {
         MediaRecorder: FakeMediaRecorder as unknown as typeof MediaRecorder,
       }),
-    ).rejects.toThrow("Cuttings-compatible MP4");
+    ).rejects.toThrow("Óia-compatible MP4");
     expect(fixture.videoTrack.stop).toHaveBeenCalledTimes(1);
   });
 });

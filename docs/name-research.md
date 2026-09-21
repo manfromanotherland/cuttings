@@ -1,5 +1,9 @@
 # Product Name Research
 
+> Historical research for the working title. Superseded on 2026-09-21 by **Óia**
+> (ASCII project slug: `oia`). The findings below refer to the names researched at
+> that time and are not an availability check for Óia.
+
 Checked **2026-08-23**. This is a knockout screen for a local-first macOS app and browser
 extension that save articles, images, video, and selected text as visual cards while retaining
 their origin.

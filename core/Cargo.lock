@@ -577,60 +577,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cuttings-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fs2",
- "hex",
- "imagesize",
- "nom-exif",
- "plist",
- "proptest",
- "rusqlite",
- "rustix",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "tempfile",
- "thiserror 1.0.69",
- "time",
- "ulid",
- "uniffi",
- "url",
- "zip",
-]
-
-[[package]]
-name = "cuttings-import-mymind"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "csv",
- "cuttings-core",
- "reqwest",
- "scraper",
- "sha2",
- "tempfile",
- "url",
-]
-
-[[package]]
-name = "cuttings-native-host"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "cuttings-core",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1547,6 +1493,60 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "oia-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fs2",
+ "hex",
+ "imagesize",
+ "nom-exif",
+ "plist",
+ "proptest",
+ "rusqlite",
+ "rustix",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "tempfile",
+ "thiserror 1.0.69",
+ "time",
+ "ulid",
+ "uniffi",
+ "url",
+ "zip",
+]
+
+[[package]]
+name = "oia-import-mymind"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "csv",
+ "oia-core",
+ "reqwest",
+ "scraper",
+ "sha2",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "oia-native-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "oia-core",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

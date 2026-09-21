@@ -29,7 +29,7 @@ export function applySiteAdapters(doc: Document, pageUrl: string): void {
     try {
       adapter.preprocess(doc);
     } catch (err) {
-      console.warn(`cuttings: site adapter "${adapter.id}" failed`, err);
+      console.warn(`oia: site adapter "${adapter.id}" failed`, err);
     }
   }
 }

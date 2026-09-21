@@ -144,9 +144,9 @@ describe("extractStandaloneMedia", () => {
     expect(first.metadata).toMatchObject({
       url: pageUrl,
       canonical_url: canonicalUrl,
-      media_url: `cuttings-video:${encodeURIComponent(canonicalUrl)}:1`,
+      media_url: `oia-video:${encodeURIComponent(canonicalUrl)}:1`,
     });
-    expect(second.metadata.media_url).toBe(`cuttings-video:${encodeURIComponent(canonicalUrl)}:2`);
+    expect(second.metadata.media_url).toBe(`oia-video:${encodeURIComponent(canonicalUrl)}:2`);
     expect(first.metadata.media_url).not.toBe(second.metadata.media_url);
     expect(first.markdown).toBe(`[Watch video](${pageUrl})`);
     expect(second.markdown).toBe(`[Watch video](${pageUrl})`);

@@ -1,4 +1,4 @@
-# Root task runner for the Cuttings monorepo.
+# Root task runner for the Óia monorepo.
 #
 # Drives the core, extension, and macOS component toolchains from the repository
 # root via scripts/components.sh.

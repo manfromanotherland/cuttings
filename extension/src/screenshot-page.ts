@@ -7,8 +7,8 @@ export const SCREENSHOT_PAGE_SCROLL_ACTION = "screenshot-capture-scroll";
 export const SCREENSHOT_PAGE_MEASURE_ACTION = "screenshot-capture-measure";
 export const SCREENSHOT_PAGE_FINISH_ACTION = "screenshot-capture-finish";
 
-const CUTTINGS_TOAST_HOST_ID = "cuttings-toast-host";
-const CAPTURE_STYLE_ATTRIBUTE = "data-cuttings-screenshot-capture";
+const OIA_TOAST_HOST_ID = "oia-toast-host";
+const CAPTURE_STYLE_ATTRIBUTE = "data-oia-screenshot-capture";
 const CAPTURE_SESSION_TIMEOUT_MS = 120_000;
 const ANIMATION_FRAME_FALLBACK_MS = 100;
 const CONTENT_SETTLE_DELAY_MS = 75;
@@ -280,7 +280,7 @@ export class ScreenshotPageCaptureController {
       }
 
       const position = this.win.getComputedStyle(element).position;
-      const isCuttingsToast = element.id === CUTTINGS_TOAST_HOST_ID;
+      const isOiaToast = element.id === OIA_TOAST_HOST_ID;
       const isStationaryScrollSibling = Boolean(
         session.scrollElement &&
         !session.scrollElement.contains(element) &&
@@ -288,7 +288,7 @@ export class ScreenshotPageCaptureController {
         element.parentElement?.contains(session.scrollElement),
       );
       if (
-        !isCuttingsToast &&
+        !isOiaToast &&
         !isStationaryScrollSibling &&
         position !== "fixed" &&
         position !== "sticky" &&
@@ -297,7 +297,7 @@ export class ScreenshotPageCaptureController {
         continue;
       }
 
-      if (!isCuttingsToast && (!hideRepeated || !session.capturedPositionedElements.has(element))) {
+      if (!isOiaToast && (!hideRepeated || !session.capturedPositionedElements.has(element))) {
         if (
           isStationaryScrollSibling ||
           position === "fixed" ||

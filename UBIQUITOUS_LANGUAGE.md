@@ -1,12 +1,15 @@
-# UBIQUITOUS_LANGUAGE.md - cuttings
+# UBIQUITOUS_LANGUAGE.md - oia
 
-This glossary defines the shared product language for `cuttings`. Use these
+This glossary defines the shared product language for `oia`. Use these
 terms in docs, code discussions, issue titles, UI architecture, and commit
 messages so the project stays consistent across the extension, core, native
 host, and macOS app.
 
 ## Naming Rules
 
+- Write **Óia** as the product name and **Save to Óia** as the extension and
+  Shortcut name. Use ASCII **Oia/oia** for code and paths. Existing compatibility
+  identifiers are listed in [docs/branding.md](./docs/branding.md).
 - Use **save** for the user action that adds a page, image, video, or text quote
   to the library, whether from the extension or by pasting/dropping in the app. Saving is
   time-neutral: people save things to revisit
@@ -35,8 +38,8 @@ host, and macOS app.
 | Term | Definition |
 |------|------------|
 | App | The user-facing product as a whole. In implementation, this currently means the browser extension, native messaging host, Rust core, and macOS client. |
-| Cuttings | The product name shown to users. |
-| cuttings | The internal project slug used for the monorepo, packages, and file paths. Not shown to users. |
+| Óia | The product name shown to users. |
+| oia | The internal project slug used for the monorepo, packages, and file paths. Not shown to users. |
 | Library | The folder chosen by the user that stores their synced, durable reading data. |
 | Library folder | Same as Library, used when emphasizing the on-disk directory. |
 | Library root | The absolute folder path selected on one device. Data stored inside the index must still use paths relative to this root. |
@@ -137,7 +140,7 @@ paragraphs, and the welcome article.
 | Inspiration library | Preferred product category: a visual, permanent place for articles, images, videos, and quotes that spark ideas. |
 | Visual library | Shorter supporting description when "inspiration library" has already established the product. |
 | Local-first | Marketing shorthand for the no-accounts, no-servers, files-on-your-disk principles. |
-| Save | The user-facing verb for adding a page, media item, or quote to Cuttings. |
+| Save | The user-facing verb for adding a page, media item, or quote to Óia. |
 
 ## Terms To Avoid Or Use Carefully
 
@@ -150,7 +153,7 @@ paragraphs, and the welcome article.
 | "Reading"/"readings" as a user-facing noun | Card, saved item, article, image, video, or quote | The internal domain term should not make the product sound like a reading queue. |
 | Starred or favorite | Tag | The current product uses tags for curation; `favorite` remains only as legacy file metadata. |
 | Clip | Save | One verb covers pages, media, quotes, and in-app paste/drop without implying that only a fragment is kept. |
-| Standalone note | Quote | Source-less text saved to Cuttings is a quote card, not a separate note kind. |
+| Standalone note | Quote | Source-less text saved to Óia is a quote card, not a separate note kind. |
 | Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
 | Bookmark (user action) | Save | A full browser capture stores cleaned content; a link saved without cleaned content, from the app or toolbar, is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |

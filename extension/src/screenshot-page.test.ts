@@ -120,7 +120,7 @@ describe("screenshot page capture", () => {
     const sticky = fixture.doc.createElement("nav");
     sticky.dataset.position = "sticky";
     const toast = fixture.doc.createElement("div");
-    toast.id = "cuttings-toast-host";
+    toast.id = "oia-toast-host";
     const ordinary = fixture.doc.createElement("main");
     const laterSticky = fixture.doc.createElement("aside");
     laterSticky.dataset.position = "sticky";
@@ -152,7 +152,7 @@ describe("screenshot page capture", () => {
       scrollY: 240,
     });
     const captureStyle = fixture.doc.querySelector<HTMLStyleElement>(
-      "style[data-cuttings-screenshot-capture]",
+      "style[data-oia-screenshot-capture]",
     );
     expect(captureStyle?.textContent).toContain("scroll-behavior: auto !important");
     expect(captureStyle?.textContent).toContain("scroll-snap-type: none !important");
@@ -179,7 +179,7 @@ describe("screenshot page capture", () => {
 
     await fixture.controller.finish("capture-one");
 
-    expect(fixture.doc.querySelector("style[data-cuttings-screenshot-capture]")).toBeNull();
+    expect(fixture.doc.querySelector("style[data-oia-screenshot-capture]")).toBeNull();
     expect(fixed.style.getPropertyValue("visibility")).toBe("visible");
     expect(fixed.style.getPropertyPriority("visibility")).toBe("important");
     expect(sticky.style.getPropertyValue("visibility")).toBe("");
@@ -207,7 +207,7 @@ describe("screenshot page capture", () => {
     expect(replacement.sessionId).toBe("capture-two");
     expect(replacement.scrollY).toBe(240);
     expect(fixed.style.getPropertyValue("visibility")).toBe("");
-    expect(fixture.doc.querySelectorAll("style[data-cuttings-screenshot-capture]")).toHaveLength(1);
+    expect(fixture.doc.querySelectorAll("style[data-oia-screenshot-capture]")).toHaveLength(1);
 
     await expect(fixture.controller.scrollTo("capture-one", 0, false)).rejects.toThrow(
       "session is no longer active",
@@ -217,7 +217,7 @@ describe("screenshot page capture", () => {
     );
 
     await fixture.controller.finish("capture-two");
-    expect(fixture.doc.querySelector("style[data-cuttings-screenshot-capture]")).toBeNull();
+    expect(fixture.doc.querySelector("style[data-oia-screenshot-capture]")).toBeNull();
   });
 
   it("scrolls and restores a full-viewport app surface when the document itself is fixed", async () => {
@@ -274,7 +274,7 @@ describe("screenshot page capture", () => {
     fixture.doc.body.append(scroller);
 
     await expect(fixture.controller.begin()).rejects.toThrow("scrolling layout");
-    expect(fixture.doc.querySelector("style[data-cuttings-screenshot-capture]")).toBeNull();
+    expect(fixture.doc.querySelector("style[data-oia-screenshot-capture]")).toBeNull();
   });
 
   it("rejects an app scroller that occupies exactly half the viewport width", async () => {
@@ -395,7 +395,7 @@ describe("screenshot page capture", () => {
 
     await expect(fixture.controller.begin()).rejects.toThrow("settle failed");
 
-    expect(fixture.doc.querySelector("style[data-cuttings-screenshot-capture]")).toBeNull();
+    expect(fixture.doc.querySelector("style[data-oia-screenshot-capture]")).toBeNull();
     expect(fixture.getScroll()).toEqual({ x: 12, y: 240 });
   });
 
@@ -441,7 +441,7 @@ describe("screenshot page capture", () => {
       const finishing = fixture.controller.finish("capture-one");
       await vi.advanceTimersByTimeAsync(500);
       await expect(finishing).resolves.toBeUndefined();
-      expect(fixture.doc.querySelector("style[data-cuttings-screenshot-capture]")).toBeNull();
+      expect(fixture.doc.querySelector("style[data-oia-screenshot-capture]")).toBeNull();
     } finally {
       vi.useRealTimers();
     }

@@ -256,12 +256,9 @@ mod tests {
         write_reading(&lib, metadata_for(url), "# Taste\n".to_string()).unwrap();
 
         assert!(
-            find_by_url(
-                &lib,
-                "https://paulgraham.com/taste.html?utm_source=cuttings"
-            )
-            .unwrap()
-            .is_some(),
+            find_by_url(&lib, "https://paulgraham.com/taste.html?utm_source=oia")
+                .unwrap()
+                .is_some(),
             "utm-tagged visit still matches the saved page"
         );
         assert!(

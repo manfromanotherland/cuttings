@@ -7,14 +7,14 @@ zmodload zsh/datetime
 
 script_dir=${0:A:h}
 repo_root=${script_dir:h:h}
-app_executable="$repo_root/macos/build/Build/Products/Debug/Cuttings.app/Contents/MacOS/Cuttings"
+app_executable="$repo_root/macos/build/Build/Products/Debug/Óia.app/Contents/MacOS/Oia"
 
 if [[ ! -x "$app_executable" ]]; then
     print -u2 "Build the normal Debug app before running this check."
     exit 2
 fi
 
-probe_root=$(mktemp -d "${TMPDIR:-/tmp}/cuttings-warm-check.XXXXXX")
+probe_root=$(mktemp -d "${TMPDIR:-/tmp}/oia-warm-check.XXXXXX")
 library_path="$probe_root/library"
 articles_path="$library_path/articles"
 database_path="$probe_root/index.db"
@@ -85,11 +85,11 @@ launch_app() {
     mkdir -p "$events_dir"
 
     env \
-        CUTTINGS_TEST_LIBRARY="$library_path" \
-        CUTTINGS_TEST_DB="$database_path" \
-        CUTTINGS_TEST_DEFAULTS="$defaults_suite" \
-        CUTTINGS_TEST_LIBRARY_RECONCILIATION_DELAY_MS="$reconciliation_delay_ms" \
-        CUTTINGS_TEST_STARTUP_EVENTS_DIR="$events_dir" \
+        OIA_TEST_LIBRARY="$library_path" \
+        OIA_TEST_DB="$database_path" \
+        OIA_TEST_DEFAULTS="$defaults_suite" \
+        OIA_TEST_LIBRARY_RECONCILIATION_DELAY_MS="$reconciliation_delay_ms" \
+        OIA_TEST_STARTUP_EVENTS_DIR="$events_dir" \
         "$app_executable" --ui-testing >"$log_path" 2>&1 &
     app_pid=$!
 }
@@ -112,7 +112,7 @@ for _ in {1..400}; do
         break
     fi
     if ! kill -0 "$app_pid" 2>/dev/null; then
-        fail "Cuttings exited during the cold launch" "$probe_root/cold.log"
+        fail "Oia exited during the cold launch" "$probe_root/cold.log"
     fi
     sleep 0.05
 done
@@ -139,7 +139,7 @@ for _ in {1..30}; do
         break
     fi
     if ! kill -0 "$app_pid" 2>/dev/null; then
-        fail "Cuttings exited during the warm launch" "$probe_root/warm.log"
+        fail "Oia exited during the warm launch" "$probe_root/warm.log"
     fi
     sleep 0.05
 done
@@ -167,7 +167,7 @@ for _ in {1..300}; do
         break
     fi
     if ! kill -0 "$app_pid" 2>/dev/null; then
-        fail "Cuttings exited before reconciliation completed" "$probe_root/warm.log"
+        fail "Oia exited before reconciliation completed" "$probe_root/warm.log"
     fi
     sleep 0.05
 done
@@ -210,7 +210,7 @@ replacement_events="$probe_root/replacement-events"
 for _ in {1..30}; do
     [[ -f "$replacement_events/toolbar" ]] && break
     if ! kill -0 "$app_pid" 2>/dev/null; then
-        fail "Cuttings exited after the cache DB was replaced" "$probe_root/replacement.log"
+        fail "Oia exited after the cache DB was replaced" "$probe_root/replacement.log"
     fi
     sleep 0.05
 done
@@ -227,7 +227,7 @@ for _ in {1..300}; do
         break
     fi
     if ! kill -0 "$app_pid" 2>/dev/null; then
-        fail "Cuttings exited while rebuilding a replacement DB" "$probe_root/replacement.log"
+        fail "Oia exited while rebuilding a replacement DB" "$probe_root/replacement.log"
     fi
     sleep 0.05
 done

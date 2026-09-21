@@ -787,7 +787,7 @@ fn list_readings_search(
             rating_val,
             kind_val,
             color_val,
-            match_query.unwrap_or("\"__cuttings_no_text_match__\""),
+            match_query.unwrap_or("\"__oia_no_text_match__\""),
             semantic_json,
         ],
         parse_row,

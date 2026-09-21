@@ -241,7 +241,7 @@ fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json:
     }
     json!({
         "name": HOST_NAME,
-        "description": "Cuttings native messaging host",
+        "description": "Óia native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_origins": origins
@@ -251,7 +251,7 @@ fn chrome_manifest(binary_path: &str, extension_id: Option<&str>) -> serde_json:
 fn firefox_manifest(binary_path: &str) -> serde_json::Value {
     json!({
         "name": HOST_NAME,
-        "description": "Cuttings native messaging host",
+        "description": "Óia native messaging host",
         "path": binary_path,
         "type": "stdio",
         "allowed_extensions": [FIREFOX_DEFAULT_EXTENSION_ID]
@@ -289,12 +289,12 @@ mod tests {
         // Chrome is installed but has never created its NativeMessagingHosts dir.
         fs::create_dir_all(app_support(home.path()).join("Google/Chrome")).unwrap();
 
-        install_manifest_in(home.path(), "/opt/cuttings/cuttings-native-host", None).unwrap();
+        install_manifest_in(home.path(), "/opt/oia/oia-native-host", None).unwrap();
 
         let nmh = app_support(home.path()).join("Google/Chrome").join(NMH_DIR);
         let manifest = read_manifest(&nmh);
         assert_eq!(manifest["name"], HOST_NAME);
-        assert_eq!(manifest["path"], "/opt/cuttings/cuttings-native-host");
+        assert_eq!(manifest["path"], "/opt/oia/oia-native-host");
         assert_eq!(
             manifest["allowed_origins"][0],
             format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")
@@ -308,11 +308,11 @@ mod tests {
         // The installer must create the browser-specific directory proactively.
         fs::create_dir_all(app_support(home.path()).join("Dia")).unwrap();
 
-        install_manifest_in(home.path(), "/opt/cuttings/cuttings-native-host", None).unwrap();
+        install_manifest_in(home.path(), "/opt/oia/oia-native-host", None).unwrap();
 
         let nmh = app_support(home.path()).join("Dia").join(NMH_DIR);
         let manifest = read_manifest(&nmh);
-        assert_eq!(manifest["path"], "/opt/cuttings/cuttings-native-host");
+        assert_eq!(manifest["path"], "/opt/oia/oia-native-host");
         assert_eq!(
             manifest["allowed_origins"][0],
             format!("chrome-extension://{DEFAULT_EXTENSION_ID}/")

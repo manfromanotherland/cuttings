@@ -10,14 +10,14 @@ describe("capture contract", () => {
     expect(PROTOCOL_VERSION).toBe(4);
   });
 
-  it("targets the Cuttings native messaging host", () => {
+  it("targets the Óia native messaging host", () => {
     expect(HOST_ID).toBe("is.edmundo.cuttings.host");
   });
 
   it("exposes one generic context menu with the exact product label", () => {
     expect(CONTEXT_MENU).toEqual({
       id: CONTEXT_MENU_ID,
-      title: "Add to Cuttings",
+      title: "Save to Óia",
       contexts: ["page", "image", "video", "selection"],
     });
   });

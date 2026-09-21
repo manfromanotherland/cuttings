@@ -25,5 +25,5 @@ fi
 exec cargo run \
   --quiet \
   --manifest-path "${repository_root}/core/Cargo.toml" \
-  -p cuttings-import-mymind \
+  -p oia-import-mymind \
   -- --enrich-existing-links "$@"

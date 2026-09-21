@@ -3,9 +3,9 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use clap::Parser;
-use cuttings_import_mymind::{enrich_existing_links, run, EnrichExistingOptions, RunOptions};
+use oia_import_mymind::{enrich_existing_links, run, EnrichExistingOptions, RunOptions};
 
-/// Import a mymind export folder into a Cuttings library.
+/// Import a mymind export folder into a Óia library.
 ///
 /// The command previews by default. Pass --write only after reviewing the
 /// planned cards and warnings.
@@ -21,7 +21,7 @@ struct Arguments {
     )]
     export: Option<PathBuf>,
 
-    /// Existing Cuttings library folder to receive the imported cards.
+    /// Existing Óia library folder to receive the imported cards.
     #[arg(long, value_name = "FOLDER")]
     library: PathBuf,
 
@@ -29,7 +29,7 @@ struct Arguments {
     #[arg(long)]
     write: bool,
 
-    /// Show one line per reading, using opaque card and Cuttings IDs only.
+    /// Show one line per reading, using opaque card and Óia IDs only.
     #[arg(long)]
     verbose: bool,
 

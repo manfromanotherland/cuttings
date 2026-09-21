@@ -231,7 +231,7 @@ Finish rejects an empty stream or a total that differs from `expected_bytes`. On
 uses the raw-byte SHA-256 to commit `assets/<sha256>.<ext>`, writes a content-derived
 `cuttings-asset:` media identity, and returns the normal save-success response with `id` and
 `path`. Re-importing identical bytes from the same normalized origin returns the normal
-`duplicate` error, allowing the extension to present it as “Already in Cuttings.” Identical bytes
+`duplicate` error, allowing the extension to present it as “Already in Óia.” Identical bytes
 from another origin produce a different reading id.
 
 ### Abort and cleanup
@@ -271,7 +271,7 @@ staging file. A later upload on a new or recovered connection starts again at se
   "protocol_version": 4,
   "ok": false,
   "error": "library_not_configured",
-  "message": "No library folder has been set. Open the Cuttings app to configure one."
+  "message": "No library folder has been set. Open the Óia app to configure one."
 }
 ```
 

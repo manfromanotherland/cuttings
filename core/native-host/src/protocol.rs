@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use cuttings_core::ReadingKind;
+use oia_core::ReadingKind;
 
 /// The wire protocol version shared with the browser extension.
 pub const PROTOCOL_VERSION: u32 = 4;

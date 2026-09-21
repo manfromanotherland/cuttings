@@ -10,12 +10,12 @@ From the repository root, preview the complete plan first:
 ```bash
 ./scripts/import-mymind.sh \
   --export /path/to/mymind \
-  --library /path/to/Cuttings
+  --library /path/to/Óia
 ```
 
-The preview reads and hashes the exported media but does not fetch any links or change the Cuttings
+The preview reads and hashes the exported media but does not fetch any links or change the Óia
 library. It reports how many link metadata fetches the subsequent write would attempt. Its default
-output contains aggregate counts only. Add `--verbose` to list opaque mymind card IDs and Cuttings
+output contains aggregate counts only. Add `--verbose` to list opaque mymind card IDs and Óia
 reading IDs without printing private URLs, tags, notes, content, or source paths.
 
 Review the totals and warnings, then run the same command with `--write`:
@@ -23,12 +23,12 @@ Review the totals and warnings, then run the same command with `--write`:
 ```bash
 ./scripts/import-mymind.sh \
   --export /path/to/mymind \
-  --library /path/to/Cuttings \
+  --library /path/to/Óia \
   --write
 ```
 
 Writes enrich HTTP(S) link rows by default. The importer fetches live page metadata plus a bounded
-social preview and favicon, then gives the captured metadata and bytes to `cuttings-core`. This is
+social preview and favicon, then gives the captured metadata and bytes to `oia-core`. This is
 the network adapter at the import boundary; the shared core itself remains network-free.
 
 To prohibit network access and write URL-only lightweight links from the export data, add
@@ -37,13 +37,13 @@ To prohibit network access and write URL-only lightweight links from the export 
 ```bash
 ./scripts/import-mymind.sh \
   --export /path/to/mymind \
-  --library /path/to/Cuttings \
+  --library /path/to/Óia \
   --write \
   --offline
 ```
 
 The command is safe to re-run. Core content addressing reports readings already in the destination
-as present and leaves their current Cuttings tags and legacy note sidecars untouched. Planning errors,
+as present and leaves their current Óia tags and legacy note sidecars untouched. Planning errors,
 including conflicting non-empty notes on duplicate source rows, block all writes.
 
 ## Link enrichment
@@ -66,7 +66,7 @@ The separate migration script snapshots lightweight links that have neither a pr
 It previews by default and reports an aggregate count plus a digest of sorted opaque reading IDs:
 
 ```bash
-./scripts/enrich-link-metadata.sh --library /path/to/Cuttings
+./scripts/enrich-link-metadata.sh --library /path/to/Óia
 ```
 
 Apply the same snapshot with `--write`. For a one-off audited migration, `--expect-count` and
@@ -74,7 +74,7 @@ Apply the same snapshot with `--write`. For a one-off audited migration, `--expe
 
 ```bash
 ./scripts/enrich-link-metadata.sh \
-  --library /path/to/Cuttings \
+  --library /path/to/Óia \
   --write \
   --expect-count 123 \
   --expect-digest <sha256>
@@ -92,22 +92,22 @@ responses are reachable and remain in the library.
 The observed mymind CSV columns are
 `id,type,title,url,content,note,tags,created`. The importer maps them as follows:
 
-| mymind export | Cuttings |
+| mymind export | Óia |
 | --- | --- |
 | Web card with an HTTP(S) URL | Lightweight article, enriched on write unless `--offline`, and ready for a later full browser capture |
 | `Content` snippet with text | Quote, retaining its HTTP(S) origin when present |
 | `Note` content | Source-less quote |
 | Image/video file whose stem exactly matches the row ID | Local media card; HTTP(S) origin retained when present |
 | `note` attached to a row | Legacy `note.md` sidecar, preserved in the files but not shown by the current macOS app |
-| Comma-separated `tags` | Lowercase, hyphenated Cuttings tags |
+| Comma-separated `tags` | Lowercase, hyphenated Óia tags |
 | `created` | Original UTC `saved_at` |
 
 Media is identified by its bytes, not its opaque export filename or a repeated URL. Rows that map
-to the same Cuttings identity are coalesced before writing: the earliest save date is retained, the
+to the same Óia identity are coalesced before writing: the earliest save date is retained, the
 latest non-empty title is used, and valid tags are combined. This prevents duplicate handling from
 silently dropping source metadata.
 
-Tags over Cuttings' 20-character limit are counted and omitted rather than truncated. Cuttings has
+Tags over Óia' 20-character limit are counted and omitted rather than truncated. Óia has
 no PDF card kind, so exported PDF bytes are counted as skipped; a document's valid source URL is
 still preserved as a lightweight article. Source-less screenshots and empty quotation rows with no
 surviving source URL are also skipped because this export does not contain their missing payloads.

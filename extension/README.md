@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="icons/icon-128.png" alt="Cuttings" width="128">
+  <img src="icons/icon-128.png" alt="Óia" width="128">
 </p>
-<h1 align="center">Cuttings</h1>
+<h1 align="center">Óia</h1>
 <p align="center">
   Keep what you find, with where it came from.
 </p>
@@ -10,7 +10,7 @@
 
 # Browser extension
 
-The Manifest V3 browser extension for **Cuttings**, the local-first native macOS library. Its toolbar
+The Manifest V3 browser extension for **Óia**, the local-first native macOS library. Its toolbar
 saves a cleaned article, a lightweight link, or one long screenshot of the full scrollable page. The
 context menu also saves right-clicked images/videos and selected-text quotes. Article and link saves
 retain live page metadata, social previews, and favicons as local assets. Captures travel through the
@@ -44,7 +44,7 @@ Builds a fresh bundle, then copies only the files the manifest ships
 (`manifest.json`, `dist/`, `icons/`, `popup.html`, `options.html`, `install.html`) into two outputs:
 
 - `unpacked/` — a stable clean directory for **Load unpacked** in Dia/Chrome during development.
-- `artifacts/cuttings-extension-<version>.zip` — ready for the Chrome Web Store, Edge Add-ons, or
+- `artifacts/oia-extension-<version>.zip` — ready for the Chrome Web Store, Edge Add-ons, or
   [AMO](https://addons.mozilla.org).
 
 Bump the `version` in `manifest.json` before store packaging; stores reject a re-upload of an
@@ -64,11 +64,11 @@ rejects any upload that carries `key`. `manifest.json` on disk keeps it.
 After editing source, re-run `npm run package` and click the **reload ↻** icon on the extension
 card. Dia/Chrome keeps the same unpacked path and stable development extension ID.
 
-Click the Cuttings toolbar button and choose **Save article**, **Save link**, or **Save screenshot**.
+Click the Óia toolbar button and choose **Save article**, **Save link**, or **Save screenshot**.
 The screenshot action captures the full scrollable page as one long screenshot. The existing
 keyboard shortcut saves the full article directly.
 
-On app-style pages, Cuttings can follow one scrolling surface that fills the browser viewport. If a
+On app-style pages, Óia can follow one scrolling surface that fills the browser viewport. If a
 page has multiple large, independently scrolling panes, capture stops with an error rather than
 saving a misleading one-viewport image.
 
@@ -91,7 +91,7 @@ works). To wire it up:
 3. Register it with the host (see the [core README](../core/README.md)):
 
    ```bash
-   ../core/target/release/cuttings-native-host --install-manifest --extension-id <your-32-char-id>
+   ../core/target/release/oia-native-host --install-manifest --extension-id <your-32-char-id>
    ```
 
 Firefox needs no ID step — it matches the host by the fixed add-on ID baked into the manifest.

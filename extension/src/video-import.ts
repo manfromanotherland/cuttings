@@ -14,7 +14,7 @@ import {
 } from "./protocol.js";
 import { recordVideoElement as recordRenderedVideoElement } from "./video-element-recorder.js";
 
-export const VIDEO_IMPORT_PORT_NAME = "cuttings-video-import";
+export const VIDEO_IMPORT_PORT_NAME = "oia-video-import";
 export const MAX_VIDEO_IMPORT_CHUNK_BYTES = 256 * 1024;
 
 export class VideoImportError extends Error {
@@ -147,7 +147,7 @@ export async function importVideo({
       throw new VideoImportError(finish.error, finish.message || finish.error);
     }
     if (!("id" in finish) || !("path" in finish)) {
-      throw new Error("The Cuttings app returned an incomplete video save response.");
+      throw new Error("The Óia app returned an incomplete video save response.");
     }
 
     return { metadata, response: finish };
@@ -440,7 +440,7 @@ class VideoImportPortClient {
     this.closed = true;
     this.terminalError ??= new VideoImportError(
       "native_connection",
-      "The Cuttings app closed the video import connection.",
+      "The Óia app closed the video import connection.",
     );
     this.pending?.reject(this.terminalError);
     this.pending = undefined;

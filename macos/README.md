@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="Sources/Cuttings/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" alt="Cuttings" width="128">
+  <img src="Sources/Oia/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" alt="Óia" width="128">
 </p>
-<h1 align="center">Cuttings</h1>
+<h1 align="center">Óia</h1>
 <p align="center">
   Keep what you find, with where it came from.
 </p>
@@ -10,7 +10,7 @@
 
 # macos
 
-The native SwiftUI client for **Cuttings**. Browse articles, images, videos, and quotes as a mixed
+The native SwiftUI client for **Óia**. Browse articles, images, videos, and quotes as a mixed
 visual inspiration board, then search, tag, and revisit them. It embeds the Rust engine (`core`)
 via UniFFI and watches the library folder for changes arriving through the user's own sync.
 
@@ -29,29 +29,29 @@ The Rust core lives at `../core` in this monorepo, and the `Makefile` references
 Run once after cloning the monorepo (and again after updating `core`):
 
 ```bash
-make all        # build the core XCFramework, copy bindings, generate Cuttings.xcodeproj
+make all        # build the core XCFramework, copy bindings, generate Oia.xcodeproj
 ```
 
 ## Run
 
 ```bash
-open Cuttings.xcodeproj                                    # then press Run in Xcode
-xcodebuild build -project Cuttings.xcodeproj -scheme Cuttings   # or from the CLI
+open Oia.xcodeproj                                    # then press Run in Xcode
+xcodebuild build -project Oia.xcodeproj -scheme Oia   # or from the CLI
 ```
 
 ## Test
 
 ```bash
-make test       # runs the unit suite (CuttingsTests) then the UI suite (CuttingsUITests)
+make test       # runs the unit suite (OiaTests) then the UI suite (OiaUITests)
 ```
 
-- `CuttingsTests` — fast, hostless unit tests for pure app logic.
-- `CuttingsUITests` — end-to-end XCUITest against a throwaway temp library.
+- `OiaTests` — fast, hostless unit tests for pure app logic.
+- `OiaUITests` — end-to-end XCUITest against a throwaway temp library.
 
 Both are dependency-free (Xcode + the macOS SDK only). Run one suite or test while iterating:
 
 ```bash
-xcodebuild test -project Cuttings.xcodeproj -scheme Cuttings -only-testing:CuttingsTests
+xcodebuild test -project Oia.xcodeproj -scheme Oia -only-testing:OiaTests
 ```
 
 ## Format & lint
@@ -67,9 +67,9 @@ make lint       # swiftlint lint — reports remaining violations
 ## Software updates (Sparkle)
 
 The project includes [Sparkle](https://sparkle-project.org), but update checks are deliberately
-dormant until Cuttings has an official appcast URL and signing key. Before the first public release,
-add `SUFeedURL` and `SUPublicEDKey` to `Sources/Cuttings/App/Info.plist`, start the updater, and add
-`UpdateCommands` to `CuttingsApp`'s command group.
+dormant until Óia has an official appcast URL and signing key. Before the first public release,
+add `SUFeedURL` and `SUPublicEDKey` to `Sources/Oia/App/Info.plist`, start the updater, and add
+`UpdateCommands` to `OiaApp`'s command group.
 
 ### Shipping a release
 
@@ -79,7 +79,7 @@ both reject an ad-hoc signature on a downloaded update. `make release` does the 
 
 ```bash
 SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-NOTARY_PROFILE=cuttings-notary \
+NOTARY_PROFILE=oia-notary \
 make release
 ```
 

@@ -1,6 +1,6 @@
-# Releasing Cuttings
+# Releasing Óia
 
-How to cut a public Cuttings release. What users download is the **macOS app**,
+How to cut a public Óia release. What users download is the **macOS app**,
 so a release is a signed `.dmg` published on GitHub plus a Sparkle appcast entry
 that points at it.
 
@@ -13,7 +13,7 @@ Record what changed in [CHANGELOG.md](./CHANGELOG.md) as part of the release.
 
 ## 1. Bump the version
 
-Edit `macos/Sources/Cuttings/App/Info.plist`:
+Edit `macos/Sources/Oia/App/Info.plist`:
 
 - `CFBundleShortVersionString` — the marketing version (e.g. `0.1.1`).
 - `CFBundleVersion` — a monotonically increasing build number (e.g. `2`). Sparkle
@@ -31,7 +31,7 @@ profile (created once with `xcrun notarytool store-credentials`):
 ```bash
 cd macos
 SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-NOTARY_PROFILE=cuttings-notary \
+NOTARY_PROFILE=oia-notary \
 make release
 ```
 
@@ -40,12 +40,12 @@ Note the two values it prints — you'll paste them into the appcast:
 - `sparkle:edSignature`
 - `length` (the DMG size in bytes)
 
-The signed DMG lands at `macos/dist/Cuttings.dmg`. Rename it to match the tag
+The signed DMG lands at `macos/dist/Óia.dmg`. Rename it to match the tag
 before uploading — the appcast enclosure URL and the GitHub release asset must use
 this exact name:
 
 ```bash
-mv dist/Cuttings.dmg dist/Cuttings-0.1.1.dmg
+mv dist/Óia.dmg dist/Óia-0.1.1.dmg
 ```
 
 > `make dmg` is the ad-hoc, local-testing path only — it is **not** notarized, so
@@ -61,8 +61,8 @@ after building in `macos/`:
 cd ..
 git tag v0.1.1
 git push origin v0.1.1
-gh release create v0.1.1 macos/dist/Cuttings-0.1.1.dmg \
-  --title "Cuttings 0.1.1" \
+gh release create v0.1.1 macos/dist/Óia-0.1.1.dmg \
+  --title "Óia 0.1.1" \
   --notes "See the 0.1.1 section of CHANGELOG.md in the monorepo root."
 ```
 

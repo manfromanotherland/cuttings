@@ -1,4 +1,4 @@
-# AGENTS.md — Cuttings
+# AGENTS.md — Óia
 
 > Guidance for humans and AI agents working in this repository.
 > This file is the project's north star: it explains **what we are building, why, and the
@@ -7,7 +7,7 @@
 
 ## What this is
 
-**Cuttings** is a local-first, single-user visual inspiration library: save it now, keep it
+**Óia** is a local-first, single-user visual inspiration library: save it now, keep it
 forever, and return to it when it sparks something.
 
 You save a web page, a right-clicked image or video, or selected text from your browser. Each save
@@ -121,8 +121,9 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   captured article and does no hidden network fetch. It writes a marked link card at the normal
   URL-derived id; a later full browser capture upgrades that card in place while preserving the
   user's state. See [DESIGN.md](./DESIGN.md).
-- **Name:** the product name is **Cuttings** and the internal slug is **cuttings**. Product-facing,
-  repository, bundle, Rust, and native-host identifiers use this name consistently.
+- **Name:** the product name is **Óia** and the internal slug is **oia**. Use **Óia** in product copy and **Oia/oia** in source, package, and build names.
+  Keep existing bundle, native-messaging, storage, and library-format identifiers stable; see
+  [docs/branding.md](./docs/branding.md).
 - **License / openness:** the project is **open source, multi-licensed by component**. The
   **browser extension, engine (`core`), and native
   host are MIT** — as permissive as possible to drive adoption and let anyone embed them. The

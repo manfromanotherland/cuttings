@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Cuttings — Docker Sandbox template
+# Oia — Docker Sandbox template
 #
 #   extension  Node (pinned in extension/.mise.toml)
 #   core       Rust stable    (core/.mise.toml)

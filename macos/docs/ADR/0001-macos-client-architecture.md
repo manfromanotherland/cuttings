@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-`macos` is the native SwiftUI client for **Cuttings**, a local-first visual
+`macos` is the native SwiftUI client for **Óia**, a local-first visual
 library. It embeds `core` through UniFFI.
 
 The Rust core is the owner of the product domain:
@@ -56,12 +56,12 @@ the shared glossary (`UBIQUITOUS_LANGUAGE.md`).
 
 ## Target Folder Organization
 
-The target shape for `macos/Sources/Cuttings/` is:
+The target shape for `macos/Sources/Oia/` is:
 
 ```text
-Sources/Cuttings/
+Sources/Oia/
   App/
-    CuttingsApp.swift
+    OiaApp.swift
     Commands/
 
   Bridge/
@@ -110,7 +110,7 @@ Application entry point and app-level command wiring.
 
 Examples:
 
-- `CuttingsApp.swift`
+- `OiaApp.swift`
 - menu command definitions,
 - keyboard shortcut command integration,
 - app lifecycle setup.

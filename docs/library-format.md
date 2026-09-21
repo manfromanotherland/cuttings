@@ -3,7 +3,7 @@
 **Version:** `1`  
 **Status:** implemented — the contract the shipped components (`core`, `extension`, `macos`) conform to.
 
-This document is the **shared contract** between all Cuttings components. Every component that
+This document is the **shared contract** between all Óia components. Every component that
 reads or writes library files must conform to it. Treat breaking changes as a major version bump;
 land them across all affected components in the same monorepo commit.
 
@@ -40,7 +40,7 @@ land them across all affected components in the same monorepo commit.
 - `inbox/` is an optional capture handoff, not canonical reading data. Its independently
   versioned [capture transport](inbox-format.md) feeds the same Rust reading importer.
   Failed or incomplete inputs remain available; the index never treats them as readings.
-- `.cuttings-locks/` contains empty advisory-lock sidecars used to serialize Cuttings writers that
+- `.cuttings-locks/` contains empty advisory-lock sidecars used to serialize Óia writers that
   share a library on one machine. They live outside reading folders so deleting a reading cannot
   replace its lock inode while another process is waiting. Sidecars deliberately persist after an
   operation or deletion, are not reading data, and are ignored by the scanner; syncing their empty

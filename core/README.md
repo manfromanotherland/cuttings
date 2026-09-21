@@ -1,12 +1,12 @@
-# Cuttings core
+# Óia core
 
-The Rust engine for **Cuttings**, the native macOS reading manager. This monorepo component is a
+The Rust engine for **Óia**, the native macOS reading manager. This monorepo component is a
 Cargo workspace containing:
 
-- **`core`** (`cuttings-core`) — the engine: library scanning/indexing, full-text search
+- **`core`** (`oia-core`) — the engine: library scanning/indexing, full-text search
   (SQLite + FTS5), tags, item state, and reading read/write. Embedded by the macOS client via
   UniFFI.
-- **`native-host`** (`cuttings-native-host`) — the browser **native messaging host**: receives
+- **`native-host`** (`oia-native-host`) — the browser **native messaging host**: receives
   cleaned Markdown + image URLs from the extension and writes them into the library folder
   (files only, never the index).
 
@@ -29,14 +29,14 @@ cargo fmt --check
 The native host is what the browser extension talks to when saving a page.
 
 ```bash
-cargo build -p cuttings-native-host --release
+cargo build -p oia-native-host --release
 
 # install browser manifests so Chrome/Edge/Firefox can find the host:
-./target/release/cuttings-native-host --install-manifest --extension-id <your-32-char-id>
+./target/release/oia-native-host --install-manifest --extension-id <your-32-char-id>
 ```
 
 The `--extension-id` gates which extension may connect (get it from `chrome://extensions` after
-loading the unpacked Cuttings extension). Re-run it whenever the ID changes or you rebuild the
+loading the unpacked Óia extension). Re-run it whenever the ID changes or you rebuild the
 binary at a new path.
 
 ## XCFramework (for the macOS app)
@@ -44,7 +44,7 @@ binary at a new path.
 The macOS client embeds `core` as an XCFramework via UniFFI bindings:
 
 ```bash
-./scripts/build-xcframework.sh --release   # outputs dist/CuttingsCore.xcframework + dist/swift/
+./scripts/build-xcframework.sh --release   # outputs dist/OiaCore.xcframework + dist/swift/
 ```
 
 The macOS app's `Makefile` (`make xcframework`) runs this automatically.
@@ -55,7 +55,7 @@ Set `SQL_TRACE=1` to log every executed SQL statement (with duration) to **stder
 spotting chatty callers and N+1 patterns. It's a no-op when unset.
 
 ```bash
-SQL_TRACE=1 cargo test -p cuttings-core -- --nocapture
+SQL_TRACE=1 cargo test -p oia-core -- --nocapture
 ```
 
 The macOS app embeds this crate, so the same variable works there too.

@@ -13,7 +13,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use cuttings_core::ImageBytes;
+use oia_core::ImageBytes;
 use reqwest::{
     blocking::{Client, Response},
     header::{ACCEPT, CONTENT_TYPE, LOCATION, USER_AGENT},
@@ -28,7 +28,7 @@ const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_REDIRECTS: usize = 5;
 const MAX_PREVIEW_CANDIDATES: usize = 4;
 const MAX_FAVICON_CANDIDATES: usize = 4;
-const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Cuttings/0.1 LinkMetadataMigration";
+const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Óia/0.1 LinkMetadataMigration";
 
 pub(crate) struct LinkMetadataCapture {
     pub canonical_url: String,

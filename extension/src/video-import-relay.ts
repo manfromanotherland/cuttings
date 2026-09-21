@@ -108,9 +108,7 @@ export function relayVideoImportPort(
     if (!tabDisconnected) {
       postError(
         tabPort,
-        new Error(
-          nativeDisconnectMessage() ?? "The Cuttings app closed the video import connection.",
-        ),
+        new Error(nativeDisconnectMessage() ?? "The Óia app closed the video import connection."),
       );
       tabPort.disconnect();
     }

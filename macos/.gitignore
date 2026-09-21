@@ -8,4 +8,6 @@ xcuserdata/
 .swiftpm/
 /Frameworks/
 /GeneratedBindings/
+/Oia.xcodeproj/
+# Generated project from before the product rename.
 /Cuttings.xcodeproj/

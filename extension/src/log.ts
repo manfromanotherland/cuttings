@@ -28,8 +28,7 @@ export function log(level: LogEntry["level"], msg: string, data?: unknown): Prom
   const entry: LogEntry = { time: new Date().toISOString(), level, msg };
   if (data !== undefined) entry.data = serialize(data);
 
-  const line =
-    entry.data !== undefined ? `cuttings: ${msg} — ${format(entry.data)}` : `cuttings: ${msg}`;
+  const line = entry.data !== undefined ? `oia: ${msg} — ${format(entry.data)}` : `oia: ${msg}`;
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.info(line);

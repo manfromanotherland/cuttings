@@ -31,7 +31,7 @@ interface VideoSnapshot {
 /**
  * Record one complete loop of the exact rendered video when its object URL is
  * backed by MediaSource and therefore cannot be fetched. Only H.264 MP4 is
- * accepted: Cuttings' native AVPlayer paths cannot play a WebM recording.
+ * accepted: Óia's native AVPlayer paths cannot play a WebM recording.
  */
 export async function recordVideoElement(
   doc: Document,
@@ -82,13 +82,13 @@ export async function recordVideoElement(
       stream.getAudioTracks().length > 0,
     );
     if (!requestedMimeType) {
-      throw new Error("This browser cannot create a Cuttings-compatible MP4 video.");
+      throw new Error("This browser cannot create a Óia-compatible MP4 video.");
     }
 
     recorder = new Recorder(stream, { mimeType: requestedMimeType });
     actualMimeType = recorder.mimeType || requestedMimeType;
     if (!isH264Mp4(actualMimeType, requestedMimeType)) {
-      throw new Error("The browser selected a video format Cuttings cannot play.");
+      throw new Error("The browser selected a video format Óia cannot play.");
     }
   } catch (error) {
     stream?.getTracks().forEach((track) => track.stop());

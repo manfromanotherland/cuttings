@@ -16,7 +16,7 @@
     "macos/build",
     "macos/Frameworks",
     "macos/GeneratedBindings",
-    "macos/Cuttings.xcodeproj",
+    "macos/Oia.xcodeproj",
     "**/xcuserdata",
     "**/DerivedData",
     "**/.build",

@@ -230,7 +230,7 @@ export async function captureStandaloneMediaRequest(
   };
 }
 
-const TOAST_HOST_ID = "cuttings-toast-host";
+const TOAST_HOST_ID = "oia-toast-host";
 
 /**
  * Show or update the toast. If a loading toast is already present and the new

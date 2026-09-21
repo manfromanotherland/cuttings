@@ -154,7 +154,7 @@ function assertHttpUrl(value: string): URL {
     throw new Error("The active tab does not have a valid web URL.");
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("Only HTTP(S) pages can be saved to Cuttings.");
+    throw new Error("Only HTTP(S) pages can be saved to Óia.");
   }
   return parsed;
 }

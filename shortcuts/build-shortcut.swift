@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Builds the reviewable, unsigned source for the Save to Cuttings Shortcut.
+// Builds the reviewable, unsigned source for the Save to Óia Shortcut.
 // Run from the repository root: swift shortcuts/build-shortcut.swift
 import Foundation
 
@@ -84,7 +84,7 @@ func endIf(_ group: String) {
 
 let shortcutInput: Object = ["Type": "ExtensionInput"]
 let repeatItem = variable("Repeat Item")
-action("comment", ["WFCommentActionText": "Share an image, video, text or link to Save to Cuttings. Choose the inbox folder inside your iCloud Cuttings library during setup. Each item is saved as a complete archive; Cuttings imports it on your Mac. No network requests or accounts."])
+action("comment", ["WFCommentActionText": "Share an image, video, text or link to Save to Óia. Choose the inbox folder inside your iCloud Óia library during setup. Each item is saved as a complete archive; Óia imports it on your Mac. No network requests or accounts."])
 let hasInput = beginIf(shortcutInput)
 let repeatGroup = identifier()
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 0,
@@ -176,17 +176,17 @@ let saveActionIndex = actions.count
 action("documentpicker.save", ["WFInput": attachment(captureFile), "WFAskWhereToSave": false,
                                 "WFSaveFileOverwrite": false])
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 2])
-action("notification", ["WFNotificationActionTitle": "Cuttings",
+action("notification", ["WFNotificationActionTitle": "Óia",
                          "WFNotificationActionBody": "Saved to Inbox",
                          "WFNotificationActionSound": false])
 otherwise(hasInput)
-action("alert", ["WFAlertActionTitle": "Save to Cuttings",
-                  "WFAlertActionMessage": "Open an image, video, text or link. Tap Share, then Save to Cuttings.",
+action("alert", ["WFAlertActionTitle": "Save to Óia",
+                  "WFAlertActionMessage": "Open an image, video, text or link. Tap Share, then Save to Óia.",
                   "WFAlertActionCancelButtonShown": false])
 endIf(hasInput)
 
 let workflow: Object = [
-    "WFWorkflowName": "Save to Cuttings",
+    "WFWorkflowName": "Save to Óia",
     "WFWorkflowClientVersion": "2302.0.4",
     "WFWorkflowMinimumClientVersion": 900,
     "WFWorkflowMinimumClientVersionString": "900",
@@ -200,10 +200,10 @@ let workflow: Object = [
         "WFGenericFileContentItem"],
     "WFWorkflowOutputContentItemClasses": [String](),
     "WFWorkflowImportQuestions": [["ActionIndex": saveActionIndex, "Category": "Parameter",
-        "ParameterKey": "WFFolder", "Text": "Choose the inbox folder inside your iCloud Cuttings library."]],
+        "ParameterKey": "WFFolder", "Text": "Choose the inbox folder inside your iCloud Óia library."]],
     "WFWorkflowActions": actions,
 ]
-let destination = CommandLine.arguments.dropFirst().first ?? "shortcuts/Save to Cuttings.unsigned.shortcut"
+let destination = CommandLine.arguments.dropFirst().first ?? "shortcuts/Save to Óia.unsigned.shortcut"
 let bytes = try PropertyListSerialization.data(fromPropertyList: workflow, format: .xml, options: 0)
 try bytes.write(to: URL(fileURLWithPath: destination), options: .atomic)
 print("Built \(actions.count) actions: \(destination)")

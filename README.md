@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="./assets/icon.png" alt="Cuttings" width="128">
+  <img src="./assets/icon.png" alt="Óia" width="128">
 </p>
-<h1 align="center">Cuttings</h1>
+<h1 align="center">Óia</h1>
 <p align="center">
   Keep what you find, with where it came from
   <br />
@@ -16,19 +16,19 @@
 
 ---
 
-Cuttings is a native, local-first home for articles, images, videos, and quotes you find on the
+Óia is a native, local-first home for articles, images, videos, and quotes you find on the
 web. Everything is stored as ordinary files in a folder you choose. No account or server needed.
 
-## What Cuttings does
+## What Óia does
 
-Cuttings turns things you find into a local, visual inspiration library. The browser extension can
+Óia turns things you find into a local, visual inspiration library. The browser extension can
 save a full article, a right-clicked image or video, or selected text. The macOS client presents
 those saves as a mixed masonry board of article, image, video, and quote cards. You can also drop
 or paste a web link, text, image, or MP4/MOV video anywhere on the board. Local text, images, and
 videos are copied into the library; a pasted link starts as a lightweight card that a later browser
 save can enrich with the cleaned article.
 
-On iPhone, use the [Save to Cuttings Shortcut](docs/ios-shortcut.md) from the share
+On iPhone, use the [Save to Óia Shortcut](docs/ios-shortcut.md) from the share
 sheet. It saves into your iCloud library's `inbox` folder; the Mac app imports
 the capture and removes the Inbox copy only after a verified save. No iOS app
 or extension is required.
@@ -53,7 +53,7 @@ user-selected iCloud Drive, Dropbox, or other folder.
 
 ## Components
 
-Cuttings is a **monorepo**. Clone it once to get the product contracts and all three components:
+Óia is a **monorepo**. Clone it once to get the product contracts and all three components:
 
 | Path | Component | Stack |
 |------|-----------|-------|
@@ -117,7 +117,7 @@ in an isolated container with no per-session setup:
 
 ```bash
 ./scripts/sandbox-build.sh   # build + load the image (run on your host)
-sbx run --template cuttings/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
+sbx run --template oia/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
 ```
 
 The macOS app can't be built in the Linux sandbox (no Xcode) — it covers the Rust engine, the

@@ -3,7 +3,7 @@
 import { OPEN_PAGE_VIDEO_SOURCE } from "./page-video-source.js";
 import { recordVideoElement } from "./video-element-recorder.js";
 
-const PAGE_VIDEO_BRIDGE_MARKER = "__cuttingsPageVideoBridgeV1";
+const PAGE_VIDEO_BRIDGE_MARKER = "__oiaPageVideoBridgeV1";
 const MAX_PAGE_VIDEO_CHUNK_BYTES = 256 * 1024;
 
 interface PageVideoPort {

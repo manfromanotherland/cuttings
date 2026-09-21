@@ -2,11 +2,11 @@
 
 Checked **2026-08-25** against Apple's public AppKit, SwiftUI, PhotoKit, Image I/O,
 Quick Look, and AVFoundation documentation, plus the source repositories of the relevant
-open-source packages. Cuttings currently targets macOS 15 in
+open-source packages. Óia currently targets macOS 15 in
 [`macos/project.yml`](../macos/project.yml).
 
 > **Status:** The option analysis below predates the adopted implementation.
-> Cuttings now uses LazyLayoutKit 0.3.0 for one complete, stable-ID masonry
+> Óia now uses LazyLayoutKit 0.3.0 for one complete, stable-ID masonry
 > snapshot whose card views are materialized only around the viewport. The board
 > has no user-visible pagination or loading row, and its layout metrics never wait
 > for asset decoding or rendered-view measurement.
@@ -44,7 +44,7 @@ three show that text readability matters more than preserving a single mixed boa
 
 ## The Native Options
 
-| Option | Large-library behaviour | Fit for Cuttings | Verdict |
+| Option | Large-library behaviour | Fit for Óia | Verdict |
 | --- | --- | --- | --- |
 | `NSCollectionViewFlowLayout` | Collection-view reuse with regular rows; fixed or delegate-provided item sizes | Ideal for a Photos-style cropped grid; item-size changes can use AppKit's layout animation | **Best default** |
 | `NSCollectionViewCompositionalLayout` | Apple describes it as “fast by default”; combines regular, nested, or custom groups without a layout subclass | Best for a hybrid board with different sections; a custom group can express special geometry, but it still needs explicit frames | **Best hybrid option** |
@@ -89,12 +89,12 @@ Apple's PhotoKit sample implements all four points and uses `aspectFill` cells
 Its large-library guide says to preload thumbnails in batches with `PHCachingImageManager`
 ([Loading and Caching Assets and Thumbnails](https://developer.apple.com/documentation/photokit/loading-and-caching-assets-and-thumbnails)).
 
-`PHCachingImageManager` itself is **not** Cuttings' solution. `PHAsset` represents an image or video
-managed by the user's Photos library, whereas Cuttings owns an arbitrary local Markdown-and-assets
+`PHCachingImageManager` itself is **not** Óia' solution. `PHAsset` represents an image or video
+managed by the user's Photos library, whereas Óia owns an arbitrary local Markdown-and-assets
 library ([`PHAsset`](https://developer.apple.com/documentation/photos/phasset),
-[`PhotoKit`](https://developer.apple.com/documentation/photokit)). Importing Cuttings assets into
+[`PhotoKit`](https://developer.apple.com/documentation/photokit)). Importing Óia assets into
 Photos would violate the product's storage model. Reproduce the preheat-and-cache pattern over
-Cuttings' own disposable thumbnail index instead.
+Óia' own disposable thumbnail index instead.
 
 ## The Shared Pipeline Every Layout Needs
 
@@ -148,13 +148,13 @@ testing as the live gesture layer before settling to a discrete grid size
 
 ## Open-Source Audit
 
-No mature package found is a drop-in improvement over AppKit for Cuttings' macOS 14 target.
+No mature package found is a drop-in improvement over AppKit for Óia' macOS 14 target.
 
 | Package | Source finding | Decision |
 | --- | --- | --- |
 | [CHTCollectionViewWaterfallLayout](https://github.com/chiahsien/CHTCollectionViewWaterfallLayout) | Mature and collection-view based, but its manifest supports only iOS and tvOS and subclasses `UICollectionViewLayout`, not AppKit | Cannot use on macOS |
 | [WaterfallGrid](https://github.com/paololeonardi/WaterfallGrid) | Supports macOS, but its source creates a `ForEach` for the complete collection inside a `ZStack`, measures every child through preferences, and then corrects alignment | Wrong architecture for thousands of cards |
-| [LazyLayoutKit](https://github.com/Dave861/LazyLayoutKit) | The most relevant design: precomputed geometry, viewport indexing, masonry and justified modes, and only visible SwiftUI views. Its package requires macOS 15; version 0.3 has a small history, states its API may change before 1.0, and does not animate insertion/removal | Useful experimental benchmark if Cuttings raises its baseline; not the production dependency now |
+| [LazyLayoutKit](https://github.com/Dave861/LazyLayoutKit) | The most relevant design: precomputed geometry, viewport indexing, masonry and justified modes, and only visible SwiftUI views. Its package requires macOS 15; version 0.3 has a small history, states its API may change before 1.0, and does not animate insertion/removal | Useful experimental benchmark if Óia raises its baseline; not the production dependency now |
 | [SwiftUILazyContainer](https://github.com/ciaranrobrien/SwiftUILazyContainer) | Supports macOS 10.15 and precomputes masonry frames while creating views only for its computed visible range, but it has no justified layout, published performance benchmark, or test target; its source still notes a visibility edge case | Lower-confidence masonry prototype that retains macOS 14; not a production recommendation |
 
 The manifests and implementation support those conclusions directly:

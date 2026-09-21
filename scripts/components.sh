@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Component task runner for the Cuttings monorepo.
+# Component task runner for the Óia monorepo.
 #
 # Drive the core, extension, and macOS format / lint / test / build commands
 # from the repository root. Git commands run once for the whole monorepo.
@@ -81,7 +81,7 @@ phase_cmd() {
     macos:fmt)       echo 'make format' ;;
     macos:lint)      echo 'make format-check && make lint' ;;
     macos:test)      echo 'make test' ;;
-    macos:build)     echo 'make all && xcodebuild build -project Cuttings.xcodeproj -scheme Cuttings -configuration Debug CODE_SIGNING_ALLOWED=NO' ;;
+    macos:build)     echo 'make all && xcodebuild build -project Oia.xcodeproj -scheme Oia -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO' ;;
 
     *)               echo '' ;;
   esac
@@ -172,7 +172,7 @@ phase_summary() {
 
 usage() {
   cat <<EOF
-${B}Cuttings monorepo runner${RST}  —  scripts/components.sh <command> [component ...]
+${B}Óia monorepo runner${RST}  —  scripts/components.sh <command> [component ...]
 
   ${B}git${RST}      status  push  pull  fetch        (whole monorepo, one branch)
   ${B}quality${RST}  fmt  lint  test  build            (per-component toolchain)

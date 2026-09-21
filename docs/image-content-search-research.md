@@ -1,12 +1,12 @@
 # Image Content and Colour Search Research
 
 Checked **2026-08-25** against Apple's public documentation, WWDC sessions, SDK behaviour, and
-first-party model licences. The current Cuttings macOS deployment target is 14.0 in
+first-party model licences. The current Óia macOS deployment target is 14.0 in
 [`macos/project.yml`](../macos/project.yml).
 
 ## Decision
 
-Yes: Cuttings can search the pixels in saved images locally. It does not need branded Apple
+Yes: Óia can search the pixels in saved images locally. It does not need branded Apple
 Intelligence for the first useful version.
 
 The recommended stack is:
@@ -25,7 +25,7 @@ The recommended stack is:
    structured visual attributes. It is currently beta, requires Apple Intelligence, and is not a
    safe sole indexing path.
 6. Bundle a licensed **Core ML text/image dual encoder** only if quality testing shows that Core
-   Spotlight and Vision are insufficient and Cuttings needs consistent open-vocabulary retrieval
+   Spotlight and Vision are insufficient and Óia needs consistent open-vocabulary retrieval
    across OS versions.
 
 All generated labels, palettes, captions, feature prints, embeddings, and Spotlight donations
@@ -71,26 +71,26 @@ requirements are macOS 15 or later and downloadable semantic-model resources. Th
 of a documented Apple Intelligence gate, not a promise that quality or resource availability is
 identical on every supported Mac.
 
-### Limits and Cuttings-specific risks
+### Limits and Óia-specific risks
 
 - Spotlight returns ranked matching item IDs but does not expose the image labels, captions, or
-  embedding vectors that produced the match. Vision is still needed if Cuttings wants visible
+  embedding vectors that produced the match. Vision is still needed if Óia wants visible
   categories or category facets.
 - Apple does not publish the media model's vocabulary or guarantee recall for any particular term.
   `chair`, small incidental objects, illustrations, and screenshots need a representative quality
   test.
 - Donated items can also be found by the user in system Spotlight. Other apps cannot query the
-  private app index, but making Cuttings cards discoverable in the system UI should be a deliberate
+  private app index, but making Óia cards discoverable in the system UI should be a deliberate
   product decision.
 - Apple's session says the `contentURL` lets Spotlight process a media asset from the app's
-  sandboxed container. Cuttings' source assets live in a user-selected, security-scoped library
+  sandboxed container. Óia' source assets live in a user-selected, security-scoped library
   folder. A prototype must confirm that Spotlight can retain the required access. The robust
   fallback is to place a small derived thumbnail in per-device Application Support and donate that
   URL; the original library image remains canonical.
 - The app must be able to reconstruct all donations after Spotlight asks for reindexing or after
   its local index is lost.
 
-Core Spotlight therefore fits Cuttings as an additional **disposable platform search index**, not
+Core Spotlight therefore fits Óia as an additional **disposable platform search index**, not
 as the source of truth. A narrow macOS adapter can donate images and return candidate reading IDs;
 the Rust core should still own parsing, filters, result merging, and pagination.
 
@@ -103,7 +103,7 @@ and confidence values for an image. The sample filters them for a chosen precisi
 stores them, and searches images by label.
 
 The legacy [`VNClassifyImageRequest`](https://developer.apple.com/documentation/vision/vnclassifyimagerequest)
-is available on Cuttings' macOS 14 baseline. The newer `ClassifyImageRequest` Swift API is macOS
+is available on Óia' macOS 14 baseline. The newer `ClassifyImageRequest` Swift API is macOS
 15+. Apple recommends trying this built-in classifier before bundling a third-party classifier
 because it avoids app-size cost and may perform better; see [Classifying Images with Vision and
 Core ML](https://developer.apple.com/documentation/coreml/classifying-images-with-vision-and-core-ml).
@@ -123,7 +123,7 @@ Vision classification has important limits:
 
 For explicit bounding boxes around arbitrary objects such as chairs, run a **custom Core ML object
 detector** through Vision. Vision supplies the image preprocessing and observations, but the custom
-model defines the detectable classes. Saliency is cheaper when Cuttings only needs to focus later
+model defines the detectable classes. Saliency is cheaper when Óia only needs to focus later
 analysis on likely foreground objects: [`VNGenerateObjectnessBasedSaliencyImageRequest`](https://developer.apple.com/documentation/vision/vngenerateobjectnessbasedsaliencyimagerequest)
 returns a heat map of image areas likely to represent objects, but it does not name them.
 
@@ -153,7 +153,7 @@ finds the most common colours in an image. Each output pixel is a cluster centre
 component is that colour's weight. The filter can work in a perceptual colour space. Apple also
 publishes an [Accelerate dominant-colours
 sample](https://developer.apple.com/documentation/accelerate/calculating-the-dominant-colors-in-an-image)
-if Cuttings needs more control over clustering.
+if Óia needs more control over clustering.
 
 A practical pipeline is:
 
@@ -161,7 +161,7 @@ A practical pipeline is:
    downsample;
 2. compute a small perceptual palette with cluster weights;
 3. convert cluster centres to a perceptual representation such as Lab;
-4. map them to a controlled Cuttings vocabulary such as red, orange, yellow, green, teal, blue,
+4. map them to a controlled Óia vocabulary such as red, orange, yellow, green, teal, blue,
    purple, pink, brown, black, grey, and white;
 5. store the centre, weight, mapped name, and analyser revision;
 6. rank `blue` by both perceptual distance to blue and the blue cluster's coverage, so a mostly-blue
@@ -218,7 +218,7 @@ Intelligence enabled, supported language/region settings, and downloaded on-devi
 
 As of the checked date, macOS 27 and the image-attachment API are beta. They can be prototyped, but
 Apple's App Review rule [2.5.1](https://developer.apple.com/app-store/review/guidelines/) requires
-public APIs and a currently shipping OS. Cuttings must preserve a non-Foundation-Models path even
+public APIs and a currently shipping OS. Óia must preserve a non-Foundation-Models path even
 after macOS 27 ships because users can disable Apple Intelligence or its model can be unavailable.
 
 The ordinary on-device system model has no special entitlement documented. Custom Foundation
@@ -232,7 +232,7 @@ requirements](https://developer.apple.com/apple-intelligence/acceptable-use-requ
 
 ## Core ML for Full Open-Vocabulary Retrieval
 
-If Cuttings needs complete control, a dual-encoder model can map images and text into the same
+If Óia needs complete control, a dual-encoder model can map images and text into the same
 vector space:
 
 1. precompute and normalise one image embedding per asset;
@@ -244,7 +244,7 @@ Core ML runs models locally on the CPU, GPU, and Neural Engine. Apple's [Core ML
 overview](https://apple.github.io/coremltools/docs-guides/source/overview-coremltools.html) says
 strictly on-device execution needs no network and keeps data private. Apple's ML Program format is
 available from [macOS 12](https://apple.github.io/coremltools/docs-guides/source/convert-to-ml-program.html),
-so a compatible converted model can support Cuttings' macOS 14 baseline.
+so a compatible converted model can support Óia' macOS 14 baseline.
 
 Apple's [MobileCLIP research](https://machinelearning.apple.com/research/mobileclip) demonstrates
 efficient text/image retrieval, and its official iOS sample demonstrates [zero-shot scene
@@ -253,7 +253,7 @@ It is technically relevant but not currently a production model choice: Apple's
 [`LICENSE_MODELS`](https://github.com/apple/ml-mobileclip/blob/main/LICENSE_MODELS) limits the
 released weights to non-commercial research and explicitly excludes product development and use
 in a commercial product or service. The code's MIT licence does not override the weights licence.
-Any bundled model needs a separately verified licence compatible with Cuttings' distribution.
+Any bundled model needs a separately verified licence compatible with Óia' distribution.
 
 This path also adds app size, conversion work, performance tuning, quality evaluation, and a model
 upgrade contract. It should be a measured response to quality gaps rather than the default first
@@ -271,13 +271,13 @@ from the network.
 The new [photo-app Apple Intelligence
 integration](https://developer.apple.com/documentation/AppIntents/integrating-your-photo-app-with-apple-intelligence)
 works in the other direction: an app donates its own entities to Spotlight and Siri. It does not
-return the Photos app's categories to Cuttings.
+return the Photos app's categories to Óia.
 
-Cuttings already owns local image files, so PhotoKit would add an unnecessary Photos permission.
+Óia already owns local image files, so PhotoKit would add an unnecessary Photos permission.
 Do not inspect Photos' private database or use internal APIs: App Review rule 2.5.1 permits only
 public APIs.
 
-## Recommended Cuttings Design
+## Recommended Óia Design
 
 ### Derived data
 

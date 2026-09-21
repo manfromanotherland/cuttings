@@ -1,6 +1,6 @@
-# DESIGN.md — Cuttings
+# DESIGN.md — Óia
 
-> UI/UX design for the whole **Cuttings ecosystem** — the macOS app and browser extension. The
+> UI/UX design for the whole **Óia ecosystem** — the macOS app and browser extension. The
 > shared identity (product name and logo) applies to every surface. The browser extension uses the
 > brand palette below; the Mac client uses Apple semantic colors and native controls so it follows
 > the current macOS appearance and accessibility settings. Architecture and data principles live
@@ -12,11 +12,11 @@
 
 ## Product name
 
-The product name is **Cuttings**. It is displayed to end users as "Cuttings."
+The product name is **Óia**. It is displayed to end users as "Óia."
 
 ## Logo / app icon
 
-<img src="./assets/icon.png" alt="Cuttings app icon" width="96" />
+<img src="./assets/icon.png" alt="Óia app icon" width="96" />
 
 The app icon is a rounded-square ("squircle") in the same near-black charcoal as the UI, with a
 centered cream/off-white **bookmark** glyph (notched bottom). It ties directly into the design
@@ -93,7 +93,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Cuttings      [Labeled board filters] [− +]   [ Search ]      │
+│ Óia      [Labeled board filters] [− +]   [ Search ]      │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────┐ ┌───────┐ ┌─────────┐ ┌──────────┐                │
 │  │ quote   │ │ image │ │ video   │ │ article  │                │
@@ -107,7 +107,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - Use one full-width board with no sidebar or navigation rail. Keep the first masonry row inset
   from the toolbar by the same 30 pt used at the board's horizontal edges.
 - Put the native search field in the unified window toolbar using `.searchable`, with the prompt
-  *"Search Cuttings"*. Do not create a bespoke `NSSearchField` or oversized page header.
+  *"Search Óia"*. Do not create a bespoke `NSSearchField` or oversized page header.
 - Use one native labeled segmented picker for the board scope, in this order: **All, Media,
   Articles, Links, Quotes**. Media combines image and video cards; Articles excludes lightweight
   link placeholders; Links means lightweight URL saves. A separate toolbar menu and searchable
@@ -148,7 +148,7 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 ### Context menu and capture
 
-- Browser right-click uses one **"Add to Cuttings"** command for a page, image, video, or selected
+- Browser right-click uses one **"Save to Óia"** command for a page, image, video, or selected
   text. Selection becomes a quote card; image bytes and video posters are copied locally when
   available.
 - The native card context menu provides tags, open origin, and permanent delete.
@@ -203,12 +203,12 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 
 | Concern | File |
 |---------|------|
-| All fonts / sizes / weights / spacing tokens | `Sources/Cuttings/Views/Markdown/MarkdownTheme.swift` |
+| All fonts / sizes / weights / spacing tokens | `Sources/Oia/Views/Markdown/MarkdownTheme.swift` |
 | Inline runs → styled `AttributedString` (bold, italic, code, links…) | `…/Markdown/InlineRenderer.swift` |
 | Block rendering (headings, lists, quotes, tables, code…) | `…/Markdown/MarkdownBlockView.swift` |
 | Images / figures + captions | `…/Markdown/AssetImageView.swift` |
 | Scroll container, reading measure, link handling | `…/Markdown/MarkdownDocumentView.swift` |
-| Article header chrome (title, metadata, tags) | `Sources/Cuttings/Views/ArticleDetailView.swift` |
+| Article header chrome (title, metadata, tags) | `Sources/Oia/Views/ArticleDetailView.swift` |
 
 ### Reader typography
 

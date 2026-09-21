@@ -3,7 +3,7 @@
 // Run via `npm run package`, which builds first, then invokes this script. It
 // stages only what the manifest references — no src/, node_modules/, or signing
 // keys — into a stable unpacked/ directory for local browser loading and
-// artifacts/cuttings-extension-<version>.zip for store upload.
+// artifacts/oia-extension-<version>.zip for store upload.
 //
 // The staged manifest drops the `key` field: it pins a stable extension ID for
 // local unpacked development, but the Chrome Web Store manages signing itself
@@ -69,7 +69,7 @@ for (const entry of CONTENTS) {
 delete manifest.key; // rejected by the Chrome Web Store; only used for local dev
 writeFileSync(join(stageDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 
-const outFile = join(outDir, `cuttings-extension-${version}.zip`);
+const outFile = join(outDir, `oia-extension-${version}.zip`);
 rmSync(outFile, { force: true }); // a stale zip would be merged into, not replaced
 
 // -r recurse, -X drop extra file attributes, -x skip cruft. Run from the stage

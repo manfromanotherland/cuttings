@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-export const CONTEXT_MENU_ID = "add-to-cuttings";
+export const CONTEXT_MENU_ID = "add-to-oia";
 
 export const CONTEXT_MENU: chrome.contextMenus.CreateProperties = {
   id: CONTEXT_MENU_ID,
-  title: "Add to Cuttings",
+  title: "Save to Óia",
   contexts: ["page", "image", "video", "selection"],
 };
 

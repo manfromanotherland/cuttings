@@ -22,7 +22,7 @@ pub(crate) struct ReadingLock {
 }
 
 /// Acquire the exclusive advisory lock for `id`, blocking until every other
-/// Cuttings process has finished its read-modify-write or delete operation.
+/// Óia process has finished its read-modify-write or delete operation.
 pub(crate) fn lock_reading(library: &LibraryRoot, id: &str) -> Result<ReadingLock> {
     let path = lock_path(library, id);
     if let Some(parent) = path.parent() {

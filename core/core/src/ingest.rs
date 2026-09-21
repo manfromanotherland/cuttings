@@ -342,7 +342,7 @@ fn save_capture_under_lock_with_state(
     }
 
     // Imported state is strictly an initializer for a new reading. An upgrade
-    // keeps every user-controlled field already stored in Cuttings, and a
+    // keeps every user-controlled field already stored in Óia, and a
     // duplicate returned above performs no validation or writes at all.
     let imported_state = if upgrading || enriching {
         ImportedReadingState::default()

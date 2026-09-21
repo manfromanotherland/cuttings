@@ -6,7 +6,7 @@ import { absoluteUrl, extractPageMetadata, firstText } from "./page-metadata.js"
 export type StandaloneMediaKind = Extract<SaveKind, "image" | "video">;
 
 const MAX_QUOTE_EXCERPT_CHARACTERS = 600;
-const VIDEO_REFERENCE_SCHEME = "cuttings-video";
+const VIDEO_REFERENCE_SCHEME = "oia-video";
 
 /** A standalone media item before its image bytes have been captured. */
 export interface MediaExtractionResult {

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Cuttings (the macOS app users download) are recorded
+All notable changes to Óia (the macOS app users download) are recorded
 here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions track the app's `CFBundleShortVersionString`. See
 [RELEASE.md](./RELEASE.md) for how a release is cut.
@@ -10,13 +10,13 @@ and versions track the app's `CFBundleShortVersionString`. See
 ### Added
 
 - Inbox imports images, videos, text, and links from the library's `inbox` folder
-  while Cuttings is open. The iOS **Save to Cuttings** Shortcut keeps available
+  while Óia is open. The iOS **Save to Óia** Shortcut keeps available
   source details with each capture in iCloud Drive. Successful inputs are removed
   only after the saved content is verified; failed inputs remain for retry.
 - Links, text, images, videos, and local `.txt`/`.md` files can now be saved by dropping
   them on the card board or pasting with ⌘V. URL-only saves remain explicitly
   lightweight until a later browser capture upgrades them in place. Local videos are copied into
-  the library and play directly in Cuttings without depending on the original file.
+  the library and play directly in Óia without depending on the original file.
 - Settings › Typography can now set the reader's **Width** — the measure the
   article is laid out to — from Extra Small (520 pt) through Extra Large
   (960 pt), with Medium (680 pt) the previous fixed value and still the default.
@@ -31,6 +31,9 @@ and versions track the app's `CFBundleShortVersionString`. See
 
 ### Changed
 
+- Renamed the app to **Óia** and the browser extension and iOS Shortcut to
+  **Save to Óia**. Existing libraries, preferences, and browser identities are
+  preserved.
 - The sidebar filters now narrow in order — smart view, then rating, then tag,
   as the sidebar reads top to bottom. Changing one clears the narrower ones
   below it, so switching from ★5 to ★4 drops the tag you had applied, and

@@ -1,15 +1,15 @@
 # Save from iPhone with Shortcuts
 
-Use **Save to Cuttings** in the iOS share sheet to save images, videos, text, and
+Use **Save to Óia** in the iOS share sheet to save images, videos, text, and
 links into the `inbox` folder inside your iCloud library. You do not need an iOS
-Cuttings app, a browser extension, an account, or a server.
+Óia app, a browser extension, an account, or a server.
 
 ## Set up
 
-1. Open Cuttings on your Mac. In Settings → Library, select **Open Inbox**.
+1. Open Óia on your Mac. In Settings → Library, select **Open Inbox**.
    Check that this library is inside iCloud Drive and is visible in Files on your
    iPhone.
-2. Open [Save to Cuttings.shortcut](../shortcuts/Save%20to%20Cuttings.shortcut) in
+2. Open [Save to Óia.shortcut](../shortcuts/Save%20to%20%C3%93ia.shortcut) in
    Apple's Shortcuts app. Add the Shortcut and, when asked for its destination,
    choose the **inbox** folder inside that same library.
 3. If you install on your Mac, enable Shortcuts iCloud Sync on both devices. The
@@ -19,7 +19,7 @@ Cuttings app, a browser extension, an account, or a server.
    action points to the right `inbox` folder, **Ask Where to Save** is off, and
    **Overwrite If File Exists** is off. Reselect the folder on the iPhone if
    Shortcuts asks for access.
-5. Open an image in Photos, tap Share, and choose **Save to Cuttings**. Approve
+5. Open an image in Photos, tap Share, and choose **Save to Óia**. Approve
    Shortcuts' first-use permission prompts. Keep the share sheet open until
    **Saved to Inbox** appears.
 
@@ -53,22 +53,22 @@ English-language Shortcuts action registry. If your iPhone uses another language
 check these four If comparisons against that device's Get Type output before
 relying on capture. On-device share-sheet behavior is a separate manual check.
 
-## When Cuttings imports
+## When Óia imports
 
 Each shared item is saved as one `<capture-id>.cuttingscapture.zip` archive.
 Keeping the manifest and media together prevents separate files arriving through
 iCloud in the wrong order. The Shortcut saves the archive; it does not write
-Cuttings' permanent library files.
+Óia' permanent library files.
 
-Cuttings imports when the Mac app is open, or after you next open it. It requests
+Óia imports when the Mac app is open, or after you next open it. It requests
 missing iCloud downloads, waits for settled files, verifies the archive and media
 checksum, and uses the Rust importer to create the normal Markdown and asset
 files. The Inbox copy is removed only after the saved item and local assets have
 been verified. An interrupted import can be retried without duplicating cards.
 
 **Saved to Inbox** means the file was saved on your iPhone, not that iCloud has
-finished syncing or that Cuttings has imported it. There is no background Mac
-service when Cuttings is closed.
+finished syncing or that Óia has imported it. There is no background Mac
+service when Óia is closed.
 
 Use Settings → Library → **Check Inbox** to retry. Files that cannot be imported
 stay in the Inbox, with an explanation in Settings; they are not deleted.
@@ -87,7 +87,7 @@ Before relying on this workflow, share one of each:
 - Plain text containing quotes, line breaks, and emoji: check the saved text.
 - Several photos at once: confirm one archive and one card per item.
 
-Close Cuttings before one test, then reopen it. The archives should remain in the
+Close Óia before one test, then reopen it. The archives should remain in the
 Inbox until the import succeeds. Share an identical item again to check that it
 deduplicates and leaves no stale Inbox archive.
 
@@ -98,10 +98,10 @@ kept alongside it so the workflow can be reviewed without importing it.
 
 ```sh
 swift shortcuts/build-shortcut.swift
-swift shortcuts/validate-shortcut.swift 'shortcuts/Save to Cuttings.unsigned.shortcut'
+swift shortcuts/validate-shortcut.swift 'shortcuts/Save to Óia.unsigned.shortcut'
 shortcuts sign --mode anyone \
-  --input 'shortcuts/Save to Cuttings.unsigned.shortcut' \
-  --output 'shortcuts/Save to Cuttings.shortcut'
+  --input 'shortcuts/Save to Óia.unsigned.shortcut' \
+  --output 'shortcuts/Save to Óia.shortcut'
 ```
 
 The generator uses only Foundation. The developer validator uses Apple's local
