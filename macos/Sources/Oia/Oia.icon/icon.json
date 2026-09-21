@@ -1,32 +1,50 @@
 {
   "fill" : {
-    "automatic-gradient" : "srgb:0.11373,0.19216,0.60392,1.00000"
+    "linear-gradient" : [
+      "extended-gray:0.00000,1.00000",
+      "gray:0.10461,1.00000"
+    ]
   },
   "groups" : [
     {
       "layers" : [
         {
           "blend-mode" : "normal",
-          "glass" : true,
-          "hidden" : false,
-          "image-name" : "Image.svg",
-          "name" : "Scissors",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              0,
-              0
+          "fill" : {
+            "linear-gradient" : [
+              "gray:0.92405,1.00000",
+              "display-p3:0.71652,0.71652,0.71652,1.00000"
             ]
-          }
+          },
+          "image-name" : "eye 2.svg",
+          "name" : "eye 2"
         }
       ],
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.3
+        "opacity" : 0.6
       },
       "translucency" : {
         "enabled" : true,
-        "value" : 0.12
+        "value" : 0.2
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "eye-bg 2.svg",
+          "name" : "eye-bg 2",
+          "opacity" : 0.05
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.6
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
       }
     }
   ],
