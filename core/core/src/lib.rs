@@ -11,6 +11,7 @@ mod images;
 pub mod inbox;
 pub mod index;
 mod ingest;
+pub mod instagram;
 pub mod list;
 mod locking;
 mod media_dimensions;

@@ -82,6 +82,21 @@ func endIf(_ group: String) {
     action("conditional", ["GroupingIdentifier": group, "WFControlFlowMode": 2])
 }
 
+// A version-2 request deliberately contains no v1 link fallback. Older apps
+// retain the unsupported archive rather than silently saving the wrong kind.
+func beginInstagram(_ input: Object) -> String {
+    let matched = action("text.match", ["text": text(input),
+        "WFMatchTextPattern": "(?i)^https://(?:www\\.)?instagram\\.com/(?:p|reel|reels)/[^/?#]+/?(?:[?#].*)?$",
+        "WFMatchTextCaseSensitive": false])
+    let group = beginIf(matched)
+    json(["version": 2], named: "Manifest")
+    field("capture_id", variable("Capture ID"))
+    field("captured_at", variable("Captured at"))
+    field("instagram_url", input)
+    otherwise(group)
+    return group
+}
+
 func captureMedia(_ input: Object, sourceURL: Object? = nil) {
     // Media and regular files keep their bytes; a safe fixed basename prevents
     // original filenames from colliding with the transport manifest.
@@ -115,7 +130,7 @@ func captureMedia(_ input: Object, sourceURL: Object? = nil) {
 
 let shortcutInput: Object = ["Type": "ExtensionInput"]
 let repeatItem = variable("Repeat Item")
-action("comment", ["WFCommentActionText": "Share an image, video, text or link to Óia! Choose the inbox folder inside your iCloud Óia library during setup. Each item is saved as a complete archive; Óia imports it on your Mac. Direct image links download the image; other links stay lightweight. No accounts."])
+action("comment", ["WFCommentActionText": "Share an image, video, text or link to Óia! Choose the inbox folder inside your iCloud Óia library during setup. Each item is saved as a complete archive; Óia imports it on your Mac. Direct image links download the image. Instagram posts queue the selected slide for download on your Mac; other links stay lightweight. No accounts."])
 let hasInput = beginIf(shortcutInput)
 let repeatGroup = identifier()
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 0,
@@ -135,8 +150,9 @@ set("Capture files", action("list", ["WFItems": [Any]()]))
 let itemType = action("getitemtype", ["WFInput": attachment(repeatItem)])
 let safari = beginIf(itemType, equals: "Safari Web Page")
 json([:], named: "Origin")
-field("url", action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
-                                                "WFContentItemPropertyName": "Page URL"]), in: "Origin")
+let pageURL = action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
+                                                "WFContentItemPropertyName": "Page URL"])
+field("url", pageURL, in: "Origin")
 field("title", action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
                                                   "WFContentItemPropertyName": "Name"]), in: "Origin")
 field("origin", variable("Origin"))
@@ -146,9 +162,13 @@ let selection = action("properties.safariwebpage", ["WFInput": attachment(repeat
 // value on iOS; omit the optional text field so this remains a lightweight link.
 let hasSelection = beginIf(selection)
 field("text", selection)
+otherwise(hasSelection)
+let safariInstagram = beginInstagram(pageURL)
+endIf(safariInstagram)
 endIf(hasSelection)
 otherwise(safari)
 let url = beginIf(itemType, equals: "URL")
+let instagram = beginInstagram(repeatItem)
 // Safari's long-press image share can supply only a direct image URL.
 // Match the URL path, never a filename embedded in an ordinary page's query.
 let imageURL = action("text.match", ["text": text(repeatItem),
@@ -170,9 +190,12 @@ json([:], named: "Origin")
 field("url", repeatItem, in: "Origin")
 field("origin", variable("Origin"))
 endIf(isImageURL)
+endIf(instagram)
 otherwise(url)
 let plain = beginIf(itemType, equals: "Text")
+let textInstagram = beginInstagram(repeatItem)
 field("text", repeatItem)
+endIf(textInstagram)
 otherwise(plain)
 let rich = beginIf(itemType, equals: "Rich Text")
 field("text", action("detect.text", ["WFInput": attachment(repeatItem)]))

@@ -5,7 +5,8 @@
 //! External writers publish ordinary files or sealed `.cuttingscapture.zip`
 //! archives. We work from a private, bounded snapshot, keep failures in place,
 //! and only remove the unchanged input after verifying the saved reading.
-//! No network requests, index writes, or recursive directory imports occur here.
+//! Ordinary imports are offline. Version-2 Instagram requests require an explicit
+//! downloader supplied by the native app; no index writes occur here.
 
 use std::{
     collections::HashSet,
@@ -64,6 +65,27 @@ fn process_inbox_at(
     library: &LibraryRoot,
     deferred_names: &[String],
     now: SystemTime,
+) -> Result<InboxReport> {
+    process_inbox_with_resolver_at(library, deferred_names, now, None)
+}
+
+pub fn process_inbox_with_instagram(
+    library: &LibraryRoot,
+    deferred_names: &[String],
+    python: &Path,
+    script: &Path,
+) -> Result<InboxReport> {
+    let resolver = |request: &crate::instagram::InstagramRequest| {
+        crate::instagram::download(python, script, request)
+    };
+    process_inbox_with_resolver_at(library, deferred_names, SystemTime::now(), Some(&resolver))
+}
+
+fn process_inbox_with_resolver_at(
+    library: &LibraryRoot,
+    deferred_names: &[String],
+    now: SystemTime,
+    resolver: Option<&crate::instagram::Resolver<'_>>,
 ) -> Result<InboxReport> {
     let inbox = library.inbox_dir();
     match fs::symlink_metadata(&inbox) {
@@ -127,7 +149,7 @@ fn process_inbox_at(
         }
         let mut outcomes = Vec::new();
         let result = if name.to_ascii_lowercase().ends_with(".cuttingscapture.zip") {
-            import_capture(library, &mut snapshot.file, &mut outcomes)
+            import_capture(library, &mut snapshot.file, &mut outcomes, resolver)
         } else {
             import_payload(
                 library,
@@ -444,6 +466,7 @@ struct Manifest {
     #[serde(default)]
     origin: Origin,
     text: Option<String>,
+    instagram_url: Option<String>,
     #[serde(default)]
     attachments: Vec<Attachment>,
 }
@@ -471,6 +494,7 @@ fn import_capture(
     library: &LibraryRoot,
     snapshot: &mut NamedTempFile,
     outcomes: &mut Vec<SaveOutcome>,
+    resolver: Option<&crate::instagram::Resolver<'_>>,
 ) -> Result<()> {
     snapshot.rewind()?;
     let mut archive =
@@ -525,7 +549,7 @@ fn import_capture(
         serde_json::from_slice(&bytes).context("The capture manifest is invalid.")?
     };
     ensure!(
-        manifest.version == 1,
+        matches!(manifest.version, 1 | 2),
         "This capture format is not supported."
     );
     ensure!(
@@ -546,6 +570,46 @@ fn import_capture(
         captured_at.minute(),
         captured_at.second(),
         captured_at.millisecond()
+    );
+    if manifest.version == 2 {
+        ensure!(
+            names.len() == 1 && manifest.attachments.is_empty() && manifest.text.is_none(),
+            "Instagram requests cannot contain other payloads."
+        );
+        let request = crate::instagram::InstagramRequest::parse(
+            manifest
+                .instagram_url
+                .as_deref()
+                .context("Missing Instagram media request.")?,
+        )?;
+        let resolver = resolver.context(
+            "This Instagram share needs the Mac downloader. Open it in an updated Óia app.",
+        )?;
+        let media = resolver(&request)?;
+        ensure!(
+            matches!(media.name.as_str(), "payload.jpg" | "payload.mp4"),
+            "Unexpected Instagram payload."
+        );
+        let origin = Origin {
+            url: Some(request.origin),
+            title: Some(format!(
+                "Instagram · {} · slide {}",
+                request.shortcode, request.slide
+            )),
+            ..Origin::default()
+        };
+        outcomes.push(import_payload(
+            library,
+            &media.path(),
+            &media.name,
+            &origin,
+            Some(&saved_at),
+        )?);
+        return Ok(());
+    }
+    ensure!(
+        manifest.instagram_url.is_none(),
+        "Instagram requests require capture version 2."
     );
     let origin_url = manifest.origin.url()?;
     ensure!(
@@ -1211,6 +1275,138 @@ mod tests {
         path
     }
 
+    fn instagram_manifest() -> serde_json::Value {
+        json!({"version": 2, "capture_id": "instagram-test", "captured_at": "2026-09-22T12:00:00Z",
+            "instagram_url": "https://www.instagram.com/p/DdlVpikk5Gj/?img_index=2&stkn=tracking"})
+    }
+
+    #[test]
+    fn instagram_requests_import_one_media_and_deduplicate() {
+        for video in [false, true] {
+            let (_temp, library) = library();
+            let manifest = instagram_manifest();
+            let resolver = |request: &crate::instagram::InstagramRequest| {
+                assert_eq!(request.slide, 2);
+                assert!(!request.origin.contains("stkn"));
+                let directory = tempfile::tempdir()?;
+                let name = if video { "payload.mp4" } else { "payload.jpg" }.to_string();
+                fs::write(
+                    directory.path().join(&name),
+                    if video { movie() } else { png() },
+                )?;
+                Ok(crate::instagram::DownloadedMedia { directory, name })
+            };
+            for duplicate in [false, true] {
+                let path = archive(&library, &manifest, &[]);
+                let report = process_inbox_with_resolver_at(
+                    &library,
+                    &[],
+                    SystemTime::now() + Duration::from_secs(60),
+                    Some(&resolver),
+                )
+                .unwrap();
+                assert!(report.issues.is_empty(), "{:?}", report.issues);
+                assert_eq!(report.saved, u32::from(!duplicate));
+                assert_eq!(report.duplicates, u32::from(duplicate));
+                assert!(!path.exists());
+                let saved = readings(&library);
+                assert_eq!(saved.len(), 1);
+                assert_eq!(
+                    saved[0].metadata.kind,
+                    if video {
+                        ReadingKind::Video
+                    } else {
+                        ReadingKind::Image
+                    }
+                );
+                assert!(!saved[0].metadata.lightweight);
+                assert_eq!(saved[0].metadata.saved_at, "2026-09-22T12:00:00.000Z");
+                assert_eq!(
+                    saved[0].metadata.url,
+                    "https://instagram.com/p/DdlVpikk5Gj?img_index=2"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn instagram_failures_keep_request_and_never_save_links() {
+        let (_temp, library) = library();
+        let path = archive(&library, &instagram_manifest(), &[]);
+        let offline = process(&library);
+        assert_eq!(offline.issues.len(), 1);
+        assert!(path.exists() && readings(&library).is_empty());
+        let failing = |_: &crate::instagram::InstagramRequest| anyhow::bail!("unavailable");
+        let report = process_inbox_with_resolver_at(
+            &library,
+            &[],
+            SystemTime::now() + Duration::from_secs(60),
+            Some(&failing),
+        )
+        .unwrap();
+        assert_eq!(report.issues.len(), 1);
+        assert!(path.exists() && readings(&library).is_empty());
+        let mut invalid = instagram_manifest();
+        invalid["text"] = json!("Do not silently save this");
+        archive(&library, &invalid, &[]);
+        let unexpected =
+            |_: &crate::instagram::InstagramRequest| -> Result<crate::instagram::DownloadedMedia> {
+                panic!("Invalid request invoked downloader")
+            };
+        assert_eq!(
+            process_inbox_with_resolver_at(
+                &library,
+                &[],
+                SystemTime::now() + Duration::from_secs(60),
+                Some(&unexpected)
+            )
+            .unwrap()
+            .issues
+            .len(),
+            1
+        );
+        assert!(path.exists() && readings(&library).is_empty());
+    }
+
+    #[test]
+    #[ignore = "Explicit live Instagram check: requires OIA_TEST_PYTHON and network"]
+    fn instagram_live_selected_slide_import() {
+        let (_temp, library) = library();
+        let path = archive(&library, &instagram_manifest(), &[]);
+        let python = std::env::var("OIA_TEST_PYTHON").unwrap();
+        let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../macos/Resources/instagram-download.py");
+        let resolver = |request: &crate::instagram::InstagramRequest| {
+            crate::instagram::download(Path::new(&python), &script, request)
+        };
+        let report = process_inbox_with_resolver_at(
+            &library,
+            &[],
+            SystemTime::now() + Duration::from_secs(60),
+            Some(&resolver),
+        )
+        .unwrap();
+        assert!(report.issues.is_empty(), "{:?}", report.issues);
+        assert_eq!(report.saved, 1);
+        assert!(!path.exists());
+        let saved = readings(&library);
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].metadata.kind, ReadingKind::Image);
+        assert_eq!(
+            saved[0].metadata.url,
+            "https://instagram.com/p/DdlVpikk5Gj?img_index=2"
+        );
+        assert!(
+            saved[0]
+                .metadata
+                .media_url
+                .as_ref()
+                .unwrap()
+                .contains("01aedfae8b4e7ab5e209fcc8c97ee123f4c20658459d5c82854d5c6245b89e5e"),
+            "Live media differs from the independently verified slide 2 fixture"
+        );
+    }
+
     #[test]
     fn creates_missing_inbox_without_reading_other_library_files() {
         let temp = TempDir::new().unwrap();
@@ -1513,7 +1709,7 @@ mod tests {
         let mut snapshot = Snapshot::read(&path, &fs::metadata(&path).unwrap())
             .unwrap()
             .unwrap();
-        import_capture(&library, &mut snapshot.file, &mut Vec::new()).unwrap();
+        import_capture(&library, &mut snapshot.file, &mut Vec::new(), None).unwrap();
         let SourceClaim::Claimed(name) = snapshot
             .claim_source(
                 &directory,

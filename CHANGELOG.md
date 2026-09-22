@@ -9,6 +9,11 @@ and versions track the app's `CFBundleShortVersionString`. See
 
 ### Added
 
+- Instagram post and reel shares through **Óia!** can now queue a local Mac
+  download of the selected photo/video. Carousel shares preserve `img_index`;
+  failures remain in Inbox for retry instead of becoming link cards. Requires
+  the per-device Instaloader setup described in the Shortcut guide.
+
 - Inbox imports images, videos, text, and links from the library's `inbox` folder
   while Óia is open. The iOS **Save to Óia** Shortcut keeps available
   source details with each capture in iCloud Drive. Successful inputs are removed

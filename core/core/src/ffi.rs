@@ -651,6 +651,36 @@ impl Database {
         })
     }
 
+    pub fn process_inbox_with_instagram(
+        &self,
+        library_path: String,
+        deferred_names: Vec<String>,
+        python_path: String,
+        script_path: String,
+    ) -> Result<FfiInboxReport, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let report = crate::inbox::process_inbox_with_instagram(
+            &lib,
+            &deferred_names,
+            Path::new(&python_path),
+            Path::new(&script_path),
+        )
+        .map_err(e)?;
+        Ok(FfiInboxReport {
+            saved: report.saved,
+            duplicates: report.duplicates,
+            pending: report.pending,
+            issues: report
+                .issues
+                .into_iter()
+                .map(|issue| FfiInboxIssue {
+                    name: issue.name,
+                    message: issue.message,
+                })
+                .collect(),
+        })
+    }
+
     /// Add an HTTP(S) link as a lightweight article placeholder. A later full
     /// browser capture upgrades it in place because both use the same id.
     pub fn import_link(

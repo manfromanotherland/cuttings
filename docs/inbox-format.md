@@ -53,6 +53,37 @@ HTTP(S) URL becomes a lightweight link when no different page origin is given.
 A source-only capture becomes a lightweight link. No page extraction or hidden
 network request occurs. Available source title/site/canonical data is retained.
 
+## Instagram requests (version 2)
+
+An explicit request contains only `manifest.json`:
+
+```json
+{
+  "version": 2,
+  "capture_id": "unique-transport-identifier",
+  "captured_at": "2026-09-22T12:00:00Z",
+  "instagram_url": "https://www.instagram.com/p/DdlVpikk5Gj/?img_index=2"
+}
+```
+
+Version 2 is reserved for selected Instagram media requests. It does not accept
+attachments or text, and never falls back to a link. Version-1-only readers reject
+and retain it. Rust validates the HTTPS Instagram post/reel URL, interprets the
+one-based `img_index` (missing means 1), rejects ambiguous/invalid indices, and
+removes tracking parameters from the saved origin. The native app opts into the
+external downloader; the ordinary `process_inbox` entry point remains offline.
+
+Instaloader runs in a per-device Python environment, outside the library. It
+fetches exactly the selected node, uses video bytes rather than a poster for a
+video node, and streams at most 40 MiB per image or 1 GiB per movie to private
+temporary storage. Each helper process has a 120-second deadline. Rust validates
+the resulting media through the normal importer and verifies the saved asset
+before consuming the unchanged request. The original share time is preserved.
+No account sessions, browser cookies, CDN URLs, or credentials are stored in the
+request or saved card. Network/authentication failures and missing slide indices
+stay in Inbox as issues; **Check Inbox** retries them. Other file imports remain
+offline. See [setup](ios-shortcut.md#instagram).
+
 ## Validation and consumption
 
 - Only direct regular files are considered. Hidden files, symlinks, and folders

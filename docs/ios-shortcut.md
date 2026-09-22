@@ -39,6 +39,7 @@ Confirm its final **Save File** destination still points to your library’s `in
 |---|---|
 | Safari webpage | Page URL, page title, and selected text when Safari supplies it. With no selection, this becomes a lightweight link. |
 | Direct image URL | URLs whose path ends in a supported image extension download into a local image attachment. The shared URL is retained as the available source. |
+| Instagram post/reel | Queues the selected image or video for download on the Mac. `img_index` selects one carousel slide; no index means the first. |
 | Other URL | A lightweight link. No page is downloaded. |
 | Plain or rich text | A quote, or a lightweight link when the entire text is an HTTP(S) URL. Rich text is converted to plain text. |
 | Image or video | The file representation and display name supplied by the sharing app, with a checksum. |
@@ -51,7 +52,8 @@ in `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, or `.heif` are downloaded
 on the sharing device (including URLs with query parameters). Shortcuts may ask
 for permission to contact the image host. A failed request or non-image response
 stops capture instead of reporting a saved link. Extensionless image URLs remain
-links. Safari's own **Page URL**, **Name**,
+links. Instagram post/reel URLs use the explicit Mac download queue described
+below. Safari's own **Page URL**, **Name**,
 and **Page Selection** properties provide the available page context. Canonical
 URLs and site names are supported by the transport but are not extracted by this
 Shortcut.
@@ -61,6 +63,36 @@ The type comparisons currently use Apple's English names: **Safari Web Page**,
 English-language Shortcuts action registry. If your iPhone uses another language,
 check these If comparisons against that device's Get Type output before
 relying on capture. On-device share-sheet behavior is a separate manual check.
+
+## Instagram
+
+The updated **Óia!** Shortcut queues an explicit media request when Instagram
+shares a post/reel URL, including when supplied as plain text or a Safari page
+without selected text. A carousel URL with `img_index=2` saves only slide 2. If
+Instagram omits the index, the first slide is selected. It never saves the whole
+carousel or substitutes a link/preview when retrieval fails.
+
+Install the downloader once on each Mac that will handle these requests:
+
+```sh
+scripts/install-instagram-downloader.sh
+```
+
+This requires Python 3 with venv/pip and installs pinned Instaloader 4.15.3 under
+`~/Library/Application Support/Oia/Instagram`. It is optional for other capture
+kinds and is not included in the synced library or installed at app launch.
+`OIA_PYTHON` may select the Python executable during setup. Re-run setup if a
+Python upgrade invalidates the environment. The app bundles the small transport
+adapter, not Python itself.
+
+Keep Óia open on the Mac with internet access. After iCloud delivers the request,
+Óia downloads the selected media and imports its local asset. **Saved to Inbox**
+on iPhone confirms the request was queued, not that the download finished.
+Failures remain visible in Settings → Library; **Check Inbox** retries them.
+There is no third-party download service and no automatic account login. Some
+posts may require authentication or be unavailable; those remain queued with an
+error rather than silently becoming links. Live photo capture has been verified;
+video selection/import is covered by fixtures and still needs an iPhone reel test.
 
 ## When Óia imports
 

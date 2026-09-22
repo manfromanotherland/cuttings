@@ -218,6 +218,18 @@ for (name, selections) in cases {
         print("FAIL: \(name): \(error)")
     }
 }
+do {
+    for type in ["URL", "Text", "Safari Web Page"] {
+        var runner = SafariGraph()
+        let url = "https://www.instagram.com/p/DdlVpikk5Gj/?img_index=2&stkn=tracking"
+        let manifest = try runner.capture(SafariFixture(url: url, title: "Post", selection: nil, type: type), index: 0)
+        try require(manifest["version"] as? Int == 2 && manifest["instagram_url"] as? String == url,
+                    "Instagram slide must survive as an explicit version-2 request: \(type)")
+        try require(manifest["text"] == nil && manifest["origin"] == nil && manifest["attachments"] == nil && runner.downloads.isEmpty,
+                    "Instagram must not download on iPhone or silently become a link")
+    }
+    print("PASS: Instagram URL, text and Safari shares queue the selected slide")
+} catch { failures += 1; print("FAIL: Instagram request: \(error)") }
 let urlCases: [(String, Bool)] = [
     ("https://media.houseandgarden.co.uk/photos/67879b979514423c41c6e4ea/master/w_1280,c_limit/11-13-24-HG-Anna-Hambro011.jpg", true),
     ("https://example.com/photo.PNG?width=1200#image", true),

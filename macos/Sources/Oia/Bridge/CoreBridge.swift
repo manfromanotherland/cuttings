@@ -122,7 +122,13 @@ actor CoreBridge {
             let deferredNames = try InboxFileAvailability.deferredNames(
                 in: libraryURL.appendingPathComponent("inbox", isDirectory: true)
             )
-            return try database.processInbox(libraryPath: libraryPath, deferredNames: deferredNames)
+            let python = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support/Oia/Instagram/bin/python3")
+            return try database.processInboxWithInstagram(
+                libraryPath: libraryPath, deferredNames: deferredNames,
+                pythonPath: python.path,
+                scriptPath: Bundle.main.url(forResource: "instagram-download", withExtension: "py")?.path ?? ""
+            )
         }.value
     }
 

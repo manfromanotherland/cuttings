@@ -53,6 +53,15 @@ reconcile. Inbox processing starts after the existing board is published and
 runs only while the Mac app is open. See [the capture contract](docs/inbox-format.md)
 and [Shortcut setup](docs/ios-shortcut.md).
 
+Version-2 Inbox captures explicitly request one Instagram post/carousel item.
+The app opts into a Rust adapter that validates the URL/index and launches the
+bundled Instaloader transport script in a per-device Python environment. Only
+this explicit request path performs network retrieval; the default core Inbox
+entry point and ordinary file imports remain offline. The resulting private
+media file passes through the same byte validation, durable import and safe
+request cleanup as supplied media. No hosted service or background daemon is
+introduced.
+
 Every card kind records its origin page in `url`/`canonical_url` plus its page title/site and save
 date. A browser-saved video's `media_url` is always a content-addressed local `cuttings-asset:`
 reference. The extension streams readable HTTP(S), `data:`, and document-scoped `blob:` bytes; if

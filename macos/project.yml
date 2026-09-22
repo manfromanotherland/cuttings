@@ -26,6 +26,8 @@ targets:
     platform: macOS
     sources:
       - Sources/Oia
+      - path: Resources/instagram-download.py
+        buildPhase: resources
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:
