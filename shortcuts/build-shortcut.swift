@@ -236,7 +236,7 @@ let workflow: Object = [
     "WFWorkflowClientVersion": "2302.0.4",
     "WFWorkflowMinimumClientVersion": 900,
     "WFWorkflowMinimumClientVersionString": "900",
-    "WFWorkflowIcon": ["WFWorkflowIconStartColor": 4251333119, "WFWorkflowIconGlyphNumber": 59511],
+    "WFWorkflowIcon": ["WFWorkflowIconStartColor": 255, "WFWorkflowIconGlyphNumber": 59745],
     "WFWorkflowTypes": ["ActionExtension"],
     "WFQuickActionSurfaces": [String](),
     "WFWorkflowHasShortcutInputVariables": true,

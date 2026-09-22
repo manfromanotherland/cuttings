@@ -4821,9 +4821,9 @@
 	<key>WFWorkflowIcon</key>
 	<dict>
 		<key>WFWorkflowIconGlyphNumber</key>
-		<integer>59511</integer>
+		<integer>59745</integer>
 		<key>WFWorkflowIconStartColor</key>
-		<integer>4251333119</integer>
+		<integer>255</integer>
 	</dict>
 	<key>WFWorkflowImportQuestions</key>
 	<array>
