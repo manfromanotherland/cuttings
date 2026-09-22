@@ -3,7 +3,7 @@
 </p>
 <h1 align="center">Óia</h1>
 <p align="center">
-  Keep what you find, with where it came from.
+  For your eyes only
 </p>
 
 ---

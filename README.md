@@ -1,143 +1,78 @@
 <p align="center">
-  <img src="./assets/icon.png" alt="Óia" width="128">
+  <img src="./assets/icon.png" alt="Óia app icon" width="128">
 </p>
 <h1 align="center">Óia</h1>
 <p align="center">
-  Keep what you find, with where it came from
-  <br />
-  <a href="./macos">macOS</a>
-  ·
-  <a href="./core">core</a>
-  ·
-  <a href="./extension">extension</a>
-  ·
-  <a href=".">root</a>
+  <strong>For your eyes only</strong>
 </p>
 
----
+Óia is a private, local-first home for the things that catch your eye. Save articles, links,
+images, videos, screenshots, and quotes from the web, then browse them as a visual library on
+your Mac. There are no accounts, no servers, and no telemetry. Your library is a folder of
+ordinary Markdown files and local assets that stays useful with or without the app.
 
-Óia is a native, local-first home for articles, images, videos, and quotes you find on the
-web. Everything is stored as ordinary files in a folder you choose. No account or server needed.
+## Why I made it
 
-## What Óia does
+I wanted somewhere quiet to keep the things I find while browsing: not a social feed, not a
+cloud service, and not another inbox trying to hold my attention. Óia is the place I can save
+something quickly, keep its source, and find it again when it becomes useful.
 
-Óia turns things you find into a local, visual inspiration library. The browser extension can
-save a full article, a right-clicked image or video, or selected text. The macOS client presents
-those saves as a mixed masonry board of article, image, video, and quote cards. You can also drop
-or paste a web link, text, image, or MP4/MOV video anywhere on the board. Local text, images, and
-videos are copied into the library; a pasted link starts as a lightweight card that a later browser
-save can enrich with the cleaned article.
+The app is native SwiftUI, the browser extension captures what is on the page, and a shared Rust
+core writes and indexes the library. You choose where that library lives and, if you want it on
+more than one device, how it syncs—iCloud Drive, Dropbox, git, or anything else that can sync a
+folder.
 
-On iPhone, use the [Óia! Shortcut](docs/ios-shortcut.md) from the share
-sheet. It saves into your iCloud library's `inbox` folder; the Mac app imports
-the capture and removes the Inbox copy only after a verified save. No iOS app
-or extension is required.
+## The name
 
-Web cards retain their origin page URL, canonical URL, page title/site, and save date. Image and
-video cards additionally retain a durable media URL when the browser exposes one; session-local
-video streams receive a compact stable capture reference instead. Captured and locally pasted
-images, video posters, and locally imported video files are stored inside the card's own folder.
-Remote browser video files themselves are not downloaded. The library remains plain files in a
-user-selected iCloud Drive, Dropbox, or other folder.
+**Óia** is pronounced **OY-uh** (`[ˈɔjɐ]`)—two syllables, with the stress on *OY*. It comes from
+Brazilian Portuguese *óia*, a playful, colloquial rendering of *olha*: “look!” The name grew out
+of the eye icon and the reason the app exists: save what catches your eye so you can look again
+later.
 
-## Principles
+In code and file names, Óia becomes `Oia` or `oia`.
 
-- **Local-first & offline** — everything works with no network and no backend.
-- **Files are the source of truth** — each saved item is a Markdown file with YAML frontmatter;
-  content, tags, and source URL live in that file.
-- **You bring your own sync** — point the app at one *library folder* and sync it however you
-  like (Dropbox, iCloud Drive, Google Drive, git…). The app never syncs for you.
-- **The database is a disposable cache** — a local index makes search fast but is rebuildable
-  from the files and is never synced.
-- **One shared core** — the domain logic lives in the Rust engine and is reused across clients.
+## What it does
 
-## Components
+- Saves cleaned articles, lightweight links, full-page screenshots, selected quotes, and
+  right-clicked images or videos with the [browser extension](./extension).
+- Accepts links, text, images, and videos pasted or dropped straight onto the macOS board.
+- Browses everything together as a visual masonry board with search and tags.
+- Keeps the original source and stores captured content locally as Markdown plus assets.
+- Accepts iPhone shares through the [Óia! Shortcut](./docs/ios-shortcut.md) when the library is in
+  iCloud Drive.
 
-Óia is a **monorepo**. Clone it once to get the product contracts and all three components:
+## Build it
 
-| Path | Component | Stack |
-|------|-----------|-------|
-| [repository root](.) | product docs, library-format contract, design, backlog | Markdown |
-| [`core`](./core) | engine + native messaging host (Cargo workspace) | Rust (SQLite + FTS5, UniFFI) |
-| [`extension`](./extension) | browser extension for page, media, and quote capture | TypeScript, Manifest V3 |
-| [`macos`](./macos) | native visual inspiration library and article viewer | Swift / SwiftUI |
-
-All paths share one Git history, so a library-format or native-messaging change can update every
-affected component in one atomic commit. See each component's README for setup and run instructions.
-
-## Development
-
-Each component keeps its native toolchain — see its README for setup. From the repository root,
-the `Makefile` drives them all at once (no `cd`-ing between folders):
+You need macOS 14 or later, Xcode 16 or later, [Rust](https://rustup.rs), Node.js/npm, and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```bash
-make lint          # lint every component
-make test          # test every component
-make build         # build every component
-make check         # lint + test (a quick pre-push gate)
-make push          # git push the monorepo's current branch once
-make status        # git status for the monorepo
+brew install xcodegen
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+(cd extension && npm install)
+make build
 ```
 
-Run `make help` for the full list, or `make COMPONENT=core test` to target one component. Component
-selection applies to quality commands; Git commands always operate on the whole monorepo. Each
-quality command maps to the component's native tools:
+The Debug app is written to `macos/build/Build/Products/Debug/Óia.app`. Open it once, choose a
+library folder, then package the extension:
 
-**Engine + native host (Rust) — `core`**
 ```bash
-cd core
-cargo build
-cargo test
-cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --check
-```
-
-**Browser extension (TypeScript) — `extension`**
-```bash
+open "macos/build/Build/Products/Debug/Óia.app"
 cd extension
-npm install
-npm run build        # bundle the MV3 extension
-npm test             # Vitest unit tests
-npm run lint         # ESLint + Prettier + tsc --noEmit
+npm run package
 ```
 
-**macOS client (Swift) — `macos`**
-```bash
-cd macos
-xcodebuild build
-xcodebuild test      # XCTest / XCUITest
-swiftlint            # + swiftformat
-```
+Load `extension/unpacked` as an unpacked browser extension. See the
+[macOS](./macos), [extension](./extension), and [core](./core) READMEs for focused setup, testing,
+and release commands. `make help` lists the repository-wide tasks.
 
-### Docker sandbox
+## License
 
-A reusable **Docker sandbox** pre-installs every toolchain (Node, Rust, Swift + linters), so you
-can run a coding agent — e.g. [Claude Code](https://claude.com/claude-code) — across the monorepo
-in an isolated container with no per-session setup:
+The Rust core, native host, and browser extension are available under the MIT License. The macOS
+client is available under GPL-3.0-or-later.
 
-```bash
-./scripts/sandbox-build.sh   # build + load the image (run on your host)
-sbx run --template oia/sandbox:1 claude -- "$(cat initial_sandbox_prompt.txt)" --dangerously-skip-permissions
-```
+## Thanks
 
-The macOS app can't be built in the Linux sandbox (no Xcode) — it covers the Rust engine, the
-extension, and macOS lint/format. See [SANDBOX.md](./SANDBOX.md) for details.
-
-## Documentation
-
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — components, data flow, and the library data model.
-- [AGENTS.md](./AGENTS.md) — goals, principles, decisions, and conventions for contributors.
-- [DESIGN.md](./DESIGN.md) — the macOS UI/UX design.
-- [UBIQUITOUS_LANGUAGE.md](./UBIQUITOUS_LANGUAGE.md) — the shared product vocabulary (glossary).
-- [docs/library-format.md](./docs/library-format.md) — **versioned library-format spec** (the cross-component contract).
-- [docs/native-messaging.md](./docs/native-messaging.md) — native messaging protocol (extension ↔ host).
-- [docs/fixtures/](./docs/fixtures/) — sample article file, save request/response JSON.
-- [core/mymind-import/README.md](./core/mymind-import/README.md) — preview and import a mymind export folder.
-
-## Releases
-
-What users download is the macOS app — a signed `.dmg` published on GitHub with a
-Sparkle appcast entry for in-app updates.
-
-- [RELEASE.md](./RELEASE.md) — the step-by-step release runbook.
-- [CHANGELOG.md](./CHANGELOG.md) — notable changes per version.
+Óia began as a fork of [ReadControl](https://github.com/readcontrol/root), made by Rodrigo
+Boniatti. His local-first reading app gave this project a thoughtful foundation. Thank you,
+Rodrigo, for building it in the open.

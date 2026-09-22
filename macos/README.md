@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="Sources/Oia/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" alt="Óia" width="128">
+  <img src="../assets/icon.png" alt="Óia" width="128">
 </p>
 <h1 align="center">Óia</h1>
 <p align="center">
-  Keep what you find, with where it came from.
+  For your eyes only
 </p>
 
 ---
