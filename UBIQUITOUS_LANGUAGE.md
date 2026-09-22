@@ -7,8 +7,8 @@ host, and macOS app.
 
 ## Naming Rules
 
-- Write **Óia** as the product name and **Save to Óia** as the extension and
-  Shortcut name. Use ASCII **Oia/oia** for code and paths. Existing compatibility
+- Write **Óia** as the product name and **Save to Óia** as the extension name,
+  and **Óia!** as the Shortcut name. Use ASCII **Oia/oia** for code and paths. Existing compatibility
   identifiers are listed in [docs/branding.md](./docs/branding.md).
 - Use **save** for the user action that adds a page, image, video, or text quote
   to the library, whether from the extension or by pasting/dropping in the app. Saving is

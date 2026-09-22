@@ -44,7 +44,7 @@ full browser capture upgrades them. The app watches the folder and indexes every
 masonry board, full-text search, type filters, and tags — so browser saves, in-app saves, and files
 delivered by sync reconcile through the same index path.
 
-The iOS **Save to Óia** Shortcut publishes sealed captures into `inbox/`
+The iOS **Óia!** Shortcut publishes sealed captures into `inbox/`
 inside the user's synced library. The Mac requests any missing iCloud bytes and
 passes ready files to the shared Rust Inbox importer. Rust validates private
 snapshots, calls the existing reading importer, verifies durable results, and

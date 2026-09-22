@@ -21,8 +21,7 @@ func kind(_ action: Object) -> String {
     String((action["WFWorkflowActionIdentifier"] as! String).dropFirst("is.workflow.actions.".count))
 }
 
-// Evaluate only the existing per-item manifest initialization and Safari arm.
-// Date/random/hash, non-Safari arms, ZIP creation, and saving are out of scope.
+// Evaluate the per-item capture branches. ZIP creation and saving are out of scope.
 let start = try actions.firstIndex { action in
     guard kind(action) == "gettext", let text = parameters(action)["WFTextActionText"] as? String,
           let bytes = text.data(using: .utf8),
@@ -36,10 +35,10 @@ let safariGroup = parameters(actions[safariIf])["GroupingIdentifier"] as! String
 let end = try actions.indices.first {
     $0 > safariIf && kind(actions[$0]) == "conditional"
         && parameters(actions[$0])["GroupingIdentifier"] as? String == safariGroup
-        && parameters(actions[$0])["WFControlFlowMode"] as? Int == 1
+        && parameters(actions[$0])["WFControlFlowMode"] as? Int == 2
 }.unwrap("Missing Safari branch boundary")
 try require(start < safariIf, "Manifest initialization must precede the Safari branch")
-let graph = Array(actions[start..<end])
+let graph = Array(actions[start...end])
 
 extension Optional {
     func unwrap(_ message: String) throws -> Wrapped {
@@ -52,11 +51,15 @@ struct SafariFixture {
     let url: String
     let title: String
     let selection: String?
+    var type = "Safari Web Page"
+    var responseType = "Image"
 }
 
 struct SafariGraph {
     var variables: Object = [:]
     var outputs: Object = [:]
+    var downloads: [String] = []
+    var payloads: [String] = []
 
     func resolve(_ value: Any?) throws -> Any? {
         guard let value else { return nil }
@@ -71,8 +74,16 @@ struct SafariGraph {
             if string == "\u{fffc}", attachments.count == 1 {
                 return try resolve(attachments.values.first)
             }
-            try require(attachments.isEmpty, "Unexpected interpolated text in Safari graph")
-            return string
+            let rendered = NSMutableString(string: string)
+            for (range, token) in attachments.sorted(by: { NSRangeFromString($0.key).location > NSRangeFromString($1.key).location }) {
+                let value = try resolve(token)
+                let replacement: String
+                if let dictionary = value as? Object {
+                    replacement = String(data: try JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]), encoding: .utf8)!
+                } else { replacement = value.map { String(describing: $0) } ?? "" }
+                rendered.replaceCharacters(in: NSRangeFromString(range), with: replacement)
+            }
+            return rendered as String
         }
         switch object["Type"] as? String {
         case "ActionOutput": return outputs[object["OutputUUID"] as! String]
@@ -86,6 +97,7 @@ struct SafariGraph {
     func hasValue(_ value: Any?) -> Bool {
         guard let value else { return false }
         if let string = value as? String { return !string.isEmpty }
+        if let list = value as? [Any] { return !list.isEmpty }
         return true
     }
 
@@ -137,7 +149,24 @@ struct SafariGraph {
                 dictionary[key] = value
                 output = dictionary
             case "list": output = p["WFItems"] as! [Any]
-            case "getitemtype": output = "Safari Web Page"
+            case "getitemtype":
+                let input = try resolve(p["WFInput"]) as? String
+                output = input == "downloaded-image" ? fixture.responseType : fixture.type
+            case "text.match":
+                let input = try resolve(p["text"]) as! String
+                let regex = try NSRegularExpression(pattern: p["WFMatchTextPattern"] as! String)
+                output = regex.matches(in: input, range: NSRange(input.startIndex..., in: input)).map { (input as NSString).substring(with: $0.range) }
+            case "downloadurl":
+                downloads.append(try resolve(p["WFURL"]) as! String)
+                output = "downloaded-image"
+            case "gettypeaction": output = try resolve(p["WFInput"])
+            case "properties.files": output = p["WFContentItemPropertyName"] as? String == "Name" ? "shared.jpg" : "jpg"
+            case "setitemname": output = try resolve(p["WFName"])
+            case "appendvariable": payloads.append(try resolve(p["WFInput"]) as! String)
+            case "hash": output = String(repeating: "a", count: 64)
+            case "detect.text": output = try resolve(p["WFInput"])
+            case "alert": break
+            case "exit": throw Failure(description: "Capture stopped")
             case "properties.safariwebpage":
                 switch p["WFContentItemPropertyName"] as! String {
                 case "Page URL": output = fixture.url
@@ -151,7 +180,7 @@ struct SafariGraph {
             // cannot stand in for the current Page Selection result.
             outputs[p["UUID"] as! String] = output
         }
-        try require(conditions.count == 1 && conditions[0].group == safariGroup,
+        try require(conditions.isEmpty,
                     "Safari branch did not finish its nested conditions")
         return try (variables["Manifest"] as? Object).unwrap("Missing manifest")
     }
@@ -189,6 +218,47 @@ for (name, selections) in cases {
         print("FAIL: \(name): \(error)")
     }
 }
-print("Safari action-graph regression checks: \(cases.count - failures)/\(cases.count) passed (\(actions.count)-action workflow).")
+let urlCases: [(String, Bool)] = [
+    ("https://media.houseandgarden.co.uk/photos/67879b979514423c41c6e4ea/master/w_1280,c_limit/11-13-24-HG-Anna-Hambro011.jpg", true),
+    ("https://example.com/photo.PNG?width=1200#image", true),
+    ("https://example.com/photo.webp", true),
+    ("https://example.com/article", false),
+    ("https://example.com/article?image=photo.jpg", false),
+    ("https://example.com/photo.jpg/article", false),
+    ("file:///tmp/photo.jpg", false),
+]
+do {
+    var runner = SafariGraph()
+    for (index, entry) in urlCases.enumerated() {
+        let (url, isImage) = entry
+        runner.downloads = []
+        runner.payloads = []
+        let manifest = try runner.capture(SafariFixture(url: url, title: "", selection: nil, type: "URL"), index: index)
+        try require((manifest["origin"] as? Object)?["url"] as? String == url, "Shared URL was lost")
+        try require(runner.downloads == (isImage ? [url] : []), "Wrong download decision: \(url)")
+        try require(runner.payloads == (isImage ? ["payload.jpg"] : []), "Image bytes were not attached: \(url)")
+        if isImage {
+            let attachments = manifest["attachments"] as? [Object]
+            try require(attachments?.count == 1 && attachments?.first?["path"] as? String == "payload.jpg", "Missing image attachment array")
+            try require(attachments?.first?["sha256"] as? String == String(repeating: "a", count: 64), "Missing image checksum")
+        } else { try require(manifest["attachments"] == nil, "Page URL retained a prior image") }
+    }
+    print("PASS: direct image URL and ordinary link capture (including House & Garden)")
+    var rejected = false
+    do {
+        _ = try runner.capture(SafariFixture(url: "https://example.com/error.jpg", title: "", selection: nil, type: "URL", responseType: "Text"), index: 0)
+    } catch { rejected = String(describing: error) == "Capture stopped" }
+    try require(rejected, "A non-image response must stop instead of saving a link")
+    print("PASS: non-image response stops capture")
+    runner.downloads = []
+    let local = try runner.capture(SafariFixture(url: "local-image", title: "", selection: nil, type: "Image"), index: 0)
+    try require((local["attachments"] as? [Object])?.count == 1 && runner.downloads.isEmpty, "Local image capture regressed")
+    print("PASS: local images retain attachments without downloading")
+    try require(workflow["WFWorkflowName"] as? String == "Óia!", "Shortcut name is stale")
+} catch {
+    failures += 1
+    print("FAIL: image URL regression: \(error)")
+}
+print("Action-graph regression checks: \(failures) failures (\(actions.count)-action workflow).")
 print("This models missing-value/control-flow semantics; it is not a native or iPhone execution test.")
 exit(failures == 0 ? 0 : 1)

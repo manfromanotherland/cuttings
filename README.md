@@ -28,7 +28,7 @@ or paste a web link, text, image, or MP4/MOV video anywhere on the board. Local 
 videos are copied into the library; a pasted link starts as a lightweight card that a later browser
 save can enrich with the cleaned article.
 
-On iPhone, use the [Save to Óia Shortcut](docs/ios-shortcut.md) from the share
+On iPhone, use the [Óia! Shortcut](docs/ios-shortcut.md) from the share
 sheet. It saves into your iCloud library's `inbox` folder; the Mac app imports
 the capture and removes the Inbox copy only after a verified save. No iOS app
 or extension is required.

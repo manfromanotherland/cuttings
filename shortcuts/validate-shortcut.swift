@@ -112,7 +112,10 @@ for (index, serialized) in actions.enumerated() {
     if identifier == "is.workflow.actions.setvalueforkey", parameters["WFDictionaryKey"] as? String == "attachments" {
         errors.append("Do not assign attachments through Set Dictionary Value: Shortcuts unwraps a singleton List into an object.")
     }
-    if identifier.contains("download") || identifier.contains("runjavascript") || identifier.contains("url.getcontents") {
+    if identifier == "is.workflow.actions.downloadurl", parameters["WFHTTPMethod"] as? String != "GET" {
+        errors.append("Image capture must use GET.")
+    }
+    if (identifier.contains("download") && identifier != "is.workflow.actions.downloadurl") || identifier.contains("runjavascript") || identifier.contains("url.getcontents") {
         errors.append("Unexpected network or script action: \(identifier)")
     }
 }

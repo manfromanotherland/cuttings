@@ -1,6 +1,6 @@
 # Save from iPhone with Shortcuts
 
-Use **Save to Óia** in the iOS share sheet to save images, videos, text, and
+Use **Óia!** in the iOS share sheet to save images, videos, text, and
 links into the `inbox` folder inside your iCloud library. You do not need an iOS
 Óia app, a browser extension, an account, or a server.
 
@@ -9,7 +9,7 @@ links into the `inbox` folder inside your iCloud library. You do not need an iOS
 1. Open Óia on your Mac. In Settings → Library, select **Open Inbox**.
    Check that this library is inside iCloud Drive and is visible in Files on your
    iPhone.
-2. Open [Save to Óia.shortcut](../shortcuts/Save%20to%20%C3%93ia.shortcut) in
+2. Open [Óia!.shortcut](../shortcuts/%C3%93ia!.shortcut) in
    Apple's Shortcuts app. Add the Shortcut and, when asked for its destination,
    choose the **inbox** folder inside that same library.
 3. If you install on your Mac, enable Shortcuts iCloud Sync on both devices. The
@@ -19,7 +19,7 @@ links into the `inbox` folder inside your iCloud library. You do not need an iOS
    action points to the right `inbox` folder, **Ask Where to Save** is off, and
    **Overwrite If File Exists** is off. Reselect the folder on the iPhone if
    Shortcuts asks for access.
-5. Open an image in Photos, tap Share, and choose **Save to Óia**. Approve
+5. Open an image in Photos, tap Share, and choose **Óia!**. Approve
    Shortcuts' first-use permission prompts. Keep the share sheet open until
    **Saved to Inbox** appears.
 
@@ -30,27 +30,36 @@ and [running shortcuts from another app](https://support.apple.com/guide/shortcu
 The folder permission is yours to grant; the distributed Shortcut contains no
 personal paths or folder bookmarks.
 
+To update an existing **Óia!**, import the new file and replace the old Shortcut.
+Confirm its final **Save File** destination still points to your library’s `inbox`.
+
 ## What is kept
 
 | Shared item | Saved content |
 |---|---|
 | Safari webpage | Page URL, page title, and selected text when Safari supplies it. With no selection, this becomes a lightweight link. |
-| URL | A lightweight link. No page or media is downloaded. |
+| Direct image URL | URLs whose path ends in a supported image extension download into a local image attachment. The shared URL is retained as the available source. |
+| Other URL | A lightweight link. No page is downloaded. |
 | Plain or rich text | A quote, or a lightweight link when the entire text is an HTTP(S) URL. Rich text is converted to plain text. |
 | Image or video | The file representation and display name supplied by the sharing app, with a checksum. |
 
 Every capture records its share time. Apps choose what they send to Shortcuts:
 an image from Photos generally has no webpage URL, and a social app may share a
 link rather than video bytes. The Shortcut does not invent a source, inspect your
-clipboard, fetch a webpage, or run JavaScript. Safari's own **Page URL**, **Name**,
+clipboard, fetch a webpage, or run JavaScript. Direct HTTP(S) image URLs ending
+in `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, or `.heif` are downloaded
+on the sharing device (including URLs with query parameters). Shortcuts may ask
+for permission to contact the image host. A failed request or non-image response
+stops capture instead of reporting a saved link. Extensionless image URLs remain
+links. Safari's own **Page URL**, **Name**,
 and **Page Selection** properties provide the available page context. Canonical
 URLs and site names are supported by the transport but are not extracted by this
 Shortcut.
 
 The type comparisons currently use Apple's English names: **Safari Web Page**,
-**URL**, **Text**, and **Rich Text**. They were validated against the installed
+**URL**, **Text**, **Rich Text**, and **Image**. They were validated against the installed
 English-language Shortcuts action registry. If your iPhone uses another language,
-check these four If comparisons against that device's Get Type output before
+check these If comparisons against that device's Get Type output before
 relying on capture. On-device share-sheet behavior is a separate manual check.
 
 ## When Óia imports
@@ -83,6 +92,8 @@ Before relying on this workflow, share one of each:
 - A Safari page with no selected text: source URL and title should be retained.
 - Selected text in Safari: check the quote and its source URL. Some share paths
   provide only plain text, in which case the source is unavailable.
+- Long-press a website image and share its direct `.jpg` URL: confirm the card
+  is an image and its local asset opens. An ordinary page URL should remain a link.
 - A photo, then a short video: open the imported local assets on the Mac.
 - Plain text containing quotes, line breaks, and emoji: check the saved text.
 - Several photos at once: confirm one archive and one card per item.
@@ -98,10 +109,11 @@ kept alongside it so the workflow can be reviewed without importing it.
 
 ```sh
 swift shortcuts/build-shortcut.swift
-swift shortcuts/validate-shortcut.swift 'shortcuts/Save to Óia.unsigned.shortcut'
+swift shortcuts/test-shortcut.swift 'shortcuts/Óia!.unsigned.shortcut'
+swift shortcuts/validate-shortcut.swift 'shortcuts/Óia!.unsigned.shortcut'
 shortcuts sign --mode anyone \
-  --input 'shortcuts/Save to Óia.unsigned.shortcut' \
-  --output 'shortcuts/Save to Óia.shortcut'
+  --input 'shortcuts/Óia!.unsigned.shortcut' \
+  --output 'shortcuts/Óia!.shortcut'
 ```
 
 The generator uses only Foundation. The developer validator uses Apple's local
@@ -117,7 +129,7 @@ uses Apple's `shortcuts sign` helper and may require access outside a restricted
 terminal sandbox. A successful signature does not replace the iPhone checks
 above.
 
-The generated workflow was also run in Mac Shortcuts with typed text, a URL,
+Before the direct-image-URL change, the generated workflow was also run in Mac Shortcuts with typed text, a URL,
 and a PNG. Two runs produced six archives with correct names and JSON types.
 The current Rust importer saved three items, recognized the other three as
 duplicates, and cleared only the successfully imported temporary Inbox copies.

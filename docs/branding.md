@@ -1,7 +1,7 @@
 # Óia naming
 
 The product name is **Óia**, pronounced approximately **OY-uh**. The browser
-extension and iOS Shortcut are named **Save to Óia**. Use **save** for the action
+extension is named **Save to Óia** and the iOS Shortcut is **Óia!**. Use **save** for the action
 and **Saved to Óia** for its confirmation.
 
 Source identifiers, packages, the repository directory, and Xcode targets use

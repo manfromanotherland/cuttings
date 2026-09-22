@@ -31,6 +31,9 @@ and versions track the app's `CFBundleShortVersionString`. See
 
 ### Changed
 
+- The iOS Shortcut is now named **Óia!**. Direct image URLs shared from Safari
+  download as local image captures instead of becoming lightweight links.
+
 - Renamed the app to **Óia** and the browser extension and iOS Shortcut to
   **Save to Óia**. Existing libraries, preferences, and browser identities are
   preserved.

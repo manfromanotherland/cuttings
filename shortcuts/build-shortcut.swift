@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Builds the reviewable, unsigned source for the Save to Óia Shortcut.
+// Builds the reviewable, unsigned source for the Óia! Shortcut.
 // Run from the repository root: swift shortcuts/build-shortcut.swift
 import Foundation
 
@@ -82,9 +82,40 @@ func endIf(_ group: String) {
     action("conditional", ["GroupingIdentifier": group, "WFControlFlowMode": 2])
 }
 
+func captureMedia(_ input: Object, sourceURL: Object? = nil) {
+    // Media and regular files keep their bytes; a safe fixed basename prevents
+    // original filenames from colliding with the transport manifest.
+    let originalFile = action("gettypeaction", ["WFInput": attachment(input), "WFFileType": "public.data"])
+    json([:], named: "Origin")
+    if let sourceURL { field("url", sourceURL, in: "Origin") }
+    field("title", action("properties.files", ["WFInput": attachment(originalFile),
+                                               "WFContentItemPropertyName": "Name"]), in: "Origin")
+    let fileExtension = action("properties.files", ["WFInput": attachment(originalFile),
+                                                    "WFContentItemPropertyName": "File Extension"])
+    let payloadName = action("gettext", ["WFTextActionText": text("payload.", fileExtension)])
+    let payload = action("setitemname", ["WFInput": attachment(originalFile),
+                                         "WFName": text(payloadName), "WFDontIncludeFileExtension": false])
+    action("appendvariable", ["WFVariableName": "Capture files", "WFInput": attachment(payload)])
+    let digest = action("hash", ["WFInput": attachment(payload), "WFHashType": "SHA256"])
+    // The filename is put into a Dictionary before JSON serialization; filenames
+    // never get interpolated into JSON source.
+    json([:], named: "Attachment")
+    field("path", payloadName, in: "Attachment")
+    field("sha256", digest, in: "Attachment")
+    // Set Dictionary Value unwraps a one-item List into its single object. Parse
+    // the array from JSON instead, then add the other fields without touching it.
+    // Attachment itself is serialized by Shortcuts, so its values remain escaped.
+    let mediaManifest = action("gettext", ["WFTextActionText": text(
+        "{\"version\":1,\"attachments\":[", variable("Attachment"), "]}")])
+    set("Manifest", action("detect.dictionary", ["WFInput": attachment(mediaManifest)]))
+    field("capture_id", variable("Capture ID"))
+    field("captured_at", variable("Captured at"))
+    field("origin", variable("Origin"))
+}
+
 let shortcutInput: Object = ["Type": "ExtensionInput"]
 let repeatItem = variable("Repeat Item")
-action("comment", ["WFCommentActionText": "Share an image, video, text or link to Save to Óia. Choose the inbox folder inside your iCloud Óia library during setup. Each item is saved as a complete archive; Óia imports it on your Mac. No network requests or accounts."])
+action("comment", ["WFCommentActionText": "Share an image, video, text or link to Óia! Choose the inbox folder inside your iCloud Óia library during setup. Each item is saved as a complete archive; Óia imports it on your Mac. Direct image links download the image; other links stay lightweight. No accounts."])
 let hasInput = beginIf(shortcutInput)
 let repeatGroup = identifier()
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 0,
@@ -118,9 +149,27 @@ field("text", selection)
 endIf(hasSelection)
 otherwise(safari)
 let url = beginIf(itemType, equals: "URL")
+// Safari's long-press image share can supply only a direct image URL.
+// Match the URL path, never a filename embedded in an ordinary page's query.
+let imageURL = action("text.match", ["text": text(repeatItem),
+    "WFMatchTextPattern": "(?i)^https?://[^/?#]+/[^?#]*\\.(?:jpe?g|png|gif|webp|heic|heif)(?:[?#].*)?$",
+    "WFMatchTextCaseSensitive": false])
+let isImageURL = beginIf(imageURL)
+let downloaded = action("downloadurl", ["WFURL": text(repeatItem), "WFHTTPMethod": "GET"])
+let downloadedType = action("getitemtype", ["WFInput": attachment(downloaded)])
+let isImage = beginIf(downloadedType, equals: "Image")
+captureMedia(downloaded, sourceURL: repeatItem)
+otherwise(isImage)
+action("alert", ["WFAlertActionTitle": "Image could not be saved",
+    "WFAlertActionMessage": "The shared image URL did not return an image. Try sharing the image file instead.",
+    "WFAlertActionCancelButtonShown": false])
+action("exit")
+endIf(isImage)
+otherwise(isImageURL)
 json([:], named: "Origin")
 field("url", repeatItem, in: "Origin")
 field("origin", variable("Origin"))
+endIf(isImageURL)
 otherwise(url)
 let plain = beginIf(itemType, equals: "Text")
 field("text", repeatItem)
@@ -129,33 +178,7 @@ let rich = beginIf(itemType, equals: "Rich Text")
 field("text", action("detect.text", ["WFInput": attachment(repeatItem)]))
 otherwise(rich)
 
-// Media and regular files keep their bytes; a safe fixed basename prevents
-// original filenames from colliding with the transport manifest.
-let originalFile = action("gettypeaction", ["WFInput": attachment(repeatItem), "WFFileType": "public.data"])
-json([:], named: "Origin")
-field("title", action("properties.files", ["WFInput": attachment(originalFile),
-                                           "WFContentItemPropertyName": "Name"]), in: "Origin")
-let fileExtension = action("properties.files", ["WFInput": attachment(originalFile),
-                                                "WFContentItemPropertyName": "File Extension"])
-let payloadName = action("gettext", ["WFTextActionText": text("payload.", fileExtension)])
-let payload = action("setitemname", ["WFInput": attachment(originalFile),
-                                     "WFName": text(payloadName), "WFDontIncludeFileExtension": false])
-action("appendvariable", ["WFVariableName": "Capture files", "WFInput": attachment(payload)])
-let digest = action("hash", ["WFInput": attachment(payload), "WFHashType": "SHA256"])
-// The filename is put into a Dictionary before JSON serialization; filenames
-// never get interpolated into JSON source.
-json([:], named: "Attachment")
-field("path", payloadName, in: "Attachment")
-field("sha256", digest, in: "Attachment")
-// Set Dictionary Value unwraps a one-item List into its single object. Parse
-// the array from JSON instead, then add the other fields without touching it.
-// Attachment itself is serialized by Shortcuts, so its values remain escaped.
-let mediaManifest = action("gettext", ["WFTextActionText": text(
-    "{\"version\":1,\"attachments\":[", variable("Attachment"), "]}")])
-set("Manifest", action("detect.dictionary", ["WFInput": attachment(mediaManifest)]))
-field("capture_id", variable("Capture ID"))
-field("captured_at", variable("Captured at"))
-field("origin", variable("Origin"))
+captureMedia(repeatItem)
 endIf(rich)
 endIf(plain)
 endIf(url)
@@ -180,13 +203,13 @@ action("notification", ["WFNotificationActionTitle": "Óia",
                          "WFNotificationActionBody": "Saved to Inbox",
                          "WFNotificationActionSound": false])
 otherwise(hasInput)
-action("alert", ["WFAlertActionTitle": "Save to Óia",
-                  "WFAlertActionMessage": "Open an image, video, text or link. Tap Share, then Save to Óia.",
+action("alert", ["WFAlertActionTitle": "Óia!",
+                  "WFAlertActionMessage": "Open an image, video, text or link. Tap Share, then choose Óia!",
                   "WFAlertActionCancelButtonShown": false])
 endIf(hasInput)
 
 let workflow: Object = [
-    "WFWorkflowName": "Save to Óia",
+    "WFWorkflowName": "Óia!",
     "WFWorkflowClientVersion": "2302.0.4",
     "WFWorkflowMinimumClientVersion": 900,
     "WFWorkflowMinimumClientVersionString": "900",
@@ -203,7 +226,7 @@ let workflow: Object = [
         "ParameterKey": "WFFolder", "Text": "Choose the inbox folder inside your iCloud Óia library."]],
     "WFWorkflowActions": actions,
 ]
-let destination = CommandLine.arguments.dropFirst().first ?? "shortcuts/Save to Óia.unsigned.shortcut"
+let destination = CommandLine.arguments.dropFirst().first ?? "shortcuts/Óia!.unsigned.shortcut"
 let bytes = try PropertyListSerialization.data(fromPropertyList: workflow, format: .xml, options: 0)
 try bytes.write(to: URL(fileURLWithPath: destination), options: .atomic)
 print("Built \(actions.count) actions: \(destination)")
