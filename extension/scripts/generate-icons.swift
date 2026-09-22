@@ -1,12 +1,36 @@
 // SPDX-License-Identifier: MIT
-// Run from the repository root after building the macOS app:
+// Run from the repository root with Icon Composer installed:
 // swift extension/scripts/generate-icons.swift
 import AppKit
 
 let source = CommandLine.arguments.dropFirst().first
-    ?? "macos/build/Build/Products/Debug/Óia.app/Contents/Resources/Oia.icns"
-guard let image = NSImage(contentsOfFile: source) else {
-    fatalError("Cannot load \(source). Build the macOS app first.")
+    ?? "macos/Sources/Oia/Oia.icon"
+let sourceURL = URL(fileURLWithPath: source)
+let temporaryExport = FileManager.default.temporaryDirectory
+    .appendingPathComponent("oia-watch-icon-\(UUID().uuidString).png")
+defer { try? FileManager.default.removeItem(at: temporaryExport) }
+
+let imageURL: URL
+if sourceURL.pathExtension == "icon" {
+    let exporter = Process()
+    exporter.executableURL = URL(fileURLWithPath:
+        "/Applications/Icon Composer.app/Contents/Executables/ictool")
+    exporter.arguments = [
+        sourceURL.path, "--export-image", "--output-file", temporaryExport.path,
+        "--platform", "watchOS", "--rendition", "Default",
+        "--width", "1024", "--height", "1024", "--scale", "1",
+    ]
+    try exporter.run()
+    exporter.waitUntilExit()
+    guard exporter.terminationStatus == 0 else {
+        fatalError("Icon Composer could not export the watchOS icon")
+    }
+    imageURL = temporaryExport
+} else {
+    imageURL = sourceURL
+}
+guard let image = NSImage(contentsOf: imageURL) else {
+    fatalError("Cannot load \(imageURL.path)")
 }
 
 for size in [16, 32, 48, 128] {
