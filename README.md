@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/icon.png" alt="Óia app icon" width="128">
+  <img src="./assets/readme-hero.png" alt="Óia app icon on a warped grid" width="800">
 </p>
 <h1 align="center">Óia</h1>
 <p align="center">
