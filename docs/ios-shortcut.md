@@ -30,8 +30,13 @@ and [running shortcuts from another app](https://support.apple.com/guide/shortcu
 The folder permission is yours to grant; the distributed Shortcut contains no
 personal paths or folder bookmarks.
 
-To update an existing **Óia!**, import the new file and replace the old Shortcut.
-Confirm its final **Save File** destination still points to your library’s `inbox`.
+For repository updates, `make shortcut-install` builds, tests, validates, and
+signs the replacement, then verifies the installed **Óia!** against its expected
+official release marker. It will not open an import while an Óia Shortcut
+already exists, because doing so would create a numbered copy. For a stale
+release, the agent removes the old canonical Shortcut and any numbered copies
+once, reruns the install, completes Apple's import UI, and leaves the final
+**Save File** destination pointing to your library’s `inbox`.
 
 ## What is kept
 
@@ -140,19 +145,51 @@ Close Óia before one test, then reopen it. The archives should remain in the
 Inbox until the import succeeds. Share an identical item again to check that it
 deduplicates and leaves no stale Inbox archive.
 
-## Rebuild the Shortcut
+## Release or update the Shortcut
 
 The signed file is the installable artifact. The unsigned XML and generator are
 kept alongside it so the workflow can be reviewed without importing it.
 
 ```sh
-swift shortcuts/build-shortcut.swift
-swift shortcuts/test-shortcut.swift 'shortcuts/Óia!.unsigned.shortcut'
-swift shortcuts/validate-shortcut.swift 'shortcuts/Óia!.unsigned.shortcut'
-shortcuts sign --mode anyone \
-  --input 'shortcuts/Óia!.unsigned.shortcut' \
-  --output 'shortcuts/Óia!.shortcut'
+make shortcut-install
 ```
+
+This builds the reviewable XML in a temporary directory, runs the regression and
+native-action validators, signs it, and publishes both artifacts only after every
+check passes. If the installed canonical release already matches, it exits
+without opening Shortcuts. If any stale **Óia!** or numbered **Óia! …** copy is
+installed, it refuses to import and prints the conflicts. The agent removes those
+copies once and reruns the command; only then does it open the signed file and
+wait for the **Add Shortcut** import. This prevents **Keep Both** and numbered
+copy churn rather than trying to clean it up after every import. The agent does
+not ask the user to inspect the editor or attest to the result.
+
+Signing is not installation. The generated workflow contains an early,
+side-effect-free version probe. Before running it, the verifier rejects every
+known unsafe release and checks the installed action count, so an older
+official workflow is never run as a probe. The current probe runs only when the
+Shortcut has no input; ordinary Share Sheet saves always have input. The
+verifier runs the installed Shortcut through Apple's background runner and
+compares its source-derived release marker with the signed candidate.
+A zero exit therefore means:
+
+1. Exactly one installed **Óia!** exists and accepts Share Sheet input.
+2. Its action count matches the candidate, so the version probe is safe to run.
+3. Its probe returns the candidate's SHA-256 release marker before any save or
+   notification action.
+
+The marker proves which official generated release is running; Apple does not
+expose the installed action graph or the configured folder bookmark for hashing.
+The agent must therefore keep or select the known library `inbox` in the import
+UI. That setup responsibility is not delegated to the user.
+
+Use `make shortcut` when only a signed distributable is needed. It deliberately
+prints that the installed behavior remains unverified. Apple exposes no supported
+silent import API, so the small import UI step remains agent-operated. The preview
+opens in the background; after verification the agent closes Shortcuts and
+restores the app that was previously in use. iCloud propagation and device-only
+rendering are separate from this Mac-side installation proof and are checked only
+when a change specifically needs on-device acceptance.
 
 The generator uses only Foundation. The developer validator uses Apple's local
 Shortcuts action registry to check action identifiers, parameter names, enum
@@ -162,10 +199,10 @@ destination import question. It also guards two native execution pitfalls:
 **Set Dictionary Value** unwraps a one-item List, so the attachments array is
 created by parsing JSON before setting the other manifest fields.
 
-The validator does not install or run the Shortcut. Signing
-uses Apple's `shortcuts sign` helper and may require access outside a restricted
-terminal sandbox. A successful signature does not replace the iPhone checks
-above.
+The validator does not install or run the Shortcut. Signing uses Apple's
+`shortcuts sign` helper and may require access outside a restricted terminal
+sandbox. A successful signature does not update an already installed Shortcut;
+the installed release-marker handshake above is the release gate.
 
 Before the direct-image-URL change, the generated workflow was also run in Mac Shortcuts with typed text, a URL,
 and a PNG. Two runs produced six archives with correct names and JSON types.

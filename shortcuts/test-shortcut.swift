@@ -32,6 +32,18 @@ func containsVariable(_ value: Any, named name: String) -> Bool {
     }
     return false
 }
+func containsOutput(_ value: Any, uuid: String) -> Bool {
+    if let object = value as? Object {
+        if object["Type"] as? String == "ActionOutput", object["OutputUUID"] as? String == uuid {
+            return true
+        }
+        return object.values.contains { containsOutput($0, uuid: uuid) }
+    }
+    if let array = value as? [Any] {
+        return array.contains { containsOutput($0, uuid: uuid) }
+    }
+    return false
+}
 
 // Evaluate the per-item capture branches. ZIP creation and saving are out of scope.
 let start = try actions.firstIndex { action in
@@ -311,6 +323,39 @@ for (name, selections) in cases {
         print("FAIL: \(name): \(error)")
     }
 }
+do {
+    try require(workflow["OiaShortcutProbeVersion"] as? Int == 2,
+                "Shortcut version probe contract is missing")
+    try require(!Set([140, 180, 220, 224, 225]).contains(actions.count),
+                "Probe-enabled releases must not reuse a known unsafe action count")
+    let fingerprint = try (workflow["OiaShortcutFingerprint"] as? String)
+        .unwrap("Missing Shortcut release fingerprint")
+    try require(fingerprint.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+                "Shortcut release fingerprint must be a lowercase SHA-256 digest")
+    let probeStart = try actions.firstIndex {
+        kind($0) == "conditional" && parameters($0)["WFCondition"] as? Int == 101
+    }.unwrap("Missing installed-version probe")
+    try require(probeStart == 1,
+                "Installed-version probe must run before every capture action")
+    try require(parameters(actions[probeStart])["WFConditionalActionString"] == nil,
+                "No-input probe must not depend on a caller-provided sentinel")
+    let probeGroup = parameters(actions[probeStart])["GroupingIdentifier"] as! String
+    let probeEnd = try actions.indices.first {
+        $0 > probeStart && kind(actions[$0]) == "conditional"
+            && parameters(actions[$0])["GroupingIdentifier"] as? String == probeGroup
+            && parameters(actions[$0])["WFControlFlowMode"] as? Int == 2
+    }.unwrap("Missing installed-version probe boundary")
+    let probe = Array(actions[probeStart...probeEnd])
+    try require(probe.map(kind) == ["conditional", "gettext", "output", "conditional"],
+                "Installed-version probe must return before any capture side effect")
+    let response = parameters(probe[1])
+    try require(response["WFTextActionText"] as? String == "oia-shortcut/v2 sha256=\(fingerprint)",
+                "Installed-version probe response does not match the release fingerprint")
+    let responseUUID = response["UUID"] as! String
+    try require(containsOutput(parameters(probe[2])["WFOutput"] as Any, uuid: responseUUID),
+                "Installed-version probe must return its fingerprint")
+    print("PASS: installed-version probe returns before capture side effects")
+} catch { failures += 1; print("FAIL: installed-version probe: \(error)") }
 do {
     for type in ["URL", "Text", "Safari Web Page"] {
         var runner = SafariGraph()

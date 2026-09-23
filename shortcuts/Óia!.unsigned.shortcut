@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>OiaShortcutFingerprint</key>
+	<string>b6e3d069cb19cd95cdf0cb27d470213225119d542998a6048002b884a43bde12</string>
+	<key>OiaShortcutProbeVersion</key>
+	<integer>2</integer>
 	<key>WFQuickActionSurfaces</key>
 	<array/>
 	<key>WFWorkflowActions</key>
@@ -23,9 +27,116 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
+				<string>0A1A0000-0000-4000-8000-000000000001</string>
+				<key>UUID</key>
+				<string>0A1A0000-0000-4000-8000-000000000002</string>
+				<key>WFCondition</key>
+				<integer>101</integer>
+				<key>WFControlFlowMode</key>
+				<integer>0</integer>
+				<key>WFInput</key>
+				<dict>
+					<key>Type</key>
+					<string>Variable</string>
+					<key>Variable</key>
+					<dict>
+						<key>Value</key>
+						<dict>
+							<key>Type</key>
+							<string>ExtensionInput</string>
+						</dict>
+						<key>WFSerializationType</key>
+						<string>WFTextTokenAttachment</string>
+					</dict>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>0A1A0000-0000-4000-8000-000000000003</string>
+				<key>WFTextActionText</key>
+				<string>oia-shortcut/v2 sha256=b6e3d069cb19cd95cdf0cb27d470213225119d542998a6048002b884a43bde12</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.output</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>0A1A0000-0000-4000-8000-000000000004</string>
+				<key>WFOutput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>OutputName</key>
+								<string>gettext</string>
+								<key>OutputUUID</key>
+								<string>0A1A0000-0000-4000-8000-000000000003</string>
+								<key>Type</key>
+								<string>ActionOutput</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>0A1A0000-0000-4000-8000-000000000001</string>
+				<key>UUID</key>
+				<string>0A1A0000-0000-4000-8000-000000000005</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000002</string>
+				<key>WFCommentActionText</key>
+				<string>Official release marker: b6e3d069cb19cd95cdf0cb27d470213225119d542998a6048002b884a43bde12</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000003</string>
+				<key>WFCommentActionText</key>
+				<string>Release verification runs only when the Shortcut has no input.</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000004</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000005</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -53,9 +164,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000004</string>
+				<string>C0771000-0000-4000-8000-000000000006</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000005</string>
+				<string>C0771000-0000-4000-8000-000000000007</string>
 				<key>WFControlFlowMode</key>
 				<integer>0</integer>
 				<key>WFInput</key>
@@ -76,7 +187,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000006</string>
+				<string>C0771000-0000-4000-8000-000000000008</string>
 				<key>WFDateActionMode</key>
 				<string>Current Date</string>
 			</dict>
@@ -87,7 +198,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000007</string>
+				<string>C0771000-0000-4000-8000-000000000009</string>
 				<key>WFDate</key>
 				<dict>
 					<key>Value</key>
@@ -99,7 +210,7 @@
 								<key>OutputName</key>
 								<string>date</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000006</string>
+								<string>C0771000-0000-4000-8000-000000000008</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -122,7 +233,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000008</string>
+				<string>C0771000-0000-4000-8000-000000000010</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -130,7 +241,7 @@
 						<key>OutputName</key>
 						<string>format.date</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000007</string>
+						<string>C0771000-0000-4000-8000-000000000009</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -147,7 +258,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000009</string>
+				<string>C0771000-0000-4000-8000-000000000011</string>
 				<key>WFRandomNumberMaximum</key>
 				<integer>999999999999</integer>
 				<key>WFRandomNumberMinimum</key>
@@ -160,7 +271,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000010</string>
+				<string>C0771000-0000-4000-8000-000000000012</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -172,7 +283,7 @@
 								<key>OutputName</key>
 								<string>format.date</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000007</string>
+								<string>C0771000-0000-4000-8000-000000000009</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -181,7 +292,7 @@
 								<key>OutputName</key>
 								<string>number.random</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000009</string>
+								<string>C0771000-0000-4000-8000-000000000011</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -207,7 +318,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000011</string>
+				<string>C0771000-0000-4000-8000-000000000013</string>
 				<key>WFHashType</key>
 				<string>SHA256</string>
 				<key>WFInput</key>
@@ -217,7 +328,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000010</string>
+						<string>C0771000-0000-4000-8000-000000000012</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -232,7 +343,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000012</string>
+				<string>C0771000-0000-4000-8000-000000000014</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -240,7 +351,7 @@
 						<key>OutputName</key>
 						<string>hash</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000011</string>
+						<string>C0771000-0000-4000-8000-000000000013</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -257,7 +368,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000013</string>
+				<string>C0771000-0000-4000-8000-000000000015</string>
 				<key>WFTextActionText</key>
 				<string>{"version":1}</string>
 			</dict>
@@ -268,7 +379,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000014</string>
+				<string>C0771000-0000-4000-8000-000000000016</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -276,7 +387,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000013</string>
+						<string>C0771000-0000-4000-8000-000000000015</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -291,7 +402,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000015</string>
+				<string>C0771000-0000-4000-8000-000000000017</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -299,7 +410,7 @@
 						<key>OutputName</key>
 						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000014</string>
+						<string>C0771000-0000-4000-8000-000000000016</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -316,7 +427,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000016</string>
+				<string>C0771000-0000-4000-8000-000000000018</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -359,7 +470,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000017</string>
+				<string>C0771000-0000-4000-8000-000000000019</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -367,7 +478,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000016</string>
+						<string>C0771000-0000-4000-8000-000000000018</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -384,7 +495,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000018</string>
+				<string>C0771000-0000-4000-8000-000000000020</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -427,7 +538,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000019</string>
+				<string>C0771000-0000-4000-8000-000000000021</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -435,7 +546,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000018</string>
+						<string>C0771000-0000-4000-8000-000000000020</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -452,7 +563,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000020</string>
+				<string>C0771000-0000-4000-8000-000000000022</string>
 				<key>WFItems</key>
 				<array/>
 			</dict>
@@ -463,7 +574,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000021</string>
+				<string>C0771000-0000-4000-8000-000000000023</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -471,7 +582,7 @@
 						<key>OutputName</key>
 						<string>list</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000020</string>
+						<string>C0771000-0000-4000-8000-000000000022</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -488,7 +599,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000022</string>
+				<string>C0771000-0000-4000-8000-000000000024</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -509,9 +620,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000023</string>
+				<string>C0771000-0000-4000-8000-000000000025</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000024</string>
+				<string>C0771000-0000-4000-8000-000000000026</string>
 				<key>WFCondition</key>
 				<integer>4</integer>
 				<key>WFConditionalActionString</key>
@@ -529,7 +640,7 @@
 							<key>OutputName</key>
 							<string>getitemtype</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000022</string>
+							<string>C0771000-0000-4000-8000-000000000024</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -545,7 +656,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000025</string>
+				<string>C0771000-0000-4000-8000-000000000027</string>
 				<key>WFTextActionText</key>
 				<string>Link saved to Inbox</string>
 			</dict>
@@ -553,42 +664,6 @@
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
 			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000026</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>gettext</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000025</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Save confirmation</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000027</string>
-				<key>WFTextActionText</key>
-				<string>{}</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.detect.dictionary</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
@@ -607,6 +682,42 @@
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
 				</dict>
+				<key>WFVariableName</key>
+				<string>Save confirmation</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000029</string>
+				<key>WFTextActionText</key>
+				<string>{}</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.detect.dictionary</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000030</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>gettext</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000029</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
 			</dict>
 		</dict>
 		<dict>
@@ -615,7 +726,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000029</string>
+				<string>C0771000-0000-4000-8000-000000000031</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -623,7 +734,7 @@
 						<key>OutputName</key>
 						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000028</string>
+						<string>C0771000-0000-4000-8000-000000000030</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -640,7 +751,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000030</string>
+				<string>C0771000-0000-4000-8000-000000000032</string>
 				<key>WFContentItemPropertyName</key>
 				<string>Page URL</string>
 				<key>WFInput</key>
@@ -663,7 +774,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000031</string>
+				<string>C0771000-0000-4000-8000-000000000033</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -689,7 +800,7 @@
 								<key>OutputName</key>
 								<string>properties.safariwebpage</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000030</string>
+								<string>C0771000-0000-4000-8000-000000000032</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -708,7 +819,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000032</string>
+				<string>C0771000-0000-4000-8000-000000000034</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -716,7 +827,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000031</string>
+						<string>C0771000-0000-4000-8000-000000000033</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -733,7 +844,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000033</string>
+				<string>C0771000-0000-4000-8000-000000000035</string>
 				<key>WFContentItemPropertyName</key>
 				<string>Name</string>
 				<key>WFInput</key>
@@ -756,7 +867,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000034</string>
+				<string>C0771000-0000-4000-8000-000000000036</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -782,7 +893,7 @@
 								<key>OutputName</key>
 								<string>properties.safariwebpage</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000033</string>
+								<string>C0771000-0000-4000-8000-000000000035</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -801,7 +912,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000035</string>
+				<string>C0771000-0000-4000-8000-000000000037</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -809,7 +920,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000034</string>
+						<string>C0771000-0000-4000-8000-000000000036</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -826,7 +937,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000036</string>
+				<string>C0771000-0000-4000-8000-000000000038</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -869,7 +980,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000037</string>
+				<string>C0771000-0000-4000-8000-000000000039</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -877,7 +988,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000036</string>
+						<string>C0771000-0000-4000-8000-000000000038</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -894,7 +1005,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000038</string>
+				<string>C0771000-0000-4000-8000-000000000040</string>
 				<key>WFContentItemPropertyName</key>
 				<string>Page Selection</string>
 				<key>WFInput</key>
@@ -917,9 +1028,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000039</string>
+				<string>C0771000-0000-4000-8000-000000000041</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000040</string>
+				<string>C0771000-0000-4000-8000-000000000042</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -935,7 +1046,7 @@
 							<key>OutputName</key>
 							<string>properties.safariwebpage</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000038</string>
+							<string>C0771000-0000-4000-8000-000000000040</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -951,7 +1062,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000041</string>
+				<string>C0771000-0000-4000-8000-000000000043</string>
 				<key>WFTextActionText</key>
 				<string>Quote saved to Inbox</string>
 			</dict>
@@ -962,7 +1073,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000042</string>
+				<string>C0771000-0000-4000-8000-000000000044</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -970,7 +1081,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000041</string>
+						<string>C0771000-0000-4000-8000-000000000043</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -987,7 +1098,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000043</string>
+				<string>C0771000-0000-4000-8000-000000000045</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -1013,7 +1124,7 @@
 								<key>OutputName</key>
 								<string>properties.safariwebpage</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000038</string>
+								<string>C0771000-0000-4000-8000-000000000040</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -1032,7 +1143,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000044</string>
+				<string>C0771000-0000-4000-8000-000000000046</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -1040,7 +1151,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000043</string>
+						<string>C0771000-0000-4000-8000-000000000045</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -1057,9 +1168,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000039</string>
+				<string>C0771000-0000-4000-8000-000000000041</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000045</string>
+				<string>C0771000-0000-4000-8000-000000000047</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -1070,7 +1181,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000046</string>
+				<string>C0771000-0000-4000-8000-000000000048</string>
 				<key>WFMatchTextCaseSensitive</key>
 				<false/>
 				<key>WFMatchTextPattern</key>
@@ -1086,7 +1197,7 @@
 								<key>OutputName</key>
 								<string>properties.safariwebpage</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000030</string>
+								<string>C0771000-0000-4000-8000-000000000032</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -1105,9 +1216,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000047</string>
+				<string>C0771000-0000-4000-8000-000000000049</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000048</string>
+				<string>C0771000-0000-4000-8000-000000000050</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -1123,7 +1234,7 @@
 							<key>OutputName</key>
 							<string>text.match</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000046</string>
+							<string>C0771000-0000-4000-8000-000000000048</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -1139,7 +1250,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000049</string>
+				<string>C0771000-0000-4000-8000-000000000051</string>
 				<key>WFTextActionText</key>
 				<string>{"version":2}</string>
 			</dict>
@@ -1150,7 +1261,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000050</string>
+				<string>C0771000-0000-4000-8000-000000000052</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -1158,80 +1269,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000049</string>
+						<string>C0771000-0000-4000-8000-000000000051</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000051</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000050</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Manifest</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000052</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Manifest</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>capture_id</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>Type</key>
-								<string>Variable</string>
-								<key>VariableName</key>
-								<string>Capture ID</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -1247,7 +1290,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000052</string>
 						<key>Type</key>
@@ -1280,7 +1323,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>captured_at</string>
+				<string>capture_id</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -1292,7 +1335,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Captured at</string>
+								<string>Capture ID</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -1348,7 +1391,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>instagram_url</string>
+				<string>captured_at</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -1357,12 +1400,10 @@
 						<dict>
 							<key>{0, 1}</key>
 							<dict>
-								<key>OutputName</key>
-								<string>properties.safariwebpage</string>
-								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000030</string>
 								<key>Type</key>
-								<string>ActionOutput</string>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>Captured at</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -1400,13 +1441,47 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000058</string>
-				<key>WFTextActionText</key>
-				<string>Instagram media queued in Inbox</string>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Manifest</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>instagram_url</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>OutputName</key>
+								<string>properties.safariwebpage</string>
+								<key>OutputUUID</key>
+								<string>C0771000-0000-4000-8000-000000000032</string>
+								<key>Type</key>
+								<string>ActionOutput</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
 			</dict>
 		</dict>
 		<dict>
@@ -1421,9 +1496,45 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>gettext</string>
+						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000058</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Manifest</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000060</string>
+				<key>WFTextActionText</key>
+				<string>Instagram media queued in Inbox</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.setvariable</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000061</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>gettext</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000060</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -1440,36 +1551,23 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000047</string>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000060</string>
-				<key>WFControlFlowMode</key>
-				<integer>1</integer>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.conditional</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000047</string>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000061</string>
-				<key>WFControlFlowMode</key>
-				<integer>2</integer>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.conditional</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000039</string>
+				<string>C0771000-0000-4000-8000-000000000049</string>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000062</string>
 				<key>WFControlFlowMode</key>
+				<integer>1</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000049</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000063</string>
+				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
 		</dict>
@@ -1479,9 +1577,22 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000023</string>
+				<string>C0771000-0000-4000-8000-000000000041</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000063</string>
+				<string>C0771000-0000-4000-8000-000000000064</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000025</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000065</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -1492,9 +1603,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000064</string>
+				<string>C0771000-0000-4000-8000-000000000066</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000065</string>
+				<string>C0771000-0000-4000-8000-000000000067</string>
 				<key>WFCondition</key>
 				<integer>4</integer>
 				<key>WFConditionalActionString</key>
@@ -1512,7 +1623,7 @@
 							<key>OutputName</key>
 							<string>getitemtype</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000022</string>
+							<string>C0771000-0000-4000-8000-000000000024</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -1528,7 +1639,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000066</string>
+				<string>C0771000-0000-4000-8000-000000000068</string>
 				<key>WFTextActionText</key>
 				<string>Link saved to Inbox</string>
 			</dict>
@@ -1539,7 +1650,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000067</string>
+				<string>C0771000-0000-4000-8000-000000000069</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -1547,7 +1658,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000066</string>
+						<string>C0771000-0000-4000-8000-000000000068</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -1564,7 +1675,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000068</string>
+				<string>C0771000-0000-4000-8000-000000000070</string>
 				<key>WFMatchTextCaseSensitive</key>
 				<false/>
 				<key>WFMatchTextPattern</key>
@@ -1597,9 +1708,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000069</string>
+				<string>C0771000-0000-4000-8000-000000000071</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000070</string>
+				<string>C0771000-0000-4000-8000-000000000072</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -1615,7 +1726,7 @@
 							<key>OutputName</key>
 							<string>text.match</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000068</string>
+							<string>C0771000-0000-4000-8000-000000000070</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -1631,7 +1742,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000071</string>
+				<string>C0771000-0000-4000-8000-000000000073</string>
 				<key>WFTextActionText</key>
 				<string>{"version":2}</string>
 			</dict>
@@ -1642,7 +1753,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000072</string>
+				<string>C0771000-0000-4000-8000-000000000074</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -1650,80 +1761,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000071</string>
+						<string>C0771000-0000-4000-8000-000000000073</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000073</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000072</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Manifest</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000074</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Manifest</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>capture_id</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>Type</key>
-								<string>Variable</string>
-								<key>VariableName</key>
-								<string>Capture ID</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -1739,7 +1782,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000074</string>
 						<key>Type</key>
@@ -1772,7 +1815,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>captured_at</string>
+				<string>capture_id</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -1784,7 +1827,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Captured at</string>
+								<string>Capture ID</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -1840,7 +1883,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>instagram_url</string>
+				<string>captured_at</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -1852,7 +1895,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Repeat Item</string>
+								<string>Captured at</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -1890,13 +1933,45 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000080</string>
-				<key>WFTextActionText</key>
-				<string>Instagram media queued in Inbox</string>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Manifest</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>instagram_url</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>Repeat Item</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
 			</dict>
 		</dict>
 		<dict>
@@ -1911,9 +1986,45 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>gettext</string>
+						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000080</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Manifest</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000082</string>
+				<key>WFTextActionText</key>
+				<string>Instagram media queued in Inbox</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.setvariable</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000083</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>gettext</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000082</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -1930,9 +2041,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000069</string>
+				<string>C0771000-0000-4000-8000-000000000071</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000082</string>
+				<string>C0771000-0000-4000-8000-000000000084</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -1943,7 +2054,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000083</string>
+				<string>C0771000-0000-4000-8000-000000000085</string>
 				<key>WFMatchTextCaseSensitive</key>
 				<false/>
 				<key>WFMatchTextPattern</key>
@@ -1976,9 +2087,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000084</string>
+				<string>C0771000-0000-4000-8000-000000000086</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000085</string>
+				<string>C0771000-0000-4000-8000-000000000087</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -1994,7 +2105,7 @@
 							<key>OutputName</key>
 							<string>text.match</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000083</string>
+							<string>C0771000-0000-4000-8000-000000000085</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -2010,7 +2121,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000086</string>
+				<string>C0771000-0000-4000-8000-000000000088</string>
 				<key>WFHTTPMethod</key>
 				<string>GET</string>
 				<key>WFURL</key>
@@ -2041,7 +2152,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000087</string>
+				<string>C0771000-0000-4000-8000-000000000089</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2049,7 +2160,7 @@
 						<key>OutputName</key>
 						<string>downloadurl</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000086</string>
+						<string>C0771000-0000-4000-8000-000000000088</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2064,9 +2175,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000088</string>
+				<string>C0771000-0000-4000-8000-000000000090</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000089</string>
+				<string>C0771000-0000-4000-8000-000000000091</string>
 				<key>WFCondition</key>
 				<integer>4</integer>
 				<key>WFConditionalActionString</key>
@@ -2084,7 +2195,7 @@
 							<key>OutputName</key>
 							<string>getitemtype</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000087</string>
+							<string>C0771000-0000-4000-8000-000000000089</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -2100,7 +2211,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000090</string>
+				<string>C0771000-0000-4000-8000-000000000092</string>
 				<key>WFFileType</key>
 				<string>public.data</string>
 				<key>WFInput</key>
@@ -2110,7 +2221,7 @@
 						<key>OutputName</key>
 						<string>downloadurl</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000086</string>
+						<string>C0771000-0000-4000-8000-000000000088</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2125,7 +2236,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000091</string>
+				<string>C0771000-0000-4000-8000-000000000093</string>
 				<key>WFTextActionText</key>
 				<string>{}</string>
 			</dict>
@@ -2136,7 +2247,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000092</string>
+				<string>C0771000-0000-4000-8000-000000000094</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2144,7 +2255,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000091</string>
+						<string>C0771000-0000-4000-8000-000000000093</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2159,7 +2270,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000093</string>
+				<string>C0771000-0000-4000-8000-000000000095</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2167,7 +2278,7 @@
 						<key>OutputName</key>
 						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000092</string>
+						<string>C0771000-0000-4000-8000-000000000094</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2184,7 +2295,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000094</string>
+				<string>C0771000-0000-4000-8000-000000000096</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -2227,7 +2338,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000095</string>
+				<string>C0771000-0000-4000-8000-000000000097</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2235,7 +2346,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000094</string>
+						<string>C0771000-0000-4000-8000-000000000096</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2252,7 +2363,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000096</string>
+				<string>C0771000-0000-4000-8000-000000000098</string>
 				<key>WFContentItemPropertyName</key>
 				<string>Name</string>
 				<key>WFInput</key>
@@ -2262,7 +2373,7 @@
 						<key>OutputName</key>
 						<string>gettypeaction</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000090</string>
+						<string>C0771000-0000-4000-8000-000000000092</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2277,7 +2388,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000097</string>
+				<string>C0771000-0000-4000-8000-000000000099</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -2303,7 +2414,7 @@
 								<key>OutputName</key>
 								<string>properties.files</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000096</string>
+								<string>C0771000-0000-4000-8000-000000000098</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -2322,7 +2433,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000098</string>
+				<string>C0771000-0000-4000-8000-000000000100</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2330,7 +2441,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000097</string>
+						<string>C0771000-0000-4000-8000-000000000099</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2347,7 +2458,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000099</string>
+				<string>C0771000-0000-4000-8000-000000000101</string>
 				<key>WFContentItemPropertyName</key>
 				<string>File Extension</string>
 				<key>WFInput</key>
@@ -2357,7 +2468,7 @@
 						<key>OutputName</key>
 						<string>gettypeaction</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000090</string>
+						<string>C0771000-0000-4000-8000-000000000092</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2372,7 +2483,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000100</string>
+				<string>C0771000-0000-4000-8000-000000000102</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -2384,7 +2495,7 @@
 								<key>OutputName</key>
 								<string>properties.files</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000099</string>
+								<string>C0771000-0000-4000-8000-000000000101</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -2403,7 +2514,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000101</string>
+				<string>C0771000-0000-4000-8000-000000000103</string>
 				<key>WFDontIncludeFileExtension</key>
 				<false/>
 				<key>WFInput</key>
@@ -2413,7 +2524,7 @@
 						<key>OutputName</key>
 						<string>gettypeaction</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000090</string>
+						<string>C0771000-0000-4000-8000-000000000092</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2431,7 +2542,7 @@
 								<key>OutputName</key>
 								<string>gettext</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000100</string>
+								<string>C0771000-0000-4000-8000-000000000102</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -2450,7 +2561,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000102</string>
+				<string>C0771000-0000-4000-8000-000000000104</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2458,7 +2569,7 @@
 						<key>OutputName</key>
 						<string>setitemname</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000101</string>
+						<string>C0771000-0000-4000-8000-000000000103</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2475,7 +2586,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000103</string>
+				<string>C0771000-0000-4000-8000-000000000105</string>
 				<key>WFHashType</key>
 				<string>SHA256</string>
 				<key>WFInput</key>
@@ -2485,7 +2596,7 @@
 						<key>OutputName</key>
 						<string>setitemname</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000101</string>
+						<string>C0771000-0000-4000-8000-000000000103</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -2500,7 +2611,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000104</string>
+				<string>C0771000-0000-4000-8000-000000000106</string>
 				<key>WFTextActionText</key>
 				<string>{}</string>
 			</dict>
@@ -2511,7 +2622,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000105</string>
+				<string>C0771000-0000-4000-8000-000000000107</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2519,82 +2630,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000104</string>
+						<string>C0771000-0000-4000-8000-000000000106</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000106</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000105</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Attachment</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000107</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Attachment</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>path</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>OutputName</key>
-								<string>gettext</string>
-								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000100</string>
-								<key>Type</key>
-								<string>ActionOutput</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -2610,7 +2651,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000107</string>
 						<key>Type</key>
@@ -2643,7 +2684,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>sha256</string>
+				<string>path</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -2653,9 +2694,9 @@
 							<key>{0, 1}</key>
 							<dict>
 								<key>OutputName</key>
-								<string>hash</string>
+								<string>gettext</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000103</string>
+								<string>C0771000-0000-4000-8000-000000000102</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -2695,11 +2736,81 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000111</string>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Attachment</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>sha256</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>OutputName</key>
+								<string>hash</string>
+								<key>OutputUUID</key>
+								<string>C0771000-0000-4000-8000-000000000105</string>
+								<key>Type</key>
+								<string>ActionOutput</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.setvariable</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000112</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>setvalueforkey</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000111</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Attachment</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000113</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -2728,7 +2839,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000112</string>
+				<string>C0771000-0000-4000-8000-000000000114</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -2736,80 +2847,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000111</string>
+						<string>C0771000-0000-4000-8000-000000000113</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000113</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000112</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Manifest</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000114</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Manifest</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>capture_id</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>Type</key>
-								<string>Variable</string>
-								<key>VariableName</key>
-								<string>Capture ID</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -2825,7 +2868,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000114</string>
 						<key>Type</key>
@@ -2858,7 +2901,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>captured_at</string>
+				<string>capture_id</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -2870,7 +2913,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Captured at</string>
+								<string>Capture ID</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -2926,7 +2969,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>origin</string>
+				<string>captured_at</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -2938,7 +2981,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Origin</string>
+								<string>Captured at</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -2976,13 +3019,45 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000120</string>
-				<key>WFTextActionText</key>
-				<string>Image saved to Inbox</string>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Manifest</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>origin</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>Origin</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
 			</dict>
 		</dict>
 		<dict>
@@ -2997,9 +3072,45 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>gettext</string>
+						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000120</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Manifest</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000122</string>
+				<key>WFTextActionText</key>
+				<string>Image saved to Inbox</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.setvariable</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000123</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>gettext</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000122</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3016,9 +3127,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000088</string>
+				<string>C0771000-0000-4000-8000-000000000090</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000122</string>
+				<string>C0771000-0000-4000-8000-000000000124</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -3029,7 +3140,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000123</string>
+				<string>C0771000-0000-4000-8000-000000000125</string>
 				<key>WFAlertActionCancelButtonShown</key>
 				<false/>
 				<key>WFAlertActionMessage</key>
@@ -3044,7 +3155,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000124</string>
+				<string>C0771000-0000-4000-8000-000000000126</string>
 			</dict>
 		</dict>
 		<dict>
@@ -3053,9 +3164,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000088</string>
+				<string>C0771000-0000-4000-8000-000000000090</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000125</string>
+				<string>C0771000-0000-4000-8000-000000000127</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -3066,9 +3177,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000084</string>
+				<string>C0771000-0000-4000-8000-000000000086</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000126</string>
+				<string>C0771000-0000-4000-8000-000000000128</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -3079,7 +3190,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000127</string>
+				<string>C0771000-0000-4000-8000-000000000129</string>
 				<key>WFTextActionText</key>
 				<string>{}</string>
 			</dict>
@@ -3090,7 +3201,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000128</string>
+				<string>C0771000-0000-4000-8000-000000000130</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3098,7 +3209,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000127</string>
+						<string>C0771000-0000-4000-8000-000000000129</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3113,7 +3224,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000129</string>
+				<string>C0771000-0000-4000-8000-000000000131</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3121,7 +3232,7 @@
 						<key>OutputName</key>
 						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000128</string>
+						<string>C0771000-0000-4000-8000-000000000130</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3138,7 +3249,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000130</string>
+				<string>C0771000-0000-4000-8000-000000000132</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -3181,7 +3292,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000131</string>
+				<string>C0771000-0000-4000-8000-000000000133</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3189,7 +3300,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000130</string>
+						<string>C0771000-0000-4000-8000-000000000132</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3206,7 +3317,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000132</string>
+				<string>C0771000-0000-4000-8000-000000000134</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -3249,7 +3360,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000133</string>
+				<string>C0771000-0000-4000-8000-000000000135</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3257,7 +3368,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000132</string>
+						<string>C0771000-0000-4000-8000-000000000134</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3274,35 +3385,35 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000084</string>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000134</string>
-				<key>WFControlFlowMode</key>
-				<integer>2</integer>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.conditional</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000069</string>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000135</string>
-				<key>WFControlFlowMode</key>
-				<integer>2</integer>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.conditional</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000064</string>
+				<string>C0771000-0000-4000-8000-000000000086</string>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000136</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000071</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000137</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000066</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000138</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -3313,9 +3424,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000137</string>
+				<string>C0771000-0000-4000-8000-000000000139</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000138</string>
+				<string>C0771000-0000-4000-8000-000000000140</string>
 				<key>WFCondition</key>
 				<integer>4</integer>
 				<key>WFConditionalActionString</key>
@@ -3333,7 +3444,7 @@
 							<key>OutputName</key>
 							<string>getitemtype</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000022</string>
+							<string>C0771000-0000-4000-8000-000000000024</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -3349,7 +3460,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000139</string>
+				<string>C0771000-0000-4000-8000-000000000141</string>
 				<key>WFMatchTextCaseSensitive</key>
 				<false/>
 				<key>WFMatchTextPattern</key>
@@ -3382,9 +3493,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000140</string>
+				<string>C0771000-0000-4000-8000-000000000142</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000141</string>
+				<string>C0771000-0000-4000-8000-000000000143</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -3400,7 +3511,7 @@
 							<key>OutputName</key>
 							<string>text.match</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000139</string>
+							<string>C0771000-0000-4000-8000-000000000141</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -3416,7 +3527,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000142</string>
+				<string>C0771000-0000-4000-8000-000000000144</string>
 				<key>WFTextActionText</key>
 				<string>{"version":2}</string>
 			</dict>
@@ -3427,7 +3538,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000143</string>
+				<string>C0771000-0000-4000-8000-000000000145</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3435,80 +3546,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000142</string>
+						<string>C0771000-0000-4000-8000-000000000144</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000144</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000143</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Manifest</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000145</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Manifest</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>capture_id</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>Type</key>
-								<string>Variable</string>
-								<key>VariableName</key>
-								<string>Capture ID</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -3524,7 +3567,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000145</string>
 						<key>Type</key>
@@ -3557,7 +3600,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>captured_at</string>
+				<string>capture_id</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -3569,7 +3612,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Captured at</string>
+								<string>Capture ID</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -3625,7 +3668,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>instagram_url</string>
+				<string>captured_at</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -3637,7 +3680,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Repeat Item</string>
+								<string>Captured at</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -3675,13 +3718,45 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000151</string>
-				<key>WFTextActionText</key>
-				<string>Instagram media queued in Inbox</string>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Manifest</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>instagram_url</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>Repeat Item</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
 			</dict>
 		</dict>
 		<dict>
@@ -3696,9 +3771,45 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>gettext</string>
+						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000151</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Manifest</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000153</string>
+				<key>WFTextActionText</key>
+				<string>Instagram media queued in Inbox</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.setvariable</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000154</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>gettext</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000153</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3715,9 +3826,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000140</string>
+				<string>C0771000-0000-4000-8000-000000000142</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000153</string>
+				<string>C0771000-0000-4000-8000-000000000155</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -3728,7 +3839,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000154</string>
+				<string>C0771000-0000-4000-8000-000000000156</string>
 				<key>WFMatchTextCaseSensitive</key>
 				<false/>
 				<key>WFMatchTextPattern</key>
@@ -3761,9 +3872,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000155</string>
+				<string>C0771000-0000-4000-8000-000000000157</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000156</string>
+				<string>C0771000-0000-4000-8000-000000000158</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -3779,7 +3890,7 @@
 							<key>OutputName</key>
 							<string>text.match</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000154</string>
+							<string>C0771000-0000-4000-8000-000000000156</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -3795,7 +3906,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000157</string>
+				<string>C0771000-0000-4000-8000-000000000159</string>
 				<key>WFTextActionText</key>
 				<string>Link saved to Inbox</string>
 			</dict>
@@ -3806,7 +3917,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000158</string>
+				<string>C0771000-0000-4000-8000-000000000160</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3814,7 +3925,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000157</string>
+						<string>C0771000-0000-4000-8000-000000000159</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3831,9 +3942,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000155</string>
+				<string>C0771000-0000-4000-8000-000000000157</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000159</string>
+				<string>C0771000-0000-4000-8000-000000000161</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -3844,7 +3955,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000160</string>
+				<string>C0771000-0000-4000-8000-000000000162</string>
 				<key>WFTextActionText</key>
 				<string>Quote saved to Inbox</string>
 			</dict>
@@ -3855,7 +3966,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000161</string>
+				<string>C0771000-0000-4000-8000-000000000163</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3863,7 +3974,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000160</string>
+						<string>C0771000-0000-4000-8000-000000000162</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3880,9 +3991,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000155</string>
+				<string>C0771000-0000-4000-8000-000000000157</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000162</string>
+				<string>C0771000-0000-4000-8000-000000000164</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -3893,7 +4004,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000163</string>
+				<string>C0771000-0000-4000-8000-000000000165</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -3936,7 +4047,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000164</string>
+				<string>C0771000-0000-4000-8000-000000000166</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -3944,7 +4055,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000163</string>
+						<string>C0771000-0000-4000-8000-000000000165</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -3961,9 +4072,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000140</string>
+				<string>C0771000-0000-4000-8000-000000000142</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000165</string>
+				<string>C0771000-0000-4000-8000-000000000167</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -3974,9 +4085,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000137</string>
+				<string>C0771000-0000-4000-8000-000000000139</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000166</string>
+				<string>C0771000-0000-4000-8000-000000000168</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -3987,9 +4098,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000167</string>
+				<string>C0771000-0000-4000-8000-000000000169</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000168</string>
+				<string>C0771000-0000-4000-8000-000000000170</string>
 				<key>WFCondition</key>
 				<integer>4</integer>
 				<key>WFConditionalActionString</key>
@@ -4007,7 +4118,7 @@
 							<key>OutputName</key>
 							<string>getitemtype</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000022</string>
+							<string>C0771000-0000-4000-8000-000000000024</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -4023,7 +4134,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000169</string>
+				<string>C0771000-0000-4000-8000-000000000171</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4044,7 +4155,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000170</string>
+				<string>C0771000-0000-4000-8000-000000000172</string>
 				<key>WFMatchTextCaseSensitive</key>
 				<false/>
 				<key>WFMatchTextPattern</key>
@@ -4060,7 +4171,7 @@
 								<key>OutputName</key>
 								<string>detect.text</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000169</string>
+								<string>C0771000-0000-4000-8000-000000000171</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4079,9 +4190,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000171</string>
+				<string>C0771000-0000-4000-8000-000000000173</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000172</string>
+				<string>C0771000-0000-4000-8000-000000000174</string>
 				<key>WFCondition</key>
 				<integer>100</integer>
 				<key>WFControlFlowMode</key>
@@ -4097,7 +4208,7 @@
 							<key>OutputName</key>
 							<string>text.match</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000170</string>
+							<string>C0771000-0000-4000-8000-000000000172</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -4113,7 +4224,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000173</string>
+				<string>C0771000-0000-4000-8000-000000000175</string>
 				<key>WFTextActionText</key>
 				<string>Link saved to Inbox</string>
 			</dict>
@@ -4124,7 +4235,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000174</string>
+				<string>C0771000-0000-4000-8000-000000000176</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4132,7 +4243,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000173</string>
+						<string>C0771000-0000-4000-8000-000000000175</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4149,9 +4260,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000171</string>
+				<string>C0771000-0000-4000-8000-000000000173</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000175</string>
+				<string>C0771000-0000-4000-8000-000000000177</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -4162,7 +4273,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000176</string>
+				<string>C0771000-0000-4000-8000-000000000178</string>
 				<key>WFTextActionText</key>
 				<string>Quote saved to Inbox</string>
 			</dict>
@@ -4173,7 +4284,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000177</string>
+				<string>C0771000-0000-4000-8000-000000000179</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4181,7 +4292,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000176</string>
+						<string>C0771000-0000-4000-8000-000000000178</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4198,9 +4309,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000171</string>
+				<string>C0771000-0000-4000-8000-000000000173</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000178</string>
+				<string>C0771000-0000-4000-8000-000000000180</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -4211,7 +4322,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000179</string>
+				<string>C0771000-0000-4000-8000-000000000181</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -4237,7 +4348,7 @@
 								<key>OutputName</key>
 								<string>detect.text</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000169</string>
+								<string>C0771000-0000-4000-8000-000000000171</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4256,7 +4367,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000180</string>
+				<string>C0771000-0000-4000-8000-000000000182</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4264,7 +4375,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000179</string>
+						<string>C0771000-0000-4000-8000-000000000181</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4281,9 +4392,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000167</string>
+				<string>C0771000-0000-4000-8000-000000000169</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000181</string>
+				<string>C0771000-0000-4000-8000-000000000183</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -4294,7 +4405,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000182</string>
+				<string>C0771000-0000-4000-8000-000000000184</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -4306,7 +4417,7 @@
 								<key>OutputName</key>
 								<string>getitemtype</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000022</string>
+								<string>C0771000-0000-4000-8000-000000000024</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4325,7 +4436,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000183</string>
+				<string>C0771000-0000-4000-8000-000000000185</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4333,7 +4444,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000182</string>
+						<string>C0771000-0000-4000-8000-000000000184</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4350,7 +4461,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000184</string>
+				<string>C0771000-0000-4000-8000-000000000186</string>
 				<key>WFFileType</key>
 				<string>public.data</string>
 				<key>WFInput</key>
@@ -4373,7 +4484,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000185</string>
+				<string>C0771000-0000-4000-8000-000000000187</string>
 				<key>WFTextActionText</key>
 				<string>{}</string>
 			</dict>
@@ -4384,7 +4495,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000186</string>
+				<string>C0771000-0000-4000-8000-000000000188</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4392,7 +4503,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000185</string>
+						<string>C0771000-0000-4000-8000-000000000187</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4407,7 +4518,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000187</string>
+				<string>C0771000-0000-4000-8000-000000000189</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4415,7 +4526,7 @@
 						<key>OutputName</key>
 						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000186</string>
+						<string>C0771000-0000-4000-8000-000000000188</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4432,7 +4543,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000188</string>
+				<string>C0771000-0000-4000-8000-000000000190</string>
 				<key>WFContentItemPropertyName</key>
 				<string>Name</string>
 				<key>WFInput</key>
@@ -4442,7 +4553,7 @@
 						<key>OutputName</key>
 						<string>gettypeaction</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000184</string>
+						<string>C0771000-0000-4000-8000-000000000186</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4457,7 +4568,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000189</string>
+				<string>C0771000-0000-4000-8000-000000000191</string>
 				<key>WFDictionary</key>
 				<dict>
 					<key>Value</key>
@@ -4483,7 +4594,7 @@
 								<key>OutputName</key>
 								<string>properties.files</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000188</string>
+								<string>C0771000-0000-4000-8000-000000000190</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4502,7 +4613,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000190</string>
+				<string>C0771000-0000-4000-8000-000000000192</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4510,7 +4621,7 @@
 						<key>OutputName</key>
 						<string>setvalueforkey</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000189</string>
+						<string>C0771000-0000-4000-8000-000000000191</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4527,7 +4638,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000191</string>
+				<string>C0771000-0000-4000-8000-000000000193</string>
 				<key>WFContentItemPropertyName</key>
 				<string>File Extension</string>
 				<key>WFInput</key>
@@ -4537,7 +4648,7 @@
 						<key>OutputName</key>
 						<string>gettypeaction</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000184</string>
+						<string>C0771000-0000-4000-8000-000000000186</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4552,7 +4663,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000192</string>
+				<string>C0771000-0000-4000-8000-000000000194</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -4564,7 +4675,7 @@
 								<key>OutputName</key>
 								<string>properties.files</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000191</string>
+								<string>C0771000-0000-4000-8000-000000000193</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4583,7 +4694,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000193</string>
+				<string>C0771000-0000-4000-8000-000000000195</string>
 				<key>WFDontIncludeFileExtension</key>
 				<false/>
 				<key>WFInput</key>
@@ -4593,7 +4704,7 @@
 						<key>OutputName</key>
 						<string>gettypeaction</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000184</string>
+						<string>C0771000-0000-4000-8000-000000000186</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4611,7 +4722,7 @@
 								<key>OutputName</key>
 								<string>gettext</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000192</string>
+								<string>C0771000-0000-4000-8000-000000000194</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4630,7 +4741,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000194</string>
+				<string>C0771000-0000-4000-8000-000000000196</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4638,7 +4749,7 @@
 						<key>OutputName</key>
 						<string>setitemname</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000193</string>
+						<string>C0771000-0000-4000-8000-000000000195</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4655,7 +4766,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000195</string>
+				<string>C0771000-0000-4000-8000-000000000197</string>
 				<key>WFHashType</key>
 				<string>SHA256</string>
 				<key>WFInput</key>
@@ -4665,7 +4776,7 @@
 						<key>OutputName</key>
 						<string>setitemname</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000193</string>
+						<string>C0771000-0000-4000-8000-000000000195</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -4680,7 +4791,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000196</string>
+				<string>C0771000-0000-4000-8000-000000000198</string>
 				<key>WFTextActionText</key>
 				<string>{}</string>
 			</dict>
@@ -4691,7 +4802,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000197</string>
+				<string>C0771000-0000-4000-8000-000000000199</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4699,82 +4810,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000196</string>
+						<string>C0771000-0000-4000-8000-000000000198</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000198</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000197</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Attachment</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000199</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Attachment</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>path</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>OutputName</key>
-								<string>gettext</string>
-								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000192</string>
-								<key>Type</key>
-								<string>ActionOutput</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -4790,7 +4831,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000199</string>
 						<key>Type</key>
@@ -4823,7 +4864,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>sha256</string>
+				<string>path</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -4833,9 +4874,9 @@
 							<key>{0, 1}</key>
 							<dict>
 								<key>OutputName</key>
-								<string>hash</string>
+								<string>gettext</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000195</string>
+								<string>C0771000-0000-4000-8000-000000000194</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -4875,11 +4916,81 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.gettext</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000203</string>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Attachment</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>sha256</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>OutputName</key>
+								<string>hash</string>
+								<key>OutputUUID</key>
+								<string>C0771000-0000-4000-8000-000000000197</string>
+								<key>Type</key>
+								<string>ActionOutput</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.setvariable</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000204</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>setvalueforkey</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000203</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Attachment</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.gettext</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000205</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -4908,7 +5019,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000204</string>
+				<string>C0771000-0000-4000-8000-000000000206</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -4916,80 +5027,12 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000203</string>
+						<string>C0771000-0000-4000-8000-000000000205</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenAttachment</string>
-				</dict>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvariable</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000205</string>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>OutputName</key>
-						<string>detect.dictionary</string>
-						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000204</string>
-						<key>Type</key>
-						<string>ActionOutput</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFVariableName</key>
-				<string>Manifest</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.setvalueforkey</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000206</string>
-				<key>WFDictionary</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>Manifest</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
-				</dict>
-				<key>WFDictionaryKey</key>
-				<string>capture_id</string>
-				<key>WFDictionaryValue</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>attachmentsByRange</key>
-						<dict>
-							<key>{0, 1}</key>
-							<dict>
-								<key>Type</key>
-								<string>Variable</string>
-								<key>VariableName</key>
-								<string>Capture ID</string>
-							</dict>
-						</dict>
-						<key>string</key>
-						<string>￼</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
 				</dict>
 			</dict>
 		</dict>
@@ -5005,7 +5048,7 @@
 					<key>Value</key>
 					<dict>
 						<key>OutputName</key>
-						<string>setvalueforkey</string>
+						<string>detect.dictionary</string>
 						<key>OutputUUID</key>
 						<string>C0771000-0000-4000-8000-000000000206</string>
 						<key>Type</key>
@@ -5038,7 +5081,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>captured_at</string>
+				<string>capture_id</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -5050,7 +5093,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Captured at</string>
+								<string>Capture ID</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -5106,7 +5149,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>WFDictionaryKey</key>
-				<string>origin</string>
+				<string>captured_at</string>
 				<key>WFDictionaryValue</key>
 				<dict>
 					<key>Value</key>
@@ -5118,7 +5161,7 @@
 								<key>Type</key>
 								<string>Variable</string>
 								<key>VariableName</key>
-								<string>Origin</string>
+								<string>Captured at</string>
 							</dict>
 						</dict>
 						<key>string</key>
@@ -5156,28 +5199,70 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.conditional</string>
+			<string>is.workflow.actions.setvalueforkey</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
-				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000167</string>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000212</string>
-				<key>WFControlFlowMode</key>
-				<integer>2</integer>
+				<key>WFDictionary</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>Type</key>
+						<string>Variable</string>
+						<key>VariableName</key>
+						<string>Manifest</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFDictionaryKey</key>
+				<string>origin</string>
+				<key>WFDictionaryValue</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>Origin</string>
+							</dict>
+						</dict>
+						<key>string</key>
+						<string>￼</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
 			</dict>
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.conditional</string>
+			<string>is.workflow.actions.setvariable</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
-				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000137</string>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000213</string>
-				<key>WFControlFlowMode</key>
-				<integer>2</integer>
+				<key>WFInput</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>setvalueforkey</string>
+						<key>OutputUUID</key>
+						<string>C0771000-0000-4000-8000-000000000212</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+				<key>WFVariableName</key>
+				<string>Manifest</string>
 			</dict>
 		</dict>
 		<dict>
@@ -5186,7 +5271,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000064</string>
+				<string>C0771000-0000-4000-8000-000000000169</string>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000214</string>
 				<key>WFControlFlowMode</key>
@@ -5199,9 +5284,35 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000023</string>
+				<string>C0771000-0000-4000-8000-000000000139</string>
 				<key>UUID</key>
 				<string>C0771000-0000-4000-8000-000000000215</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000066</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000216</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>C0771000-0000-4000-8000-000000000025</string>
+				<key>UUID</key>
+				<string>C0771000-0000-4000-8000-000000000217</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -5212,7 +5323,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000216</string>
+				<string>C0771000-0000-4000-8000-000000000218</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -5241,7 +5352,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000217</string>
+				<string>C0771000-0000-4000-8000-000000000219</string>
 				<key>WFDontIncludeFileExtension</key>
 				<false/>
 				<key>WFInput</key>
@@ -5251,7 +5362,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000216</string>
+						<string>C0771000-0000-4000-8000-000000000218</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -5268,7 +5379,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000218</string>
+				<string>C0771000-0000-4000-8000-000000000220</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -5276,7 +5387,7 @@
 						<key>OutputName</key>
 						<string>setitemname</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000217</string>
+						<string>C0771000-0000-4000-8000-000000000219</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -5293,7 +5404,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000219</string>
+				<string>C0771000-0000-4000-8000-000000000221</string>
 				<key>WFArchiveFormat</key>
 				<string>zip</string>
 				<key>WFInput</key>
@@ -5316,7 +5427,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000220</string>
+				<string>C0771000-0000-4000-8000-000000000222</string>
 				<key>WFDontIncludeFileExtension</key>
 				<false/>
 				<key>WFInput</key>
@@ -5326,7 +5437,7 @@
 						<key>OutputName</key>
 						<string>makezip</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000219</string>
+						<string>C0771000-0000-4000-8000-000000000221</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -5361,7 +5472,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000221</string>
+				<string>C0771000-0000-4000-8000-000000000223</string>
 				<key>WFAskWhereToSave</key>
 				<false/>
 				<key>WFInput</key>
@@ -5371,7 +5482,7 @@
 						<key>OutputName</key>
 						<string>setitemname</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000220</string>
+						<string>C0771000-0000-4000-8000-000000000222</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -5388,9 +5499,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000004</string>
+				<string>C0771000-0000-4000-8000-000000000006</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000222</string>
+				<string>C0771000-0000-4000-8000-000000000224</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -5411,7 +5522,7 @@
 					<string>WFTextTokenAttachment</string>
 				</dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000223</string>
+				<string>C0771000-0000-4000-8000-000000000225</string>
 				<key>WFCountType</key>
 				<string>Items</string>
 			</dict>
@@ -5422,7 +5533,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000224</string>
+				<string>C0771000-0000-4000-8000-000000000226</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -5434,7 +5545,7 @@
 								<key>OutputName</key>
 								<string>count</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000223</string>
+								<string>C0771000-0000-4000-8000-000000000225</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -5453,9 +5564,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000225</string>
+				<string>C0771000-0000-4000-8000-000000000227</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000226</string>
+				<string>C0771000-0000-4000-8000-000000000228</string>
 				<key>WFCondition</key>
 				<integer>4</integer>
 				<key>WFConditionalActionString</key>
@@ -5473,7 +5584,7 @@
 							<key>OutputName</key>
 							<string>gettext</string>
 							<key>OutputUUID</key>
-							<string>C0771000-0000-4000-8000-000000000224</string>
+							<string>C0771000-0000-4000-8000-000000000226</string>
 							<key>Type</key>
 							<string>ActionOutput</string>
 						</dict>
@@ -5489,7 +5600,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000227</string>
+				<string>C0771000-0000-4000-8000-000000000229</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -5512,9 +5623,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000225</string>
+				<string>C0771000-0000-4000-8000-000000000227</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000228</string>
+				<string>C0771000-0000-4000-8000-000000000230</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -5525,7 +5636,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000229</string>
+				<string>C0771000-0000-4000-8000-000000000231</string>
 				<key>WFTextActionText</key>
 				<dict>
 					<key>Value</key>
@@ -5537,7 +5648,7 @@
 								<key>OutputName</key>
 								<string>count</string>
 								<key>OutputUUID</key>
-								<string>C0771000-0000-4000-8000-000000000223</string>
+								<string>C0771000-0000-4000-8000-000000000225</string>
 								<key>Type</key>
 								<string>ActionOutput</string>
 							</dict>
@@ -5556,7 +5667,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000230</string>
+				<string>C0771000-0000-4000-8000-000000000232</string>
 				<key>WFInput</key>
 				<dict>
 					<key>Value</key>
@@ -5564,7 +5675,7 @@
 						<key>OutputName</key>
 						<string>gettext</string>
 						<key>OutputUUID</key>
-						<string>C0771000-0000-4000-8000-000000000229</string>
+						<string>C0771000-0000-4000-8000-000000000231</string>
 						<key>Type</key>
 						<string>ActionOutput</string>
 					</dict>
@@ -5581,9 +5692,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000225</string>
+				<string>C0771000-0000-4000-8000-000000000227</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000231</string>
+				<string>C0771000-0000-4000-8000-000000000233</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -5594,7 +5705,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000232</string>
+				<string>C0771000-0000-4000-8000-000000000234</string>
 				<key>WFNotificationActionSound</key>
 				<false/>
 				<key>WFNotificationActionTitle</key>
@@ -5625,9 +5736,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000002</string>
+				<string>C0771000-0000-4000-8000-000000000004</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000233</string>
+				<string>C0771000-0000-4000-8000-000000000235</string>
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 			</dict>
@@ -5638,7 +5749,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000234</string>
+				<string>C0771000-0000-4000-8000-000000000236</string>
 				<key>WFAlertActionCancelButtonShown</key>
 				<false/>
 				<key>WFAlertActionMessage</key>
@@ -5653,9 +5764,9 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>GroupingIdentifier</key>
-				<string>C0771000-0000-4000-8000-000000000002</string>
+				<string>C0771000-0000-4000-8000-000000000004</string>
 				<key>UUID</key>
-				<string>C0771000-0000-4000-8000-000000000235</string>
+				<string>C0771000-0000-4000-8000-000000000237</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>
@@ -5678,7 +5789,7 @@
 	<array>
 		<dict>
 			<key>ActionIndex</key>
-			<integer>206</integer>
+			<integer>212</integer>
 			<key>Category</key>
 			<string>Parameter</string>
 			<key>ParameterKey</key>

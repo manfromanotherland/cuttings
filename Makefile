@@ -10,6 +10,8 @@
 #   make check           # lint + test (fast pre-push gate)
 #   make ci              # lint + test + build
 #   make status          # git status for the monorepo
+#   make shortcut         # build, test, validate, and sign the iOS Shortcut
+#   make shortcut-install # release and verify the installed Shortcut marker
 #   make COMPONENT=core test  # narrow a quality target to one component
 #
 # COMPONENT is optional for quality targets; leave it empty to hit all components.
@@ -18,10 +20,11 @@ RUN       := scripts/components.sh
 COMPONENT ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help status push pull fetch fmt lint test build check ci
+.PHONY: help status push pull fetch fmt lint test build check ci shortcut shortcut-install
 
 help:   ## Show this runner's help and per-component command mapping
 	@$(RUN) help
+	@printf '\nShortcut release:\n  make shortcut          build, test, validate, and sign\n  make shortcut-install  release and verify the installed marker\n'
 
 status: ## git status -sb for the monorepo
 	@$(RUN) status
@@ -52,3 +55,9 @@ check:  ## lint + test (fast pre-push gate)
 
 ci:     ## lint + test + build (full)
 	@$(RUN) ci $(COMPONENT)
+
+shortcut: ## Build, test, validate, and sign the installable iOS Shortcut
+	@shortcuts/release-shortcut.sh
+
+shortcut-install: ## Release and verify the installed Shortcut marker
+	@shortcuts/release-shortcut.sh --install

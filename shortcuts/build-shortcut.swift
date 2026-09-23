@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Builds the reviewable, unsigned source for the Óia! Shortcut.
-// Run from the repository root: swift shortcuts/build-shortcut.swift
+// Run through `make shortcut`; the release script supplies the source fingerprint.
 import Foundation
 
 typealias Object = [String: Any]
+guard CommandLine.arguments.count == 3 else {
+    fatalError("Usage: swift shortcuts/build-shortcut.swift <destination> <source-sha256>")
+}
+let destination = CommandLine.arguments[1]
+let sourceFingerprint = CommandLine.arguments[2]
+guard sourceFingerprint.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+    fatalError("The Shortcut source fingerprint must be a lowercase SHA-256 digest.")
+}
 var actions: [Object] = []
 var sequence = 0
 
@@ -36,8 +44,8 @@ func text(_ parts: Any...) -> Object {
 }
 
 @discardableResult
-func action(_ name: String, _ parameters: Object = [:]) -> Object {
-    let uuid = identifier()
+func action(_ name: String, _ parameters: Object = [:], uuid explicitUUID: String? = nil) -> Object {
+    let uuid = explicitUUID ?? identifier()
     var parameters = parameters
     parameters["UUID"] = uuid
     actions.append(["WFWorkflowActionIdentifier": "is.workflow.actions.\(name)",
@@ -148,6 +156,17 @@ func captureMedia(_ input: Object, sourceURL: Object? = nil) {
 let shortcutInput: Object = ["Type": "ExtensionInput"]
 let repeatItem = variable("Repeat Item")
 action("comment", ["WFCommentActionText": "Share an image, video, text or link to Óia! Choose the inbox folder inside your iCloud Óia library during setup. Each item is saved as a complete archive; Óia imports it on your Mac. Direct image links download the image. Instagram posts queue the selected slide for download on your Mac; other links stay lightweight. No accounts."])
+let probeGroup = "0A1A0000-0000-4000-8000-000000000001"
+action("conditional", ["GroupingIdentifier": probeGroup, "WFControlFlowMode": 0,
+    "WFCondition": 101, "WFInput": ["Type": "Variable", "Variable": attachment(shortcutInput)]],
+       uuid: "0A1A0000-0000-4000-8000-000000000002")
+let probeResponse = action("gettext", ["WFTextActionText": "oia-shortcut/v2 sha256=\(sourceFingerprint)"],
+                           uuid: "0A1A0000-0000-4000-8000-000000000003")
+action("output", ["WFOutput": text(probeResponse)], uuid: "0A1A0000-0000-4000-8000-000000000004")
+action("conditional", ["GroupingIdentifier": probeGroup, "WFControlFlowMode": 2],
+       uuid: "0A1A0000-0000-4000-8000-000000000005")
+action("comment", ["WFCommentActionText": "Official release marker: \(sourceFingerprint)"])
+action("comment", ["WFCommentActionText": "Release verification runs only when the Shortcut has no input."])
 let hasInput = beginIf(shortcutInput)
 let repeatGroup = identifier()
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 0,
@@ -265,6 +284,8 @@ endIf(hasInput)
 
 let workflow: Object = [
     "WFWorkflowName": "Óia!",
+    "OiaShortcutProbeVersion": 2,
+    "OiaShortcutFingerprint": sourceFingerprint,
     "WFWorkflowClientVersion": "2302.0.4",
     "WFWorkflowMinimumClientVersion": 900,
     "WFWorkflowMinimumClientVersionString": "900",
@@ -281,7 +302,6 @@ let workflow: Object = [
         "ParameterKey": "WFFolder", "Text": "Choose the inbox folder inside your iCloud Óia library."]],
     "WFWorkflowActions": actions,
 ]
-let destination = CommandLine.arguments.dropFirst().first ?? "shortcuts/Óia!.unsigned.shortcut"
 let bytes = try PropertyListSerialization.data(fromPropertyList: workflow, format: .xml, options: 0)
 try bytes.write(to: URL(fileURLWithPath: destination), options: .atomic)
 print("Built \(actions.count) actions: \(destination)")
