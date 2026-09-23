@@ -98,7 +98,7 @@ pub fn render_reading(reading: &Reading) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Metadata;
+    use crate::types::{Metadata, SourceAttachment, SourceProfile};
     use proptest::prelude::*;
 
     fn sample_metadata(read: bool, archived: bool, favorite: bool) -> Metadata {
@@ -116,6 +116,7 @@ mod tests {
             title: "Test Article".to_string(),
             author: Some("Jane Doe".to_string()),
             site: Some("example.com".to_string()),
+            source_profile: None,
             saved_at: "2026-06-13T15:00:00Z".to_string(),
             read_at: read.then(|| "2026-06-13T16:00:00.000Z".to_string()),
             archived,
@@ -160,6 +161,54 @@ mod tests {
         assert!(rendered.contains("preview_asset: assets/poster.jpg"));
         assert!(rendered.contains("favicon_asset: assets/favicon.ico"));
         assert_eq!(parse_reading(&rendered).unwrap().metadata, meta);
+    }
+
+    #[test]
+    fn round_trip_source_profile_preserves_open_strings_and_attachment_order() {
+        let mut meta = sample_metadata(false, false, false);
+        meta.source_profile = Some(SourceProfile {
+            version: 1,
+            source_type: "future-social-kind".into(),
+            provider: "future-provider".into(),
+            source_id: "2102505743278829840".into(),
+            author_handle: "@benspringwater".into(),
+            published_at: Some("2026-09-22T18:42:00.000Z".into()),
+            avatar_asset: Some("assets/avatar.jpg".into()),
+            attachments: vec![
+                SourceAttachment {
+                    kind: "future-image-kind".into(),
+                    asset: "assets/first.jpg".into(),
+                    poster_asset: None,
+                    content_type: Some("image/jpeg".into()),
+                    width: Some(1200),
+                    height: Some(800),
+                    alt: Some("First image".into()),
+                },
+                SourceAttachment {
+                    kind: "future-video-kind".into(),
+                    asset: "assets/second.mp4".into(),
+                    poster_asset: Some("assets/second-poster.jpg".into()),
+                    content_type: Some("video/mp4".into()),
+                    width: Some(1920),
+                    height: Some(1080),
+                    alt: None,
+                },
+            ],
+        });
+        let reading = Reading {
+            metadata: meta.clone(),
+            body: "Post body.\n".into(),
+        };
+
+        let rendered = render_reading(&reading).unwrap();
+        let parsed = parse_reading(&rendered).unwrap();
+
+        assert_eq!(parsed.metadata, meta);
+        assert!(rendered.contains("source_type: future-social-kind"));
+        assert!(rendered.contains("provider: future-provider"));
+        let attachments = &parsed.metadata.source_profile.unwrap().attachments;
+        assert_eq!(attachments[0].asset, "assets/first.jpg");
+        assert_eq!(attachments[1].asset, "assets/second.mp4");
     }
 
     #[test]

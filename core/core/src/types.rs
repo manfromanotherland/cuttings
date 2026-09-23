@@ -35,6 +35,46 @@ impl ReadingKind {
     }
 }
 
+/// Durable, provider-neutral metadata for a saved source item.
+///
+/// Provider and kind discriminators deliberately remain strings. A newer
+/// resolver can therefore write values an older core does not recognise and
+/// still have them survive frontmatter parsing and indexing unchanged.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceProfile {
+    pub version: u32,
+    pub source_type: String,
+    pub provider: String,
+    pub source_id: String,
+    pub author_handle: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_asset: Option<String>,
+    /// Source order is presentation order and must be retained on round trips.
+    #[serde(default)]
+    pub attachments: Vec<SourceAttachment>,
+}
+
+/// One locally persisted attachment belonging to a [`SourceProfile`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceAttachment {
+    /// Open discriminator such as `image` or `video`.
+    pub kind: String,
+    /// Reading-relative local path in `assets/`.
+    pub asset: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster_asset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+}
+
 /// All YAML frontmatter fields for a saved reading.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Metadata {
@@ -67,6 +107,9 @@ pub struct Metadata {
     pub author: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub site: Option<String>,
+    /// Provider-neutral source metadata for special links such as social posts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_profile: Option<SourceProfile>,
     pub saved_at: String,
     /// UTC ISO-8601 timestamp (millisecond precision, `Z` suffix — same format
     /// as `saved_at`) of the most recent time the reading was marked read.

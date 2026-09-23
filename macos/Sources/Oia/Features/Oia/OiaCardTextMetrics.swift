@@ -41,6 +41,7 @@ final class OiaCardTextMetrics {
     static let quoteFont = makeQuoteFont(ofSize: 24)
     static let quoteMarkFont = makeQuoteFont(ofSize: 64)
 
+    static let socialPostFont = NSFont.preferredFont(forTextStyle: .body)
     static let sourceFont = NSFont.preferredFont(forTextStyle: .caption2)
     static let articleFooterPadding: CGFloat = 16
     static let articleFooterSpacing: CGFloat = 8
@@ -52,9 +53,28 @@ final class OiaCardTextMetrics {
     static let quoteMarkSpacing: CGFloat = 12
     static let quoteLineSpacing: CGFloat = 5
     static let quoteLineLimit = 12
+    static let socialPostPadding: CGFloat = 16
+    static let socialPostSpacing: CGFloat = 12
+    static let socialPostHeaderHeight = max(
+        34,
+        ceil(
+            NSFont.preferredFont(forTextStyle: .callout).ascender
+                - NSFont.preferredFont(forTextStyle: .callout).descender
+                + NSFont.preferredFont(forTextStyle: .callout).leading
+        )
+            + 1
+            + ceil(
+                NSFont.preferredFont(forTextStyle: .caption1).ascender
+                    - NSFont.preferredFont(forTextStyle: .caption1).descender
+                    + NSFont.preferredFont(forTextStyle: .caption1).leading
+            )
+    )
+    static let socialPostLineSpacing: CGFloat = 3
+    static let socialPostLineLimit = 10
 
     private var articleFooterHeights = WidthScopedHeightCache<String>()
     private var quoteHeights = WidthScopedHeightCache<String>()
+    private var socialPostHeights = WidthScopedHeightCache<SocialPostHeightKey>()
 
     func articleFooterHeight(for title: String, width: CGFloat) -> CGFloat {
         let textWidth = max(1, width - Self.articleFooterPadding * 2)
@@ -83,6 +103,34 @@ final class OiaCardTextMetrics {
                 + Self.quoteMarkHeight * 2
                 + Self.quoteMarkSpacing * 2
                 + measured
+        }
+    }
+
+    func socialPostCardHeight(
+        for text: String,
+        width: CGFloat,
+        attachmentAspectRatio: CGFloat?
+    ) -> CGFloat {
+        let contentWidth = max(1, width - Self.socialPostPadding * 2)
+        let halfPointWidth = Int((contentWidth * 2).rounded())
+        let key = SocialPostHeightKey(
+            text: text,
+            attachmentAspectRatio: attachmentAspectRatio
+        )
+        return socialPostHeights.value(for: key, width: halfPointWidth) {
+            let measured = Self.measuredSocialPostHeight(
+                text,
+                width: CGFloat(halfPointWidth) / 2
+            )
+            let attachmentHeight = attachmentAspectRatio.map { ratio in
+                contentWidth / max(0.01, ratio)
+            } ?? 0
+            let spacingCount: CGFloat = attachmentAspectRatio == nil ? 1 : 2
+            return Self.socialPostPadding * 2
+                + Self.socialPostHeaderHeight
+                + Self.socialPostSpacing * spacingCount
+                + measured
+                + attachmentHeight
         }
     }
 
@@ -134,6 +182,22 @@ final class OiaCardTextMetrics {
         return min(maximumHeight, max(articleTitleLineHeight, ceil(bounds.height)))
     }
 
+    private static func measuredSocialPostHeight(_ text: String, width: CGFloat) -> CGFloat {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = socialPostLineSpacing
+        let bounds = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesFontLeading, .usesLineFragmentOrigin],
+            attributes: [
+                .font: socialPostFont,
+                .paragraphStyle: paragraphStyle
+            ]
+        )
+        let maximumHeight = CGFloat(socialPostLineLimit) * socialPostLineHeight
+            + CGFloat(socialPostLineLimit - 1) * socialPostLineSpacing
+        return min(maximumHeight, max(socialPostLineHeight, ceil(bounds.height)))
+    }
+
     private static let articleTitleLineLimit = 3
     private static let articleTitleLineHeight = ceil(
         articleTitleFont.ascender - articleTitleFont.descender + articleTitleFont.leading
@@ -144,4 +208,12 @@ final class OiaCardTextMetrics {
     private static let sourceLineHeight = ceil(
         sourceFont.ascender - sourceFont.descender + sourceFont.leading
     )
+    private static let socialPostLineHeight = ceil(
+        socialPostFont.ascender - socialPostFont.descender + socialPostFont.leading
+    )
+
+    private struct SocialPostHeightKey: Hashable {
+        let text: String
+        let attachmentAspectRatio: CGFloat?
+    }
 }

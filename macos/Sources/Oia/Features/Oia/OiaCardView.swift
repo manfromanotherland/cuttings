@@ -28,6 +28,7 @@ struct OiaCardView: View {
         .modifier(CardViewportVisibilityModifier(
             isEnabled: row.previewAsset != nil
                 || row.localVideoAssetReference != nil
+                || row.hasLocalSocialPreview
                 || row.faviconAsset != nil,
             viewportSize: viewportSize,
             isVisible: $isInViewport
@@ -128,7 +129,17 @@ struct OiaCardView: View {
 
     @ViewBuilder
     private func articleCard(in size: CGSize) -> some View {
-        if row.previewAsset != nil {
+        if let profile = row.socialPostProfile {
+            SocialPostCard(
+                row: row,
+                profile: profile,
+                libraryURL: appState.libraryURL,
+                cardSize: size,
+                displayScale: displayScale,
+                isVisible: isInViewport,
+                scrollState: scrollState
+            )
+        } else if row.previewAsset != nil {
             previewArticleCard(in: size)
         } else {
             textArticleCard
@@ -307,7 +318,24 @@ private extension OiaCardView {
     }
 
     private var accessibilityLabel: String {
-        [row.kind.singularLabel, row.displayTitle, row.displaySite]
+        if let profile = row.socialPostProfile {
+            var parts = [
+                "Social post",
+                row.socialPostAuthor,
+                profile.displayHandle,
+                row.socialPostText,
+                profile.displayProvider
+            ]
+            .compactMap(\.self)
+            if let attachment = profile.primaryAttachment {
+                parts.append(
+                    attachment.alt
+                        ?? (attachment.mediaKind == .video ? "Attached video" : "Attached image")
+                )
+            }
+            return parts.joined(separator: ", ")
+        }
+        return [row.kind.singularLabel, row.displayTitle, row.displaySite]
             .compactMap(\.self)
             .joined(separator: ", ")
     }

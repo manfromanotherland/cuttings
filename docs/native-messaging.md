@@ -90,9 +90,12 @@ additional metadata and never replaces that origin.
 | `favicon_url` | string | — | Captured page favicon URL to retain as the local `favicon_asset` |
 
 The extension fetches each article image or clicked image itself — from the browser's
-cache where possible — so the host performs **no** network requests. An image the extension couldn't
-capture is simply omitted from `images`; its URL stays in Markdown and the reader shows a labelled
-placeholder. Ordinary save messages never contain video bytes; every current browser video uses
+cache where possible — so the ordinary capture writer never re-fetches it. An image the extension
+couldn't capture is simply omitted from `images`; its URL stays in Markdown and the reader shows a
+labelled placeholder. A strictly recognized article URL is first offered to the separate Rust source
+adapter. If that adapter cannot retrieve or validate a complete source capture, a full `save` request
+falls back to the Markdown and image bytes the extension already captured; storage failures still
+fail the request. Ordinary save messages never contain video bytes; every current browser video uses
 the streaming import below and is successful only after its local movie asset is committed.
 
 For articles, the extension also inspects Open Graph/Twitter metadata and the browser-selected or
@@ -107,9 +110,13 @@ can coexist from one origin page.
 
 ## Save link request (extension → host)
 
-`save_link` stores a lightweight link: page metadata and local preview/favicon assets are retained,
-but no cleaned article body is claimed. The core constructs the link body and marks the reading
-`lightweight: true`, so a later full article capture upgrades the same URL-derived reading.
+`save_link` first passes the URL through the shared Rust URL-save facade. A recognized public source
+is resolved into a complete local article; an unrecognized URL stores a lightweight link: page
+metadata and local preview/favicon assets are retained, but no cleaned article body is claimed. The
+core constructs that link body and marks the reading `lightweight: true`, so a later full article
+capture upgrades the same URL-derived reading. Unlike a full `save`, `save_link` has no cleaned body
+to fall back to: failure to retrieve or validate a recognized source returns `source_unavailable`
+and does not write a misleading lightweight card.
 
 ```json
 {
@@ -293,6 +300,7 @@ staging file. A later upload on a new or recovered connection starts again at se
 |------|---------|
 | `library_not_configured` | No library folder set; user must open the app |
 | `duplicate` | A save, including a completed streamed-video import, found a card with the same deterministic identity |
+| `source_unavailable` | A recognized URL-only source could not be retrieved or validated; no lightweight fallback was written |
 | `io_error` | Failed to write to the library folder |
 | `invalid_request` | Malformed or missing required fields |
 
@@ -310,9 +318,10 @@ Asks whether a URL is already in the library — used to reflect saved state in 
 }
 ```
 
-The host looks up the article identity for that normalized page URL. A full article or lightweight
-link counts as saved; saving only an image, video, screenshot, or quote from the page does not make
-the article icon appear saved.
+The host looks up the article identity for that normalized page URL. For a recognized source it also
+matches provider aliases by the stable `source_profile` provider/source id. A full article or
+lightweight link counts as saved; saving only an image, video, screenshot, or quote from the page
+does not make the article icon appear saved.
 
 ```json
 {
@@ -334,7 +343,8 @@ otherwise — including when no library is configured (a `check` never errors on
   metadata for articles, images, videos, and quotes. Version `3` added lightweight browser-link
   saves plus explicit local social-preview and favicon asset roles. Version `4` adds acknowledged,
   bounded streaming imports for browser videos. Optional `metadata.theme_color` is an additive
-  version-4 field; senders and receivers may omit it.
+  version-4 field; senders and receivers may omit it. Provider-aware URL resolution is a host-side
+  save behavior and does not change the wire shape.
 - The extension and host must both support the same version; a mismatch should surface an error.
 - Version bumps follow the same lockstep rule as the library format: update both components in one
   monorepo commit.

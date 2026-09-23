@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use oia_core::{find_by_url, LibraryRoot};
+use oia_core::{find_saved_url, LibraryRoot};
 
 use crate::protocol::{CheckRequest, SaveResponse, PROTOCOL_VERSION};
 use crate::save::find_library_path;
@@ -23,6 +23,6 @@ pub fn handle(req: CheckRequest) -> anyhow::Result<SaveResponse> {
     // is a per-device cache the host can't reliably reach; the `articles/` tree is
     // the only source of truth.
     let library = LibraryRoot::new(&library_path)?;
-    let id = find_by_url(&library, &req.url)?;
+    let id = find_saved_url(&library, &req.url)?;
     Ok(SaveResponse::check(id.is_some(), id))
 }

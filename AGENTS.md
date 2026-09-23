@@ -51,8 +51,9 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 - **Save from the browser** — browser extension. Capture a cleaned article, right-clicked image or
   video, or selected-text quote and save it locally with its origin.
 - **Save in the app** — macOS client. Drop or paste an HTTP(S) link, plain text, or image anywhere
-  on the board. Text and image bytes are stored locally; a link is explicitly lightweight until a
-  later browser capture upgrades the same URL-derived reading.
+  on the board. Text and image bytes are stored locally; a recognized public source is resolved by
+  the Rust URL-save facade, while any other link stays lightweight until a later browser capture
+  upgrades the same URL-derived reading.
 - **Visual card board** — native app. Browse articles, images, videos, and quotes together in one
   full-width masonry layout with kind and tag filters.
 - **Search** — native app. Full-text search over readings (title, content, tags) via SQLite
@@ -96,7 +97,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   `assets/` folder (`articles/<prefix>/<id>/assets/`) with relative `assets/<file>` links, so saved
   readings stay readable offline and survive the source going away. The
   extension fetches each image (reusing the browser's cache) and sends the bytes; the host writes
-  them and never makes network requests of its own.
+  them without re-fetching ordinary article assets. Strictly recognized URL-only sources use the
+  separate Rust source-adapter path below.
 - **Standalone media and quotes are first-class saves.** Articles retain their URL-derived id.
   Image/video ids derive from kind + origin page + media identity; quote ids derive from origin
   page + selected Markdown. This lets several cards coexist from one page while exact re-saves
@@ -107,8 +109,8 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   source uses native-messaging protocol v4 with acknowledged chunks of at most 256 KiB decoded
   bytes. The core caps the complete video at 1 GiB, hashes it into a local `cuttings-asset:` file,
   and removes incomplete staging on abort, disconnect, or error. A poster-only capture is never a
-  successful video save, ordinary save messages never contain video bytes, and the host never
-  fetches media from the network.
+  successful video save, and ordinary save messages never contain video bytes. This browser-video
+  path does not fetch media in the host; recognized source adapters are a separate bounded path.
 - **The macOS home is a search-first, sidebar-free masonry board.** Articles still use the
   existing native Markdown reader in the card detail overlay; no WebView is introduced.
 - **The organizing model is Tags**, not manual Lists, favorites, read/unread queues, ratings, or an
@@ -117,10 +119,10 @@ These are load-bearing. Most architectural questions resolve by appealing to one
   current macOS product.
 - **UI preferences** (theme, reader font/size/width/line height) are per-device app
   preferences — not stored in the library and not synced.
-- **Paste/drop URL saves are deliberately lightweight.** The app never pretends a URL alone is a
-  captured article and does no hidden network fetch. It writes a marked link card at the normal
-  URL-derived id; a later full browser capture upgrades that card in place while preserving the
-  user's state. See [DESIGN.md](./DESIGN.md).
+- **URL-only saves share one Rust facade.** Strictly recognized public sources may use bounded,
+  provider-specific retrieval to become complete local articles. Every other URL stays a marked
+  lightweight link at the normal URL-derived id; a later full browser capture upgrades that card
+  in place while preserving the user's state. See [DESIGN.md](./DESIGN.md).
 - **Name:** the product name is **Óia** and the internal slug is **oia**. Use **Óia** in product copy and **Oia/oia** in source, package, and build names.
   Keep existing bundle, native-messaging, storage, and library-format identifiers stable; see
   [docs/branding.md](./docs/branding.md).

@@ -20,6 +20,11 @@ final class ReadingRowMapperTests: XCTestCase {
             previewAsset: "assets/poster.jpg",
             faviconAsset: "assets/favicon.ico",
             themeColor: "#123456",
+            sourceProfileJson: """
+            {"version":1,"source_type":"social_post","provider":"x",\
+            "source_id":"1890000000000000000","author_handle":"@ada",\
+            "attachments":[]}
+            """,
             dominantColor: FfiWeightedColor(red: 0.1, green: 0.2, blue: 0.3, weight: 0.6),
             mediaAspectRatio: 16.0 / 9.0,
             canonicalUrl: "https://example.com/article?canonical",
@@ -61,6 +66,10 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertEqual(row.previewAsset, ffi.previewAsset)
         XCTAssertEqual(row.faviconAsset, ffi.faviconAsset)
         XCTAssertEqual(row.themeColor, ffi.themeColor)
+        XCTAssertEqual(row.sourceProfile?.sourceType, .socialPost)
+        XCTAssertEqual(row.sourceProfile?.provider, "x")
+        XCTAssertEqual(row.sourceProfile?.sourceID, "1890000000000000000")
+        XCTAssertEqual(row.sourceProfile?.displayHandle, "@ada")
         XCTAssertEqual(row.dominantColor?.red, ffi.dominantColor?.red)
         XCTAssertEqual(row.dominantColor?.green, ffi.dominantColor?.green)
         XCTAssertEqual(row.dominantColor?.blue, ffi.dominantColor?.blue)
@@ -76,6 +85,7 @@ final class ReadingRowMapperTests: XCTestCase {
         ffi.previewAsset = nil
         ffi.faviconAsset = nil
         ffi.themeColor = nil
+        ffi.sourceProfileJson = nil
         ffi.dominantColor = nil
         ffi.mediaAspectRatio = nil
         ffi.author = nil
@@ -96,6 +106,7 @@ final class ReadingRowMapperTests: XCTestCase {
         XCTAssertNil(row.previewAsset)
         XCTAssertNil(row.faviconAsset)
         XCTAssertNil(row.themeColor)
+        XCTAssertNil(row.sourceProfile)
         XCTAssertNil(row.dominantColor)
         XCTAssertNil(row.mediaAspectRatio)
         XCTAssertTrue(row.tags.isEmpty)
@@ -116,6 +127,9 @@ final class ReadingRowMapperTests: XCTestCase {
         var mediaRatioChanged = base
         mediaRatioChanged.mediaAspectRatio = 4.0 / 3.0
         XCTAssertNotEqual(base, mediaRatioChanged)
+        var sourceProfileChanged = base
+        sourceProfileChanged.sourceProfile = nil
+        XCTAssertNotEqual(base, sourceProfileChanged)
         var dominantColorChanged = base
         dominantColorChanged.dominantColor = ReadingColor(
             red: 0.9, green: 0.8, blue: 0.7, weight: 0.6

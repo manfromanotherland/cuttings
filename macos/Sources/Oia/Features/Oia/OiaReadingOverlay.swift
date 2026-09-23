@@ -132,8 +132,12 @@ struct OiaReadingOverlay: View {
     private var detail: some View {
         switch row.kind {
         case .article:
-            ArticleDetailView(showsToolbar: false)
-                .background(Color(nsColor: .textBackgroundColor))
+            if let profile = row.socialPostProfile {
+                SocialPostDetailView(row: row, profile: profile)
+            } else {
+                ArticleDetailView(showsToolbar: false)
+                    .background(Color(nsColor: .textBackgroundColor))
+            }
         case .image:
             mediaDetail(showsPlay: false)
         case .video:

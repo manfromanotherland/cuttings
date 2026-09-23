@@ -55,6 +55,12 @@ pub(crate) fn rebuild_scanned(conn: &Connection, readings: &[ScannedReading]) ->
 fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
     let tags_text = r.metadata.tags.join(" ");
+    let source_profile_json = r
+        .metadata
+        .source_profile
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
     let projection = match r.visual_asset.as_ref() {
         Some(asset) => crate::visual_index::cached_projection(conn, &asset.content_hash)?,
         None => Default::default(),
@@ -65,8 +71,8 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
           theme_color, canonical_url, title, author, site, saved_at, read_at, archived,
           favorite, rating, source_hash, excerpt, word_count, lang, tags_json, tags_text,
           body_text, visual_asset_path, visual_asset_hash, visual_analyzer_version,
-          visual_terms, predominant_color, media_aspect_ratio)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31)",
+          visual_terms, predominant_color, media_aspect_ratio, source_profile_json)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32)",
         params![
             r.metadata.id,
             r.metadata.kind.as_str(),
@@ -99,6 +105,7 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
             projection.visual_terms,
             projection.predominant_color,
             r.media_aspect_ratio,
+            source_profile_json,
         ],
     )?;
     Ok(())
@@ -107,6 +114,12 @@ fn insert(conn: &Connection, r: &ScannedReading) -> Result<()> {
 fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
     let tags = serde_json::to_string(&r.metadata.tags)?;
     let tags_text = r.metadata.tags.join(" ");
+    let source_profile_json = r
+        .metadata
+        .source_profile
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
     let projection = match r.visual_asset.as_ref() {
         Some(asset) => crate::visual_index::cached_projection(conn, &asset.content_hash)?,
         None => Default::default(),
@@ -119,7 +132,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
          source_hash=?19, excerpt=?20, word_count=?21, lang=?22, tags_json=?23,
          tags_text=?24, body_text=?25, visual_asset_path=?26, visual_asset_hash=?27,
          visual_analyzer_version=?28, visual_terms=?29, predominant_color=?30,
-         media_aspect_ratio=?31
+         media_aspect_ratio=?31, source_profile_json=?32
          WHERE id=?1",
         params![
             r.metadata.id,
@@ -153,6 +166,7 @@ fn update(conn: &Connection, r: &ScannedReading) -> Result<()> {
             projection.visual_terms,
             projection.predominant_color,
             r.media_aspect_ratio,
+            source_profile_json,
         ],
     )?;
     Ok(())
@@ -192,6 +206,7 @@ mod tests {
             title: "Title".to_string(),
             author: None,
             site: None,
+            source_profile: None,
             saved_at: "2026-06-13T15:00:00Z".to_string(),
             read_at: None,
             archived: false,

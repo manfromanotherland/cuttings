@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use base64::Engine;
 use oia_core::{
-    save_capture, ImageBytes, LibraryRoot, ReadingKind, SaveDisposition, SaveError, SaveInput,
+    save_capture, save_special_url, ImageBytes, LibraryRoot, ReadingKind, SaveDisposition,
+    SaveError, SaveInput, SaveUrlError, UrlSaveRequest,
 };
 
 use crate::protocol::{SaveRequest, SaveResponse, PROTOCOL_VERSION};
@@ -41,12 +42,38 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
     };
     let library = LibraryRoot::new(&library_path)?;
 
+    handle_in_library_with_source_resolver(req, &library, save_special_url)
+}
+
+fn handle_in_library_with_source_resolver(
+    req: SaveRequest,
+    library: &LibraryRoot,
+    resolve_source: impl FnOnce(
+        &LibraryRoot,
+        &UrlSaveRequest,
+    ) -> Result<Option<oia_core::SaveOutcome>, SaveUrlError>,
+) -> Result<SaveResponse> {
+    if req.metadata.kind == ReadingKind::Article {
+        let special_request = UrlSaveRequest {
+            url: req.metadata.url.clone(),
+            title_hint: Some(req.metadata.title.clone()),
+            saved_at: Some(req.metadata.saved_at.clone()),
+        };
+        match resolve_source(library, &special_request) {
+            Ok(Some(outcome)) => return Ok(response_for_outcome(outcome)),
+            Ok(None) => {}
+            Err(SaveUrlError::Retrieval(_))
+            | Err(SaveUrlError::Save(SaveError::InvalidRequest(_))) => {}
+            Err(error) => return response_for_source_error(error),
+        }
+    }
+
     // Decode the image bytes the extension captured. An image whose base64 won't
     // decode is skipped, so its URL stays in the Markdown as a placeholder.
     let images = decode_images(&req.images);
 
     let outcome = match save_capture(
-        &library,
+        library,
         SaveInput {
             quote_identity_markdown: None,
             kind: req.metadata.kind,
@@ -75,14 +102,31 @@ pub fn handle(req: SaveRequest) -> Result<SaveResponse> {
         Err(SaveError::Storage(error)) => return Err(error),
     };
 
+    Ok(response_for_outcome(outcome))
+}
+
+pub(crate) fn response_for_outcome(outcome: oia_core::SaveOutcome) -> SaveResponse {
     if outcome.disposition == SaveDisposition::Duplicate {
-        return Ok(SaveResponse::error(
+        return SaveResponse::error(
             "duplicate",
             &format!("This reading already exists (id: {})", outcome.id),
-        ));
+        );
     }
 
-    Ok(SaveResponse::success(outcome.id, outcome.path))
+    SaveResponse::success(outcome.id, outcome.path)
+}
+
+pub(crate) fn response_for_source_error(error: SaveUrlError) -> Result<SaveResponse> {
+    match error {
+        error @ SaveUrlError::Retrieval(_) => Ok(SaveResponse::error(
+            "source_unavailable",
+            &error.to_string(),
+        )),
+        SaveUrlError::Save(SaveError::InvalidRequest(message)) => {
+            Ok(SaveResponse::error("invalid_request", &message))
+        }
+        SaveUrlError::Save(SaveError::Storage(error)) | SaveUrlError::Storage(error) => Err(error),
+    }
 }
 
 pub(crate) fn decode_images(images: &[crate::protocol::RequestImage]) -> Vec<ImageBytes> {
@@ -121,4 +165,107 @@ pub(crate) fn find_library_path() -> Result<PathBuf> {
     }
 
     bail!("library_not_configured")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oia_core::SaveUrlError;
+
+    fn captured_article_request(url: &str) -> SaveRequest {
+        serde_json::from_value(serde_json::json!({
+            "protocol_version": PROTOCOL_VERSION,
+            "action": "save",
+            "metadata": {
+                "kind": "article",
+                "url": url,
+                "canonical_url": url,
+                "title": "Captured post",
+                "site": "X",
+                "saved_at": "2026-09-23T12:00:00.000Z"
+            },
+            "markdown": "The complete post captured from the live page.",
+            "images": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn full_article_falls_back_to_browser_capture_when_source_retrieval_fails() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = LibraryRoot::new(directory.path()).unwrap();
+        let request = captured_article_request("https://x.com/example/status/42");
+
+        let response = handle_in_library_with_source_resolver(request, &library, |_, _| {
+            Err(SaveUrlError::Retrieval("offline".into()))
+        })
+        .unwrap();
+
+        assert!(response.ok);
+        let article = std::fs::read_to_string(
+            directory
+                .path()
+                .join(response.path.expect("saved article path")),
+        )
+        .unwrap();
+        let reading = oia_core::parse_reading(&article).unwrap();
+        assert_eq!(
+            reading.body,
+            "The complete post captured from the live page.\n"
+        );
+        assert!(reading.metadata.source_profile.is_none());
+    }
+
+    #[test]
+    fn full_article_falls_back_to_browser_capture_when_source_payload_is_invalid() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = LibraryRoot::new(directory.path()).unwrap();
+        let request = captured_article_request("https://x.com/example/status/43");
+
+        let response = handle_in_library_with_source_resolver(request, &library, |_, _| {
+            Err(SaveUrlError::Save(SaveError::InvalidRequest(
+                "invalid source payload".into(),
+            )))
+        })
+        .unwrap();
+
+        assert!(response.ok);
+        let article = std::fs::read_to_string(
+            directory
+                .path()
+                .join(response.path.expect("saved article path")),
+        )
+        .unwrap();
+        let reading = oia_core::parse_reading(&article).unwrap();
+        assert_eq!(
+            reading.body,
+            "The complete post captured from the live page.\n"
+        );
+        assert!(reading.metadata.source_profile.is_none());
+    }
+
+    #[test]
+    fn source_retrieval_failure_is_reported_as_source_unavailable() {
+        let response =
+            response_for_source_error(SaveUrlError::Retrieval("offline".into())).unwrap();
+
+        assert_eq!(response.error.as_deref(), Some("source_unavailable"));
+    }
+
+    #[test]
+    fn source_invalid_request_is_reported_as_invalid_request() {
+        let response = response_for_source_error(SaveUrlError::Save(SaveError::InvalidRequest(
+            "bad source capture".into(),
+        )))
+        .unwrap();
+
+        assert_eq!(response.error.as_deref(), Some("invalid_request"));
+    }
+
+    #[test]
+    fn source_storage_failure_remains_a_host_io_error() {
+        let result = response_for_source_error(SaveUrlError::Storage(anyhow::anyhow!("disk full")));
+
+        assert_eq!(result.unwrap_err().to_string(), "disk full");
+    }
 }

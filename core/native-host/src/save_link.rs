@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 
 use anyhow::Result;
-use oia_core::{save_link_capture, LibraryRoot, SaveDisposition, SaveError, SaveLinkInput};
+use oia_core::{
+    save_link_capture, save_special_url, LibraryRoot, SaveError, SaveLinkInput, UrlSaveRequest,
+};
 
 use crate::{
     protocol::{SaveLinkRequest, SaveResponse, PROTOCOL_VERSION},
-    save::{decode_images, find_library_path},
+    save::{decode_images, find_library_path, response_for_outcome, response_for_source_error},
 };
 
 pub fn handle(request: SaveLinkRequest) -> Result<SaveResponse> {
@@ -38,10 +40,33 @@ pub fn handle(request: SaveLinkRequest) -> Result<SaveResponse> {
         }
     };
     let library = LibraryRoot::new(&library_path)?;
+
+    handle_in_library_with_source_resolver(request, &library, save_special_url)
+}
+
+fn handle_in_library_with_source_resolver(
+    request: SaveLinkRequest,
+    library: &LibraryRoot,
+    resolve_source: impl FnOnce(
+        &LibraryRoot,
+        &UrlSaveRequest,
+    ) -> Result<Option<oia_core::SaveOutcome>, oia_core::SaveUrlError>,
+) -> Result<SaveResponse> {
+    let special_request = UrlSaveRequest {
+        url: request.metadata.url.clone(),
+        title_hint: Some(request.metadata.title.clone()),
+        saved_at: Some(request.metadata.saved_at.clone()),
+    };
+    match resolve_source(library, &special_request) {
+        Ok(Some(outcome)) => return Ok(response_for_outcome(outcome)),
+        Ok(None) => {}
+        Err(error) => return response_for_source_error(error),
+    }
+
     let images = decode_images(&request.images);
 
     let outcome = match save_link_capture(
-        &library,
+        library,
         SaveLinkInput {
             url: request.metadata.url,
             canonical_url: request.metadata.canonical_url,
@@ -64,12 +89,39 @@ pub fn handle(request: SaveLinkRequest) -> Result<SaveResponse> {
         Err(SaveError::Storage(error)) => return Err(error),
     };
 
-    if outcome.disposition == SaveDisposition::Duplicate {
-        return Ok(SaveResponse::error(
-            "duplicate",
-            &format!("This reading already exists (id: {})", outcome.id),
-        ));
-    }
+    Ok(response_for_outcome(outcome))
+}
 
-    Ok(SaveResponse::success(outcome.id, outcome.path))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oia_core::SaveUrlError;
+
+    #[test]
+    fn url_only_save_remains_failure_strict_when_source_retrieval_fails() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = LibraryRoot::new(directory.path()).unwrap();
+        let request: SaveLinkRequest = serde_json::from_value(serde_json::json!({
+            "protocol_version": PROTOCOL_VERSION,
+            "action": "save_link",
+            "metadata": {
+                "kind": "article",
+                "url": "https://x.com/example/status/42",
+                "canonical_url": "https://x.com/example/status/42",
+                "title": "X post",
+                "saved_at": "2026-09-23T12:00:00.000Z"
+            },
+            "images": []
+        }))
+        .unwrap();
+
+        let response = handle_in_library_with_source_resolver(request, &library, |_, _| {
+            Err(SaveUrlError::Retrieval("offline".into()))
+        })
+        .unwrap();
+
+        assert!(!response.ok);
+        assert_eq!(response.error.as_deref(), Some("source_unavailable"));
+        assert!(!library.articles_dir().exists());
+    }
 }

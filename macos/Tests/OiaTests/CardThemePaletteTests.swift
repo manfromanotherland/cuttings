@@ -46,6 +46,18 @@ final class CardThemePaletteTests: XCTestCase {
         XCTAssertNil(OiaTheme.articlePalette(for: row))
     }
 
+    func testSocialPostKeepsTheNeutralNativeSurface() throws {
+        let profile = try XCTUnwrap(ReadingSourceProfile.decode("""
+        {"version":1,"source_type":"social_post","provider":"x",\
+        "source_id":"123","author_handle":"example","attachments":[]}
+        """))
+        var row = makeReadingRow(sourceProfile: profile)
+        row.themeColor = "#123456"
+
+        XCTAssertTrue(row.isSocialPost)
+        XCTAssertNil(OiaTheme.articlePalette(for: row))
+    }
+
     func testImagePreviewUsesItsExactDominantColor() throws {
         let dominant = ReadingColor(red: 0.12, green: 0.34, blue: 0.56, weight: 0.72)
         let row = makeReadingRow(kind: .image, dominantColor: dominant)

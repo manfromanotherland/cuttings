@@ -25,10 +25,11 @@ use tempfile::NamedTempFile;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 
 use crate::{
-    begin_browser_video_import, import_image_with_options, import_link_with_options,
-    import_reading, import_text_with_options, import_video_file_with_options, parse_reading,
-    save_link_capture, BrowserVideoImportInput, ImportOptions, ImportedReadingState, LibraryRoot,
-    ReadingKind, SaveDisposition, SaveInput, SaveLinkInput, SaveOutcome, MAX_BROWSER_VIDEO_BYTES,
+    begin_browser_video_import, import_image_with_options, import_reading,
+    import_text_with_options, import_video_file_with_options, parse_reading, save_link_capture,
+    save_special_url, save_url, BrowserVideoImportInput, ImportOptions, ImportedReadingState,
+    LibraryRoot, ReadingKind, SaveDisposition, SaveInput, SaveLinkInput, SaveOutcome,
+    UrlSaveRequest, MAX_BROWSER_VIDEO_BYTES,
 };
 
 const QUIET_PERIOD: Duration = Duration::from_secs(2);
@@ -887,23 +888,32 @@ fn import_text_capture(
     };
     let outcome = if let Some(url) = origin_url {
         if is_link {
-            save_link_capture(
-                library,
-                SaveLinkInput {
-                    url: url.clone(),
-                    canonical_url: origin.canonical_url(&url),
-                    title: origin.title(&url),
-                    author: None,
-                    site: origin.site(&url),
-                    saved_at,
-                    images: vec![],
-                    preview_url: None,
-                    favicon_url: None,
-                    theme_color: None,
-                    excerpt: None,
-                    lang: None,
-                },
-            )?
+            let request = UrlSaveRequest {
+                url: url.clone(),
+                title_hint: Some(origin.title(&url)),
+                saved_at: Some(saved_at.clone()),
+            };
+            if let Some(outcome) = save_special_url(library, &request)? {
+                outcome
+            } else {
+                save_link_capture(
+                    library,
+                    SaveLinkInput {
+                        url: url.clone(),
+                        canonical_url: origin.canonical_url(&url),
+                        title: origin.title(&url),
+                        author: None,
+                        site: origin.site(&url),
+                        saved_at,
+                        images: vec![],
+                        preview_url: None,
+                        favicon_url: None,
+                        theme_color: None,
+                        excerpt: None,
+                        lang: None,
+                    },
+                )?
+            }
         } else {
             let text = text.replace("\r\n", "\n").replace('\r', "\n");
             let identity = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -937,13 +947,12 @@ fn import_text_capture(
             )?
         }
     } else if let Some(url) = text_url {
-        import_link_with_options(
+        save_url(
             library,
-            &url,
-            ImportOptions {
-                title: origin.title.clone(),
+            UrlSaveRequest {
+                url,
+                title_hint: origin.title.clone(),
                 saved_at: Some(saved_at),
-                ..ImportOptions::default()
             },
         )?
     } else {

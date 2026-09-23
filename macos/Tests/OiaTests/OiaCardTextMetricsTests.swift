@@ -119,6 +119,77 @@ final class OiaCardTextMetricsTests: XCTestCase {
         )
     }
 
+    func testSocialPostHeightTracksTextWidthAndAttachmentRatio() {
+        let metrics = OiaCardTextMetrics()
+        let text = "A locally saved post keeps its text and media readable even after the source disappears."
+
+        XCTAssertGreaterThan(
+            metrics.socialPostCardHeight(
+                for: text,
+                width: 220,
+                attachmentAspectRatio: nil
+            ),
+            metrics.socialPostCardHeight(
+                for: text,
+                width: 403,
+                attachmentAspectRatio: nil
+            )
+        )
+        XCTAssertGreaterThan(
+            metrics.socialPostCardHeight(
+                for: text,
+                width: 320,
+                attachmentAspectRatio: 3.0 / 4.0
+            ),
+            metrics.socialPostCardHeight(
+                for: text,
+                width: 320,
+                attachmentAspectRatio: 16.0 / 9.0
+            )
+        )
+    }
+
+    func testSocialPostHeightStopsAtVisibleLineLimit() {
+        let metrics = OiaCardTextMetrics()
+        let long = String(repeating: "visible words ", count: 200)
+        let longer = String(repeating: "visible words ", count: 400)
+
+        XCTAssertEqual(
+            metrics.socialPostCardHeight(
+                for: long,
+                width: 220,
+                attachmentAspectRatio: 16.0 / 9.0
+            ),
+            metrics.socialPostCardHeight(
+                for: longer,
+                width: 220,
+                attachmentAspectRatio: 16.0 / 9.0
+            )
+        )
+    }
+
+    func testSocialPostHeightMatchesRenderedStack() {
+        let metrics = OiaCardTextMetrics()
+        let text = "Local-first social posts preserve the words and the media together."
+
+        let ratios: [CGFloat?] = [nil, 16.0 / 9.0, 3.0 / 4.0]
+        for ratio in ratios {
+            XCTAssertEqual(
+                metrics.socialPostCardHeight(
+                    for: text,
+                    width: 320,
+                    attachmentAspectRatio: ratio
+                ),
+                renderedSocialPostHeight(
+                    for: text,
+                    width: 320,
+                    attachmentAspectRatio: ratio
+                ),
+                accuracy: 0.5
+            )
+        }
+    }
+
     private func renderedArticleFooterHeight(for title: String, width: CGFloat) -> CGFloat {
         let view = VStack(
             alignment: .leading,
@@ -167,5 +238,33 @@ final class OiaCardTextMetricsTests: XCTestCase {
                 maxHeight: OiaCardTextMetrics.quoteMarkHeight,
                 alignment: .leading
             )
+    }
+
+    private func renderedSocialPostHeight(
+        for text: String,
+        width: CGFloat,
+        attachmentAspectRatio: CGFloat?
+    ) -> CGFloat {
+        let contentWidth = width - OiaCardTextMetrics.socialPostPadding * 2
+        let view = VStack(
+            alignment: .leading,
+            spacing: OiaCardTextMetrics.socialPostSpacing
+        ) {
+            Color.clear
+                .frame(height: OiaCardTextMetrics.socialPostHeaderHeight)
+            Text(text)
+                .font(Font(OiaCardTextMetrics.socialPostFont))
+                .lineSpacing(OiaCardTextMetrics.socialPostLineSpacing)
+                .lineLimit(OiaCardTextMetrics.socialPostLineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+            if let attachmentAspectRatio {
+                Color.clear
+                    .frame(height: contentWidth / attachmentAspectRatio)
+            }
+        }
+        .padding(OiaCardTextMetrics.socialPostPadding)
+        .frame(width: width, alignment: .leading)
+
+        return ceil(NSHostingView(rootView: view).fittingSize.height)
     }
 }

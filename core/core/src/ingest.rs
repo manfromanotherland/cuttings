@@ -7,6 +7,7 @@
 //! stay identical across clients.
 
 use std::{
+    collections::HashSet,
     fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -18,6 +19,7 @@ use url::Url;
 use crate::{
     find_by_media, find_by_url, first_local_image_asset, media_id, parse_reading, quote_id,
     read_metadata, sha256_hex, url_id, ImageBytes, LibraryRoot, Metadata, Reading, ReadingKind,
+    SourceProfile,
 };
 use crate::{
     images::{
@@ -68,6 +70,77 @@ pub struct SaveInput {
     pub excerpt: Option<String>,
     pub word_count: Option<u32>,
     pub lang: Option<String>,
+}
+
+/// A full article capture enriched with provider-neutral source metadata and
+/// required local assets prepared by an adapter.
+///
+/// The core does not fetch these assets. It verifies and commits them before
+/// `article.md`, which remains the visibility/commit marker for the reading.
+pub struct SourceCaptureInput {
+    pub capture: SaveInput,
+    pub source_profile: SourceProfile,
+    pub staged_assets: Vec<StagedSourceAsset>,
+    /// The article state observed before the adapter started retrieval.
+    ///
+    /// This makes the later replacement conditional: a source capture never
+    /// overwrites an article that appeared or changed while network work was
+    /// in flight.
+    pub expected_article: ExpectedArticleState,
+}
+
+/// File-backed article state observed before a source adapter starts retrieval.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExpectedArticleState {
+    Missing,
+    Sha256(String),
+}
+
+/// One temporary local file adopted by [`save_source_capture`].
+///
+/// Construction validates its portable `assets/<sha256>.<ext>` destination.
+/// The declared hash and byte count are verified while committing. Once
+/// constructed, the staging file is owned by this value and removed on drop
+/// unless it has already been committed and cleaned up.
+#[derive(Debug)]
+pub struct StagedSourceAsset {
+    staging_path: Option<PathBuf>,
+    asset: String,
+    sha256: String,
+    byte_count: u64,
+}
+
+impl StagedSourceAsset {
+    pub fn new(
+        staging_path: PathBuf,
+        asset: String,
+        sha256: String,
+        byte_count: u64,
+    ) -> Result<Self, SaveError> {
+        let validation = validate_staged_asset_declaration(&asset, &sha256, byte_count);
+        if let Err(error) = validation {
+            let _ = fs::remove_file(&staging_path);
+            return Err(error);
+        }
+        Ok(Self {
+            staging_path: Some(staging_path),
+            asset,
+            sha256,
+            byte_count,
+        })
+    }
+
+    pub fn asset(&self) -> &str {
+        &self.asset
+    }
+}
+
+impl Drop for StagedSourceAsset {
+    fn drop(&mut self) {
+        if let Some(path) = self.staging_path.as_ref() {
+            let _ = fs::remove_file(path);
+        }
+    }
 }
 
 /// User-controlled state supplied when migrating an existing library item.
@@ -190,6 +263,40 @@ pub fn save_capture(library: &LibraryRoot, input: SaveInput) -> Result<SaveOutco
     )
 }
 
+/// Save a fully captured source article and its pre-staged required assets.
+///
+/// Adapters resolve/fetch outside the core, write temporary local files, and
+/// pass their declared content addresses here. The textual post belongs in
+/// `capture.markdown`; ordered media presentation belongs in
+/// `source_profile.attachments`.
+pub fn save_source_capture(
+    library: &LibraryRoot,
+    input: SourceCaptureInput,
+) -> Result<SaveOutcome, SaveError> {
+    let SourceCaptureInput {
+        capture,
+        source_profile,
+        staged_assets,
+        expected_article,
+    } = input;
+    if capture.kind != ReadingKind::Article || capture.lightweight {
+        return Err(SaveError::InvalidRequest(
+            "source capture requires a full article SaveInput".to_string(),
+        ));
+    }
+    validate_source_profile(&source_profile, &staged_assets)?;
+    validate_expected_article_state(&expected_article)?;
+    save_with_source_profile_and_assets(
+        library,
+        capture,
+        ImportedReadingState::default(),
+        ImageWritePolicy::Required,
+        ExistingReadingPolicy::ReplaceArticleWithSourceProfile { expected_article },
+        Some(source_profile),
+        staged_assets,
+    )
+}
+
 /// Import a fully described reading with initial user-controlled state.
 ///
 /// A missing or whitespace-only `saved_at` falls back to the current UTC time.
@@ -221,6 +328,9 @@ enum ImageWritePolicy {
 #[derive(Clone, PartialEq, Eq)]
 enum ExistingReadingPolicy {
     PreserveDuplicate,
+    ReplaceArticleWithSourceProfile {
+        expected_article: ExpectedArticleState,
+    },
     EnrichLightweightLink {
         expected_article_sha256: Option<String>,
     },
@@ -231,12 +341,40 @@ struct ExistingReadingSnapshot {
     article_sha256: String,
 }
 
+struct CaptureSavePlan<'a> {
+    imported_state: ImportedReadingState,
+    image_write_policy: ImageWritePolicy,
+    existing_policy: ExistingReadingPolicy,
+    source_profile: Option<SourceProfile>,
+    staged_assets: &'a mut [StagedSourceAsset],
+}
+
 fn save_with_imported_state(
     library: &LibraryRoot,
     input: SaveInput,
     state: ImportedReadingState,
     image_write_policy: ImageWritePolicy,
     existing_policy: ExistingReadingPolicy,
+) -> Result<SaveOutcome, SaveError> {
+    save_with_source_profile_and_assets(
+        library,
+        input,
+        state,
+        image_write_policy,
+        existing_policy,
+        None,
+        Vec::new(),
+    )
+}
+
+fn save_with_source_profile_and_assets(
+    library: &LibraryRoot,
+    input: SaveInput,
+    state: ImportedReadingState,
+    image_write_policy: ImageWritePolicy,
+    existing_policy: ExistingReadingPolicy,
+    source_profile: Option<SourceProfile>,
+    mut staged_assets: Vec<StagedSourceAsset>,
 ) -> Result<SaveOutcome, SaveError> {
     let id = capture_id(&input)?;
     // Identity is known before touching disk. Hold its cross-process lock from
@@ -246,9 +384,13 @@ fn save_with_imported_state(
         library,
         input,
         id,
-        state,
-        image_write_policy,
-        existing_policy,
+        CaptureSavePlan {
+            imported_state: state,
+            image_write_policy,
+            existing_policy,
+            source_profile,
+            staged_assets: &mut staged_assets,
+        },
         &lock,
     )
 }
@@ -260,13 +402,18 @@ fn save_capture_under_lock(
     id: String,
     lock: &ReadingLock,
 ) -> Result<SaveOutcome, SaveError> {
+    let mut staged_assets = Vec::new();
     save_capture_under_lock_with_state(
         library,
         input,
         id,
-        ImportedReadingState::default(),
-        ImageWritePolicy::BestEffort,
-        ExistingReadingPolicy::PreserveDuplicate,
+        CaptureSavePlan {
+            imported_state: ImportedReadingState::default(),
+            image_write_policy: ImageWritePolicy::BestEffort,
+            existing_policy: ExistingReadingPolicy::PreserveDuplicate,
+            source_profile: None,
+            staged_assets: &mut staged_assets,
+        },
         lock,
     )
 }
@@ -275,11 +422,16 @@ fn save_capture_under_lock_with_state(
     library: &LibraryRoot,
     input: SaveInput,
     id: String,
-    imported_state: ImportedReadingState,
-    image_write_policy: ImageWritePolicy,
-    existing_policy: ExistingReadingPolicy,
+    plan: CaptureSavePlan<'_>,
     lock: &ReadingLock,
 ) -> Result<SaveOutcome, SaveError> {
+    let CaptureSavePlan {
+        imported_state,
+        image_write_policy,
+        existing_policy,
+        source_profile,
+        staged_assets,
+    } = plan;
     lock.ensure_protects(library, &id)?;
     let existing_id = find_existing(library, &input, &id)?;
 
@@ -304,7 +456,19 @@ fn save_capture_under_lock_with_state(
         ExistingReadingPolicy::EnrichLightweightLink {
             expected_article_sha256,
         } => expected_article_sha256.as_deref(),
-        ExistingReadingPolicy::PreserveDuplicate => None,
+        ExistingReadingPolicy::PreserveDuplicate
+        | ExistingReadingPolicy::ReplaceArticleWithSourceProfile { .. } => None,
+    };
+    let expected_source_article = match &existing_policy {
+        ExistingReadingPolicy::ReplaceArticleWithSourceProfile { expected_article } => {
+            Some(expected_article)
+        }
+        ExistingReadingPolicy::PreserveDuplicate
+        | ExistingReadingPolicy::EnrichLightweightLink { .. } => None,
+    };
+    let source_expectation_matches = match expected_source_article {
+        Some(expected) => expected_article_state_matches(library, &id, expected)?,
+        None => true,
     };
     let allows_enrichment = matches!(
         &existing_policy,
@@ -317,11 +481,45 @@ fn save_capture_under_lock_with_state(
                 && snapshot.reading.metadata.kind == ReadingKind::Article
                 && snapshot.reading.metadata.lightweight
                 && snapshot.reading.metadata.id == id
-                && url_id(&snapshot.reading.metadata.url)
-                    .is_ok_and(|stored_id| stored_id == id)
+                && url_id(&snapshot.reading.metadata.url).is_ok_and(|stored_id| stored_id == id)
                 && expected_article_sha256
                     .is_none_or(|expected| snapshot.article_sha256 == expected)
         });
+    let replacing_source = matches!(
+        &existing_policy,
+        ExistingReadingPolicy::ReplaceArticleWithSourceProfile { .. }
+    ) && previous.as_ref().is_some_and(|snapshot| {
+        let Some(incoming_profile) = source_profile.as_ref() else {
+            return false;
+        };
+        input.kind == ReadingKind::Article
+            && !input.lightweight
+            && snapshot.reading.metadata.kind == ReadingKind::Article
+            && snapshot.reading.metadata.id == id
+            && url_id(&snapshot.reading.metadata.url).is_ok_and(|stored_id| stored_id == id)
+            && snapshot
+                .reading
+                .metadata
+                .source_profile
+                .as_ref()
+                .is_none_or(|existing_profile| {
+                    existing_profile
+                        .provider
+                        .eq_ignore_ascii_case(&incoming_profile.provider)
+                        && existing_profile.source_id == incoming_profile.source_id
+                })
+    });
+
+    // Source resolution may perform minutes of network work. Treat the article
+    // state observed before retrieval as a compare-and-swap precondition so a
+    // newer local or synced article is never replaced by the stale result.
+    if !source_expectation_matches {
+        return Ok(outcome(
+            library,
+            SaveDisposition::Duplicate,
+            existing_id.clone().unwrap_or_else(|| id.clone()),
+        ));
+    }
 
     // A conditional migration enriches an existing snapshot only. If the file
     // disappeared, stopped being a lightweight URL-derived link, or changed by
@@ -331,12 +529,12 @@ fn save_capture_under_lock_with_state(
         return Ok(outcome(
             library,
             SaveDisposition::Duplicate,
-            existing_id.unwrap_or(id),
+            existing_id.clone().unwrap_or_else(|| id.clone()),
         ));
     }
 
     if let Some(existing_id) = existing_id {
-        if !upgrading && !enriching {
+        if !upgrading && !enriching && !replacing_source {
             return Ok(outcome(library, SaveDisposition::Duplicate, existing_id));
         }
     }
@@ -344,7 +542,7 @@ fn save_capture_under_lock_with_state(
     // Imported state is strictly an initializer for a new reading. An upgrade
     // keeps every user-controlled field already stored in Óia, and a
     // duplicate returned above performs no validation or writes at all.
-    let imported_state = if upgrading || enriching {
+    let imported_state = if upgrading || enriching || replacing_source {
         ImportedReadingState::default()
     } else {
         validate_imported_state(imported_state)?
@@ -373,6 +571,10 @@ fn save_capture_under_lock_with_state(
         .as_deref()
         .and_then(|url| written_image_asset(library, &id, &input.images, url));
 
+    for asset in staged_assets {
+        asset.persist(library, &id, lock)?;
+    }
+
     let mut metadata = Metadata {
         format_version: 1,
         id: id.clone(),
@@ -387,6 +589,7 @@ fn save_capture_under_lock_with_state(
         title: input.title,
         author: input.author,
         site: input.site,
+        source_profile,
         saved_at: input.saved_at,
         read_at: None,
         archived: false,
@@ -399,7 +602,7 @@ fn save_capture_under_lock_with_state(
         source_hash: String::new(),
     };
 
-    if let Some(previous) = previous.filter(|_| upgrading || enriching) {
+    if let Some(previous) = previous.filter(|_| upgrading || enriching || replacing_source) {
         let previous = previous.reading.metadata;
         metadata.saved_at = previous.saved_at;
         metadata.read_at = previous.read_at;
@@ -422,6 +625,9 @@ fn save_capture_under_lock_with_state(
         if metadata.site.is_none() {
             metadata.site = previous.site;
         }
+        if metadata.source_profile.is_none() {
+            metadata.source_profile = previous.source_profile;
+        }
         if metadata.excerpt.is_none() {
             metadata.excerpt = previous.excerpt;
         }
@@ -433,7 +639,7 @@ fn save_capture_under_lock_with_state(
         }
     }
 
-    if !upgrading && !enriching {
+    if !upgrading && !enriching && !replacing_source {
         if let Some(note_markdown) = imported_state.note_markdown.as_deref() {
             // The article is the commit marker for a reading. Store an explicit
             // imported note first so a successful article commit includes it.
@@ -443,10 +649,20 @@ fn save_capture_under_lock_with_state(
         }
     }
 
+    // Asset adoption can take long enough for a non-cooperating sync writer to
+    // change `article.md` despite Óia's reading lock. Re-check immediately
+    // before the article rename; content-addressed assets left by a failed CAS
+    // are harmless, while the newer article remains authoritative.
+    if let Some(expected) = expected_source_article {
+        if !expected_article_state_matches(library, &id, expected)? {
+            return Ok(outcome(library, SaveDisposition::Duplicate, id));
+        }
+    }
+
     write_reading_under_lock(library, metadata, markdown, lock)?;
     Ok(outcome(
         library,
-        if upgrading || enriching {
+        if upgrading || enriching || replacing_source {
             SaveDisposition::Upgraded
         } else {
             SaveDisposition::Saved
@@ -1187,6 +1403,7 @@ fn save_staged_video(
         title: import_title(title.as_deref(), "Imported video"),
         author,
         site,
+        source_profile: None,
         saved_at: imported_saved_at(saved_at),
         read_at: None,
         archived: false,
@@ -1481,6 +1698,262 @@ fn ebml_size(bytes: &[u8]) -> Option<(usize, usize)> {
     Some((value, width))
 }
 
+fn validate_staged_asset_declaration(
+    asset: &str,
+    sha256: &str,
+    byte_count: u64,
+) -> Result<(), SaveError> {
+    if byte_count == 0 {
+        return Err(SaveError::InvalidRequest(
+            "staged source assets must be non-empty".to_string(),
+        ));
+    }
+    if sha256.len() != 64
+        || !sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(SaveError::InvalidRequest(
+            "staged source asset sha256 must be 64 lowercase hexadecimal characters".to_string(),
+        ));
+    }
+    let filename = asset.strip_prefix("assets/").filter(|filename| {
+        !filename.is_empty()
+            && !filename.contains('/')
+            && !filename.contains('\\')
+            && *filename != "."
+            && *filename != ".."
+    });
+    let Some(filename) = filename else {
+        return Err(SaveError::InvalidRequest(
+            "staged source asset target must be assets/<file>".to_string(),
+        ));
+    };
+    let Some((stem, extension)) = filename.rsplit_once('.') else {
+        return Err(SaveError::InvalidRequest(
+            "staged source asset target requires a file extension".to_string(),
+        ));
+    };
+    if stem != sha256
+        || extension.is_empty()
+        || !extension.bytes().all(|byte| byte.is_ascii_alphanumeric())
+    {
+        return Err(SaveError::InvalidRequest(
+            "staged source asset target must be assets/<sha256>.<ext>".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_source_profile(
+    profile: &SourceProfile,
+    staged_assets: &[StagedSourceAsset],
+) -> Result<(), SaveError> {
+    if profile.version == 0
+        || profile.source_type.trim().is_empty()
+        || profile.provider.trim().is_empty()
+        || profile.source_id.trim().is_empty()
+        || profile.author_handle.trim().is_empty()
+    {
+        return Err(SaveError::InvalidRequest(
+            "source profile requires a positive version and non-empty source/provider/author fields"
+                .to_string(),
+        ));
+    }
+
+    let mut declared = HashSet::new();
+    for staged in staged_assets {
+        if !declared.insert(staged.asset()) {
+            return Err(SaveError::InvalidRequest(format!(
+                "source capture declares duplicate staged asset {}",
+                staged.asset()
+            )));
+        }
+    }
+
+    let required = profile
+        .avatar_asset
+        .iter()
+        .chain(profile.attachments.iter().flat_map(|attachment| {
+            std::iter::once(&attachment.asset).chain(attachment.poster_asset.iter())
+        }));
+    for asset in required {
+        if !declared.contains(asset.as_str()) {
+            return Err(SaveError::InvalidRequest(format!(
+                "source profile asset is missing a required staged file: {asset}"
+            )));
+        }
+    }
+    if profile
+        .attachments
+        .iter()
+        .any(|attachment| attachment.kind.trim().is_empty())
+    {
+        return Err(SaveError::InvalidRequest(
+            "source attachment kind must not be empty".to_string(),
+        ));
+    }
+    if profile
+        .attachments
+        .iter()
+        .any(|attachment| attachment.width == Some(0) || attachment.height == Some(0))
+    {
+        return Err(SaveError::InvalidRequest(
+            "source attachment dimensions must be positive when present".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_expected_article_state(expected: &ExpectedArticleState) -> Result<(), SaveError> {
+    let ExpectedArticleState::Sha256(sha256) = expected else {
+        return Ok(());
+    };
+    if sha256.len() != 64
+        || !sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(SaveError::InvalidRequest(
+            "expected source article sha256 must be 64 lowercase hexadecimal characters"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn expected_article_state_matches(
+    library: &LibraryRoot,
+    id: &str,
+    expected: &ExpectedArticleState,
+) -> Result<bool, SaveError> {
+    match fs::read(library.article_path(id)) {
+        Ok(bytes) => Ok(match expected {
+            ExpectedArticleState::Missing => false,
+            ExpectedArticleState::Sha256(expected) => {
+                sha256_hex(&bytes).as_str() == expected.as_str()
+            }
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(matches!(expected, ExpectedArticleState::Missing))
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+impl StagedSourceAsset {
+    fn persist(
+        &mut self,
+        library: &LibraryRoot,
+        id: &str,
+        lock: &ReadingLock,
+    ) -> Result<(), SaveError> {
+        lock.ensure_protects(library, id)?;
+        let source_path = self
+            .staging_path
+            .as_ref()
+            .expect("staged source asset has not yet been committed")
+            .clone();
+        let source_metadata = fs::symlink_metadata(&source_path)?;
+        if !source_metadata.file_type().is_file() {
+            return Err(SaveError::InvalidRequest(
+                "staged source asset must be a regular file".to_string(),
+            ));
+        }
+        if source_metadata.len() != self.byte_count {
+            return Err(SaveError::InvalidRequest(format!(
+                "staged source asset byte count did not match: expected {}, received {}",
+                self.byte_count,
+                source_metadata.len()
+            )));
+        }
+
+        let destination = library.reading_dir(id).join(&self.asset);
+        if let (Ok(source), Ok(target)) = (
+            fs::canonicalize(&source_path),
+            fs::canonicalize(&destination),
+        ) {
+            if source == target {
+                self.staging_path = None;
+                return Err(SaveError::InvalidRequest(
+                    "staged source path must be outside its final asset path".to_string(),
+                ));
+            }
+        }
+
+        match fs::symlink_metadata(&destination) {
+            Ok(metadata) if metadata.file_type().is_file() => {
+                if metadata.len() == self.byte_count {
+                    let (hash, size) = hash_file(&destination)?;
+                    if hash == self.sha256 && size == self.byte_count {
+                        return self.remove_staging_file();
+                    }
+                }
+                // A sync conflict or interrupted external write may have left
+                // corrupt bytes at the content-addressed path. The freshly
+                // downloaded, verified asset below atomically repairs it.
+            }
+            Ok(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!(
+                        "source asset path is not a regular file: {}",
+                        destination.display()
+                    ),
+                )
+                .into())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+
+        let assets_dir = library.assets_dir(id);
+        fs::create_dir_all(&assets_dir)?;
+        let temp_path = assets_dir.join(format!(".asset.{}.tmp", crate::new_id()));
+        let commit_result = (|| -> Result<(), SaveError> {
+            let mut source = fs::File::open(&source_path)?;
+            let mut temporary = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temp_path)?;
+            let (hash, size) = stream_and_hash(&mut source, &mut temporary)?;
+            temporary.sync_all()?;
+            drop(temporary);
+            if hash != self.sha256 || size != self.byte_count {
+                return Err(SaveError::InvalidRequest(format!(
+                    "staged source asset did not match its declared hash/size: {}",
+                    self.asset
+                )));
+            }
+            fs::rename(&temp_path, &destination)?;
+            self.remove_staging_file()?;
+            Ok(())
+        })();
+        if commit_result.is_err() {
+            let _ = fs::remove_file(&temp_path);
+        }
+        commit_result
+    }
+
+    fn remove_staging_file(&mut self) -> Result<(), SaveError> {
+        let path = self
+            .staging_path
+            .take()
+            .expect("staged source asset still owns its temporary file");
+        if let Err(error) = fs::remove_file(&path) {
+            self.staging_path = Some(path);
+            return Err(error.into());
+        }
+        Ok(())
+    }
+}
+
+fn hash_file(path: &Path) -> Result<(String, u64), SaveError> {
+    let mut source = fs::File::open(path)?;
+    let mut sink = std::io::sink();
+    stream_and_hash(&mut source, &mut sink).map_err(Into::into)
+}
+
 struct StagedVideo {
     path: Option<PathBuf>,
     content_hash: String,
@@ -1552,7 +2025,7 @@ fn stage_video(library: &LibraryRoot, file_path: &Path) -> Result<StagedVideo, S
 
 fn stream_and_hash(
     source: &mut fs::File,
-    destination: &mut fs::File,
+    destination: &mut impl Write,
 ) -> std::io::Result<(String, u64)> {
     let mut hasher = Sha256::new();
     let mut byte_count = 0_u64;
@@ -1793,7 +2266,7 @@ fn truncate_chars(text: &str, max: usize) -> String {
 mod tests {
     use super::*;
     use crate::{
-        get_note, parse_reading, set_favorite, set_rating, set_read,
+        get_note, parse_reading, set_favorite, set_rating, set_read, write_reading,
         writer::write_reading_under_lock,
     };
     use std::{fs, sync::mpsc};
@@ -1847,6 +2320,349 @@ mod tests {
             excerpt: Some("Captured excerpt".to_string()),
             lang: Some("en".to_string()),
         }
+    }
+
+    fn source_profile(attachments: Vec<crate::SourceAttachment>) -> crate::SourceProfile {
+        crate::SourceProfile {
+            version: 1,
+            source_type: "social_post".into(),
+            provider: "x".into(),
+            source_id: "2102505743278829840".into(),
+            author_handle: "@benspringwater".into(),
+            published_at: Some("2026-09-22T18:42:00.000Z".into()),
+            avatar_asset: None,
+            attachments,
+        }
+    }
+
+    #[test]
+    fn source_capture_commits_required_staged_assets_before_the_article() {
+        let (_dir, library) = library();
+        let staging = tempfile::TempDir::new().unwrap();
+        let image_bytes = b"social image bytes";
+        let video_bytes = b"social video bytes";
+        let image_hash = sha256_hex(image_bytes);
+        let video_hash = sha256_hex(video_bytes);
+        let image_source = staging.path().join("image.tmp");
+        let video_source = staging.path().join("video.tmp");
+        fs::write(&image_source, image_bytes).unwrap();
+        fs::write(&video_source, video_bytes).unwrap();
+        let image_asset = format!("assets/{image_hash}.jpg");
+        let video_asset = format!("assets/{video_hash}.mp4");
+        let input = SourceCaptureInput {
+            capture: full_capture("https://x.com/benspringwater/status/2102505743278829840"),
+            source_profile: source_profile(vec![
+                crate::SourceAttachment {
+                    kind: "image".into(),
+                    asset: image_asset.clone(),
+                    poster_asset: None,
+                    content_type: Some("image/jpeg".into()),
+                    width: Some(1200),
+                    height: Some(800),
+                    alt: Some("A screenshot".into()),
+                },
+                crate::SourceAttachment {
+                    kind: "video".into(),
+                    asset: video_asset.clone(),
+                    poster_asset: Some(image_asset.clone()),
+                    content_type: Some("video/mp4".into()),
+                    width: Some(1920),
+                    height: Some(1080),
+                    alt: None,
+                },
+            ]),
+            staged_assets: vec![
+                StagedSourceAsset::new(
+                    image_source.clone(),
+                    image_asset.clone(),
+                    image_hash,
+                    image_bytes.len() as u64,
+                )
+                .unwrap(),
+                StagedSourceAsset::new(
+                    video_source.clone(),
+                    video_asset.clone(),
+                    video_hash,
+                    video_bytes.len() as u64,
+                )
+                .unwrap(),
+            ],
+            expected_article: ExpectedArticleState::Missing,
+        };
+
+        let saved = save_source_capture(&library, input).unwrap();
+        let metadata = read_metadata(&library.article_path(&saved.id)).unwrap();
+
+        assert_eq!(saved.disposition, SaveDisposition::Saved);
+        assert_eq!(metadata.source_profile.unwrap().provider, "x");
+        assert_eq!(
+            fs::read(library.reading_dir(&saved.id).join(image_asset)).unwrap(),
+            image_bytes
+        );
+        assert_eq!(
+            fs::read(library.reading_dir(&saved.id).join(video_asset)).unwrap(),
+            video_bytes
+        );
+        assert!(!image_source.exists());
+        assert!(!video_source.exists());
+    }
+
+    #[test]
+    fn source_capture_converts_a_full_generic_article_and_preserves_user_state() {
+        let (_dir, library) = library();
+        let url = "https://x.com/example/status/2102505743278829840";
+        let mut generic = full_capture(url);
+        generic.title = "Generic browser capture".into();
+        generic.markdown = "Generic body".into();
+        let existing = save_capture(&library, generic).unwrap();
+        let mut existing_reading =
+            parse_reading(&fs::read_to_string(library.article_path(&existing.id)).unwrap())
+                .unwrap();
+        existing_reading.metadata.favorite = true;
+        let saved_at = existing_reading.metadata.saved_at.clone();
+        write_reading(&library, existing_reading.metadata, existing_reading.body).unwrap();
+        let expected_article = ExpectedArticleState::Sha256(sha256_hex(
+            &fs::read(library.article_path(&existing.id)).unwrap(),
+        ));
+
+        let mut social = full_capture(url);
+        social.title = "Post by Example".into();
+        social.markdown = "Complete post text".into();
+        let outcome = save_source_capture(
+            &library,
+            SourceCaptureInput {
+                capture: social,
+                source_profile: source_profile(vec![]),
+                staged_assets: vec![],
+                expected_article,
+            },
+        )
+        .unwrap();
+        let reading =
+            parse_reading(&fs::read_to_string(library.article_path(&outcome.id)).unwrap()).unwrap();
+
+        assert_eq!(outcome.disposition, SaveDisposition::Upgraded);
+        assert_eq!(outcome.id, existing.id);
+        assert_eq!(reading.metadata.title, "Post by Example");
+        assert_eq!(reading.metadata.saved_at, saved_at);
+        assert!(reading.metadata.favorite);
+        assert_eq!(reading.body, "Complete post text\n");
+        assert_eq!(reading.metadata.source_profile.unwrap().provider, "x");
+    }
+
+    #[test]
+    fn source_capture_repairs_a_corrupt_required_asset() {
+        let (_dir, library) = library();
+        let staging = tempfile::TempDir::new().unwrap();
+        let bytes = b"durable social media";
+        let hash = sha256_hex(bytes);
+        let asset = format!("assets/{hash}.jpg");
+        let first_source = staging.path().join("first.tmp");
+        fs::write(&first_source, bytes).unwrap();
+        let url = "https://x.com/example/status/2102505743278829840";
+        let attachment = crate::SourceAttachment {
+            kind: "image".into(),
+            asset: asset.clone(),
+            poster_asset: None,
+            content_type: Some("image/jpeg".into()),
+            width: Some(1200),
+            height: Some(800),
+            alt: None,
+        };
+
+        let first = save_source_capture(
+            &library,
+            SourceCaptureInput {
+                capture: full_capture(url),
+                source_profile: source_profile(vec![attachment.clone()]),
+                staged_assets: vec![StagedSourceAsset::new(
+                    first_source,
+                    asset.clone(),
+                    hash.clone(),
+                    bytes.len() as u64,
+                )
+                .unwrap()],
+                expected_article: ExpectedArticleState::Missing,
+            },
+        )
+        .unwrap();
+        let final_asset = library.reading_dir(&first.id).join(&asset);
+        fs::write(&final_asset, b"corrupt").unwrap();
+
+        let repair_source = staging.path().join("repair.tmp");
+        fs::write(&repair_source, bytes).unwrap();
+        let expected_article = ExpectedArticleState::Sha256(sha256_hex(
+            &fs::read(library.article_path(&first.id)).unwrap(),
+        ));
+        let repaired = save_source_capture(
+            &library,
+            SourceCaptureInput {
+                capture: full_capture(url),
+                source_profile: source_profile(vec![attachment]),
+                staged_assets: vec![StagedSourceAsset::new(
+                    repair_source,
+                    asset,
+                    hash,
+                    bytes.len() as u64,
+                )
+                .unwrap()],
+                expected_article,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(repaired.disposition, SaveDisposition::Upgraded);
+        assert_eq!(fs::read(final_asset).unwrap(), bytes);
+    }
+
+    #[test]
+    fn source_capture_hash_failure_cleans_staging_without_committing_article() {
+        let (_dir, library) = library();
+        let staging = tempfile::TempDir::new().unwrap();
+        let bytes = b"different bytes than declared";
+        let declared_hash = sha256_hex(b"declared bytes");
+        let source = staging.path().join("attachment.tmp");
+        fs::write(&source, bytes).unwrap();
+        let asset = format!("assets/{declared_hash}.mp4");
+        let url = "https://x.com/example/status/99";
+        let input = SourceCaptureInput {
+            capture: full_capture(url),
+            source_profile: source_profile(vec![crate::SourceAttachment {
+                kind: "video".into(),
+                asset: asset.clone(),
+                poster_asset: None,
+                content_type: Some("video/mp4".into()),
+                width: None,
+                height: None,
+                alt: None,
+            }]),
+            staged_assets: vec![StagedSourceAsset::new(
+                source.clone(),
+                asset,
+                declared_hash,
+                bytes.len() as u64,
+            )
+            .unwrap()],
+            expected_article: ExpectedArticleState::Missing,
+        };
+
+        let result = save_source_capture(&library, input);
+        let id = url_id(url).unwrap();
+
+        assert!(matches!(result, Err(SaveError::InvalidRequest(_))));
+        assert!(!library.article_path(&id).exists());
+        assert!(!source.exists());
+        if library.assets_dir(&id).is_dir() {
+            assert!(fs::read_dir(library.assets_dir(&id)).unwrap().all(|entry| {
+                !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".asset.")
+            }));
+        }
+    }
+
+    #[test]
+    fn staged_source_asset_rejects_unsafe_targets_and_cleans_the_adopted_file() {
+        let staging = tempfile::TempDir::new().unwrap();
+        let source = staging.path().join("attachment.tmp");
+        let bytes = b"attachment";
+        fs::write(&source, bytes).unwrap();
+
+        let result = StagedSourceAsset::new(
+            source.clone(),
+            format!("assets/../{}.jpg", sha256_hex(bytes)),
+            sha256_hex(bytes),
+            bytes.len() as u64,
+        );
+
+        assert!(matches!(result, Err(SaveError::InvalidRequest(_))));
+        assert!(!source.exists());
+    }
+
+    #[test]
+    fn source_capture_rejects_zero_attachment_dimensions() {
+        let (_dir, library) = library();
+        let staging = tempfile::TempDir::new().unwrap();
+        let bytes = b"image bytes";
+        let hash = sha256_hex(bytes);
+        let asset = format!("assets/{hash}.jpg");
+        let source = staging.path().join("attachment.tmp");
+        fs::write(&source, bytes).unwrap();
+
+        let result = save_source_capture(
+            &library,
+            SourceCaptureInput {
+                capture: full_capture("https://x.com/example/status/42"),
+                source_profile: source_profile(vec![crate::SourceAttachment {
+                    kind: "image".into(),
+                    asset: asset.clone(),
+                    poster_asset: None,
+                    content_type: Some("image/jpeg".into()),
+                    width: Some(0),
+                    height: Some(100),
+                    alt: None,
+                }]),
+                staged_assets: vec![StagedSourceAsset::new(
+                    source.clone(),
+                    asset,
+                    hash,
+                    bytes.len() as u64,
+                )
+                .unwrap()],
+                expected_article: ExpectedArticleState::Missing,
+            },
+        );
+
+        assert!(matches!(
+            result,
+            Err(SaveError::InvalidRequest(message)) if message.contains("dimensions")
+        ));
+        assert!(!source.exists());
+    }
+
+    #[test]
+    fn full_capture_upgrade_preserves_an_existing_source_profile_when_omitted() {
+        let (_dir, library) = library();
+        let url = "https://x.com/example/status/42";
+        let id = url_id(url).unwrap();
+        let mut lightweight = full_capture(url);
+        lightweight.lightweight = true;
+        lightweight.markdown = "Saved link".into();
+        let mut metadata = Metadata {
+            format_version: 1,
+            id: id.clone(),
+            kind: ReadingKind::Article,
+            lightweight: true,
+            url: url.into(),
+            media_url: None,
+            preview_asset: None,
+            favicon_asset: None,
+            theme_color: None,
+            canonical_url: url.into(),
+            title: "Saved link".into(),
+            author: None,
+            site: Some("x.com".into()),
+            source_profile: Some(source_profile(vec![])),
+            saved_at: "2026-09-22T18:42:00.000Z".into(),
+            read_at: None,
+            archived: false,
+            favorite: false,
+            rating: 0,
+            tags: vec![],
+            excerpt: None,
+            word_count: None,
+            lang: None,
+            source_hash: String::new(),
+        };
+        write_reading(&library, metadata.clone(), lightweight.markdown).unwrap();
+
+        let upgraded = save_capture(&library, full_capture(url)).unwrap();
+        metadata = read_metadata(&library.article_path(&id)).unwrap();
+
+        assert_eq!(upgraded.disposition, SaveDisposition::Upgraded);
+        assert_eq!(metadata.source_profile.unwrap().provider, "x");
     }
 
     #[test]

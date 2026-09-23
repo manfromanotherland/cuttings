@@ -4,16 +4,18 @@ import AVFoundation
 import AVKit
 import SwiftUI
 
-/// Offline playback for source-less videos imported from Finder or the
-/// pasteboard. Core persists the movie as
-/// `cuttings-asset:assets/<content-hash>.<ext>`; only that explicit prefix and
-/// the existing single-file asset-path rules are accepted here. Browser video
-/// identities remain source-page cards and never enter this view.
+/// Offline playback for a reading's local movie. Standalone video rows resolve
+/// their `cuttings-asset:assets/<content-hash>.<ext>` identity; source-aware
+/// articles pass an explicit attachment path. Both use the existing
+/// single-file asset-path rules, so playback cannot leave the reading folder.
 struct LocalReadingVideo: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let row: ReadingRow
     let libraryURL: URL?
+    var assetReference: String?
+    var accessibilityName: String?
+    var autoplay = true
 
     @State private var player: AVPlayer?
     @State private var failed = false
@@ -24,7 +26,7 @@ struct LocalReadingVideo: View {
 
             if let player {
                 VideoPlayer(player: player)
-                    .accessibilityLabel("Video: \(row.displayTitle)")
+                    .accessibilityLabel("Video: \(accessibilityName ?? row.displayTitle)")
                     .accessibilityIdentifier(A11y.Detail.videoPlayer)
             } else if failed {
                 ContentUnavailableView(
@@ -50,7 +52,7 @@ struct LocalReadingVideo: View {
     }
 
     private var loadKey: String {
-        "\(row.id):\(row.mediaUrl ?? "")"
+        "\(row.id):\(resolvedAssetReference ?? "")"
     }
 
     @MainActor
@@ -76,7 +78,7 @@ struct LocalReadingVideo: View {
             }
             let loadedPlayer = AVPlayer(playerItem: AVPlayerItem(asset: asset))
             player = loadedPlayer
-            if !reduceMotion {
+            if autoplay, !reduceMotion {
                 loadedPlayer.play()
             }
         } catch {
@@ -93,10 +95,14 @@ struct LocalReadingVideo: View {
     }
 
     private var localVideoURL: URL? {
-        guard let reference = row.localVideoAssetReference else { return nil }
+        guard let reference = resolvedAssetReference else { return nil }
         let baseURL = AssetImageLoader.readingFolderURL(
             libraryURL: libraryURL, readingID: row.id
         )
         return AssetImageLoader.localURL(source: reference, assetBaseURL: baseURL)
+    }
+
+    private var resolvedAssetReference: String? {
+        assetReference ?? row.localVideoAssetReference
     }
 }

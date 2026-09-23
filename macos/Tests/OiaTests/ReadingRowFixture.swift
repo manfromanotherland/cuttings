@@ -15,7 +15,8 @@ func makeReadingRow(
     mediaUrl: String? = nil,
     previewAsset: String? = nil,
     dominantColor: ReadingColor? = nil,
-    mediaAspectRatio: Double? = nil
+    mediaAspectRatio: Double? = nil,
+    sourceProfile: ReadingSourceProfile? = nil
 ) -> ReadingRow {
     ReadingRow(
         id: "01JQ0000000000000000000000",
@@ -40,6 +41,7 @@ func makeReadingRow(
         faviconAsset: nil,
         themeColor: nil,
         dominantColor: dominantColor,
-        mediaAspectRatio: mediaAspectRatio
+        mediaAspectRatio: mediaAspectRatio,
+        sourceProfile: sourceProfile
     )
 }

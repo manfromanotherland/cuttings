@@ -74,6 +74,22 @@ favicon_asset: assets/91d0c4ab....ico      # optional locally captured page favi
 author: Jane Doe                           # optional; extracted byline
 site: Example                              # optional source-site label or hostname
 theme_color: "#123456"                     # optional normalized website colour for card presentation
+source_profile:                            # optional versioned metadata for a recognized source
+  version: 1
+  source_type: social_post
+  provider: x
+  source_id: "2102505743278829840"
+  author_handle: benspringwater
+  published_at: 2026-09-22T10:00:00.000Z
+  avatar_asset: assets/91d0c4ab....jpg
+  attachments:
+    - kind: video
+      asset: assets/5ad8c2ef....mp4
+      poster_asset: assets/7b14f991....jpg
+      content_type: video/mp4
+      width: 1920
+      height: 1080
+      alt: Optional source-provided description
 saved_at: 2026-06-13T15:00:00Z            # ISO-8601 UTC; set once at save time; never updated
 read_at: 2026-06-14T09:00:00Z             # optional legacy state; preserved for compatibility
 archived: false                            # required legacy state; current macOS app ignores it
@@ -93,7 +109,7 @@ source_hash: sha256:abc123...              # sha256 of the cleaned Markdown body
 
 #### Optional fields
 `kind`, `lightweight`, `media_url`, `preview_asset`, `favicon_asset`, `author`, `site`,
-`theme_color`, `read_at`, `excerpt`, `word_count`, `lang`.
+`theme_color`, `source_profile`, `read_at`, `excerpt`, `word_count`, `lang`.
 
 `kind` is written for every new card but remains optional in the parser for backwards compatibility;
 an older file without it is an `article`. `lightweight` is omitted/false for ordinary captures and
@@ -124,6 +140,13 @@ is true for a link saved without a cleaned article body, from either the app or 
   website's declared theme colour. Its stored form is lowercase sRGB `#rrggbb`; it does not affect
   reading identity or content. Save/import adapters may supply common CSS colour forms, which the
   core normalizes centrally; unsupported values are omitted rather than failing the save.
+- `source_profile`, when present, is additive provider-neutral metadata for a recognized source.
+  `version`, `source_type`, `provider`, `source_id`, and `author_handle` are required inside the
+  profile. `published_at` and `avatar_asset` are optional. `attachments` retains source order; each
+  entry has an open string `kind`, a required safe local `asset`, and optional `poster_asset`,
+  `content_type`, positive `width`/`height`, and `alt`. Provider and attachment discriminators are
+  deliberately open strings so older readers can preserve future values. A social post remains an
+  `article`; this profile changes its presentation, not its primary kind, identity, or tags.
 - `read_at`, `archived`, `favorite`, and `rating` remain part of the format-v1 compatibility
   contract. Older clients may still interpret and mutate them, so current readers preserve them
   when rewriting a file. The current macOS product does not expose them as curation controls.
@@ -148,6 +171,10 @@ blank line. It is **Markdown** (CommonMark), cleaned of navigation, ads, banners
   bounded preview for the board, but the body remains the full selection.
 - A **lightweight article** body is one Markdown link to its HTTP(S) URL. It is intentionally
   distinguishable from a full extension capture and may later be upgraded in place.
+- A **social-post article** body starts with the post text and may append local attachment links
+  after an internal `<!-- oia:attachments -->` marker. The `source_profile.attachments` array is
+  authoritative for ordered native presentation; the Markdown references keep the file useful in
+  ordinary text editors.
 
 ---
 
@@ -201,14 +228,15 @@ More content…
   their remote source URLs are not the stored presentation references.
 - Filename is the **lowercase hex SHA-256** of the file's raw bytes, with an extension chosen from
   its `Content-Type` (falling back to the source URL for images): e.g. `3f4a1b8e....jpg`.
-- Article and standalone images are **captured by the browser extension** (from the page's cache
+- Article and standalone images are normally **captured by the browser extension** (from the page's cache
   where possible) and sent to the host. Every browser video is streamed in acknowledged chunks;
   when source bytes cannot be fetched, the extension records the exact rendered element as a
   compatible H.264 MP4. Videos are never embedded in an ordinary save message. Standalone images
   and videos may also arrive from the app's paste/drop path. The My Mind migration adapter may
   fetch link metadata, social previews, and favicons during a write unless `--offline` is selected.
-  Every adapter hands already-captured bytes to the same core writer; the core performs no network
-  requests. An image the extension couldn't capture is left as a remote URL in the Markdown and is
+  A strictly matched source adapter may instead retrieve bounded public metadata/media through the
+  explicit Rust URL-save facade, stage it locally, and hand it to the same core writer. Other write
+  paths do not fetch. An image the extension couldn't capture is left as a remote URL in the Markdown and is
   never re-fetched; the reader shows a labelled placeholder for it.
 - The original HTML snapshot is optional. If kept, it lives as `original.html` inside the reading's
   folder for future re-processing.
@@ -305,6 +333,12 @@ it is not substituted with a CDN or direct media address. The URL-only app path 
 before writing because no page metadata exists yet. Source-less local identities are already stable
 internal URLs and do not go through web URL normalization. Two different normalized web origins for
 the same content can still produce two readings — an accepted trade-off of origin-aware capture.
+
+A recognized source adapter may canonicalize equivalent provider aliases before the first save (for
+example, X and Twitter host aliases for one post). If a lightweight placeholder already exists for
+the submitted URL, the full source capture upgrades that same URL-derived reading instead. Later
+alias checks and saves use `source_profile.provider` plus `source_profile.source_id` to find the
+existing reading without changing its durable id.
 
 ---
 

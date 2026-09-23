@@ -37,12 +37,16 @@ Confirm its final **Save File** destination still points to your library’s `in
 
 | Shared item | Saved content |
 |---|---|
-| Safari webpage | Page URL, page title, and selected text when Safari supplies it. With no selection, this becomes a lightweight link. |
+| Safari webpage | Page URL, page title, and selected text when Safari supplies it. With no selection, this becomes a URL-only capture. |
 | Direct image URL | URLs whose path ends in a supported image extension download into a local image attachment. The shared URL is retained as the available source. |
 | Instagram post/reel | Queues the selected image or video for download on the Mac. `img_index` selects one carousel slide; no index means the first. |
-| Other URL | A lightweight link. No page is downloaded. |
-| Plain or rich text | A quote, or a lightweight link when the entire text is an HTTP(S) URL. Rich text is converted to plain text. |
+| Other URL | A URL-only capture. The Shortcut does not download the page. |
+| Plain or rich text | A quote, or a URL-only capture when the entire text is an HTTP(S) URL. Rich text is converted to plain text. |
 | Image or video | The file representation and display name supplied by the sharing app, with a checksum. |
+
+On the Mac, every URL-only capture passes through the Rust URL-save facade: a
+recognized public source becomes a complete local article with supported media
+saved locally; every other URL remains a lightweight link.
 
 Every capture records its share time. Apps choose what they send to Shortcuts:
 an image from Photos generally has no webpage URL, and a social app may share a

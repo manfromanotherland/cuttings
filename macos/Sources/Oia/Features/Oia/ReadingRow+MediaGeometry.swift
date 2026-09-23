@@ -32,6 +32,11 @@ extension ReadingRow {
         height(for: width, aspectRatio: standaloneMediaAspectRatio)
     }
 
+    var hasLocalSocialPreview: Bool {
+        guard let profile = socialPostProfile else { return false }
+        return profile.avatarAsset != nil || profile.primaryAttachment != nil
+    }
+
     private func height(for width: CGFloat, aspectRatio: CGFloat?) -> CGFloat? {
         guard width.isFinite, width > 0,
               let aspectRatio
@@ -49,5 +54,26 @@ extension ReadingRow {
             return nil
         }
         return CGFloat(mediaAspectRatio)
+    }
+}
+
+extension ReadingSourceAttachment {
+    /// The durable dimensions are advisory because files can be externally
+    /// edited. Invalid or absent values use a stable media-kind fallback.
+    var intrinsicAspectRatio: CGFloat {
+        if let width, let height,
+           width.isFinite, height.isFinite,
+           width > 0, height > 0
+        {
+            return CGFloat(width / height)
+        }
+        return mediaKind == .video ? 16 / 9 : 4 / 3
+    }
+
+    /// Board cards keep unusually tall or panoramic source media within a
+    /// readable post-shaped range. Detail presentation still uses the intrinsic
+    /// ratio above.
+    var cardAspectRatio: CGFloat {
+        min(2, max(3 / 4, intrinsicAspectRatio))
     }
 }

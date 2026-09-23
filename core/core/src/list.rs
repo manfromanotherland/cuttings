@@ -114,6 +114,8 @@ pub struct ReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
+    /// Opaque disposable projection of the typed frontmatter source profile.
+    pub source_profile_json: Option<String>,
     /// Representative exact sRGB cluster from the current derived visual
     /// analysis. A large extreme-neutral canvas may yield to a substantial
     /// secondary surface colour. This is presentation metadata only; the
@@ -583,7 +585,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
                  FROM visual_analysis a
                  WHERE a.content_hash=readings.visual_asset_hash
                    AND a.analyzer_version=readings.visual_analyzer_version
-                   AND a.supported=1)
+                   AND a.supported=1),
+                source_profile_json
          FROM readings
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?3))
@@ -683,13 +686,14 @@ pub fn get_reading(conn: &Connection, id: &str) -> Result<Option<(ReadingRow, St
                  WHERE a.content_hash=readings.visual_asset_hash
                    AND a.analyzer_version=readings.visual_analyzer_version
                    AND a.supported=1),
+                source_profile_json,
                 body_text
          FROM readings WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query_map(params![id], |row| {
         let row_data = parse_row(row)?;
-        let body: String = row.get(25)?;
+        let body: String = row.get(26)?;
         Ok((row_data, body))
     })?;
 
@@ -753,7 +757,8 @@ fn list_readings_search(
                  FROM visual_analysis a
                  WHERE a.content_hash=r.visual_asset_hash
                    AND a.analyzer_version=r.visual_analyzer_version
-                   AND a.supported=1)
+                   AND a.supported=1),
+                r.source_profile_json
          FROM matched m JOIN readings r ON r.rowid=m.rowid
          WHERE {view_clause}
            AND (?3 = '' OR EXISTS (SELECT 1 FROM json_each(r.tags_json) WHERE value = ?3))
@@ -815,6 +820,7 @@ fn parse_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ReadingRow> {
         preview_asset: row.get(18)?,
         favicon_asset: row.get(19)?,
         theme_color: row.get(20)?,
+        source_profile_json: row.get(25)?,
         dominant_color,
         media_aspect_ratio: row.get(23)?,
         canonical_url: row.get(3)?,
@@ -857,7 +863,10 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::{index::open, new_id, reconcile::rebuild, write_reading, LibraryRoot, Metadata};
+    use crate::{
+        index::open, new_id, reconcile::rebuild, write_reading, LibraryRoot, Metadata,
+        SourceAttachment, SourceProfile,
+    };
 
     fn make_library(dir: &TempDir) -> LibraryRoot {
         fs::create_dir_all(dir.path().join("articles")).unwrap();
@@ -879,6 +888,7 @@ mod tests {
             title: title.to_string(),
             author: None,
             site: None,
+            source_profile: None,
             saved_at: "2026-06-13T15:00:00Z".to_string(),
             read_at: None,
             archived: false,
@@ -906,6 +916,47 @@ mod tests {
         bytes.extend_from_slice(&2468_u32.to_be_bytes());
         bytes.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
         bytes
+    }
+
+    #[test]
+    fn rebuild_projects_source_profile_json_through_list_and_ffi() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+        let mut metadata = meta(&new_id(), "https://x.com/example/status/42", "A post");
+        metadata.source_profile = Some(SourceProfile {
+            version: 1,
+            source_type: "future-social-kind".into(),
+            provider: "future-provider".into(),
+            source_id: "42".into(),
+            author_handle: "@example".into(),
+            published_at: None,
+            avatar_asset: None,
+            attachments: vec![SourceAttachment {
+                kind: "future-attachment-kind".into(),
+                asset: "assets/attachment.bin".into(),
+                poster_asset: None,
+                content_type: Some("application/octet-stream".into()),
+                width: None,
+                height: None,
+                alt: None,
+            }],
+        });
+        write_reading(&lib, metadata, "Post text".into()).unwrap();
+        rebuild(&conn, &lib).unwrap();
+
+        let row = list_readings(&conn, &ListOptions::default())
+            .unwrap()
+            .pop()
+            .unwrap();
+        let json = row.source_profile_json.clone().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["source_type"], "future-social-kind");
+        assert_eq!(value["provider"], "future-provider");
+        assert_eq!(value["attachments"][0]["kind"], "future-attachment-kind");
+        assert_eq!(value["attachments"][0]["asset"], "assets/attachment.bin");
+
+        let ffi_row: crate::ffi::FfiReadingRow = row.into();
+        assert_eq!(ffi_row.source_profile_json.as_deref(), Some(json.as_str()));
     }
 
     #[test]

@@ -1,0 +1,18 @@
+{
+  "__typename": "Tweet",
+  "id_str": "2017950499786686612",
+  "text": "https://t.co/Oe6urrD4Iu",
+  "display_text_range": [0, 23],
+  "created_at": "2026-02-01T13:17:45.000Z",
+  "user": {
+    "name": "Bharat Alpha Intel",
+    "screen_name": "BharatAlphaint",
+    "profile_image_url_https": "https://pbs.twimg.com/profile_images/2015447671352520704/XEopN3qS_normal.jpg"
+  },
+  "article": {
+    "id": "QXJ0aWNsZUVudGl0eToyMDE3OTQ5MDExMjAyOTM2ODMy",
+    "rest_id": "2017949011202936832",
+    "title": "From Zero to Paid: The Blueprint to Shatter the X Algorithm",
+    "preview_text": "The article body begins here but is not present in the public wrapper payload."
+  }
+}

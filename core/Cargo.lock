@@ -1506,6 +1506,7 @@ dependencies = [
  "nom-exif",
  "plist",
  "proptest",
+ "reqwest",
  "rusqlite",
  "rustix",
  "serde",

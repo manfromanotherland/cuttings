@@ -132,8 +132,13 @@ actor CoreBridge {
         }.value
     }
 
-    func importLink(url: String) throws -> FfiImportResult {
-        try database.importLink(libraryPath: libraryPath, url: url)
+    /// Recognised public sources may perform bounded network retrieval before
+    /// committing. Release this actor while the Rust URL-save facade works so
+    /// existing reads remain responsive.
+    func importLink(url: String) async throws -> FfiImportResult {
+        try await Task.detached(priority: .utility) { [database, libraryPath] in
+            try database.importLink(libraryPath: libraryPath, url: url)
+        }.value
     }
 
     func importText(text: String, title: String?) throws -> FfiImportResult {

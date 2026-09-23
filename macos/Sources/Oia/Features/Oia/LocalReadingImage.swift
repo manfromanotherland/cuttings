@@ -3,13 +3,16 @@
 import AppKit
 import SwiftUI
 
-/// Offline-only image rendering for card previews and the image/video overlay.
-/// Captured previews are decoded with ImageIO; a local video without a poster
-/// derives its thumbnail from the saved movie. Both paths stay beneath the
-/// reading's own folder and never reach back to the network.
+/// Offline-only image rendering for card previews, source-profile attachments,
+/// and the image/video overlay. Captured previews are decoded with ImageIO; a
+/// local video without a poster derives its thumbnail from the saved movie.
+/// Every path stays beneath the reading's own folder and never reaches back to
+/// the network.
 struct LocalReadingImage: View {
     let row: ReadingRow
     let libraryURL: URL?
+    var explicitAssetReference: String?
+    var explicitAssetIsVideo = false
     var fallbackAspectRatio: CGFloat = 4 / 3
     var maxPixel: CGFloat = 800
     var contentMode: ContentMode = .fit
@@ -240,7 +243,10 @@ private extension LocalReadingImage {
     private var assetRequest: AssetRequest? {
         let source: String
         let isVideo: Bool
-        if let previewAsset = row.previewAsset {
+        if let explicitAssetReference {
+            source = explicitAssetReference
+            isVideo = explicitAssetIsVideo
+        } else if let previewAsset = row.previewAsset {
             source = previewAsset
             isVideo = false
         } else if let videoAsset = row.localVideoAssetReference {

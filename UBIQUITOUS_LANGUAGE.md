@@ -53,6 +53,9 @@ host, and macOS app.
 | Preview asset | Optional safe local `assets/<file>` reference used by the masonry card. The host derives it only after captured image/poster bytes have been written. |
 | Quote | A text card whose full text is stored as Markdown. Browser selections retain their page origin; source-less paste/drop text uses a private local identity. |
 | Lightweight link | An article card with no cleaned article body. It may be created by paste/drop or the browser toolbar and may retain page metadata, a social preview, and a favicon. It is explicitly marked `lightweight: true`; a later full browser capture upgrades the same reading in place. |
+| Recognized source | A public URL whose host and route match a Rust source adapter. A URL-only save can retrieve its durable text, metadata, and supported media without needing a live browser DOM. Unknown URLs retain the ordinary lightweight-link behavior. |
+| Source profile | Optional, versioned, provider-neutral frontmatter describing a recognized source and its ordered local attachments. It changes presentation without introducing a new card kind or user tag. |
+| Social post | A full `article` reading with a `source_profile` whose type is `social_post`. Its text and attachments are durable local content; the board and detail surfaces may give it a provider-aware presentation. |
 | Local identity | A deterministic, non-web `cuttings://local/...` URL used for source-less text, image, or video saves. It prevents machine-local paths leaking into synced files and is never shown as an openable source. |
 | Reading folder | The per-reading folder `articles/<prefix>/<id>/` (named by the reading id, under a two-character fan-out bucket) that holds the reading's `article.md`, its assets and highlights, and any preserved legacy sidecars. Moving or deleting a reading operates on this one folder. |
 | Article file | The `article.md` file inside a reading folder (`articles/<prefix>/<id>/article.md`) that stores one reading's frontmatter and body. |
@@ -106,8 +109,10 @@ host, and macOS app.
 | Extension | Browser extension that saves a cleaned article, lightweight link, or one long screenshot of the full scrollable page from its toolbar, and captures a clicked image/video or selected-text quote from its context menu. It sends ordinary captures as Markdown, origin metadata, and optional image bytes; every video instead uses the acknowledged browser video import stream. |
 | Browser video import | Protocol-v4 transfer used by every browser video save. The extension streams readable source bytes or records one rendered loop as compatible H.264 MP4 when the source cannot be fetched, then sends acknowledged chunks through the native host; the core commits a content-addressed local asset and cleans incomplete staging. |
 | Site adapter | Extension pre-processor for a specific host (e.g. X/Twitter) that reshapes single-page-app markup before generic extraction, so content Readability would otherwise discard is preserved. |
+| Source adapter | Rust resolver for one recognized public source. It classifies URLs, retrieves bounded provider metadata and media, and hands a complete staged capture to the shared writer. Provider-specific transport details do not enter the library format or clients. |
+| URL save facade | The core entry point used by the Shortcut Inbox, native host, and app paste/drop path. It asks source adapters to resolve recognized URLs and otherwise writes an ordinary lightweight link. |
 | Native messaging host | Native binary called by the extension. It writes readings and assets to the library through `core`. |
-| Core | Rust engine that owns save/import behavior, the library format, file parsing/writing, indexing, search, tags, highlights, legacy compatibility, and the UniFFI surface. |
+| Core | Rust engine that owns save/import behavior, recognized-source resolution, the library format, file parsing/writing, indexing, search, tags, highlights, legacy compatibility, and the UniFFI surface. |
 | macOS client | SwiftUI app that lets the user save by paste/drop, browse, search, revisit, tag, highlight, delete, and configure the library. |
 | UniFFI bindings | Generated Swift bridge that lets the macOS client call the Rust core. |
 | Thin client | A client that delegates domain logic to the Rust core and keeps only presentation, navigation, and local UI state. |
@@ -154,7 +159,7 @@ paragraphs, and the welcome article.
 | Starred or favorite | Tag | The current product uses tags for curation; `favorite` remains only as legacy file metadata. |
 | Clip | Save | One verb covers pages, media, quotes, and in-app paste/drop without implying that only a fragment is kept. |
 | Standalone note | Quote | Source-less text saved to Óia is a quote card, not a separate note kind. |
-| Download (user action) | Save | Download implies fetching raw files over the network. The extension captures from the live DOM and the host never downloads — keep "download" for its technical meaning only. |
+| Download (user action) | Save | Download describes an implementation detail, not the user's intent. The extension captures live-DOM content and source adapters may retrieve public assets; keep "download" for those technical operations only. |
 | Bookmark (user action) | Save | A full browser capture stores cleaned content; a link saved without cleaned content, from the app or toolbar, is explicitly lightweight and can later be upgraded. The bookmark glyph as brand iconography is fine; the verb is not. |
 | Plugin | Extension | Browsers and their stores call them extensions. |
 | Read-later app | Inspiration library | The product is organized around collecting and revisiting inspiration, not clearing an unread queue. |

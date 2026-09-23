@@ -20,6 +20,7 @@ pub mod rating;
 pub mod reconcile;
 pub mod scanner;
 mod search;
+pub mod source_capture;
 pub mod status;
 pub mod tags;
 mod time;
@@ -27,6 +28,7 @@ mod types;
 mod url_norm;
 pub mod visual_index;
 mod writer;
+pub mod x_source;
 
 pub use delete::{delete_reading, delete_unenriched_link_files_if_unchanged};
 pub use frontmatter::{parse_reading, read_metadata, render_reading};
@@ -42,9 +44,10 @@ pub use ingest::{
     import_image_with_options, import_link, import_link_capture, import_link_capture_if_unchanged,
     import_link_with_options, import_reading, import_text, import_text_with_options,
     import_video_file, import_video_file_from_origin_with_options, import_video_file_with_options,
-    normalize_theme_color, save_capture, save_link_capture, BrowserVideoImport,
-    BrowserVideoImportInput, ImportOptions, ImportedReadingState, SaveDisposition, SaveError,
-    SaveInput, SaveLinkInput, SaveOutcome, MAX_BROWSER_VIDEO_BYTES,
+    normalize_theme_color, save_capture, save_link_capture, save_source_capture,
+    BrowserVideoImport, BrowserVideoImportInput, ExpectedArticleState, ImportOptions,
+    ImportedReadingState, SaveDisposition, SaveError, SaveInput, SaveLinkInput, SaveOutcome,
+    SourceCaptureInput, StagedSourceAsset, MAX_BROWSER_VIDEO_BYTES,
 };
 pub use list::{
     get_reading, list_readings, sidebar_counts, view_counts, CountScope, ListOptions, ReadingRow,
@@ -54,9 +57,12 @@ pub use notes::{get_note, set_note};
 pub use rating::{list_ratings, set_rating};
 pub use reconcile::{apply_diffs, rebuild};
 pub use scanner::{diff, scan_library, ScanDiff, ScannedReading};
+pub use source_capture::{
+    find_saved_url, save_special_url, save_url, SaveUrlError, UrlSaveRequest,
+};
 pub use status::{set_archived, set_favorite, set_read};
 pub use tags::{add_tag, list_tags, remove_tag, MAX_TAG_LEN};
-pub use types::{LibraryRoot, Metadata, Reading, ReadingKind};
+pub use types::{LibraryRoot, Metadata, Reading, ReadingKind, SourceAttachment, SourceProfile};
 pub use url_norm::normalize_url;
 pub use visual_index::{
     complete_visual_analysis, current_visual_assets, pending_visual_analysis,

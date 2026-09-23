@@ -130,6 +130,9 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   available in detail and the Inspector, but is omitted from the board card.
 - **Article:** first local image plus compact title/domain treatment, or a text-led card when no
   preview exists.
+- **Social post:** a source-aware article card with avatar, author/handle, full post text, provider,
+  and the first local attachment or video poster. It remains in Articles and does not acquire an
+  automatic tag.
 - Cards have 8–12 pt continuous corners and a semantic separator border. Hover reveals only a
   small standard action menu; cards do not add decorative lift or shadow effects. Tags and actions
   do not permanently clutter the board.
@@ -163,7 +166,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   through the frozen detail-capable board order, skipping links.
 - The selected preview fills the available space above a persistent horizontal filmstrip. Clicking
   a filmstrip thumbnail selects it, and keyboard navigation keeps the selected thumbnail visible.
-- Articles reuse the existing native Markdown reader. Images show the local asset aspect-fit.
+- Ordinary articles reuse the existing native Markdown reader. Social-post articles use a native
+  post detail with selectable text and every ordered local attachment. Images show the local asset aspect-fit.
   Videos show the local poster and source/media actions without silently downloading a stream.
   Quotes show the full selected text natively.
 - Metadata lives in an optional trailing Inspector toggled from the standard toolbar, not a
@@ -448,16 +452,18 @@ selection; the first load begins unselected.
   Search, tag, and other text editors retain normal paste behavior.
 - Plain text becomes a quote card. Image data and supported local image files are copied into the
   reading's `assets/` folder. Local text/Markdown files use their file name as the card title.
-- A pasted or dropped URL is a marked lightweight article card, not fake extracted content and not
-  a hidden network request. The browser extension remains the full-fidelity path: saving that URL
-  later replaces the lightweight body in place while retaining the user's tags and state.
+- A pasted or dropped URL uses the shared Rust URL-save facade. A strictly recognized public source
+  becomes a full local article; every other URL remains a marked lightweight article card rather
+  than fake extracted content. The browser extension remains the full-fidelity path for ordinary,
+  authenticated, and JavaScript-rendered pages and upgrades a matching placeholder in place.
 - Unsupported payloads such as PDFs, generic files, and local video files are rejected with visible
   feedback; the app does not create cards it cannot render faithfully.
 
 ## Deferred / out of scope (for now)
 
-- **Core-side URL fetching and cleanup.** The app does not reproduce the extension's live-DOM
-  extraction. Authenticated and JavaScript-rendered pages continue to require the browser extension.
+- **Generic core-side page cleanup.** Source adapters are intentionally narrow; the app does not
+  reproduce the extension's live-DOM extraction. Authenticated and JavaScript-rendered pages
+  continue to require the browser extension.
 - **Lists.** The mockup's "Lists" section is replaced by **Tags**; manual Lists are not planned.
 
 ## Open questions / to finalize

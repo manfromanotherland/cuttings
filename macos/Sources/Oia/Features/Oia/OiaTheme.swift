@@ -85,7 +85,7 @@ enum OiaTheme {
     static let border = Color(nsColor: .separatorColor)
 
     static func articlePalette(for row: ReadingRow) -> CardThemePalette? {
-        guard row.kind == .article else { return nil }
+        guard row.kind == .article, !row.isSocialPost else { return nil }
         return CardThemePalette(themeColor: row.themeColor)
     }
 

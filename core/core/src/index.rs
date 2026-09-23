@@ -58,6 +58,29 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 7 {
         migrate_v7(conn)?;
     }
+    if version < 8 {
+        migrate_v8(conn)?;
+    }
+    Ok(())
+}
+
+/// v8: cache the provider-neutral source profile as JSON for list clients.
+///
+/// The typed frontmatter remains authoritative. This nullable projection is
+/// intentionally opaque to SQLite so open string discriminators survive from
+/// scanner to clients without a schema migration per provider or attachment
+/// kind.
+fn migrate_v8(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        BEGIN;
+
+        ALTER TABLE readings ADD COLUMN source_profile_json TEXT;
+
+        PRAGMA user_version = 8;
+        COMMIT;
+        ",
+    )?;
     Ok(())
 }
 
@@ -376,7 +399,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
 
         // readings table exists
         let count: i64 = conn
@@ -472,7 +495,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
 
         let mut stmt = conn
             .prepare("SELECT id FROM readings ORDER BY saved_at DESC, id DESC")
@@ -574,6 +597,7 @@ mod tests {
             "visual_terms",
             "predominant_color",
             "media_aspect_ratio",
+            "source_profile_json",
         ] {
             assert!(columns.contains(&col.to_string()), "missing column: {col}");
         }
@@ -598,6 +622,45 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn v8_adds_a_nullable_source_profile_projection_to_existing_rows() {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("index.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            migrate_v1(&conn).unwrap();
+            migrate_v2(&conn).unwrap();
+            migrate_v3(&conn).unwrap();
+            migrate_v4(&conn).unwrap();
+            migrate_v5(&conn).unwrap();
+            migrate_v6(&conn).unwrap();
+            migrate_v7(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO readings
+                 (id, url, canonical_url, title, saved_at, source_hash)
+                 VALUES ('existing', 'https://example.com/post', 'https://example.com/post',
+                         'Existing', '2026-09-22T18:42:00.000Z', 'sha256:existing')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let conn = open(&db_path).unwrap();
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        let projected: Option<String> = conn
+            .query_row(
+                "SELECT source_profile_json FROM readings WHERE id = 'existing'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(version, 8);
+        assert_eq!(projected, None);
     }
 
     #[test]
@@ -628,7 +691,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -670,7 +733,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
 
         let values: (i64, i64, String) = conn
             .query_row(

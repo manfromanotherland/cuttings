@@ -38,16 +38,18 @@ Article and link saves retain live Open Graph/Twitter metadata plus local social
 assets without injecting those head assets into the cleaned Markdown body. When a website declares
 a usable theme colour, the core stores it as normalized `theme_color` card-presentation metadata.
 The macOS app also accepts dropped or pasted HTTP(S) links, text, and images. Both native entry
-points call the same core save service: local bytes are copied into the library, source-less items
-receive a private deterministic identity, and URL-only saves are marked lightweight so a later
-full browser capture upgrades them. The app watches the folder and indexes every new file for the
-masonry board, full-text search, type filters, and tags — so browser saves, in-app saves, and files
-delivered by sync reconcile through the same index path.
+points call the same core save service: local bytes are copied into the library and source-less
+items receive a private deterministic identity. URL-only saves first pass through the Rust URL-save
+facade. A recognized public source is resolved into a complete local article by its bounded source
+adapter; an unknown URL remains lightweight so a later full browser capture can upgrade it. The app
+watches the folder and indexes every new file for the masonry board, full-text search, type filters,
+and tags — so browser saves, in-app saves, and files delivered by sync reconcile through the same
+index path.
 
 The iOS **Óia!** Shortcut publishes sealed captures into `inbox/`
 inside the user's synced library. The Mac requests any missing iCloud bytes and
 passes ready files to the shared Rust Inbox importer. Rust validates private
-snapshots, calls the existing reading importer, verifies durable results, and
+snapshots, sends URL-only captures through the same URL-save facade, verifies durable results, and
 removes only unchanged successful inputs. It then yields to a single index
 reconcile. Inbox processing starts after the existing board is published and
 runs only while the Mac app is open. See [the capture contract](docs/inbox-format.md)
@@ -97,13 +99,17 @@ every affected component.
 
 ### Engine (`core`, Rust)
 - **Responsibility:** owns the library format and all logic — validate and write extension or
-  paste/drop saves, scan and index the library, full-text search, tags, highlights, and reconcile
-  changes that arrive via sync.
+  URL-only saves, scan and index the library, full-text search, tags, highlights, and reconcile
+  changes that arrive via sync. The provider registry currently recognizes public X post URLs;
+  its seam is provider-neutral so additional social and video sources can be added independently.
 - **Shape:** a core library crate reused by the other native pieces (the macOS app and the native
   messaging host both link it). Not a long-running daemon.
-- **Network boundary:** the core performs no network requests. Capture and migration adapters must
-  provide page metadata and asset bytes before invoking it; the core only validates, normalizes,
-  and persists that supplied data.
+- **Network boundary:** ordinary capture/write/index APIs perform no network requests. The explicit
+  URL-save facade may call a source adapter only after a strict host-and-route match. Each adapter
+  uses fixed HTTPS hosts, bounded redirects, timeouts, response-size caps, media validation, and
+  staging; the writer verifies every content address and commits all required assets before making
+  the article file visible. Recognized-source failure is reported rather than silently writing a
+  misleading lightweight link.
 - **Index:** local SQLite database with FTS5. Rebuildable; per-device; never synced.
 
 ### My Mind migration adapter (`core/mymind-import`)
@@ -186,6 +192,10 @@ The card metadata is additive and backwards compatible:
   from the full-size card preview and is never a remote URL.
 - `theme_color`: optional lowercase `#rrggbb` presentation hint derived from the origin website.
   The card palette may use it as a base colour; it does not participate in reading identity.
+- `source_profile`: optional versioned, provider-neutral metadata for a recognized source. A social
+  post remains `kind: article`; the profile records its provider/source identity, author handle,
+  publication time, avatar asset, and ordered local attachments so clients can render a source-aware
+  card without inventing a new kind or tag.
 - `lightweight`: optional `true` marker for a link saved without cleaned article content, from the
   app or browser toolbar. A later full browser capture
   replaces that placeholder at the same article id and clears the marker while preserving user

@@ -83,6 +83,7 @@ struct ReadingRow: Identifiable, Equatable, Sendable {
     var themeColor: String?
     var dominantColor: ReadingColor?
     var mediaAspectRatio: Double?
+    var sourceProfile: ReadingSourceProfile?
 }
 
 extension ReadingRow {
@@ -113,6 +114,7 @@ extension ReadingRow {
         themeColor = row.themeColor
         dominantColor = row.dominantColor.map(ReadingColor.init)
         mediaAspectRatio = row.mediaAspectRatio
+        sourceProfile = ReadingSourceProfile.decode(row.sourceProfileJson)
     }
 }
 
@@ -131,5 +133,39 @@ extension ReadingRow {
 
     var hasLocalVideoAsset: Bool {
         localVideoAssetReference != nil
+    }
+
+    var socialPostProfile: ReadingSourceProfile? {
+        guard kind == .article,
+              sourceProfile?.sourceType == .socialPost
+        else {
+            return nil
+        }
+        return sourceProfile
+    }
+
+    var isSocialPost: Bool {
+        socialPostProfile != nil
+    }
+
+    var socialPostText: String {
+        if let excerpt = excerpt?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !excerpt.isEmpty
+        {
+            return excerpt
+        }
+        return displayTitle
+    }
+
+    var socialPostAuthor: String {
+        if let author = author?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !author.isEmpty
+        {
+            return author
+        }
+        if let handle = socialPostProfile?.displayHandle {
+            return String(handle.drop(while: { $0 == "@" }))
+        }
+        return socialPostProfile?.displayProvider ?? "Social post"
     }
 }

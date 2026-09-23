@@ -49,9 +49,10 @@ an origin. A canonical URL is metadata and does not replace the visited URL.
 
 At least one attachment, nonempty text, or source URL is required. Attachments
 become media/text readings; nonempty text becomes a quote, except an exact
-HTTP(S) URL becomes a lightweight link when no different page origin is given.
-A source-only capture becomes a lightweight link. No page extraction or hidden
-network request occurs. Available source title/site/canonical data is retained.
+HTTP(S) URL uses the shared URL-save facade when no different page origin is
+given. A recognized public source becomes a complete local article; every other
+source-only capture becomes a lightweight link. Generic page extraction never
+occurs in the Inbox path. Available source title/site/canonical data is retained.
 
 ## Instagram requests (version 2)
 

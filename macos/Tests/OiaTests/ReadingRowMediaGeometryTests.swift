@@ -82,4 +82,30 @@ final class ReadingRowMediaGeometryTests: XCTestCase {
         XCTAssertNil(quote.standaloneMediaAspectRatio)
         XCTAssertNil(quote.standaloneMediaHeight(for: 320))
     }
+
+    func testSocialAttachmentUsesDurableDimensionsAndBoundsBoardRatio() {
+        let landscape = ReadingSourceAttachment(
+            kind: "image",
+            asset: "assets/wide.jpg",
+            posterAsset: nil,
+            contentType: "image/jpeg",
+            width: 4000,
+            height: 1000,
+            alt: nil
+        )
+        let portrait = ReadingSourceAttachment(
+            kind: "image",
+            asset: "assets/tall.jpg",
+            posterAsset: nil,
+            contentType: "image/jpeg",
+            width: 900,
+            height: 1600,
+            alt: nil
+        )
+
+        XCTAssertEqual(landscape.intrinsicAspectRatio, 4)
+        XCTAssertEqual(landscape.cardAspectRatio, 2)
+        XCTAssertEqual(portrait.intrinsicAspectRatio, 9.0 / 16.0)
+        XCTAssertEqual(portrait.cardAspectRatio, 3.0 / 4.0)
+    }
 }

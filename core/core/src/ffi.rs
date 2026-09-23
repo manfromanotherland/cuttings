@@ -46,6 +46,7 @@ pub struct FfiReadingRow {
     pub preview_asset: Option<String>,
     pub favicon_asset: Option<String>,
     pub theme_color: Option<String>,
+    pub source_profile_json: Option<String>,
     pub dominant_color: Option<FfiWeightedColor>,
     pub media_aspect_ratio: Option<f64>,
     pub canonical_url: String,
@@ -275,6 +276,7 @@ impl From<crate::list::ReadingRow> for FfiReadingRow {
             preview_asset: r.preview_asset,
             favicon_asset: r.favicon_asset,
             theme_color: r.theme_color,
+            source_profile_json: r.source_profile_json,
             dominant_color: r.dominant_color.map(|color| FfiWeightedColor {
                 red: color.red,
                 green: color.green,
@@ -681,15 +683,15 @@ impl Database {
         })
     }
 
-    /// Add an HTTP(S) link as a lightweight article placeholder. A later full
-    /// browser capture upgrades it in place because both use the same id.
+    /// Save an HTTP(S) URL. Recognised public sources are resolved into full
+    /// local articles; ordinary URLs remain lightweight placeholders.
     pub fn import_link(
         &self,
         library_path: String,
         url: String,
     ) -> Result<FfiImportResult, CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
-        let outcome = crate::import_link(&lib, &url).map_err(e)?;
+        let outcome = crate::save_url(&lib, crate::UrlSaveRequest::new(url)).map_err(e)?;
         self.sync(library_path)?;
         Ok(outcome.into())
     }
