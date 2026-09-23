@@ -114,6 +114,8 @@ targets:
       - path: Sources/Oia/Bridge/Mappers/ReadingRow.swift
       - path: Sources/Oia/Features/Oia/OiaTheme.swift
       - path: Sources/Oia/Features/Oia/OiaCardTextMetrics.swift
+      - path: Sources/Oia/Resources/CormorantGaramond-VariableFont_wght.ttf
+        buildPhase: resources
       - path: Sources/Oia/Features/Oia/ReadingRow+MediaGeometry.swift
       - path: Sources/Oia/Features/Oia/AssetPreviewPipeline.swift
       - path: Sources/Oia/Features/Oia/LocalReadingImage.swift

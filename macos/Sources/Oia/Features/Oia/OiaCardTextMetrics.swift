@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
+import CoreText
+
+private final class OiaCardFontBundleToken: NSObject {}
 
 struct WidthScopedHeightCache<Key: Hashable> {
     private var activeWidth: Int?
@@ -35,24 +38,18 @@ final class OiaCardTextMetrics {
         return NSFont.systemFont(ofSize: preferred.pointSize, weight: .semibold)
     }()
 
-    static let quoteFont =
-        NSFont(name: "EBGaramond-Regular", size: 24)
-            ?? NSFont(name: "Cochin", size: 24)
-            ?? NSFont.systemFont(ofSize: 24)
-
-    static let quoteMarkFont =
-        NSFont(name: "EBGaramond-SemiBold", size: 56)
-            ?? NSFont(name: "Cochin-Bold", size: 56)
-            ?? NSFont.systemFont(ofSize: 56, weight: .semibold)
+    static let quoteFont = makeQuoteFont(ofSize: 24)
+    static let quoteMarkFont = makeQuoteFont(ofSize: 64)
 
     static let sourceFont = NSFont.preferredFont(forTextStyle: .caption2)
     static let articleFooterPadding: CGFloat = 16
     static let articleFooterSpacing: CGFloat = 8
     static let articleFooterSourceLineHeight = max(14, sourceLineHeight)
-    static let quotePadding: CGFloat = 24
-    static let quoteMarkHeight: CGFloat = 24
-    static let quoteMarkVerticalOffset: CGFloat = -14
-    static let quoteMarkSpacing: CGFloat = 18
+    static let quoteHorizontalPadding: CGFloat = 24
+    static let quoteVerticalPadding: CGFloat = 16
+    static let quoteMarkHeight: CGFloat = 20
+    static let quoteMarkVerticalOffset: CGFloat = 12
+    static let quoteMarkSpacing: CGFloat = 12
     static let quoteLineSpacing: CGFloat = 5
     static let quoteLineLimit = 12
 
@@ -75,14 +72,14 @@ final class OiaCardTextMetrics {
     }
 
     func quoteCardHeight(for text: String, width: CGFloat) -> CGFloat {
-        let textWidth = max(1, width - Self.quotePadding * 2)
+        let textWidth = max(1, width - Self.quoteHorizontalPadding * 2)
         let halfPointWidth = Int((textWidth * 2).rounded())
         return quoteHeights.value(for: text, width: halfPointWidth) {
             let measured = Self.measuredQuoteHeight(
                 text,
                 width: CGFloat(halfPointWidth) / 2
             )
-            return Self.quotePadding * 2
+            return Self.quoteVerticalPadding * 2
                 + Self.quoteMarkHeight * 2
                 + Self.quoteMarkSpacing * 2
                 + measured
@@ -105,6 +102,28 @@ final class OiaCardTextMetrics {
         return min(maximumHeight, max(quoteLineHeight, ceil(bounds.height)))
     }
 
+    private static func makeQuoteFont(ofSize size: CGFloat) -> NSFont {
+        let postScriptName = "CormorantGaramond-Light"
+        if let font = NSFont(name: postScriptName, size: size) {
+            return font
+        }
+
+        if let fontURL = Bundle(for: OiaCardFontBundleToken.self).url(
+            forResource: "CormorantGaramond-VariableFont_wght",
+            withExtension: "ttf"
+        ) {
+            var registrationError: Unmanaged<CFError>?
+            CTFontManagerRegisterFontsForURL(
+                fontURL as CFURL,
+                .process,
+                &registrationError
+            )
+        }
+
+        return NSFont(name: postScriptName, size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: .light)
+    }
+
     private static func measuredArticleTitleHeight(_ text: String, width: CGFloat) -> CGFloat {
         let bounds = (text as NSString).boundingRect(
             with: CGSize(width: width, height: .greatestFiniteMagnitude),
@@ -119,7 +138,7 @@ final class OiaCardTextMetrics {
     private static let articleTitleLineHeight = ceil(
         articleTitleFont.ascender - articleTitleFont.descender + articleTitleFont.leading
     )
-    private static let quoteLineHeight = ceil(
+    private static let quoteLineHeight = floor(
         quoteFont.ascender - quoteFont.descender + quoteFont.leading
     )
     private static let sourceLineHeight = ceil(

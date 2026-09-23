@@ -203,7 +203,8 @@ struct OiaCardView: View {
             quoteMark("”")
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
         }
-        .padding(OiaCardTextMetrics.quotePadding)
+        .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
+        .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OiaTheme.cardTint(for: row.id))
     }
@@ -220,7 +221,6 @@ struct OiaCardView: View {
                 maxHeight: OiaCardTextMetrics.quoteMarkHeight,
                 alignment: .leading
             )
-            .clipped()
             .accessibilityHidden(true)
     }
 

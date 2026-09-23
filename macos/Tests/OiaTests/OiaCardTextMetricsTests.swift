@@ -5,6 +5,11 @@ import XCTest
 
 @MainActor
 final class OiaCardTextMetricsTests: XCTestCase {
+    func testQuoteTypographyUsesTheBundledLightFace() {
+        XCTAssertEqual(OiaCardTextMetrics.quoteFont.fontName, "CormorantGaramond-Light")
+        XCTAssertEqual(OiaCardTextMetrics.quoteMarkFont.fontName, "CormorantGaramond-Light")
+    }
+
     func testWidthScopedCacheEvictsThePreviousWidth() {
         var cache = WidthScopedHeightCache<String>()
         var calculations = 0
@@ -144,7 +149,8 @@ final class OiaCardTextMetricsTests: XCTestCase {
             renderedQuoteMark("”")
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
         }
-        .padding(OiaCardTextMetrics.quotePadding)
+        .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
+        .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding)
         .frame(width: width, alignment: .leading)
 
         return ceil(NSHostingView(rootView: view).fittingSize.height)
@@ -161,6 +167,5 @@ final class OiaCardTextMetricsTests: XCTestCase {
                 maxHeight: OiaCardTextMetrics.quoteMarkHeight,
                 alignment: .leading
             )
-            .clipped()
     }
 }
