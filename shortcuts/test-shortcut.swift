@@ -20,6 +20,18 @@ func parameters(_ action: Object) -> Object { action["WFWorkflowActionParameters
 func kind(_ action: Object) -> String {
     String((action["WFWorkflowActionIdentifier"] as! String).dropFirst("is.workflow.actions.".count))
 }
+func containsVariable(_ value: Any, named name: String) -> Bool {
+    if let object = value as? Object {
+        if object["Type"] as? String == "Variable", object["VariableName"] as? String == name {
+            return true
+        }
+        return object.values.contains { containsVariable($0, named: name) }
+    }
+    if let array = value as? [Any] {
+        return array.contains { containsVariable($0, named: name) }
+    }
+    return false
+}
 
 // Evaluate the per-item capture branches. ZIP creation and saving are out of scope.
 let start = try actions.firstIndex { action in
@@ -186,6 +198,83 @@ struct SafariGraph {
     }
 }
 
+struct NotificationGraph {
+    let graph: [Object]
+    let shortcutInput: [String]
+    var variables: Object = [:]
+    var outputs: Object = [:]
+
+    func resolve(_ value: Any?) throws -> Any? {
+        guard let value else { return nil }
+        guard let object = value as? Object else { return value }
+        if let serialization = object["WFSerializationType"] as? String {
+            if serialization == "WFTextTokenAttachment" { return try resolve(object["Value"]) }
+            try require(serialization == "WFTextTokenString", "Unsupported summary token serialization: \(serialization)")
+            let body = object["Value"] as! Object
+            let string = body["string"] as! String
+            let attachments = body["attachmentsByRange"] as! Object
+            let rendered = NSMutableString(string: string)
+            for (range, token) in attachments.sorted(by: { NSRangeFromString($0.key).location > NSRangeFromString($1.key).location }) {
+                let replacement = try resolve(token).map { String(describing: $0) } ?? ""
+                rendered.replaceCharacters(in: NSRangeFromString(range), with: replacement)
+            }
+            return rendered as String
+        }
+        switch object["Type"] as? String {
+        case "ActionOutput": return outputs[object["OutputUUID"] as! String]
+        case "Variable":
+            if let subject = object["Variable"] { return try resolve(subject) }
+            return variables[object["VariableName"] as! String]
+        case "ExtensionInput": return shortcutInput
+        default: throw Failure(description: "Unsupported variable in notification graph: \(object)")
+        }
+    }
+
+    mutating func title(saveConfirmation: String) throws -> String {
+        variables["Save confirmation"] = saveConfirmation
+        var conditions: [(group: String, parent: Bool, matches: Bool)] = []
+        var active = true
+        for action in graph {
+            let p = parameters(action)
+            if kind(action) == "conditional" {
+                let group = p["GroupingIdentifier"] as! String
+                switch p["WFControlFlowMode"] as! Int {
+                case 0:
+                    let subject = active ? try resolve(p["WFInput"]) as? String : nil
+                    let matches = subject == p["WFConditionalActionString"] as? String
+                    conditions.append((group, active, matches))
+                    active = active && matches
+                case 1:
+                    let condition = try conditions.last.unwrap("Unexpected summary Otherwise")
+                    try require(condition.group == group, "Mismatched summary Otherwise")
+                    active = condition.parent && !condition.matches
+                case 2:
+                    let condition = try conditions.popLast().unwrap("Unexpected summary End If")
+                    try require(condition.group == group, "Mismatched summary End If")
+                    active = condition.parent
+                default: throw Failure(description: "Unsupported summary control-flow mode")
+                }
+                continue
+            }
+            guard active else { continue }
+            var output: Any?
+            switch kind(action) {
+            case "count":
+                let input = try (resolve(p["Input"]) as? [Any]).unwrap("Count does not use Shortcut Input")
+                output = input.count
+            case "gettext": output = try resolve(p["WFTextActionText"])
+            case "setvariable": variables[p["WFVariableName"] as! String] = try resolve(p["WFInput"])
+            case "notification":
+                try require(conditions.isEmpty, "Notification summary has unclosed control flow")
+                return try (resolve(p["WFNotificationActionTitle"]) as? String).unwrap("Missing notification title")
+            default: throw Failure(description: "Unexpected action in notification graph: \(kind(action))")
+            }
+            outputs[p["UUID"] as! String] = output
+        }
+        throw Failure(description: "Notification graph did not show a notification")
+    }
+}
+
 let selectedText = "A \"quoted\" selection\nwith café and 🌱"
 let cases: [(String, [String?])] = [
     ("whole page: absent selection", [nil]),
@@ -208,8 +297,12 @@ for (name, selections) in cases {
                         && manifest["captured_at"] as? String == "2026-09-18T12:00:00Z", "Capture metadata was lost or stale")
             if let selection, !selection.isEmpty {
                 try require(manifest["text"] as? String == selection, "Selected quote text was lost or changed")
+                try require(runner.variables["Save confirmation"] as? String == "Quote saved to Inbox",
+                            "Selected text confirmation is not contextual")
             } else {
                 try require(manifest["text"] == nil, "Whole-page link retained a text field")
+                try require(runner.variables["Save confirmation"] as? String == "Link saved to Inbox",
+                            "Whole-page link confirmation is not contextual")
             }
         }
         print("PASS: \(name)")
@@ -227,6 +320,8 @@ do {
                     "Instagram slide must survive as an explicit version-2 request: \(type)")
         try require(manifest["text"] == nil && manifest["origin"] == nil && manifest["attachments"] == nil && runner.downloads.isEmpty,
                     "Instagram must not download on iPhone or silently become a link")
+        try require(runner.variables["Save confirmation"] as? String == "Instagram media queued in Inbox",
+                    "Instagram confirmation must describe the queued handoff")
     }
     print("PASS: Instagram URL, text and Safari shares queue the selected slide")
 } catch { failures += 1; print("FAIL: Instagram request: \(error)") }
@@ -254,6 +349,9 @@ do {
             try require(attachments?.count == 1 && attachments?.first?["path"] as? String == "payload.jpg", "Missing image attachment array")
             try require(attachments?.first?["sha256"] as? String == String(repeating: "a", count: 64), "Missing image checksum")
         } else { try require(manifest["attachments"] == nil, "Page URL retained a prior image") }
+        let confirmation = isImage ? "Image saved to Inbox" : "Link saved to Inbox"
+        try require(runner.variables["Save confirmation"] as? String == confirmation,
+                    "URL confirmation did not match its saved kind: \(url)")
     }
     print("PASS: direct image URL and ordinary link capture (including House & Garden)")
     var rejected = false
@@ -265,11 +363,43 @@ do {
     runner.downloads = []
     let local = try runner.capture(SafariFixture(url: "local-image", title: "", selection: nil, type: "Image"), index: 0)
     try require((local["attachments"] as? [Object])?.count == 1 && runner.downloads.isEmpty, "Local image capture regressed")
+    try require(runner.variables["Save confirmation"] as? String == "Image saved to Inbox",
+                "Local image confirmation is not contextual")
     print("PASS: local images retain attachments without downloading")
+    _ = try runner.capture(SafariFixture(url: "A thought worth keeping", title: "", selection: nil, type: "Text"), index: 0)
+    try require(runner.variables["Save confirmation"] as? String == "Quote saved to Inbox",
+                "Plain text confirmation is not contextual")
+    _ = try runner.capture(SafariFixture(url: "https://example.com/from-text", title: "", selection: nil, type: "Rich Text"), index: 0)
+    try require(runner.variables["Save confirmation"] as? String == "Link saved to Inbox",
+                "A URL supplied as text must use the link confirmation")
+    _ = try runner.capture(SafariFixture(url: "local-video", title: "", selection: nil, type: "Media"), index: 0)
+    try require(runner.variables["Save confirmation"] as? String == "Media saved to Inbox",
+                "Media confirmation is not contextual")
+    print("PASS: text and media use contextual confirmations")
     try require(workflow["WFWorkflowName"] as? String == "Óia!", "Shortcut name is stale")
+    let notifications = actions.filter { kind($0) == "notification" }
+    try require(notifications.count == 1, "The Shortcut must show one summary notification")
+    let notification = parameters(notifications[0])
+    try require(notification["WFNotificationActionBody"] == nil,
+                "The summary must not add a redundant notification body")
+    try require(containsVariable(notification["WFNotificationActionTitle"] as Any, named: "Notification copy"),
+                "The notification title must use the contextual summary")
+    let countIndex = try actions.firstIndex { kind($0) == "count" && parameters($0)["WFCountType"] as? String == "Items" }
+        .unwrap("Multi-item shares must count their saved items")
+    let notificationIndex = try actions.firstIndex { kind($0) == "notification" }
+        .unwrap("Missing summary notification")
+    try require(countIndex < notificationIndex, "Item count must precede the summary notification")
+    let summaryGraph = Array(actions[countIndex...notificationIndex])
+    var singleSummary = NotificationGraph(graph: summaryGraph, shortcutInput: ["image"])
+    try require(singleSummary.title(saveConfirmation: "Image saved to Inbox") == "Image saved to Inbox",
+                "Single-item summary lost its contextual confirmation")
+    var pluralSummary = NotificationGraph(graph: summaryGraph, shortcutInput: ["image", "link", "quote"])
+    try require(pluralSummary.title(saveConfirmation: "Quote saved to Inbox") == "3 items saved to Inbox",
+                "Multi-item summary did not use its item count")
+    print("PASS: notification has one contextual title and no duplicate Óia line")
 } catch {
     failures += 1
-    print("FAIL: image URL regression: \(error)")
+    print("FAIL: Shortcut regression: \(error)")
 }
 print("Action-graph regression checks: \(failures) failures (\(actions.count)-action workflow).")
 print("This models missing-value/control-flow semantics; it is not a native or iPhone execution test.")

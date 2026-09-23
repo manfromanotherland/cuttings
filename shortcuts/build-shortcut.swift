@@ -82,6 +82,22 @@ func endIf(_ group: String) {
     action("conditional", ["GroupingIdentifier": group, "WFControlFlowMode": 2])
 }
 
+func setSaveConfirmation(_ value: Any) {
+    let message = action("gettext", ["WFTextActionText": value])
+    set("Save confirmation", message)
+}
+
+func setTextSaveConfirmation(_ input: Object) {
+    let matched = action("text.match", ["text": text(input),
+        "WFMatchTextPattern": "(?i)^\\s*https?://[^\\s]+\\s*$",
+        "WFMatchTextCaseSensitive": false])
+    let isLink = beginIf(matched)
+    setSaveConfirmation("Link saved to Inbox")
+    otherwise(isLink)
+    setSaveConfirmation("Quote saved to Inbox")
+    endIf(isLink)
+}
+
 // A version-2 request deliberately contains no v1 link fallback. Older apps
 // retain the unsupported archive rather than silently saving the wrong kind.
 func beginInstagram(_ input: Object) -> String {
@@ -93,6 +109,7 @@ func beginInstagram(_ input: Object) -> String {
     field("capture_id", variable("Capture ID"))
     field("captured_at", variable("Captured at"))
     field("instagram_url", input)
+    setSaveConfirmation("Instagram media queued in Inbox")
     otherwise(group)
     return group
 }
@@ -149,6 +166,7 @@ set("Capture files", action("list", ["WFItems": [Any]()]))
 
 let itemType = action("getitemtype", ["WFInput": attachment(repeatItem)])
 let safari = beginIf(itemType, equals: "Safari Web Page")
+setSaveConfirmation("Link saved to Inbox")
 json([:], named: "Origin")
 let pageURL = action("properties.safariwebpage", ["WFInput": attachment(repeatItem),
                                                 "WFContentItemPropertyName": "Page URL"])
@@ -161,6 +179,7 @@ let selection = action("properties.safariwebpage", ["WFInput": attachment(repeat
 // A whole-page share has no selection. Set Dictionary Value rejects a missing
 // value on iOS; omit the optional text field so this remains a lightweight link.
 let hasSelection = beginIf(selection)
+setSaveConfirmation("Quote saved to Inbox")
 field("text", selection)
 otherwise(hasSelection)
 let safariInstagram = beginInstagram(pageURL)
@@ -168,6 +187,7 @@ endIf(safariInstagram)
 endIf(hasSelection)
 otherwise(safari)
 let url = beginIf(itemType, equals: "URL")
+setSaveConfirmation("Link saved to Inbox")
 let instagram = beginInstagram(repeatItem)
 // Safari's long-press image share can supply only a direct image URL.
 // Match the URL path, never a filename embedded in an ordinary page's query.
@@ -179,6 +199,7 @@ let downloaded = action("downloadurl", ["WFURL": text(repeatItem), "WFHTTPMethod
 let downloadedType = action("getitemtype", ["WFInput": attachment(downloaded)])
 let isImage = beginIf(downloadedType, equals: "Image")
 captureMedia(downloaded, sourceURL: repeatItem)
+setSaveConfirmation("Image saved to Inbox")
 otherwise(isImage)
 action("alert", ["WFAlertActionTitle": "Image could not be saved",
     "WFAlertActionMessage": "The shared image URL did not return an image. Try sharing the image file instead.",
@@ -194,13 +215,17 @@ endIf(instagram)
 otherwise(url)
 let plain = beginIf(itemType, equals: "Text")
 let textInstagram = beginInstagram(repeatItem)
+setTextSaveConfirmation(repeatItem)
 field("text", repeatItem)
 endIf(textInstagram)
 otherwise(plain)
 let rich = beginIf(itemType, equals: "Rich Text")
-field("text", action("detect.text", ["WFInput": attachment(repeatItem)]))
+let richText = action("detect.text", ["WFInput": attachment(repeatItem)])
+setTextSaveConfirmation(richText)
+field("text", richText)
 otherwise(rich)
 
+setSaveConfirmation(text(itemType, " saved to Inbox"))
 captureMedia(repeatItem)
 endIf(rich)
 endIf(plain)
@@ -222,8 +247,15 @@ let saveActionIndex = actions.count
 action("documentpicker.save", ["WFInput": attachment(captureFile), "WFAskWhereToSave": false,
                                 "WFSaveFileOverwrite": false])
 action("repeat.each", ["GroupingIdentifier": repeatGroup, "WFControlFlowMode": 2])
-action("notification", ["WFNotificationActionTitle": "Óia",
-                         "WFNotificationActionBody": "Saved to Inbox",
+let inputCount = action("count", ["Input": attachment(shortcutInput), "WFCountType": "Items"])
+let inputCountText = action("gettext", ["WFTextActionText": text(inputCount)])
+let singleSave = beginIf(inputCountText, equals: "1")
+set("Notification copy", variable("Save confirmation"))
+otherwise(singleSave)
+let pluralConfirmation = action("gettext", ["WFTextActionText": text(inputCount, " items saved to Inbox")])
+set("Notification copy", pluralConfirmation)
+endIf(singleSave)
+action("notification", ["WFNotificationActionTitle": text(variable("Notification copy")),
                          "WFNotificationActionSound": false])
 otherwise(hasInput)
 action("alert", ["WFAlertActionTitle": "Óia!",

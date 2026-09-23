@@ -36,6 +36,8 @@ and versions track the app's `CFBundleShortVersionString`. See
 
 ### Changed
 
+- **Óia!** confirmations now name the saved item—such as an image, link, or
+  quote—without repeating the product name in the notification.
 - The iOS Shortcut is now named **Óia!**. Direct image URLs shared from Safari
   download as local image captures instead of becoming lightweight links.
 

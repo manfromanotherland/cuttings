@@ -21,7 +21,7 @@ links into the `inbox` folder inside your iCloud library. You do not need an iOS
    Shortcuts asks for access.
 5. Open an image in Photos, tap Share, and choose **Óia!**. Approve
    Shortcuts' first-use permission prompts. Keep the share sheet open until
-   **Saved to Inbox** appears.
+   a contextual confirmation such as **Image saved to Inbox** appears.
 
 Shortcuts supports sharing installed shortcuts across devices through
 [iCloud Sync](https://support.apple.com/guide/shortcuts/apdb3a4240b0/ios),
@@ -86,8 +86,9 @@ Python upgrade invalidates the environment. The app bundles the small transport
 adapter, not Python itself.
 
 Keep Óia open on the Mac with internet access. After iCloud delivers the request,
-Óia downloads the selected media and imports its local asset. **Saved to Inbox**
-on iPhone confirms the request was queued, not that the download finished.
+Óia downloads the selected media and imports its local asset. **Instagram media
+queued in Inbox** on iPhone confirms the request was queued, not that the download
+finished.
 Failures remain visible in Settings → Library; **Check Inbox** retries them.
 There is no third-party download service and no automatic account login. Some
 posts may require authentication or be unavailable; those remain queued with an
@@ -107,9 +108,10 @@ checksum, and uses the Rust importer to create the normal Markdown and asset
 files. The Inbox copy is removed only after the saved item and local assets have
 been verified. An interrupted import can be retried without duplicating cards.
 
-**Saved to Inbox** means the file was saved on your iPhone, not that iCloud has
-finished syncing or that Óia has imported it. There is no background Mac
-service when Óia is closed.
+A confirmation such as **Image saved to Inbox**, **Link saved to Inbox**, or
+**3 items saved to Inbox** means the capture was saved on your iPhone, not that
+iCloud has finished syncing or that Óia has imported it. There is no background
+Mac service when Óia is closed.
 
 Use Settings → Library → **Check Inbox** to retry. Files that cannot be imported
 stay in the Inbox, with an explanation in Settings; they are not deleted.
