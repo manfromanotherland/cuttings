@@ -36,14 +36,25 @@ final class OiaCardTextMetrics {
     }()
 
     static let quoteFont: NSFont = {
-        let font = NSFont.preferredFont(forTextStyle: .title2)
-        return NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        let preferred = NSFont.preferredFont(forTextStyle: .title1)
+        let descriptor = preferred.fontDescriptor.withDesign(.serif)
+            ?? preferred.fontDescriptor
+        return NSFont(descriptor: descriptor, size: preferred.pointSize)
+            ?? preferred
     }()
 
     static let sourceFont = NSFont.preferredFont(forTextStyle: .caption2)
     static let articleFooterPadding: CGFloat = 16
     static let articleFooterSpacing: CGFloat = 8
     static let articleFooterSourceLineHeight = max(14, sourceLineHeight)
+    static let quotePadding: CGFloat = 24
+    static let quoteMarkSize: CGFloat = 28
+    static let quoteMarkHeight: CGFloat = 28
+    static let quoteMarkSpacing: CGFloat = 12
+    static let quoteSourceSpacing: CGFloat = 16
+    static let quoteSourceLineHeight = max(14, sourceLineHeight)
+    static let quoteLineSpacing: CGFloat = 4
+    static let quoteLineLimit = 12
 
     private var articleFooterHeights = WidthScopedHeightCache<String>()
     private var quoteHeights = WidthScopedHeightCache<String>()
@@ -64,18 +75,19 @@ final class OiaCardTextMetrics {
     }
 
     func quoteCardHeight(for text: String, width: CGFloat) -> CGFloat {
-        let textWidth = max(1, width - Self.horizontalPadding)
+        let textWidth = max(1, width - Self.quotePadding * 2)
         let halfPointWidth = Int((textWidth * 2).rounded())
         return quoteHeights.value(for: text, width: halfPointWidth) {
             let measured = Self.measuredQuoteHeight(
                 text,
                 width: CGFloat(halfPointWidth) / 2
             )
-            return Self.verticalPadding
-                + Self.quoteMarkHeight
-                + Self.stackSpacing
+            return Self.quotePadding * 2
+                + Self.quoteMarkHeight * 2
+                + Self.quoteMarkSpacing * 2
                 + measured
-                + Self.sourceLineHeight
+                + Self.quoteSourceSpacing
+                + Self.quoteSourceLineHeight
         }
     }
 
@@ -90,8 +102,11 @@ final class OiaCardTextMetrics {
                 .paragraphStyle: paragraphStyle
             ]
         )
-        let maximumHeight = CGFloat(quoteLineLimit) * quoteLineHeight
-            + CGFloat(quoteLineLimit - 1) * quoteLineSpacing
+        let firstLineHeight = quoteFont.ascender - quoteFont.descender
+        let lineAdvance = firstLineHeight + quoteFont.leading + quoteLineSpacing
+        let maximumHeight = ceil(
+            firstLineHeight + CGFloat(quoteLineLimit - 1) * lineAdvance
+        )
         return min(maximumHeight, max(quoteLineHeight, ceil(bounds.height)))
     }
 
@@ -105,12 +120,6 @@ final class OiaCardTextMetrics {
         return min(maximumHeight, max(articleTitleLineHeight, ceil(bounds.height)))
     }
 
-    private static let horizontalPadding: CGFloat = 44
-    private static let verticalPadding: CGFloat = 44
-    private static let quoteMarkHeight: CGFloat = 24
-    private static let stackSpacing: CGFloat = 36
-    private static let quoteLineSpacing: CGFloat = 4
-    private static let quoteLineLimit = 12
     private static let articleTitleLineLimit = 3
     private static let articleTitleLineHeight = ceil(
         articleTitleFont.ascender - articleTitleFont.descender + articleTitleFont.leading

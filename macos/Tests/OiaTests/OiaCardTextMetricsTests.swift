@@ -68,21 +68,25 @@ final class OiaCardTextMetricsTests: XCTestCase {
         }
     }
 
-    func testScreenshotQuotesDoNotReserveCharacterBucketWhitespace() {
+    func testQuoteHeightMatchesTheRenderedStack() {
         let metrics = OiaCardTextMetrics()
-        let short = "doubt is not a pleasant condition, but certainty is absurd"
-        let long = [
-            "A solar eclipse occurs when the Moon passes between Earth and the Sun, ",
-            "thereby obscuring the view of the Sun from a small part of Earth, ",
-            "totally or partially."
-        ].joined()
 
-        let shortHeight = metrics.quoteCardHeight(for: short, width: 403)
-        let longHeight = metrics.quoteCardHeight(for: long, width: 403)
-
-        XCTAssertLessThan(shortHeight, legacyQuoteHeight(for: short, width: 403))
-        XCTAssertLessThan(longHeight, legacyQuoteHeight(for: long, width: 403))
-        XCTAssertGreaterThan(longHeight, shortHeight)
+        for text in [
+            "doubt is not a pleasant condition, but certainty is absurd",
+            [
+                "A solar eclipse occurs when the Moon passes between Earth and the Sun, ",
+                "thereby obscuring the view of the Sun from a small part of Earth, ",
+                "totally or partially."
+            ].joined(),
+            String(repeating: "A deliberately long quote ", count: 100)
+        ] {
+            XCTAssertEqual(
+                metrics.quoteCardHeight(for: text, width: 403),
+                renderedQuoteHeight(for: text, width: 403),
+                accuracy: 0.5,
+                "Height mismatch for: \(text.prefix(32))"
+            )
+        }
     }
 
     func testQuoteHeightUsesRenderedWidthAndHardLineBreaks() {
@@ -110,15 +114,6 @@ final class OiaCardTextMetricsTests: XCTestCase {
         )
     }
 
-    private func legacyQuoteHeight(for text: String, width: CGFloat) -> CGFloat {
-        let charactersPerLine = max(12, Int(width / 11))
-        let lines = min(
-            12,
-            max(1, Int(ceil(Double(text.count) / Double(charactersPerLine))))
-        )
-        return 22 + 24 + 18 + CGFloat(lines * 30) + 18 + 16 + 22
-    }
-
     private func renderedArticleFooterHeight(for title: String, width: CGFloat) -> CGFloat {
         let view = VStack(
             alignment: .leading,
@@ -132,6 +127,31 @@ final class OiaCardTextMetricsTests: XCTestCase {
                 .frame(height: OiaCardTextMetrics.articleFooterSourceLineHeight)
         }
         .padding(OiaCardTextMetrics.articleFooterPadding)
+        .frame(width: width, alignment: .leading)
+
+        return ceil(NSHostingView(rootView: view).fittingSize.height)
+    }
+
+    private func renderedQuoteHeight(for text: String, width: CGFloat) -> CGFloat {
+        let view = VStack(alignment: .leading, spacing: 0) {
+            Color.clear
+                .frame(height: OiaCardTextMetrics.quoteMarkHeight)
+            Text(text)
+                .font(Font(OiaCardTextMetrics.quoteFont))
+                .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
+                .lineLimit(OiaCardTextMetrics.quoteLineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
+            Color.clear
+                .frame(height: OiaCardTextMetrics.quoteMarkHeight)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
+            Text("example.com")
+                .font(Font(OiaCardTextMetrics.sourceFont))
+                .lineLimit(1)
+                .frame(minHeight: OiaCardTextMetrics.quoteSourceLineHeight)
+                .padding(.top, OiaCardTextMetrics.quoteSourceSpacing)
+        }
+        .padding(OiaCardTextMetrics.quotePadding)
         .frame(width: width, alignment: .leading)
 
         return ceil(NSHostingView(rootView: view).fittingSize.height)

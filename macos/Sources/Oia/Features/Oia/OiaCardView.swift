@@ -187,23 +187,42 @@ struct OiaCardView: View {
     }
 
     private var quoteCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("“")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-                .frame(height: 24)
+        VStack(alignment: .leading, spacing: 0) {
+            quoteMark("quote.opening")
 
             Text(quoteText)
                 .font(Font(OiaCardTextMetrics.quoteFont))
-                .lineSpacing(4)
-                .lineLimit(12)
+                .foregroundStyle(.primary)
+                .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
+                .multilineTextAlignment(.leading)
+                .lineLimit(OiaCardTextMetrics.quoteLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
+
+            quoteMark("quote.closing")
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
 
             sourceLine(foreground: .secondary)
+                .frame(minHeight: OiaCardTextMetrics.quoteSourceLineHeight)
+                .padding(.top, OiaCardTextMetrics.quoteSourceSpacing)
         }
-        .padding(22)
+        .padding(OiaCardTextMetrics.quotePadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OiaTheme.cardTint(for: row.id))
+    }
+
+    private func quoteMark(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: OiaCardTextMetrics.quoteMarkSize, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: OiaCardTextMetrics.quoteMarkHeight,
+                maxHeight: OiaCardTextMetrics.quoteMarkHeight,
+                alignment: .leading
+            )
+            .accessibilityHidden(true)
     }
 
     private var articleText: some View {
