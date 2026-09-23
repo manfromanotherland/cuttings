@@ -38,20 +38,21 @@ final class OiaCardTextMetrics {
         return NSFont.systemFont(ofSize: preferred.pointSize, weight: .semibold)
     }()
 
-    static let quoteFont = makeQuoteFont(ofSize: 24)
-    static let quoteMarkFont = makeQuoteFont(ofSize: 64)
+    static let quoteFont = makeQuoteFont(ofSize: 24, opticalSize: 24)
+    static let quoteMarkFont = makeQuoteFont(ofSize: 59, opticalSize: 6)
 
     static let socialPostFont = NSFont.preferredFont(forTextStyle: .body)
     static let sourceFont = NSFont.preferredFont(forTextStyle: .caption2)
     static let articleFooterPadding: CGFloat = 16
     static let articleFooterSpacing: CGFloat = 8
     static let articleFooterSourceLineHeight = max(14, sourceLineHeight)
-    static let quoteHorizontalPadding: CGFloat = 24
-    static let quoteVerticalPadding: CGFloat = 16
-    static let quoteMarkHeight: CGFloat = 20
-    static let quoteMarkVerticalOffset: CGFloat = 12
-    static let quoteMarkSpacing: CGFloat = 12
-    static let quoteLineSpacing: CGFloat = 5
+    static let quoteHorizontalPadding: CGFloat = 34.5
+    static let quoteVerticalPadding: CGFloat = 24
+    static let quoteMinimumHeight: CGFloat = 300
+    static let quoteMarkHeight: CGFloat = 15
+    static let quoteMarkVerticalOffset: CGFloat = 21
+    static let quoteMarkSpacing: CGFloat = 23
+    static let quoteLineSpacing: CGFloat = 7
     static let quoteLineLimit = 12
     static let socialPostPadding: CGFloat = 16
     static let socialPostSpacing: CGFloat = 12
@@ -99,10 +100,11 @@ final class OiaCardTextMetrics {
                 text,
                 width: CGFloat(halfPointWidth) / 2
             )
-            return Self.quoteVerticalPadding * 2
+            let intrinsicHeight = Self.quoteVerticalPadding * 2
                 + Self.quoteMarkHeight * 2
                 + Self.quoteMarkSpacing * 2
                 + measured
+            return max(Self.quoteMinimumHeight, intrinsicHeight)
         }
     }
 
@@ -136,6 +138,7 @@ final class OiaCardTextMetrics {
 
     private static func measuredQuoteHeight(_ text: String, width: CGFloat) -> CGFloat {
         let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
         paragraphStyle.lineSpacing = quoteLineSpacing
         let bounds = (text as NSString).boundingRect(
             with: CGSize(width: width, height: .greatestFiniteMagnitude),
@@ -150,26 +153,36 @@ final class OiaCardTextMetrics {
         return min(maximumHeight, max(quoteLineHeight, ceil(bounds.height)))
     }
 
-    private static func makeQuoteFont(ofSize size: CGFloat) -> NSFont {
-        let postScriptName = "CormorantGaramond-Light"
-        if let font = NSFont(name: postScriptName, size: size) {
-            return font
-        }
+    private static let newsreaderPostScriptName = "Newsreader16pt-Regular"
+    private static let weightAxis = NSNumber(value: UInt32(0x7767_6874))
+    private static let opticalSizeAxis = NSNumber(value: UInt32(0x6F70_737A))
 
-        if let fontURL = Bundle(for: OiaCardFontBundleToken.self).url(
-            forResource: "CormorantGaramond-VariableFont_wght",
+    private static func makeQuoteFont(ofSize size: CGFloat, opticalSize: CGFloat) -> NSFont {
+        guard let fontURL = Bundle(for: OiaCardFontBundleToken.self).url(
+            forResource: "Newsreader-VariableFont_opsz-wght",
             withExtension: "ttf"
-        ) {
-            var registrationError: Unmanaged<CFError>?
-            CTFontManagerRegisterFontsForURL(
-                fontURL as CFURL,
-                .process,
-                &registrationError
-            )
+        ),
+            let descriptors = CTFontManagerCreateFontDescriptorsFromURL(fontURL as CFURL)
+            as? [CTFontDescriptor],
+            let baseDescriptor = descriptors.first(where: { descriptor in
+                (CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute) as? String)
+                    == newsreaderPostScriptName
+            })
+        else {
+            assertionFailure("Bundled Newsreader variable font is missing")
+            return NSFont.systemFont(ofSize: size, weight: .light)
         }
 
-        return NSFont(name: postScriptName, size: size)
-            ?? NSFont.systemFont(ofSize: size, weight: .light)
+        let variations: [NSNumber: NSNumber] = [
+            weightAxis: NSNumber(value: 300),
+            opticalSizeAxis: NSNumber(value: Double(opticalSize))
+        ]
+        let descriptor = CTFontDescriptorCreateCopyWithAttributes(
+            baseDescriptor,
+            [kCTFontVariationAttribute: variations] as CFDictionary
+        )
+
+        return CTFontCreateWithFontDescriptor(descriptor, size, nil) as NSFont
     }
 
     private static func measuredArticleTitleHeight(_ text: String, width: CGFloat) -> CGFloat {

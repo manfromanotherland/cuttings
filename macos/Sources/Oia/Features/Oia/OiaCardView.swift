@@ -198,17 +198,17 @@ struct OiaCardView: View {
     }
 
     private var quoteCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .center, spacing: 0) {
             quoteMark("“")
 
             Text(quoteText)
                 .font(Font(OiaCardTextMetrics.quoteFont))
                 .foregroundStyle(.primary)
                 .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
-                .multilineTextAlignment(.leading)
+                .multilineTextAlignment(.center)
                 .lineLimit(OiaCardTextMetrics.quoteLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
 
             quoteMark("”")
@@ -216,7 +216,11 @@ struct OiaCardView: View {
         }
         .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
         .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: OiaCardTextMetrics.quoteMinimumHeight,
+            alignment: .center
+        )
         .background(OiaTheme.cardTint(for: row.id))
     }
 
@@ -230,7 +234,7 @@ struct OiaCardView: View {
                 maxWidth: .infinity,
                 minHeight: OiaCardTextMetrics.quoteMarkHeight,
                 maxHeight: OiaCardTextMetrics.quoteMarkHeight,
-                alignment: .leading
+                alignment: .center
             )
             .accessibilityHidden(true)
     }

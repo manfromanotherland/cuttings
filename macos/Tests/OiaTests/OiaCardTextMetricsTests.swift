@@ -5,11 +5,6 @@ import XCTest
 
 @MainActor
 final class OiaCardTextMetricsTests: XCTestCase {
-    func testQuoteTypographyUsesTheBundledLightFace() {
-        XCTAssertEqual(OiaCardTextMetrics.quoteFont.fontName, "CormorantGaramond-Light")
-        XCTAssertEqual(OiaCardTextMetrics.quoteMarkFont.fontName, "CormorantGaramond-Light")
-    }
-
     func testWidthScopedCacheEvictsThePreviousWidth() {
         var cache = WidthScopedHeightCache<String>()
         var calculations = 0
@@ -97,14 +92,29 @@ final class OiaCardTextMetricsTests: XCTestCase {
     func testQuoteHeightUsesRenderedWidthAndHardLineBreaks() {
         let metrics = OiaCardTextMetrics()
         let text = "Behind your image, below your words, above your thoughts, the silence of another world awaits."
+        let sevenLines = Array(repeating: "one", count: 7).joined(separator: "\n")
 
         XCTAssertLessThanOrEqual(
             metrics.quoteCardHeight(for: text, width: 403),
             metrics.quoteCardHeight(for: text, width: 220)
         )
         XCTAssertGreaterThan(
-            metrics.quoteCardHeight(for: "one\ntwo\nthree", width: 403),
+            metrics.quoteCardHeight(for: sevenLines, width: 403),
             metrics.quoteCardHeight(for: "one two three", width: 403)
+        )
+    }
+
+    func testShortQuoteCardsUseTheApprovedMinimumHeight() {
+        let metrics = OiaCardTextMetrics()
+
+        XCTAssertEqual(OiaCardTextMetrics.quoteMinimumHeight, 300)
+        XCTAssertEqual(metrics.quoteCardHeight(for: "A short quote", width: 403), 300)
+        XCTAssertEqual(
+            metrics.quoteCardHeight(
+                for: "To live is the rarest\nthing in the world.\nMost people exist,\nthat is all.",
+                width: 403
+            ),
+            300
         )
     }
 
@@ -209,20 +219,23 @@ final class OiaCardTextMetricsTests: XCTestCase {
     }
 
     private func renderedQuoteHeight(for text: String, width: CGFloat) -> CGFloat {
-        let view = VStack(alignment: .leading, spacing: 0) {
+        let view = VStack(alignment: .center, spacing: 0) {
             renderedQuoteMark("“")
             Text(text)
                 .font(Font(OiaCardTextMetrics.quoteFont))
                 .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
+                .multilineTextAlignment(.center)
                 .lineLimit(OiaCardTextMetrics.quoteLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
             renderedQuoteMark("”")
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
         }
         .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
         .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding)
-        .frame(width: width, alignment: .leading)
+        .frame(width: width, alignment: .center)
+        .frame(minHeight: OiaCardTextMetrics.quoteMinimumHeight, alignment: .center)
 
         return ceil(NSHostingView(rootView: view).fittingSize.height)
     }
@@ -236,7 +249,7 @@ final class OiaCardTextMetricsTests: XCTestCase {
                 maxWidth: .infinity,
                 minHeight: OiaCardTextMetrics.quoteMarkHeight,
                 maxHeight: OiaCardTextMetrics.quoteMarkHeight,
-                alignment: .leading
+                alignment: .center
             )
     }
 
