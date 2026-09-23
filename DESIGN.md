@@ -126,8 +126,8 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   mix. Redundant title chrome is hidden.
 - **Video:** captured poster image with a restrained play glyph. A durable media URL is secondary
   metadata; session-local streams fall back to the source page for playback.
-- **Quote:** selected text rendered as an editorial typographic card. The origin domain is quiet but
-  always present.
+- **Quote:** selected text rendered as a left-aligned editorial typographic card. Its origin remains
+  available in detail and the Inspector, but is omitted from the board card.
 - **Article:** first local image plus compact title/domain treatment, or a text-led card when no
   preview exists.
 - Cards have 8–12 pt continuous corners and a semantic separator border. Hover reveals only a

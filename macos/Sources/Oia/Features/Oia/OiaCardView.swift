@@ -188,7 +188,7 @@ struct OiaCardView: View {
 
     private var quoteCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            quoteMark("quote.opening")
+            quoteMark("“")
 
             Text(quoteText)
                 .font(Font(OiaCardTextMetrics.quoteFont))
@@ -200,28 +200,27 @@ struct OiaCardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
 
-            quoteMark("quote.closing")
+            quoteMark("”")
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
-
-            sourceLine(foreground: .secondary)
-                .frame(minHeight: OiaCardTextMetrics.quoteSourceLineHeight)
-                .padding(.top, OiaCardTextMetrics.quoteSourceSpacing)
         }
         .padding(OiaCardTextMetrics.quotePadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OiaTheme.cardTint(for: row.id))
     }
 
-    private func quoteMark(_ symbol: String) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: OiaCardTextMetrics.quoteMarkSize, weight: .semibold))
+    private func quoteMark(_ mark: String) -> some View {
+        Text(mark)
+            .font(Font(OiaCardTextMetrics.quoteMarkFont))
             .foregroundStyle(.secondary)
+            .fixedSize()
+            .offset(y: OiaCardTextMetrics.quoteMarkVerticalOffset)
             .frame(
                 maxWidth: .infinity,
                 minHeight: OiaCardTextMetrics.quoteMarkHeight,
                 maxHeight: OiaCardTextMetrics.quoteMarkHeight,
                 alignment: .leading
             )
+            .clipped()
             .accessibilityHidden(true)
     }
 

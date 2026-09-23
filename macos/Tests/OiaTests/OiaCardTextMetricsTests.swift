@@ -134,26 +134,33 @@ final class OiaCardTextMetricsTests: XCTestCase {
 
     private func renderedQuoteHeight(for text: String, width: CGFloat) -> CGFloat {
         let view = VStack(alignment: .leading, spacing: 0) {
-            Color.clear
-                .frame(height: OiaCardTextMetrics.quoteMarkHeight)
+            renderedQuoteMark("“")
             Text(text)
                 .font(Font(OiaCardTextMetrics.quoteFont))
                 .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
                 .lineLimit(OiaCardTextMetrics.quoteLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
-            Color.clear
-                .frame(height: OiaCardTextMetrics.quoteMarkHeight)
+            renderedQuoteMark("”")
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
-            Text("example.com")
-                .font(Font(OiaCardTextMetrics.sourceFont))
-                .lineLimit(1)
-                .frame(minHeight: OiaCardTextMetrics.quoteSourceLineHeight)
-                .padding(.top, OiaCardTextMetrics.quoteSourceSpacing)
         }
         .padding(OiaCardTextMetrics.quotePadding)
         .frame(width: width, alignment: .leading)
 
         return ceil(NSHostingView(rootView: view).fittingSize.height)
+    }
+
+    private func renderedQuoteMark(_ mark: String) -> some View {
+        Text(mark)
+            .font(Font(OiaCardTextMetrics.quoteMarkFont))
+            .fixedSize()
+            .offset(y: OiaCardTextMetrics.quoteMarkVerticalOffset)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: OiaCardTextMetrics.quoteMarkHeight,
+                maxHeight: OiaCardTextMetrics.quoteMarkHeight,
+                alignment: .leading
+            )
+            .clipped()
     }
 }
