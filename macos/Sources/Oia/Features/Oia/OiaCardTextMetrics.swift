@@ -43,7 +43,30 @@ final class OiaCardTextMetrics {
     private static let mediumQuoteFont = makeQuoteFont(ofSize: 20, opticalSize: 20)
     private static let largeQuoteFont = makeQuoteFont(ofSize: 22, opticalSize: 22)
     private static let extraLargeQuoteFont = makeQuoteFont(ofSize: 24, opticalSize: 24)
-    static let quoteMarkFont = makeQuoteFont(ofSize: 59, opticalSize: 6)
+    private static let quoteMarkBasePointSize: CGFloat = 59
+    private static let quoteMarkBaseHeight: CGFloat = 15
+    private static let quoteMarkBaseVerticalOffset: CGFloat = 21
+    private static let quoteMarkBaseSpacing: CGFloat = 23
+    private static let extraSmallQuoteMarkFont = makeQuoteFont(
+        ofSize: quoteMarkPointSize(for: .extraSmall),
+        opticalSize: 6
+    )
+    private static let smallQuoteMarkFont = makeQuoteFont(
+        ofSize: quoteMarkPointSize(for: .small),
+        opticalSize: 6
+    )
+    private static let mediumQuoteMarkFont = makeQuoteFont(
+        ofSize: quoteMarkPointSize(for: .medium),
+        opticalSize: 6
+    )
+    private static let largeQuoteMarkFont = makeQuoteFont(
+        ofSize: quoteMarkPointSize(for: .large),
+        opticalSize: 6
+    )
+    private static let extraLargeQuoteMarkFont = makeQuoteFont(
+        ofSize: quoteMarkPointSize(for: .extraLarge),
+        opticalSize: 6
+    )
 
     static let socialPostFont = NSFont.preferredFont(forTextStyle: .body)
     static let sourceFont = NSFont.preferredFont(forTextStyle: .caption2)
@@ -51,9 +74,6 @@ final class OiaCardTextMetrics {
     static let articleFooterSpacing: CGFloat = 8
     static let articleFooterSourceLineHeight = max(14, sourceLineHeight)
     static let quoteHorizontalPadding: CGFloat = 34.5
-    static let quoteMarkHeight: CGFloat = 15
-    static let quoteMarkVerticalOffset: CGFloat = 21
-    static let quoteMarkSpacing: CGFloat = 23
     static let quoteLineSpacing: CGFloat = 7
     static let quoteLineLimit = 12
     static let socialPostPadding: CGFloat = 16
@@ -105,15 +125,19 @@ final class OiaCardTextMetrics {
         return quoteHeights.value(for: key, width: halfPointWidth) {
             let font = Self.quoteFont(for: cardSize)
             let verticalPadding = Self.quoteVerticalPadding(for: cardSize)
+            let markHeight = Self.quoteMarkHeight(for: cardSize)
+            let markSpacing = Self.quoteMarkSpacing(for: cardSize)
             let measured = Self.measuredQuoteHeight(
                 text,
                 width: CGFloat(halfPointWidth) / 2,
                 font: font
             )
-            return verticalPadding * 2
-                + Self.quoteMarkHeight * 2
-                + Self.quoteMarkSpacing * 2
-                + measured
+            return ceil(
+                verticalPadding * 2
+                    + markHeight * 2
+                    + markSpacing * 2
+                    + measured
+            )
         }
     }
 
@@ -142,30 +166,6 @@ final class OiaCardTextMetrics {
                 + Self.socialPostSpacing * spacingCount
                 + measured
                 + attachmentHeight
-        }
-    }
-
-    static func quotePointSize(for cardSize: CardSize) -> CGFloat {
-        switch cardSize {
-        case .extraSmall: 16
-        case .small: 18
-        case .medium: 20
-        case .large: 22
-        case .extraLarge: 24
-        }
-    }
-
-    static func quoteVerticalPadding(for cardSize: CardSize) -> CGFloat {
-        quotePointSize(for: cardSize)
-    }
-
-    static func quoteFont(for cardSize: CardSize) -> NSFont {
-        switch cardSize {
-        case .extraSmall: extraSmallQuoteFont
-        case .small: smallQuoteFont
-        case .medium: mediumQuoteFont
-        case .large: largeQuoteFont
-        case .extraLarge: extraLargeQuoteFont
         }
     }
 
@@ -268,5 +268,61 @@ final class OiaCardTextMetrics {
     private struct QuoteHeightKey: Hashable {
         let text: String
         let cardSize: CardSize
+    }
+}
+
+extension OiaCardTextMetrics {
+    static func quotePointSize(for cardSize: CardSize) -> CGFloat {
+        switch cardSize {
+        case .extraSmall: 16
+        case .small: 18
+        case .medium: 20
+        case .large: 22
+        case .extraLarge: 24
+        }
+    }
+
+    static func quoteVerticalPadding(for cardSize: CardSize) -> CGFloat {
+        quotePointSize(for: cardSize)
+    }
+
+    static func quoteMarkPointSize(for cardSize: CardSize) -> CGFloat {
+        quoteMarkBasePointSize * quoteScale(for: cardSize)
+    }
+
+    static func quoteMarkHeight(for cardSize: CardSize) -> CGFloat {
+        quoteMarkBaseHeight * quoteScale(for: cardSize)
+    }
+
+    static func quoteMarkVerticalOffset(for cardSize: CardSize) -> CGFloat {
+        quoteMarkBaseVerticalOffset * quoteScale(for: cardSize)
+    }
+
+    static func quoteMarkSpacing(for cardSize: CardSize) -> CGFloat {
+        quoteMarkBaseSpacing * quoteScale(for: cardSize)
+    }
+
+    static func quoteFont(for cardSize: CardSize) -> NSFont {
+        switch cardSize {
+        case .extraSmall: extraSmallQuoteFont
+        case .small: smallQuoteFont
+        case .medium: mediumQuoteFont
+        case .large: largeQuoteFont
+        case .extraLarge: extraLargeQuoteFont
+        }
+    }
+
+    static func quoteMarkFont(for cardSize: CardSize) -> NSFont {
+        switch cardSize {
+        case .extraSmall: extraSmallQuoteMarkFont
+        case .small: smallQuoteMarkFont
+        case .medium: mediumQuoteMarkFont
+        case .large: largeQuoteMarkFont
+        case .extraLarge: extraLargeQuoteMarkFont
+        }
+    }
+
+    private static func quoteScale(for cardSize: CardSize) -> CGFloat {
+        quotePointSize(for: cardSize) / quotePointSize(for: .extraLarge)
     }
 }

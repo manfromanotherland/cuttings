@@ -215,10 +215,10 @@ struct OiaCardView: View {
                 .lineLimit(OiaCardTextMetrics.quoteLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing(for: cardSize))
 
             quoteMark("”")
-                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing(for: cardSize))
         }
         .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
         .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding(for: cardSize))
@@ -227,14 +227,14 @@ struct OiaCardView: View {
 
     private func quoteMark(_ mark: String) -> some View {
         Text(mark)
-            .font(Font(OiaCardTextMetrics.quoteMarkFont))
+            .font(Font(OiaCardTextMetrics.quoteMarkFont(for: cardSize)))
             .foregroundStyle(.secondary)
             .fixedSize()
-            .offset(y: OiaCardTextMetrics.quoteMarkVerticalOffset)
+            .offset(y: OiaCardTextMetrics.quoteMarkVerticalOffset(for: cardSize))
             .frame(
                 maxWidth: .infinity,
-                minHeight: OiaCardTextMetrics.quoteMarkHeight,
-                maxHeight: OiaCardTextMetrics.quoteMarkHeight,
+                minHeight: OiaCardTextMetrics.quoteMarkHeight(for: cardSize),
+                maxHeight: OiaCardTextMetrics.quoteMarkHeight(for: cardSize),
                 alignment: .center
             )
             .accessibilityHidden(true)

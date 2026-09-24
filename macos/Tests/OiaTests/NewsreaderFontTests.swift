@@ -17,7 +17,7 @@ final class NewsreaderFontTests: XCTestCase {
             opticalSize: 24
         )
         try assertBundledNewsreader(
-            OiaCardTextMetrics.quoteMarkFont,
+            OiaCardTextMetrics.quoteMarkFont(for: .extraLarge),
             pointSize: 59,
             opticalSize: 6
         )
@@ -28,16 +28,25 @@ final class NewsreaderFontTests: XCTestCase {
 
         XCTAssertEqual(pointSizes, [16, 18, 20, 22, 24])
         for (cardSize, pointSize) in zip(CardSize.allCases, pointSizes) {
+            let scale = pointSize / 24
             try assertBundledNewsreader(
                 OiaCardTextMetrics.quoteFont(for: cardSize),
                 pointSize: pointSize,
                 opticalSize: Double(pointSize)
             )
+            try assertBundledNewsreader(
+                OiaCardTextMetrics.quoteMarkFont(for: cardSize),
+                pointSize: 59 * scale,
+                opticalSize: 6
+            )
+            XCTAssertEqual(OiaCardTextMetrics.quoteMarkHeight(for: cardSize), 15 * scale)
+            XCTAssertEqual(OiaCardTextMetrics.quoteMarkVerticalOffset(for: cardSize), 21 * scale)
+            XCTAssertEqual(OiaCardTextMetrics.quoteMarkSpacing(for: cardSize), 23 * scale)
         }
     }
 
     func testNewsreaderContainsDistinctCurlyQuoteGlyphs() {
-        let font = OiaCardTextMetrics.quoteMarkFont as CTFont
+        let font = OiaCardTextMetrics.quoteMarkFont(for: .extraLarge) as CTFont
         var characters: [UniChar] = [0x201C, 0x201D]
         var glyphs = [CGGlyph](repeating: 0, count: characters.count)
 

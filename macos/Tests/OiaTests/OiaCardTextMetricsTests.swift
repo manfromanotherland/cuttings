@@ -287,7 +287,7 @@ extension OiaCardTextMetricsTests {
         cardSize: CardSize
     ) -> CGFloat {
         let view = VStack(alignment: .center, spacing: 0) {
-            renderedQuoteMark("“")
+            renderedQuoteMark("“", cardSize: cardSize)
             Text(text)
                 .font(Font(OiaCardTextMetrics.quoteFont(for: cardSize)))
                 .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
@@ -295,9 +295,9 @@ extension OiaCardTextMetricsTests {
                 .lineLimit(OiaCardTextMetrics.quoteLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
-            renderedQuoteMark("”")
-                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing(for: cardSize))
+            renderedQuoteMark("”", cardSize: cardSize)
+                .padding(.top, OiaCardTextMetrics.quoteMarkSpacing(for: cardSize))
         }
         .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
         .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding(for: cardSize))
@@ -306,15 +306,15 @@ extension OiaCardTextMetricsTests {
         return ceil(NSHostingView(rootView: view).fittingSize.height)
     }
 
-    private func renderedQuoteMark(_ mark: String) -> some View {
+    private func renderedQuoteMark(_ mark: String, cardSize: CardSize) -> some View {
         Text(mark)
-            .font(Font(OiaCardTextMetrics.quoteMarkFont))
+            .font(Font(OiaCardTextMetrics.quoteMarkFont(for: cardSize)))
             .fixedSize()
-            .offset(y: OiaCardTextMetrics.quoteMarkVerticalOffset)
+            .offset(y: OiaCardTextMetrics.quoteMarkVerticalOffset(for: cardSize))
             .frame(
                 maxWidth: .infinity,
-                minHeight: OiaCardTextMetrics.quoteMarkHeight,
-                maxHeight: OiaCardTextMetrics.quoteMarkHeight,
+                minHeight: OiaCardTextMetrics.quoteMarkHeight(for: cardSize),
+                maxHeight: OiaCardTextMetrics.quoteMarkHeight(for: cardSize),
                 alignment: .center
             )
     }
