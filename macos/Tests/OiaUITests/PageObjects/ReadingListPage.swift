@@ -161,7 +161,7 @@ struct ReadingListPage {
     /// dropped if a reload fires mid-type — keep search terms short, and the
     /// verify/retry covers an occasional miss.
     func search(_ text: String) {
-        let field = searchField
+        let field = revealSearchField()
         field.clickWhenReady()
         for _ in 0 ..< 2 {
             clearField(field)
@@ -173,7 +173,7 @@ struct ReadingListPage {
     }
 
     func clearSearch() {
-        let field = searchField
+        let field = revealSearchField()
         field.clickWhenReady()
         clearField(field)
     }
@@ -183,12 +183,21 @@ struct ReadingListPage {
     /// from `typeText`, and a single paste sidesteps both — while also
     /// landing atomically, past the search debounce.
     func pasteSearch(_ text: String) {
-        let field = searchField
+        let field = revealSearchField()
         field.clickWhenReady()
         clearField(field)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         field.typeKey("v", modifierFlags: .command)
+    }
+
+    private func revealSearchField() -> XCUIElement {
+        let field = searchField
+        if !field.exists {
+            app.typeKey("f", modifierFlags: .command)
+            _ = field.waitForExistence(timeout: 2)
+        }
+        return field
     }
 
     private func clearField(_ field: XCUIElement) {

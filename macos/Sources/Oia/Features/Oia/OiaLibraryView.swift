@@ -24,6 +24,7 @@ struct OiaLibraryView: View {
     @State private var boardScrollState = BoardScrollState()
     @State var pinchStartCardSize: CardSize?
     @State var quickLookURL: URL?
+    @State private var searchPresented = false
     @FocusState var boardFocused: Bool
     @FocusState var searchFocused: Bool
     var body: some View {
@@ -140,10 +141,16 @@ extension OiaLibraryView {
             board
                 .searchable(
                     text: searchQuery,
+                    isPresented: $searchPresented,
                     placement: .toolbar,
                     prompt: "Search Óia"
                 )
                 .searchFocused($searchFocused)
+                .onChange(of: searchFocused) { _, isFocused in
+                    if !isFocused {
+                        searchPresented = false
+                    }
+                }
                 .toolbar { boardToolbar }
         }
     }
@@ -207,6 +214,12 @@ extension OiaLibraryView {
         .onAppear {
             TestHooks.recordStartupEvent("toolbar")
         }
+    }
+
+    func focusSearch() {
+        guard presentedReading == nil, !appState.isFocusMode else { return }
+        searchPresented = true
+        searchFocused = true
     }
 
     @ViewBuilder

@@ -52,11 +52,6 @@ extension OiaLibraryView {
         open(row)
     }
 
-    func focusSearch() {
-        guard presentedReading == nil, !appState.isFocusMode else { return }
-        searchFocused = true
-    }
-
     static let boardSpacing: CGFloat = 18
     static let boardTopSpacing: CGFloat = 12
 }
