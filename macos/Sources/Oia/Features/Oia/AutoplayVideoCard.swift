@@ -8,6 +8,7 @@ import SwiftUI
 /// video above it. The player is prepared on first entry, released offscreen,
 /// and recreated at its saved playback position when the card returns.
 struct AutoplayVideoCard: View {
+    @Environment(\.assetContentGeneration) private var contentGeneration
     let row: ReadingRow
     let libraryURL: URL?
     let cardSize: CGSize
@@ -21,6 +22,8 @@ struct AutoplayVideoCard: View {
 
     @State private var loadedMediaKey: String?
     @State private var playback: CardVideoPlayback?
+    @State private var loadedSourceFingerprint: AssetPreviewSourceFingerprint?
+    @State private var validatedMediaGeneration: UInt64?
 
     var body: some View {
         LocalReadingImage(
@@ -36,7 +39,7 @@ struct AutoplayVideoCard: View {
         .frame(width: cardSize.width, height: cardSize.height)
         .clipped()
         .overlay {
-            if let playback, !scrollState.isScrolling {
+            if let playback {
                 CardVideoPlayerLayer(player: playback.player)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -65,7 +68,7 @@ struct AutoplayVideoCard: View {
     }
 
     private var playbackTaskID: String {
-        "\(mediaKey):retain=\(shouldRetainPlayback):autoplay=\(shouldAutoplay)"
+        "\(mediaKey):retain=\(shouldRetainPlayback):autoplay=\(shouldAutoplay):generation=\(contentGeneration)"
     }
 
     private var mediaKey: String {
@@ -90,9 +93,20 @@ struct AutoplayVideoCard: View {
             pausePlayback()
             return
         }
+        guard await revalidatePlayback(requestedMediaKey: requestedMediaKey) else { return }
+        if let playback, playback.player.rate > 0 {
+            return
+        }
+
+        do {
+            try await Task.sleep(for: .milliseconds(220))
+        } catch {
+            return
+        }
+        guard !Task.isCancelled, shouldAutoplay, loadedMediaKey == requestedMediaKey else { return }
 
         if let playback {
-            playback.player.play()
+            await resumePlayback(playback)
             return
         }
 
@@ -100,36 +114,84 @@ struct AutoplayVideoCard: View {
     }
 
     @MainActor
+    private func resumePlayback(_ playback: CardVideoPlayback) async {
+        guard await playbackPositions.scheduler.waitForStartTurn(),
+              !Task.isCancelled, shouldAutoplay,
+              self.playback === playback else { return }
+        playback.player.play()
+    }
+
+    @MainActor
     private func loadAndPlay(requestedMediaKey: String) async {
-        guard let url = playbackURL else { return }
-        guard (try? url.resourceValues(
-            forKeys: [.isRegularFileKey]
-        ).isRegularFile) == true else { return }
+        guard let url = playbackURL,
+              let lease = await playbackPositions.scheduler.acquire() else { return }
+        var leaseTransferred = false
+        defer {
+            if !leaseTransferred {
+                playbackPositions.scheduler.release(lease)
+            }
+        }
+        guard await playbackPositions.scheduler.waitForStartTurn(), !Task.isCancelled else { return }
+        guard let prepared = await playableAsset(at: url),
+              !Task.isCancelled, loadedMediaKey == requestedMediaKey, shouldAutoplay else { return }
+        let loadedPlayback = CardVideoPlayback(
+            item: AVPlayerItem(asset: prepared.asset),
+            scheduler: playbackPositions.scheduler,
+            lease: lease
+        )
+        playback = loadedPlayback
+        loadedSourceFingerprint = prepared.fingerprint
+        validatedMediaGeneration = contentGeneration
+        leaseTransferred = true
+        restorePosition(of: loadedPlayback.player, mediaKey: requestedMediaKey)
+        loadedPlayback.player.play()
+    }
+
+    @MainActor
+    private func playableAsset(at url: URL) async -> PreparedVideoAsset? {
+        let fingerprint = await Task.detached(priority: .utility) {
+            AssetPreviewSourceFingerprint.read(at: url)
+        }.value
+        guard let fingerprint, !Task.isCancelled else { return nil }
 
         let asset = AVURLAsset(url: url)
         do {
             guard try await asset.load(.isPlayable),
                   try await !(asset.loadTracks(withMediaType: .video)).isEmpty,
                   !Task.isCancelled
-            else { return }
-
-            let loadedPlayback = CardVideoPlayback(
-                item: AVPlayerItem(asset: asset)
-            )
-            guard !Task.isCancelled,
-                  loadedMediaKey == requestedMediaKey,
-                  shouldAutoplay
-            else {
-                loadedPlayback.stop()
-                return
-            }
-
-            playback = loadedPlayback
-            restorePosition(of: loadedPlayback.player, mediaKey: requestedMediaKey)
-            loadedPlayback.player.play()
+            else { return nil }
+            let current = await Task.detached(priority: .utility) {
+                AssetPreviewSourceFingerprint.read(at: url)
+            }.value
+            guard current == fingerprint, !Task.isCancelled else { return nil }
+            return PreparedVideoAsset(asset: asset, fingerprint: fingerprint)
         } catch {
             // The saved poster remains the card's offline/failure presentation.
+            return nil
         }
+    }
+
+    @MainActor
+    private func revalidatePlayback(requestedMediaKey: String) async -> Bool {
+        guard playback != nil, validatedMediaGeneration != contentGeneration else { return true }
+        let generation = contentGeneration
+        let url = playbackURL
+        let fingerprint = await Task.detached(priority: .utility) {
+            url.flatMap { AssetPreviewSourceFingerprint.read(at: $0) }
+        }.value
+        guard !Task.isCancelled, loadedMediaKey == requestedMediaKey,
+              contentGeneration == generation else { return false }
+        if fingerprint != loadedSourceFingerprint {
+            pausePlayback()
+            releasePlayback()
+        }
+        validatedMediaGeneration = generation
+        return true
+    }
+
+    private struct PreparedVideoAsset {
+        let asset: AVURLAsset
+        let fingerprint: AssetPreviewSourceFingerprint
     }
 
     @MainActor
@@ -150,6 +212,8 @@ struct AutoplayVideoCard: View {
     private func releasePlayback() {
         playback?.stop()
         playback = nil
+        loadedSourceFingerprint = nil
+        validatedMediaGeneration = nil
     }
 
     private var playbackURL: URL? {
@@ -164,6 +228,7 @@ struct AutoplayVideoCard: View {
 
 @MainActor
 final class VideoPlaybackPositionStore {
+    let scheduler = VideoPlaybackScheduler()
     private var positions: [String: CMTime] = [:]
 
     func position(for mediaKey: String) -> CMTime? {
@@ -181,8 +246,12 @@ final class VideoPlaybackPositionStore {
 private final class CardVideoPlayback {
     let player: AVQueuePlayer
     private let looper: AVPlayerLooper
+    private let scheduler: VideoPlaybackScheduler
+    private var lease: UUID?
 
-    init(item: AVPlayerItem) {
+    init(item: AVPlayerItem, scheduler: VideoPlaybackScheduler, lease: UUID) {
+        self.scheduler = scheduler
+        self.lease = lease
         let player = AVQueuePlayer()
         player.isMuted = true
         player.preventsDisplaySleepDuringVideoPlayback = false
@@ -193,6 +262,10 @@ private final class CardVideoPlayback {
     func stop() {
         player.pause()
         player.removeAllItems()
+        if let lease {
+            scheduler.release(lease)
+            self.lease = nil
+        }
     }
 }
 
@@ -206,7 +279,9 @@ private struct CardVideoPlayerLayer: NSViewRepresentable {
     }
 
     func updateNSView(_ view: PlayerView, context _: Context) {
-        view.playerLayer.player = player
+        if view.playerLayer.player !== player {
+            view.playerLayer.player = player
+        }
     }
 
     static func dismantleNSView(_ view: PlayerView, coordinator _: Void) {
