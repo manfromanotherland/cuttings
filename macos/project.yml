@@ -131,6 +131,7 @@ targets:
       - path: Sources/Oia/Features/Oia/VideoPlaybackScheduler.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetImageLoader.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewDecodeQueue.swift
+      - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewDecodeKey.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewDiskCache.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewImageCache.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewPublicationQueue.swift

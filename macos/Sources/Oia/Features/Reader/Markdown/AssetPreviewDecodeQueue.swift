@@ -2,26 +2,6 @@
 
 import AppKit
 
-struct AssetPreviewDecodeKey: Hashable, Sendable {
-    enum Kind: Hashable, Sendable {
-        case image
-        case video
-    }
-
-    let kind: Kind
-    let path: String
-    let maxPixel: Int
-
-    init(kind: Kind, url: URL, maxPixel: CGFloat) {
-        self.kind = kind
-        path = url.standardizedFileURL.path
-        let boundedMaxPixel = maxPixel.isFinite
-            ? min(max(1, maxPixel.rounded(.up)), CGFloat(Int32.max))
-            : 1
-        self.maxPixel = Int(boundedMaxPixel)
-    }
-}
-
 /// Bounds board preview work so opening a page cannot decode dozens of large
 /// images simultaneously. A permit is handed directly to the next waiter,
 /// keeping at most four ImageIO/AVFoundation decodes live at once. Requests for
@@ -29,6 +9,9 @@ struct AssetPreviewDecodeKey: Hashable, Sendable {
 /// starts duplicate work in another permit slot. Completed results enter the
 /// exact-size cache before the in-flight job is removed.
 actor AssetPreviewDecodeQueue {
+    typealias SourceDecoder = @Sendable (
+        URL, CGFloat, AssetPreviewDecodeKey.Kind
+    ) async -> AssetImageLoader.Decoded?
     /// Two visible lanes, one refinement lane, and one speculative lane keep
     /// total original decoding bounded at four without prefetch queuing ahead
     /// of newly visible cards. Every lane shares a source-work registry.
@@ -40,6 +23,7 @@ actor AssetPreviewDecodeQueue {
     private let limit: Int
     private let priority: TaskPriority
     private let diskCache: AssetPreviewDiskCache
+    private let sourceDecoder: SourceDecoder
     private var active = 0
     private var nextWaiterID = 0
     private var waiters: [Int: CheckedContinuation<Bool, Never>] = [:]
@@ -47,16 +31,18 @@ actor AssetPreviewDecodeQueue {
     private var waiterHead = 0
     private var nextDecodeJobID = 0
     private var nextDecodeSubscriberID = 0
-    private var decodeJobs: [AssetPreviewDecodeKey: DecodeJob] = [:]
+    private var decodeJobs: [DecodeJobKey: DecodeJob] = [:]
 
     init(
         limit: Int,
         priority: TaskPriority = .utility,
-        diskCache: AssetPreviewDiskCache = .shared
+        diskCache: AssetPreviewDiskCache = .shared,
+        sourceDecoder: @escaping SourceDecoder = AssetPreviewDecodeQueue.decodeSource
     ) {
         self.limit = max(1, limit)
         self.priority = priority
         self.diskCache = diskCache
+        self.sourceDecoder = sourceDecoder
     }
 
     func image(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
@@ -67,43 +53,30 @@ actor AssetPreviewDecodeQueue {
         await preview(at: url, maxPixel: maxPixel, kind: .video)
     }
 
-    /// Warm-cache lookup only. No original image decode or video frame extraction.
-    func cachedPreview(
-        at url: URL, maxPixel: CGFloat, kind: AssetPreviewDecodeKey.Kind
-    ) async -> AssetImageLoader.Decoded? {
-        let key = AssetPreviewDecodeKey(kind: kind, url: url, maxPixel: maxPixel)
-        let diskCache = diskCache
-        let priority = priority
-        return await withPermit {
-            await Task.detached(priority: priority) {
-                guard let fingerprint = AssetPreviewSourceFingerprint.read(at: url) else { return nil }
-                return Self.cached(key, fingerprint: fingerprint, diskCache: diskCache)
-            }.value
-        } ?? nil
-    }
-
     private func preview(
         at url: URL, maxPixel: CGFloat, kind: AssetPreviewDecodeKey.Kind
     ) async -> AssetImageLoader.Decoded? {
         let key = AssetPreviewDecodeKey(kind: kind, url: url, maxPixel: maxPixel)
         let priority = priority
         let diskCache = diskCache
-        return await decode(key: key) {
+        let sourceDecoder = sourceDecoder
+        // Resolve the revision before subscribing in either registry. A watcher
+        // refresh must not join work for bytes that an external writer replaced.
+        // The stat itself is off-main and uses the lane's bounded permit pool.
+        guard let fingerprint = await sourceFingerprint(at: url), !Task.isCancelled else { return nil }
+        let jobKey = DecodeJobKey(asset: key, fingerprint: fingerprint)
+        return await decode(jobKey: jobKey) {
             // All lanes share the final in-flight registry. Cancelling speculative
             // subscribers cannot cancel a visible subscriber's source decode.
-            await Self.sourceWork.decode(key: key) {
+            await Self.sourceWork.decode(jobKey: jobKey) {
                 await Task.detached(priority: priority) {
-                    guard let fingerprint = AssetPreviewSourceFingerprint.read(at: url) else { return nil }
+                    guard AssetPreviewSourceFingerprint.read(at: url) == fingerprint else { return nil }
                     if let cached = Self.cached(key, fingerprint: fingerprint, diskCache: diskCache) {
                         return cached
                     }
                     PerformanceTrace.increment("preview_source_decodes")
                     let interval = PerformanceTrace.begin("PreviewDecode")
-                    let decoded: AssetImageLoader.Decoded? = if kind == .video {
-                        await AssetImageLoader.videoThumbnail(at: url, maxPixel: CGFloat(key.maxPixel))
-                    } else {
-                        AssetImageLoader.downsampledImage(at: url, maxPixel: CGFloat(key.maxPixel))
-                    }
+                    let decoded = await sourceDecoder(url, CGFloat(key.maxPixel), kind)
                     PerformanceTrace.end("PreviewDecode", interval)
                     guard let decoded,
                           AssetPreviewSourceFingerprint.read(at: url) == fingerprint else { return nil }
@@ -117,6 +90,13 @@ actor AssetPreviewDecodeQueue {
 
     func decode(
         key: AssetPreviewDecodeKey,
+        operation: @escaping @Sendable () async -> AssetImageLoader.Decoded?
+    ) async -> AssetImageLoader.Decoded? {
+        await decode(jobKey: DecodeJobKey(asset: key, fingerprint: nil), operation: operation)
+    }
+
+    private func decode(
+        jobKey key: DecodeJobKey,
         operation: @escaping @Sendable () async -> AssetImageLoader.Decoded?
     ) async -> AssetImageLoader.Decoded? {
         guard !Task.isCancelled else { return nil }
@@ -144,7 +124,7 @@ actor AssetPreviewDecodeQueue {
 
     private func subscribe(
         _ subscriberID: Int,
-        to key: AssetPreviewDecodeKey,
+        to key: DecodeJobKey,
         operation: @escaping @Sendable () async -> AssetImageLoader.Decoded?
     ) -> DecodeJob {
         if var existing = decodeJobs[key] {
@@ -220,7 +200,7 @@ actor AssetPreviewDecodeQueue {
 
     private func runDecodeJob(
         id: Int,
-        key: AssetPreviewDecodeKey,
+        key: DecodeJobKey,
         operation: @escaping @Sendable () async -> AssetImageLoader.Decoded?
     ) async -> AssetImageLoader.Decoded? {
         guard await acquire() else {
@@ -244,7 +224,7 @@ actor AssetPreviewDecodeQueue {
     private func cancelDecodeSubscriber(
         _ subscriberID: Int,
         jobID: Int,
-        key: AssetPreviewDecodeKey
+        key: DecodeJobKey
     ) {
         guard var job = decodeJobs[key], job.id == jobID else { return }
         job.subscribers.remove(subscriberID)
@@ -264,7 +244,7 @@ actor AssetPreviewDecodeQueue {
         job.task.cancel()
     }
 
-    private func finishDecodeJob(id: Int, key: AssetPreviewDecodeKey) {
+    private func finishDecodeJob(id: Int, key: DecodeJobKey) {
         guard decodeJobs[key]?.id == id else { return }
         decodeJobs.removeValue(forKey: key)
     }
@@ -317,7 +297,39 @@ actor AssetPreviewDecodeQueue {
     }
 }
 
+extension AssetPreviewDecodeQueue {
+    /// Warm-cache lookup only. No original image decode or video frame extraction.
+    func cachedPreview(
+        at url: URL, maxPixel: CGFloat, kind: AssetPreviewDecodeKey.Kind
+    ) async -> AssetImageLoader.Decoded? {
+        let key = AssetPreviewDecodeKey(kind: kind, url: url, maxPixel: maxPixel)
+        let diskCache = diskCache
+        let priority = priority
+        return await withPermit {
+            await Task.detached(priority: priority) {
+                guard let fingerprint = AssetPreviewSourceFingerprint.read(at: url) else { return nil }
+                return Self.cached(key, fingerprint: fingerprint, diskCache: diskCache)
+            }.value
+        } ?? nil
+    }
+
+}
+
 private extension AssetPreviewDecodeQueue {
+    struct DecodeJobKey: Hashable {
+        let asset: AssetPreviewDecodeKey
+        let fingerprint: AssetPreviewSourceFingerprint?
+    }
+
+    func sourceFingerprint(at url: URL) async -> AssetPreviewSourceFingerprint? {
+        let priority = priority
+        return await withPermit {
+            await Task.detached(priority: priority) {
+                AssetPreviewSourceFingerprint.read(at: url)
+            }.value
+        } ?? nil
+    }
+
     nonisolated static func cached(
         _ key: AssetPreviewDecodeKey,
         fingerprint: AssetPreviewSourceFingerprint,
