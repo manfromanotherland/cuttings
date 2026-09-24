@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class OiaCardTextMetricsTests: XCTestCase {
-    func testWidthScopedCacheEvictsThePreviousWidth() {
+    func testWidthScopedCacheReusesRecentWidthsAndEvictsTheOldest() {
         var cache = WidthScopedHeightCache<String>()
         var calculations = 0
 
@@ -19,7 +19,19 @@ final class OiaCardTextMetricsTests: XCTestCase {
         XCTAssertEqual(height(at: 440), 1)
         XCTAssertEqual(height(at: 440), 1)
         XCTAssertEqual(height(at: 806), 2)
-        XCTAssertEqual(height(at: 440), 3)
+        XCTAssertEqual(height(at: 440), 1)
+        XCTAssertEqual(height(at: 600), 3)
+        XCTAssertEqual(height(at: 700), 4)
+        XCTAssertEqual(height(at: 806), 5)
+    }
+
+    func testWidthScopedCacheBoundsEntriesAtEachWidth() {
+        var cache = WidthScopedHeightCache<String>(maximumEntriesPerWidth: 2)
+        XCTAssertEqual(cache.value(for: "first", width: 440) { 1 }, 1)
+        XCTAssertEqual(cache.value(for: "second", width: 440) { 2 }, 2)
+        XCTAssertEqual(cache.value(for: "uncached", width: 440) { 3 }, 3)
+        XCTAssertEqual(cache.value(for: "uncached", width: 440) { 4 }, 4)
+        XCTAssertEqual(cache.value(for: "first", width: 440) { 5 }, 1)
     }
 
     func testArticleFooterHeightUsesRenderedTitleWidth() {

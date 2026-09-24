@@ -18,4 +18,4 @@
 
 # Generated bindings, the vendored XCFramework, build output, and the Xcode
 # project are not hand-written Swift — never reformat them.
---exclude GeneratedBindings,Frameworks,build,dist,.build,Oia.xcodeproj
+--exclude GeneratedBindings,Frameworks,Packages,build,dist,.build,Oia.xcodeproj

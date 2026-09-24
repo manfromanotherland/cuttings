@@ -7,7 +7,15 @@ private final class OiaCardFontBundleToken: NSObject {}
 
 struct WidthScopedHeightCache<Key: Hashable> {
     private var activeWidth: Int?
-    private var values: [Key: CGFloat] = [:]
+    private var values: [Int: [Key: CGFloat]] = [:]
+    private var recentWidths: [Int] = []
+    private let maximumWidths: Int
+    private let maximumEntriesPerWidth: Int
+
+    init(maximumWidths: Int = 3, maximumEntriesPerWidth: Int = 20_000) {
+        self.maximumWidths = max(1, maximumWidths)
+        self.maximumEntriesPerWidth = max(1, maximumEntriesPerWidth)
+    }
 
     mutating func value(
         for key: Key,
@@ -16,20 +24,26 @@ struct WidthScopedHeightCache<Key: Hashable> {
     ) -> CGFloat {
         if activeWidth != width {
             activeWidth = width
-            values.removeAll(keepingCapacity: true)
+            recentWidths.removeAll { $0 == width }
+            recentWidths.append(width)
+            if recentWidths.count > maximumWidths {
+                values.removeValue(forKey: recentWidths.removeFirst())
+            }
         }
-        if let cached = values[key] {
+        if let cached = values[width]?[key] {
             return cached
         }
 
         let value = calculate()
-        values[key] = value
+        if values[width, default: [:]].count < maximumEntriesPerWidth {
+            values[width, default: [:]][key] = value
+        }
         return value
     }
 }
 
 /// Native text measurements for the fixed card frames supplied to
-/// LazyLayoutKit. Measurements are cached at the active column width and never
+/// LazyLayoutKit. Measurements retain a bounded set of recent column widths and never
 /// read assets or construct offscreen card views.
 @MainActor
 final class OiaCardTextMetrics {

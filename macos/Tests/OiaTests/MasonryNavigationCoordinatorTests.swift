@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import LazyLayoutKit
 import XCTest
 
 final class MasonryNavigationCoordinatorTests: XCTestCase {
@@ -29,34 +30,18 @@ final class MasonryNavigationCoordinatorTests: XCTestCase {
     }
 
     @MainActor
-    func testRefreshesWhenOnlyConfigurationIDChanges() {
+    func testNavigationUsesTheRenderedSnapshotWithoutMeasuringAgain() {
         let coordinator = MasonryNavigationCoordinator<Double, Int>()
-        var estimationCount = 0
+        let snapshot = LayoutSnapshot(
+            ids: ids,
+            result: layout.layout(items: elements.map { .fixedHeight($0) }, containerWidth: 336),
+            containerWidth: 336
+        )
+        coordinator.update(snapshot: snapshot)
 
-        func update(configurationID: String) {
-            coordinator.updateIfNeeded(
-                elements: elements,
-                ids: ids,
-                configuration: MasonryNavigationConfiguration(
-                    layout: layout,
-                    containerWidth: 336,
-                    configurationID: configurationID
-                ),
-                estimatedHeight: { _, _ in
-                    estimationCount += 1
-                    return 100
-                }
-            )
+        for _ in 0 ..< 20 {
+            XCTAssertEqual(coordinator.neighbor(of: 1, toward: .rightward), 2)
         }
-
-        update(configurationID: CardSize.small.rawValue)
-        XCTAssertEqual(estimationCount, elements.count)
-
-        update(configurationID: CardSize.small.rawValue)
-        XCTAssertEqual(estimationCount, elements.count)
-
-        update(configurationID: CardSize.large.rawValue)
-        XCTAssertEqual(estimationCount, elements.count * 2)
     }
 
     @MainActor
@@ -65,16 +50,11 @@ final class MasonryNavigationCoordinatorTests: XCTestCase {
         ids: [Int],
         width: Double
     ) {
-        coordinator.updateIfNeeded(
-            elements: elements,
+        coordinator.update(snapshot: LayoutSnapshot(
             ids: ids,
-            configuration: MasonryNavigationConfiguration(
-                layout: layout,
-                containerWidth: width,
-                configurationID: 0
-            ),
-            estimatedHeight: { _, _ in 100 }
-        )
+            result: layout.layout(items: elements.map { .fixedHeight($0) }, containerWidth: width),
+            containerWidth: width
+        ))
     }
 
     private var layout: OiaMasonryLayout {

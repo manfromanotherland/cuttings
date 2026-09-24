@@ -10,8 +10,7 @@ packages:
     url: https://github.com/apple/swift-markdown.git
     exactVersion: "0.8.0"
   LazyLayoutKit:
-    url: https://github.com/Dave861/LazyLayoutKit.git
-    exactVersion: "0.3.0"
+    path: Packages/LazyLayoutKit
   # Sparkle drives in-app software updates (the "Check for Updates…" menu item and,
   # once the user opts in, periodic background checks). Distributed as a binary
   # XCFramework over SPM, so Xcode embeds and signs Sparkle.framework into the app
@@ -125,6 +124,8 @@ targets:
       - path: Sources/Oia/Features/Oia/LocalReadingFavicon.swift
       - path: Sources/Oia/Features/Oia/ReadingQuickLookURLResolver.swift
       - path: Sources/Oia/Features/Oia/LazyMasonryBoard.swift
+      - path: Sources/Oia/Features/Oia/BoardVisibilityCoordinator.swift
+      - path: Sources/Oia/Features/Oia/ReadingRow+BoardGeometry.swift
       - path: Sources/Oia/Features/Oia/VideoCardViewport.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetImageLoader.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetPreviewDecodeQueue.swift

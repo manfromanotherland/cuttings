@@ -193,51 +193,14 @@ struct MasonryNavigationIndex<ID: Hashable & Sendable>: Sendable {
     }
 }
 
-/// A non-observable cache updated only when the board's layout inputs change.
-/// Selection changes can then query spatial neighbors without solving all
-/// reading frames again for every key repeat.
-struct MasonryNavigationConfiguration: Equatable {
-    let layout: OiaMasonryLayout
-    let containerWidth: Double
-    let configurationID: AnyHashable
-}
-
+/// Spatial navigation consumes the exact snapshot already solved by the board.
+/// It never measures cards or runs a second layout from a view body.
 @MainActor
 final class MasonryNavigationCoordinator<Element: Equatable, ID: Hashable & Sendable> {
     private var index = MasonryNavigationIndex<ID>(ids: [], frames: [])
-    private var elements: [Element] = []
-    private var ids: [ID] = []
-    private var configuration: MasonryNavigationConfiguration?
-    private var hasSnapshot = false
 
-    func updateIfNeeded(
-        elements: [Element],
-        ids: [ID],
-        configuration: MasonryNavigationConfiguration,
-        estimatedHeight: (Element, CGFloat) -> CGFloat
-    ) {
-        guard !hasSnapshot
-            || self.elements != elements
-            || self.ids != ids
-            || self.configuration != configuration
-        else { return }
-
-        let layout = configuration.layout
-        let containerWidth = configuration.containerWidth
-        let columnWidth = CGFloat(layout.columnWidth(forContainerWidth: containerWidth))
-        let metrics = elements.map { element in
-            ItemMetric.fixedHeight(
-                OiaMasonryLayout.normalizedHeight(
-                    estimatedHeight(element, columnWidth)
-                )
-            )
-        }
-        let result = layout.layout(items: metrics, containerWidth: containerWidth)
-        index = MasonryNavigationIndex(ids: ids, frames: result.frames)
-        self.elements = elements
-        self.ids = ids
-        self.configuration = configuration
-        hasSnapshot = true
+    func update(snapshot: LayoutSnapshot<ID>) {
+        index = MasonryNavigationIndex(ids: snapshot.ids, frames: snapshot.frames)
     }
 
     func neighbor(of id: ID, toward direction: BoardNavigationDirection) -> ID? {
@@ -249,12 +212,15 @@ final class MasonryNavigationCoordinator<Element: Equatable, ID: Hashable & Send
 /// snapshot is cheap layout input; only cards in the materialized window become
 /// SwiftUI views.
 struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
+    @State private var visibility = BoardVisibilityCoordinator<ID>()
+
     private let elements: [Element]
     private let id: KeyPath<Element, ID>
     private let minimumColumnWidth: CGFloat
     private let spacing: CGFloat
     private let contentInsets: EdgeInsets
     private let configurationID: AnyHashable
+    private let geometryKey: ((Element) -> AnyHashable)?
     private let position: Binding<LazyLayoutPosition<ID>>?
     private let navigationCoordinator: MasonryNavigationCoordinator<Element, ID>?
     private let estimatedHeight: (Element, CGFloat) -> CGFloat
@@ -267,6 +233,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         spacing: CGFloat = 18,
         contentInsets: EdgeInsets = .init(),
         configurationID: AnyHashable = 0,
+        geometryKey: ((Element) -> AnyHashable)? = nil,
         position: Binding<LazyLayoutPosition<ID>>? = nil,
         navigationCoordinator: MasonryNavigationCoordinator<Element, ID>? = nil,
         estimatedHeight: @escaping (Element, CGFloat) -> CGFloat = { _, _ in 180 },
@@ -279,6 +246,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         self.spacing = spacing
         self.contentInsets = contentInsets
         self.configurationID = configurationID
+        self.geometryKey = geometryKey
         self.position = position
         self.navigationCoordinator = navigationCoordinator
         self.estimatedHeight = estimatedHeight
@@ -295,40 +263,34 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
             trailingInset: Double(contentInsets.trailing)
         )
 
-        GeometryReader { proxy in
-            let containerWidth = Double(proxy.size.width)
-            // A declaration is required here because this is a ViewBuilder scope.
-            // swiftlint:disable:next redundant_discardable_let
-            let _ = navigationCoordinator?.updateIfNeeded(
-                elements: elements,
-                ids: elements.map { $0[keyPath: id] },
-                configuration: MasonryNavigationConfiguration(
-                    layout: layout,
-                    containerWidth: containerWidth,
-                    configurationID: configurationID
-                ),
-                estimatedHeight: estimatedHeight
-            )
-
-            LazyLayoutView(
-                elements,
-                id: id,
-                layout: layout,
-                overscan: .items(80),
-                position: position,
-                recomputeOn: configurationID
-            ) { element, containerWidth in
-                .fixedHeight(
-                    OiaMasonryLayout.normalizedHeight(
-                        estimatedHeight(
-                            element,
-                            CGFloat(layout.columnWidth(forContainerWidth: containerWidth))
-                        )
+        LazyLayoutView(
+            elements,
+            id: id,
+            layout: layout,
+            overscan: .items(80),
+            position: position,
+            recomputeOn: configurationID,
+            geometryKey: geometryKey
+        ) { element, containerWidth in
+            .fixedHeight(
+                OiaMasonryLayout.normalizedHeight(
+                    estimatedHeight(
+                        element,
+                        CGFloat(layout.columnWidth(forContainerWidth: containerWidth))
                     )
                 )
-            } content: { element in
-                content(element)
-            }
+            )
+        } content: { element in
+            content(element)
+                .environment(\.boardCardVisibility, visibility.tracker(for: element[keyPath: id]))
+        }
+        .preparingLayoutCooperatively()
+        .onLayoutSnapshotChange { snapshot in
+            navigationCoordinator?.update(snapshot: snapshot)
+            visibility.update(snapshot: snapshot)
+        }
+        .onLayoutViewportChange { viewport in
+            visibility.update(viewport: viewport)
         }
     }
 }

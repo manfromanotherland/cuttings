@@ -240,6 +240,7 @@ extension OiaLibraryView {
                         trailing: Self.boardSpacing
                     ),
                     configurationID: cardSize.rawValue,
+                    geometryKey: { AnyHashable($0.boardGeometryKey) },
                     position: $boardPosition,
                     navigationCoordinator: boardNavigation,
                     estimatedHeight: estimatedCardHeight,

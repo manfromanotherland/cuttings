@@ -4,6 +4,7 @@ import SwiftUI
 
 struct OiaCardView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.boardCardVisibility) private var boardVisibility
 
     let row: ReadingRow
     let isSelected: Bool
@@ -20,19 +21,23 @@ struct OiaCardView: View {
     var onEditTags: () -> Void
 
     @State private var isHovered = false
-    @State private var isInViewport = false
+    @State private var fallbackVisibility = false
+
+    private var isInViewport: Bool {
+        boardVisibility?.isVisible ?? fallbackVisibility
+    }
 
     var body: some View {
         GeometryReader { proxy in
             interactiveCard(in: proxy.size)
         }
         .modifier(CardViewportVisibilityModifier(
-            isEnabled: row.previewAsset != nil
+            isEnabled: boardVisibility == nil && (row.previewAsset != nil
                 || row.localVideoAssetReference != nil
                 || row.hasLocalSocialPreview
-                || row.faviconAsset != nil,
+                || row.faviconAsset != nil),
             viewportSize: viewportSize,
-            isVisible: $isInViewport
+            isVisible: $fallbackVisibility
         ))
         .onAppear {
             TestHooks.recordStartupEvent("card")
