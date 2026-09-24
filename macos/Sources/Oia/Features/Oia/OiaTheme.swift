@@ -89,10 +89,6 @@ enum OiaTheme {
         return CardThemePalette(themeColor: row.themeColor)
     }
 
-    static func cardBackground(for row: ReadingRow) -> Color {
-        articlePalette(for: row)?.background.color ?? card
-    }
-
     static func previewPalette(for row: ReadingRow) -> CardThemePalette? {
         if let color = row.dominantColor {
             return CardThemePalette(

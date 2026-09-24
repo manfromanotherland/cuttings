@@ -71,7 +71,13 @@ struct OiaCardView: View {
     private func cardSurface(in size: CGSize) -> some View {
         cardContent(in: size)
             .frame(width: size.width, height: size.height, alignment: .topLeading)
-            .background(OiaTheme.cardBackground(for: row))
+            .background {
+                cardShape.fill(.thinMaterial)
+
+                if let palette = OiaTheme.articlePalette(for: row) {
+                    cardShape.fill(palette.background.color.opacity(0.15))
+                }
+            }
             .clipShape(cardShape)
             .overlay(cardShape.stroke(OiaTheme.border, lineWidth: 1))
             .overlay { selectionRing }
@@ -194,7 +200,6 @@ struct OiaCardView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OiaTheme.cardBackground(for: row))
     }
 
     private var quoteCard: some View {
@@ -221,7 +226,6 @@ struct OiaCardView: View {
             minHeight: OiaCardTextMetrics.quoteMinimumHeight,
             alignment: .center
         )
-        .background(OiaTheme.cardTint(for: row.id))
     }
 
     private func quoteMark(_ mark: String) -> some View {
@@ -273,14 +277,11 @@ private extension OiaCardView {
     }
 
     private var articlePrimaryForeground: Color {
-        OiaTheme.articlePalette(for: row)?.foreground.color ?? .primary
+        .primary
     }
 
     private var articleSecondaryForeground: Color {
-        // A themed surface uses the same pure black/white foreground for every
-        // text role so captions never lose contrast through opacity. Font size
-        // and weight continue to provide the hierarchy.
-        OiaTheme.articlePalette(for: row)?.foreground.color ?? .secondary
+        .secondary
     }
 
     private var hoverMenu: some View {
