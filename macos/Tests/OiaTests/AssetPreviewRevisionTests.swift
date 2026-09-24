@@ -4,6 +4,33 @@ import AppKit
 import XCTest
 
 final class AssetPreviewRevisionTests: XCTestCase {
+    func testWarmPreviewResolvesWhileTheSourceLaneIsOccupied() async throws {
+        let fixture = try ReplacementFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try fixture.preloadPreview()
+        let queue = AssetPreviewDecodeQueue(limit: 1)
+        let probe = RevisionDecodeProbe()
+        let occupied = Task {
+            await queue.withPermit {
+                await probe.decode(at: fixture.source, maxPixel: 80, kind: .image)
+            }
+        }
+        let started = await probe.waitForInvocations(1)
+        XCTAssertTrue(started)
+        let completion = CacheLookupCompletion()
+        let lookup = Task {
+            let cached = await queue.cachedPreview(at: fixture.source, maxPixel: 80, kind: .image)
+            await completion.finish(found: cached != nil)
+        }
+        let foundBeforeRelease = await completion.waitForResult()
+        let occupiedState = await queue.state()
+        await probe.releaseFirst()
+        _ = await occupied.value
+        _ = await lookup.value
+        XCTAssertEqual(occupiedState.active, 1)
+        XCTAssertEqual(foundBeforeRelease, true, "Cached cards must not wait for occupied source decode lanes")
+    }
+
     func testReplacementSourceDoesNotJoinAnActiveDecodeOfItsPreviousRevision() async throws {
         let fixture = try ReplacementFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
@@ -44,6 +71,13 @@ private struct ReplacementFixture {
         try writeImage(width: 40, height: 80)
     }
 
+    func preloadPreview() throws {
+        let decoded = try XCTUnwrap(AssetImageLoader.downsampledImage(at: source, maxPixel: 80))
+        let fingerprint = try XCTUnwrap(AssetPreviewSourceFingerprint.read(at: source))
+        let key = AssetPreviewDecodeKey(kind: .image, url: source, maxPixel: 80)
+        AssetPreviewImageCache.shared.insert(decoded.image, for: key, fingerprint: fingerprint)
+    }
+
     private func writeImage(width: Int, height: Int) throws {
         let context = try XCTUnwrap(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8,
@@ -55,6 +89,22 @@ private struct ReplacementFixture {
         let image = try XCTUnwrap(context.makeImage())
         let bytes = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
         try bytes.write(to: source, options: .atomic)
+    }
+}
+
+private actor CacheLookupCompletion {
+    private var result: Bool?
+
+    func finish(found: Bool) {
+        result = found
+    }
+
+    func waitForResult() async -> Bool? {
+        for _ in 0 ..< 200 {
+            if let result { return result }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return nil
     }
 }
 

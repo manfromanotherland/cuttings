@@ -19,6 +19,8 @@ actor AssetPreviewDecodeQueue {
     static let refinement = AssetPreviewDecodeQueue(limit: 1)
     static let prefetch = AssetPreviewDecodeQueue(limit: 1, priority: .background)
     private static let sourceWork = AssetPreviewDecodeQueue(limit: 4)
+    // Warm cards must remain available while slow original decodes occupy a lane.
+    private static let cacheLookupWork = AssetPreviewDecodeQueue(limit: 2)
 
     private let limit: Int
     private let priority: TaskPriority
@@ -305,14 +307,13 @@ extension AssetPreviewDecodeQueue {
         let key = AssetPreviewDecodeKey(kind: kind, url: url, maxPixel: maxPixel)
         let diskCache = diskCache
         let priority = priority
-        return await withPermit {
+        return await Self.cacheLookupWork.withPermit {
             await Task.detached(priority: priority) {
                 guard let fingerprint = AssetPreviewSourceFingerprint.read(at: url) else { return nil }
                 return Self.cached(key, fingerprint: fingerprint, diskCache: diskCache)
             }.value
         } ?? nil
     }
-
 }
 
 private extension AssetPreviewDecodeQueue {
