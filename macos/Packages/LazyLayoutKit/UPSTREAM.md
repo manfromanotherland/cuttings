@@ -6,6 +6,10 @@ license is retained in `LICENSE`. Sources retain their original notices.
 
 Óia changes keep raw scroll geometry outside observable view state, retain a
 bounded materialization region, and share solved geometry with navigation and
-visibility tracking. Regression tests exercise the real macOS scroll container.
+visibility tracking. Geometry-only keys avoid remeasurement for metadata edits.
+Cooperative preparation yields between measurement batches and retains payloads
+aligned with the published snapshot while replacements are pending. Pure tests
+cover cancellation and content identity; optional hosted tests exercise the real
+macOS scroll container.
 This local package is the reproducible source used by the app; build checkouts
 must never be patched.

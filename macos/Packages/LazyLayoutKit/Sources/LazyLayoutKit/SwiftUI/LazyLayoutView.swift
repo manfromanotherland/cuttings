@@ -153,6 +153,10 @@ public struct LazyLayoutView<Element, ID: Hashable & Sendable, Layout: LazyLayou
         var preparation: Task<Void, Never>?
         var generation: UInt64 = 0
         var preparationPending = false
+        // Payloads belong to the published geometry, not the latest parent input.
+        // A smaller/filter-changed collection can arrive while its replacement
+        // snapshot is still being prepared and the old window remains scrollable.
+        var snapshotElements: [Element] = []
     }
 
     @State private var scrollGeometry = ScrollGeometryState()
@@ -436,9 +440,11 @@ public struct LazyLayoutView<Element, ID: Hashable & Sendable, Layout: LazyLayou
                         // captured at solve time keeps the right content on
                         // screen for that frame instead — same identity, just one
                         // frame stale.
-                        let current = item.position < elements.count && ids[item.position] == item.id
-                            ? elements[item.position]
-                            : item.element
+                        let current = LayoutWindowContent.element(
+                            at: item.position, matching: item.id,
+                            currentElements: elements, currentIDs: ids,
+                            fallback: item.element
+                        )
                         content(current)
                             .frame(width: item.frame.width, height: item.frame.height)
                             .offset(x: item.frame.x, y: item.frame.y)
@@ -676,7 +682,7 @@ public struct LazyLayoutView<Element, ID: Hashable & Sendable, Layout: LazyLayou
                 total: itemsDuration + layoutDuration + snapshotDuration
             )
         )
-        publishSnapshot(next, anchored: anchored)
+        publishSnapshot(next, elements: elements, anchored: anchored)
     }
 
     private func schedulePreparation(anchored: Bool) {
@@ -739,12 +745,13 @@ public struct LazyLayoutView<Element, ID: Hashable & Sendable, Layout: LazyLayou
                 total: itemsDuration + layoutDuration + snapshotDuration
             ))
             scrollGeometry.preparationPending = false
-            publishSnapshot(next, anchored: anchored)
+            publishSnapshot(next, elements: capturedElements, anchored: anchored)
         }
     }
 
-    private func publishSnapshot(_ next: LayoutSnapshot<ID>, anchored: Bool) {
+    private func publishSnapshot(_ next: LayoutSnapshot<ID>, elements: [Element], anchored: Bool) {
         let previous = snapshot
+        scrollGeometry.snapshotElements = elements
         snapshot = next
         scrollGeometry.retainedWindow = nil
         onSnapshotChange?(next)
@@ -849,7 +856,11 @@ public struct LazyLayoutView<Element, ID: Hashable & Sendable, Layout: LazyLayou
                 id: snapshot.ids[$0],
                 position: $0,
                 frame: snapshot.frames[$0],
-                element: elements[$0]
+                element: LayoutWindowContent.element(
+                    at: $0, matching: snapshot.ids[$0],
+                    currentElements: elements, currentIDs: ids,
+                    fallback: scrollGeometry.snapshotElements[$0]
+                )
             )
         }
     }
