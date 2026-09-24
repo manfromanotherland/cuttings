@@ -18,7 +18,14 @@ enum TestHooks {
     /// True when the app was launched by the UI-test harness (passes `--ui-testing`).
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
     /// Performance launches use the real board without the UI-test accessibility row probe.
-    static let isPerformanceTesting = ProcessInfo.processInfo.arguments.contains("--performance-testing")
+    static let isPerformanceTesting: Bool = {
+        guard ProcessInfo.processInfo.arguments.contains("--performance-testing") else { return false }
+        let required = ["OIA_TEST_LIBRARY", "OIA_TEST_DB", "OIA_TEST_DEFAULTS"]
+        precondition(required.allSatisfy {
+            ProcessInfo.processInfo.environment[$0]?.isEmpty == false
+        }, "Performance launches require an isolated library, index, and defaults suite.")
+        return true
+    }()
     static let isIsolatedRun = isUITesting || isPerformanceTesting
 
     /// Library folder to boot against, replacing the persisted bookmark.
@@ -108,7 +115,7 @@ enum TestHooks {
         recordStartupEvent("card-visible-\(String(safeID))", details: id)
     }
 
-    /// Reads an environment variable, but only in UI-testing mode, so a
+    /// Reads an environment variable, but only in an isolated harness mode, so a
     /// production build can never be redirected by a stray variable.
     private static func env(_ key: String) -> String? {
         guard isIsolatedRun,
