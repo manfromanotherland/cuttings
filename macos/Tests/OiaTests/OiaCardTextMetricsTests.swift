@@ -156,26 +156,27 @@ final class OiaCardTextMetricsTests: XCTestCase {
         )
     }
 
-    func testShortQuoteCardsUseTheApprovedMinimumHeight() {
+    func testQuoteCardsScaleTheirVerticalSpaceWithCardSize() {
         let metrics = OiaCardTextMetrics()
+        let text = "Not every situation warrants advice. Sometimes, "
+            + "the person just wants to gauge a reaction or to share."
 
-        XCTAssertEqual(OiaCardTextMetrics.quoteMinimumHeight, 300)
         XCTAssertEqual(
-            metrics.quoteCardHeight(
-                for: "A short quote",
-                width: 403,
-                cardSize: .extraLarge
-            ),
-            300
+            CardSize.allCases.map(OiaCardTextMetrics.quoteVerticalPadding(for:)),
+            [16, 18, 20, 22, 24]
         )
-        XCTAssertEqual(
-            metrics.quoteCardHeight(
-                for: "To live is the rarest\nthing in the world.\nMost people exist,\nthat is all.",
-                width: 403,
-                cardSize: .extraLarge
-            ),
-            300
+        let narrowHeight = metrics.quoteCardHeight(
+            for: text,
+            width: CardSize.extraSmall.minimumColumnWidth,
+            cardSize: .extraSmall
         )
+        let wideHeight = metrics.quoteCardHeight(
+            for: text,
+            width: CardSize.extraLarge.minimumColumnWidth,
+            cardSize: .extraLarge
+        )
+        XCTAssertGreaterThan(narrowHeight, wideHeight)
+        XCTAssertLessThan(wideHeight, 300)
     }
 
     func testQuoteHeightStopsAtTheVisibleLineLimit() {
@@ -299,9 +300,8 @@ extension OiaCardTextMetricsTests {
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
         }
         .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
-        .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding)
+        .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding(for: cardSize))
         .frame(width: width, alignment: .center)
-        .frame(minHeight: OiaCardTextMetrics.quoteMinimumHeight, alignment: .center)
 
         return ceil(NSHostingView(rootView: view).fittingSize.height)
     }

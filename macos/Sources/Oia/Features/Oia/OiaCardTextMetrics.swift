@@ -51,8 +51,6 @@ final class OiaCardTextMetrics {
     static let articleFooterSpacing: CGFloat = 8
     static let articleFooterSourceLineHeight = max(14, sourceLineHeight)
     static let quoteHorizontalPadding: CGFloat = 34.5
-    static let quoteVerticalPadding: CGFloat = 24
-    static let quoteMinimumHeight: CGFloat = 300
     static let quoteMarkHeight: CGFloat = 15
     static let quoteMarkVerticalOffset: CGFloat = 21
     static let quoteMarkSpacing: CGFloat = 23
@@ -106,16 +104,16 @@ final class OiaCardTextMetrics {
         let key = QuoteHeightKey(text: text, cardSize: cardSize)
         return quoteHeights.value(for: key, width: halfPointWidth) {
             let font = Self.quoteFont(for: cardSize)
+            let verticalPadding = Self.quoteVerticalPadding(for: cardSize)
             let measured = Self.measuredQuoteHeight(
                 text,
                 width: CGFloat(halfPointWidth) / 2,
                 font: font
             )
-            let intrinsicHeight = Self.quoteVerticalPadding * 2
+            return verticalPadding * 2
                 + Self.quoteMarkHeight * 2
                 + Self.quoteMarkSpacing * 2
                 + measured
-            return max(Self.quoteMinimumHeight, intrinsicHeight)
         }
     }
 
@@ -155,6 +153,10 @@ final class OiaCardTextMetrics {
         case .large: 22
         case .extraLarge: 24
         }
+    }
+
+    static func quoteVerticalPadding(for cardSize: CardSize) -> CGFloat {
+        quotePointSize(for: cardSize)
     }
 
     static func quoteFont(for cardSize: CardSize) -> NSFont {

@@ -221,12 +221,8 @@ struct OiaCardView: View {
                 .padding(.top, OiaCardTextMetrics.quoteMarkSpacing)
         }
         .padding(.horizontal, OiaCardTextMetrics.quoteHorizontalPadding)
-        .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding)
-        .frame(
-            maxWidth: .infinity,
-            minHeight: OiaCardTextMetrics.quoteMinimumHeight,
-            alignment: .center
-        )
+        .padding(.vertical, OiaCardTextMetrics.quoteVerticalPadding(for: cardSize))
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func quoteMark(_ mark: String) -> some View {
