@@ -52,12 +52,12 @@ final class AssetPreviewLoadPlanTests: XCTestCase {
         XCTAssertNil(plan.refinementMaxPixel)
     }
 
-    func testDisplayQualityTracksActualRenderedBackingSize() {
+    func testDisplayQualityRoundsBackingSizeIntoFiniteBoardTiers() {
         XCTAssertEqual(
             AssetPreviewLoadPlan.displayMaxPixel(
                 for: CGSize(width: 202.5, height: 337.25), displayScale: 2
             ),
-            675
+            768
         )
         XCTAssertEqual(
             AssetPreviewLoadPlan.displayMaxPixel(
@@ -69,7 +69,7 @@ final class AssetPreviewLoadPlanTests: XCTestCase {
             AssetPreviewLoadPlan.displayMaxPixel(
                 for: CGSize(width: 300, height: 100), displayScale: .nan
             ),
-            300
+            320
         )
         XCTAssertEqual(
             AssetPreviewLoadPlan.displayMaxPixel(
@@ -77,6 +77,13 @@ final class AssetPreviewLoadPlanTests: XCTestCase {
             ),
             1024
         )
+    }
+
+    func testSmallResizeKeepsTheSameDecodeTier() {
+        let before = AssetPreviewLoadPlan.displayMaxPixel(for: CGSize(width: 240, height: 300), displayScale: 2)
+        let after = AssetPreviewLoadPlan.displayMaxPixel(for: CGSize(width: 241, height: 301), displayScale: 2)
+        XCTAssertEqual(before, after)
+        XCTAssertEqual(before, 768)
     }
 
     @MainActor

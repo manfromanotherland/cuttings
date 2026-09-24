@@ -9,6 +9,8 @@ import SwiftUI
 /// Every path stays beneath the reading's own folder and never reaches back to
 /// the network.
 struct LocalReadingImage: View {
+    @Environment(\.boardCardVisibility) private var viewportVisibility
+    @Environment(\.assetContentGeneration) private var contentGeneration
     let row: ReadingRow
     let libraryURL: URL?
     var explicitAssetReference: String?
@@ -21,6 +23,7 @@ struct LocalReadingImage: View {
     var scrollState: BoardScrollState?
 
     @State private var presentation = AssetPreviewPresentation()
+    @State private var validatedRequest: AssetRequest?
 
     var body: some View {
         Group {
@@ -42,6 +45,7 @@ struct LocalReadingImage: View {
         }
         .onDisappear {
             presentation.clear(for: nil)
+            validatedRequest = nil
         }
     }
 
@@ -79,9 +83,13 @@ struct LocalReadingImage: View {
         AssetPreviewLoadPlan(
             maxPixel: maxPixel,
             loadsProgressively: loadsProgressively,
-            isVisible: isVisible,
+            isVisible: isVisible || shouldPrefetch,
             isScrolling: true
         )
+    }
+
+    private var shouldPrefetch: Bool {
+        loadsProgressively && !isVisible && (viewportVisibility?.isNearViewport ?? false)
     }
 
     private var refinementMaxPixel: CGFloat? {
@@ -99,14 +107,14 @@ struct LocalReadingImage: View {
             request: assetRequest,
             maxPixel: initialPlan.initialMaxPixel,
             quality: loadsProgressively ? .lightweight : .display,
-            prerequisiteIsReady: true
+            prerequisiteIsReady: isVisible
         )
     }
 
     private var refinementTaskID: LoadTaskID {
         let request = assetRequest
         let refinementMaxPixel = refinementMaxPixel
-        let lightweightIsReady = if let request, let refinementMaxPixel {
+        let lightweightIsReady = if let request, validatedRequest == request, let refinementMaxPixel {
             presentation.contains(
                 .lightweight,
                 atLeastMaxPixel: min(
@@ -138,6 +146,10 @@ private extension LocalReadingImage {
         let request = assetRequest
         guard isVisible else {
             presentation.clear(for: request?.url)
+            validatedRequest = nil
+            if shouldPrefetch, let request, let initialMaxPixel = initialPlan.initialMaxPixel {
+                _ = await decode(request, maxPixel: initialMaxPixel, queue: .prefetch)
+            }
             return
         }
         guard let request, let initialMaxPixel = initialPlan.initialMaxPixel else {
@@ -149,26 +161,29 @@ private extension LocalReadingImage {
         presentation.reset(for: request.url)
         // Re-entering a warm card should not replay the lightweight stage.
         if loadsProgressively {
-            let displayKey = decodeKey(request, maxPixel: maxPixel)
-            if presentation.contains(.display, atLeastMaxPixel: maxPixel, for: request.url) {
+            if validatedRequest == request,
+               presentation.contains(.display, atLeastMaxPixel: maxPixel, for: request.url)
+            {
                 return
             }
-            if let cached = AssetPreviewImageCache.shared.entry(for: displayKey) {
-                presentation.publish(cached, quality: .display, for: request.url)
+            if let cached = await AssetPreviewDecodeQueue.shared.cachedPreview(
+                at: request.url, maxPixel: maxPixel, kind: request.isVideo ? .video : .image
+            ) {
+                guard !Task.isCancelled, assetRequest == request, isVisible else { return }
+                presentation.publish(
+                    AssetPreviewVariant(image: cached.image, decodedForMaxPixel: maxPixel),
+                    quality: .display, for: request.url
+                )
+                validatedRequest = request
                 return
             }
+            guard !Task.isCancelled, assetRequest == request, isVisible else { return }
         }
-        guard !presentation.contains(
+        guard validatedRequest != request || !presentation.contains(
             quality,
             atLeastMaxPixel: initialMaxPixel,
             for: request.url
         ) else { return }
-
-        let key = decodeKey(request, maxPixel: initialMaxPixel)
-        if let cached = AssetPreviewImageCache.shared.entry(for: key) {
-            presentation.publish(cached, quality: quality, for: request.url)
-            return
-        }
 
         let decoded = await decode(request, maxPixel: initialMaxPixel, queue: .shared)
         completeInitialDecode(
@@ -188,7 +203,9 @@ private extension LocalReadingImage {
     ) {
         guard let decoded else {
             guard !Task.isCancelled, assetRequest == request, isVisible else { return }
+            presentation.clear(for: request.url)
             presentation.markFailed(for: request.url)
+            validatedRequest = request
             return
         }
         let variant = AssetPreviewVariant(
@@ -196,7 +213,11 @@ private extension LocalReadingImage {
             decodedForMaxPixel: maxPixel
         )
         guard !Task.isCancelled, assetRequest == request, isVisible else { return }
+        if validatedRequest != request {
+            presentation.clear(for: request.url)
+        }
         presentation.publish(variant, quality: quality, for: request.url)
+        validatedRequest = request
     }
 
     @MainActor
@@ -213,16 +234,10 @@ private extension LocalReadingImage {
         }
         guard !Task.isCancelled else { return }
 
-        let key = decodeKey(request, maxPixel: refinementMaxPixel)
-        if let cached = AssetPreviewImageCache.shared.entry(for: key) {
-            guard assetRequest == request, !isScrolling, isVisible else { return }
-            presentation.publish(cached, quality: .display, for: request.url)
-            return
-        }
-
         let decoded = await decode(
             request, maxPixel: refinementMaxPixel, queue: .refinement
         )
+        guard decoded != nil, await AssetPreviewPublicationQueue.shared.waitForTurn() else { return }
         completeDisplayDecode(
             decoded,
             request: request,
@@ -270,7 +285,7 @@ private extension LocalReadingImage {
         )
         guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: baseURL)
         else { return nil }
-        return AssetRequest(url: url, isVideo: isVideo)
+        return AssetRequest(url: url, isVideo: isVideo, contentGeneration: contentGeneration)
     }
 
     private func decode(
@@ -284,20 +299,10 @@ private extension LocalReadingImage {
         return await queue.image(at: request.url, maxPixel: maxPixel)
     }
 
-    private func decodeKey(
-        _ request: AssetRequest,
-        maxPixel: CGFloat
-    ) -> AssetPreviewDecodeKey {
-        AssetPreviewDecodeKey(
-            kind: request.isVideo ? .video : .image,
-            url: request.url,
-            maxPixel: maxPixel
-        )
-    }
-
     private struct AssetRequest: Hashable {
         let url: URL
         let isVideo: Bool
+        let contentGeneration: UInt64
     }
 
     private struct LoadTaskID: Hashable {

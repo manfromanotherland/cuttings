@@ -29,14 +29,17 @@ struct AssetPreviewDecodeKey: Hashable, Sendable {
 /// starts duplicate work in another permit slot. Completed results enter the
 /// exact-size cache before the in-flight job is removed.
 actor AssetPreviewDecodeQueue {
-    /// Lightweight previews and favicons can use three lanes while one
-    /// independent lane refines a settled board card. This keeps total preview
-    /// decoding at the existing four-work ceiling without letting refinements
-    /// queue ahead of newly visible cards.
-    static let shared = AssetPreviewDecodeQueue(limit: 3)
+    /// Two visible lanes, one refinement lane, and one speculative lane keep
+    /// total original decoding bounded at four without prefetch queuing ahead
+    /// of newly visible cards. Every lane shares a source-work registry.
+    static let shared = AssetPreviewDecodeQueue(limit: 2)
     static let refinement = AssetPreviewDecodeQueue(limit: 1)
+    static let prefetch = AssetPreviewDecodeQueue(limit: 1, priority: .background)
+    private static let sourceWork = AssetPreviewDecodeQueue(limit: 4)
 
     private let limit: Int
+    private let priority: TaskPriority
+    private let diskCache: AssetPreviewDiskCache
     private var active = 0
     private var nextWaiterID = 0
     private var waiters: [Int: CheckedContinuation<Bool, Never>] = [:]
@@ -46,43 +49,69 @@ actor AssetPreviewDecodeQueue {
     private var nextDecodeSubscriberID = 0
     private var decodeJobs: [AssetPreviewDecodeKey: DecodeJob] = [:]
 
-    init(limit: Int) {
+    init(
+        limit: Int,
+        priority: TaskPriority = .utility,
+        diskCache: AssetPreviewDiskCache = .shared
+    ) {
         self.limit = max(1, limit)
+        self.priority = priority
+        self.diskCache = diskCache
     }
 
     func image(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
-        let key = AssetPreviewDecodeKey(kind: .image, url: url, maxPixel: maxPixel)
-        return await decode(key: key) {
-            if let cached = AssetPreviewImageCache.shared.entry(for: key) {
-                return AssetImageLoader.Decoded(image: cached.image)
-            }
-            return await Task.detached(priority: .utility) {
-                let decoded = AssetImageLoader.downsampledImage(
-                    at: url,
-                    maxPixel: CGFloat(key.maxPixel)
-                )
-                if let decoded {
-                    AssetPreviewImageCache.shared.insert(decoded.image, for: key)
-                }
-                return decoded
-            }.value
-        }
+        await preview(at: url, maxPixel: maxPixel, kind: .image)
     }
 
     func videoThumbnail(at url: URL, maxPixel: CGFloat) async -> AssetImageLoader.Decoded? {
-        let key = AssetPreviewDecodeKey(kind: .video, url: url, maxPixel: maxPixel)
+        await preview(at: url, maxPixel: maxPixel, kind: .video)
+    }
+
+    /// Warm-cache lookup only. No original image decode or video frame extraction.
+    func cachedPreview(
+        at url: URL, maxPixel: CGFloat, kind: AssetPreviewDecodeKey.Kind
+    ) async -> AssetImageLoader.Decoded? {
+        let key = AssetPreviewDecodeKey(kind: kind, url: url, maxPixel: maxPixel)
+        let diskCache = diskCache
+        let priority = priority
+        return await withPermit {
+            await Task.detached(priority: priority) {
+                guard let fingerprint = AssetPreviewSourceFingerprint.read(at: url) else { return nil }
+                return Self.cached(key, fingerprint: fingerprint, diskCache: diskCache)
+            }.value
+        } ?? nil
+    }
+
+    private func preview(
+        at url: URL, maxPixel: CGFloat, kind: AssetPreviewDecodeKey.Kind
+    ) async -> AssetImageLoader.Decoded? {
+        let key = AssetPreviewDecodeKey(kind: kind, url: url, maxPixel: maxPixel)
+        let priority = priority
+        let diskCache = diskCache
         return await decode(key: key) {
-            if let cached = AssetPreviewImageCache.shared.entry(for: key) {
-                return AssetImageLoader.Decoded(image: cached.image)
+            // All lanes share the final in-flight registry. Cancelling speculative
+            // subscribers cannot cancel a visible subscriber's source decode.
+            await Self.sourceWork.decode(key: key) {
+                await Task.detached(priority: priority) {
+                    guard let fingerprint = AssetPreviewSourceFingerprint.read(at: url) else { return nil }
+                    if let cached = Self.cached(key, fingerprint: fingerprint, diskCache: diskCache) {
+                        return cached
+                    }
+                    PerformanceTrace.increment("preview_source_decodes")
+                    let interval = PerformanceTrace.begin("PreviewDecode")
+                    let decoded: AssetImageLoader.Decoded? = if kind == .video {
+                        await AssetImageLoader.videoThumbnail(at: url, maxPixel: CGFloat(key.maxPixel))
+                    } else {
+                        AssetImageLoader.downsampledImage(at: url, maxPixel: CGFloat(key.maxPixel))
+                    }
+                    PerformanceTrace.end("PreviewDecode", interval)
+                    guard let decoded,
+                          AssetPreviewSourceFingerprint.read(at: url) == fingerprint else { return nil }
+                    AssetPreviewImageCache.shared.insert(decoded.image, for: key, fingerprint: fingerprint)
+                    diskCache.scheduleStore(decoded, for: AssetPreviewDiskKey(key, fingerprint: fingerprint))
+                    return decoded
+                }.value
             }
-            let decoded = await AssetImageLoader.videoThumbnail(
-                at: url,
-                maxPixel: CGFloat(key.maxPixel)
-            )
-            if let decoded {
-                AssetPreviewImageCache.shared.insert(decoded.image, for: key)
-            }
-            return decoded
         }
     }
 
@@ -285,5 +314,24 @@ actor AssetPreviewDecodeQueue {
         var isActive: Bool
         var subscribers: Set<Int>
         let task: Task<AssetImageLoader.Decoded?, Never>
+    }
+}
+
+private extension AssetPreviewDecodeQueue {
+    nonisolated static func cached(
+        _ key: AssetPreviewDecodeKey,
+        fingerprint: AssetPreviewSourceFingerprint,
+        diskCache: AssetPreviewDiskCache
+    ) -> AssetImageLoader.Decoded? {
+        if let cached = AssetPreviewImageCache.shared.entry(for: key, fingerprint: fingerprint) {
+            PerformanceTrace.increment("preview_memory_hits")
+            return AssetImageLoader.Decoded(image: cached.image)
+        }
+        guard let decoded = diskCache.image(for: AssetPreviewDiskKey(key, fingerprint: fingerprint)) else {
+            PerformanceTrace.increment("preview_cache_misses")
+            return nil
+        }
+        AssetPreviewImageCache.shared.insert(decoded.image, for: key, fingerprint: fingerprint)
+        return decoded
     }
 }

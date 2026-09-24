@@ -238,12 +238,14 @@ final class AssetPreviewDecodeQueueTests: XCTestCase {
         XCTAssertNotNil(first)
         XCTAssertNotNil(AssetPreviewImageCache.shared.entry(for: key))
 
-        try FileManager.default.removeItem(at: url)
         let reused = await AssetPreviewDecodeQueue(limit: 3).image(at: url, maxPixel: 80)
-        let differentSize = await AssetPreviewDecodeQueue(limit: 3).image(at: url, maxPixel: 81)
+        let differentSize = await AssetPreviewDecodeQueue(limit: 3).cachedPreview(at: url, maxPixel: 81, kind: .image)
 
         XCTAssertNotNil(reused, "A replacement request must reuse the completed exact-size decode")
         XCTAssertNil(differentSize, "A detail or board size must not contaminate another cache key")
+        try FileManager.default.removeItem(at: url)
+        let deleted = await AssetPreviewDecodeQueue(limit: 3).image(at: url, maxPixel: 80)
+        XCTAssertNil(deleted, "Externally removed assets must not survive through a stale memory entry")
     }
 
     private func waitForState(

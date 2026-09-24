@@ -34,6 +34,7 @@ struct OiaLibraryView: View {
                     overlay
                 }
         }
+        .environment(\.assetContentGeneration, appState.libraryContentGeneration)
         .focusedSceneValue(\.boardActions, focusedBoardActions)
         .quickLookPreview($quickLookURL)
         .alert("Óia couldn’t complete that action", isPresented: errorAlertPresented) {
