@@ -34,6 +34,7 @@ struct ImageLightbox: View {
 
     @State private var localImage: NSImage?
     @State private var failed = false
+    @Environment(\.assetContentGeneration) private var contentGeneration
 
     var body: some View {
         ZStack {
@@ -50,6 +51,7 @@ struct ImageLightbox: View {
             // behind it, and dismisses on a click or Escape.
             CursorSurface(cursor: .pointingHand, onClick: onClose, onEscape: onClose)
         }
+        .task(id: LoadRequest(targetID: target.id, generation: contentGeneration)) { await loadLocal() }
     }
 
     @ViewBuilder
@@ -62,7 +64,6 @@ struct ImageLightbox: View {
             ProgressView()
                 .controlSize(.large)
                 .tint(.white)
-                .task(id: target.id) { await loadLocal() }
         }
     }
 
@@ -105,12 +106,18 @@ struct ImageLightbox: View {
 
     // ── Loading ───────────────────────────────────────────────────────────────
 
+    private struct LoadRequest: Hashable {
+        let targetID: UUID
+        let generation: UInt64
+    }
+
     private func loadLocal() async {
+        failed = false
+        localImage = nil
         let url = target.localURL
         let maxPixel = Self.zoomMaxPixel()
-        let decoded = await Task.detached(priority: .userInitiated) {
-            AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
-        }.value
+        let decoded = await AssetPreviewDecodeQueue.shared.image(at: url, maxPixel: maxPixel)
+        guard !Task.isCancelled else { return }
         if let decoded {
             localImage = decoded.image
         } else {

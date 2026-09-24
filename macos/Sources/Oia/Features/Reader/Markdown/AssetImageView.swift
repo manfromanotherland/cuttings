@@ -25,9 +25,12 @@ struct AssetImageView: View {
     var onHighlight: (String) -> Void = { _ in }
 
     @Environment(ImageZoomPresenter.self) private var zoomPresenter: ImageZoomPresenter?
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.assetContentGeneration) private var contentGeneration
 
     @State private var localImage: NSImage?
     @State private var failed = false
+    @State private var loadedURL: URL?
 
     var body: some View {
         VStack(spacing: theme.captionGap) {
@@ -43,6 +46,8 @@ struct AssetImageView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .task(id: loadRequest) { await loadLocal() }
+        .onDisappear { localImage = nil }
     }
 
     /// The alt-text caption as an `NSAttributedString` (centered, secondary,
@@ -79,7 +84,6 @@ struct AssetImageView: View {
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 80)
-                .task(id: source) { await loadLocal() }
         }
     }
 
@@ -125,8 +129,28 @@ struct AssetImageView: View {
 
     // ── Resolution ──────────────────────────────────────────────────────────
 
+    private struct LoadRequest: Hashable {
+        let url: URL?
+        let maxPixel: CGFloat
+        let generation: UInt64
+    }
+
+    private var loadRequest: LoadRequest {
+        LoadRequest(
+            url: AssetImageLoader.localURL(source: source, assetBaseURL: assetBaseURL),
+            maxPixel: theme.contentMaxWidth * displayScale,
+            generation: contentGeneration
+        )
+    }
+
     private func loadLocal() async {
-        guard let url = AssetImageLoader.localURL(source: source, assetBaseURL: assetBaseURL) else {
+        let request = loadRequest
+        if loadedURL != request.url {
+            localImage = nil
+        }
+        loadedURL = request.url
+        failed = false
+        guard let url = request.url else {
             failed = true
             return
         }
@@ -135,18 +159,11 @@ struct AssetImageView: View {
         // needs. Loading at native resolution instead would hold far more memory
         // than the on-screen size warrants, and a long article stacks several
         // images. (The lightbox loads a larger decode on demand for zooming.)
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
-        let maxPixel = theme.contentMaxWidth * scale
-        // Decode the downsampled image off the main actor. ImageIO reads only
-        // what it needs from disk and never materializes the full-resolution
-        // bitmap.
-        let decoded = await Task.detached(priority: .userInitiated) {
-            AssetImageLoader.downsampledImage(at: url, maxPixel: maxPixel)
-        }.value
-        if let decoded {
-            localImage = decoded.image
-        } else {
-            failed = true
-        }
+        // Share the bounded decoder with the board so a long article cannot
+        // start one original-image decode per figure at the same time.
+        let decoded = await AssetPreviewDecodeQueue.shared.image(at: url, maxPixel: request.maxPixel)
+        guard !Task.isCancelled else { return }
+        localImage = decoded?.image
+        failed = decoded == nil
     }
 }

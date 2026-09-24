@@ -126,6 +126,7 @@ targets:
       - path: Sources/Oia/Features/Oia/LazyMasonryBoard.swift
       - path: Sources/Oia/Features/Oia/BoardVisibilityCoordinator.swift
       - path: Sources/Oia/Features/Oia/ReadingRow+BoardGeometry.swift
+      - path: Sources/Oia/Features/Oia/GallerySnapshot.swift
       - path: Sources/Oia/Features/Oia/VideoCardViewport.swift
       - path: Sources/Oia/Features/Oia/VideoPlaybackScheduler.swift
       - path: Sources/Oia/Features/Reader/Markdown/AssetImageLoader.swift

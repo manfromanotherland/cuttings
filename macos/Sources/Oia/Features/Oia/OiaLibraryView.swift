@@ -14,7 +14,7 @@ struct OiaLibraryView: View {
     @AppStorage("cardSize", store: AppDefaults.store) var cardSize: CardSize = .small
 
     @State var presentedReading: ReadingRow?
-    @State private var presentationOrder: [String] = []
+    @State private var gallerySnapshot = GallerySnapshot<ReadingRow>()
     @State private var tagTargetID: String?
     @State private var isDropTargeted = false
     @State var cardTextMetrics = OiaCardTextMetrics()
@@ -97,8 +97,9 @@ extension OiaLibraryView {
             .modifier(SearchQueryChangeModifier())
             .onChange(of: appState.readings) { _, rows in
                 guard let id = presentedReading?.id else { return }
-                if let refreshed = rows.first(where: { $0.id == id }) {
-                    presentedReading = refreshed
+                gallerySnapshot.reconcile(rows)
+                if let refreshed = gallerySnapshot.row(id: id) {
+                    updatePresentedRow(refreshed)
                 } else {
                     advanceOverlayPastCurrent()
                 }
@@ -303,9 +304,9 @@ extension OiaLibraryView {
             OiaReadingOverlay(
                 row: Binding(
                     get: { presentedReading ?? row },
-                    set: { presentedReading = $0 }
+                    set: updatePresentedRow
                 ),
-                rows: presentationRows,
+                rows: gallerySnapshot.rows,
                 onClose: closeOverlay,
                 onMove: moveOverlay,
                 onSelect: open,
@@ -392,16 +393,9 @@ extension OiaLibraryView {
             ?? (presentedReading?.id == id ? presentedReading : nil)
     }
 
-    private var presentationRows: [ReadingRow] {
-        let rowsByID = appState.readings.reduce(into: [String: ReadingRow]()) { result, row in
-            result[row.id] = row
-        }
-        return presentationOrder.compactMap { id in
-            if presentedReading?.id == id {
-                return presentedReading
-            }
-            return rowsByID[id]
-        }
+    private func updatePresentedRow(_ row: ReadingRow) {
+        gallerySnapshot.update(row)
+        presentedReading = row
     }
 
     func open(_ row: ReadingRow) {
@@ -415,17 +409,15 @@ extension OiaLibraryView {
         }
 
         if presentedReading == nil {
-            presentationOrder = appState.readings
-                .filter { !LibraryScope.links.contains($0) }
-                .map(\.id)
+            gallerySnapshot = GallerySnapshot(appState.readings.filter { !LibraryScope.links.contains($0) })
         }
         boardFocused = false
-        presentedReading = row
+        updatePresentedRow(row)
     }
 
     func closeOverlay() {
         presentedReading = nil
-        presentationOrder = []
+        gallerySnapshot = GallerySnapshot()
         appState.showHighlights = false
         if let id = appState.selectedId {
             boardPosition.scrollTo(id: id, anchor: .nearest)
@@ -435,28 +427,13 @@ extension OiaLibraryView {
 
     private func moveOverlay(_ direction: Int) {
         guard let id = presentedReading?.id,
-              let index = presentationOrder.firstIndex(of: id) else { return }
-        var next = index + direction
-        while presentationOrder.indices.contains(next) {
-            if let row = appState.readings.first(where: { $0.id == presentationOrder[next] }) {
-                open(row)
-                return
-            }
-            next += direction
-        }
+              let row = gallerySnapshot.neighbor(of: id, direction: direction) else { return }
+        open(row)
     }
 
     private func canMoveOverlay(_ direction: Int) -> Bool {
-        guard let id = presentedReading?.id,
-              let index = presentationOrder.firstIndex(of: id) else { return false }
-        var next = index + direction
-        while presentationOrder.indices.contains(next) {
-            if appState.readings.contains(where: { $0.id == presentationOrder[next] }) {
-                return true
-            }
-            next += direction
-        }
-        return false
+        guard let id = presentedReading?.id else { return false }
+        return gallerySnapshot.neighbor(of: id, direction: direction) != nil
     }
 
     private func updateTag(_ tag: String, applies: Bool, to row: ReadingRow) {
@@ -466,7 +443,7 @@ extension OiaLibraryView {
             } else if !applies {
                 presented.tags.removeAll { $0 == tag }
             }
-            presentedReading = presented
+            updatePresentedRow(presented)
         }
         Task {
             if applies {
@@ -474,8 +451,8 @@ extension OiaLibraryView {
             } else {
                 await appState.removeTag(id: row.id, tag: tag)
             }
-            if presentedReading?.id == row.id {
-                presentedReading = await appState.reloadRow(id: row.id) ?? presentedReading
+            if let refreshed = await appState.reloadRow(id: row.id), presentedReading?.id == row.id {
+                updatePresentedRow(refreshed)
             }
         }
     }
@@ -554,7 +531,7 @@ private struct CompactSearchToolbarConfiguration: NSViewRepresentable {
             guard let toolbar = notification.object as? NSToolbar,
                   toolbar === window?.toolbar,
                   let item = notification.userInfo?[NSToolbarUserInfoKey.itemKey]
-                    as? NSSearchToolbarItem
+                  as? NSSearchToolbarItem
             else {
                 return
             }
