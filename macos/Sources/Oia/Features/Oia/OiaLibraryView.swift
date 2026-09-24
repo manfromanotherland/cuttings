@@ -137,25 +137,31 @@ extension OiaLibraryView {
     private var detailSurface: some View {
         if appState.isFocusMode {
             board
-        } else if searchPresented {
-            board
-                .searchable(
-                    text: searchQuery,
-                    isPresented: $searchPresented,
-                    placement: .toolbar,
-                    prompt: "Search Óia"
-                )
-                .searchFocused($searchFocused)
-                .onChange(of: searchFocused) { _, isFocused in
-                    if !isFocused {
+        } else if #available(macOS 26.0, *) {
+            searchableBoard
+                .toolbar(removing: searchPresented ? nil : .search)
+        } else {
+            searchableBoard
+        }
+    }
+
+    private var searchableBoard: some View {
+        board
+            .searchable(
+                text: searchQuery,
+                isPresented: $searchPresented,
+                placement: .toolbar,
+                prompt: "Search Óia"
+            )
+            .searchFocused($searchFocused)
+            .onChange(of: searchFocused) { _, isFocused in
+                if !isFocused {
+                    withAnimation(.smooth(duration: 0.2)) {
                         searchPresented = false
                     }
                 }
-                .toolbar { boardToolbar }
-        } else {
-            board
-                .toolbar { boardToolbar }
-        }
+            }
+            .toolbar { boardToolbar }
     }
 
     @ToolbarContentBuilder
@@ -169,7 +175,7 @@ extension OiaLibraryView {
                 boardFilterPicker
             }
 
-            if !searchPresented {
+            if #available(macOS 26.0, *), !searchPresented {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: focusSearch) {
                         Label("Search", systemImage: "magnifyingglass")
@@ -230,7 +236,9 @@ extension OiaLibraryView {
 
     func focusSearch() {
         guard presentedReading == nil, !appState.isFocusMode else { return }
-        searchPresented = true
+        withAnimation(.smooth(duration: 0.2)) {
+            searchPresented = true
+        }
         searchFocused = true
     }
 
