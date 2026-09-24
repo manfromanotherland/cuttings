@@ -122,7 +122,7 @@ final class AssetPreviewLoadPlanTests: XCTestCase {
     }
 
     @MainActor
-    func testPresentationKeepsLightweightImageSelectedDuringScrolling() throws {
+    func testPresentationNeverDowngradesAnAlreadyRefinedImage() throws {
         let url = URL(fileURLWithPath: "/tmp/tiered-preview.png")
         let lightweight = NSImage(size: NSSize(width: 160, height: 100))
         let display = NSImage(size: NSSize(width: 800, height: 500))
@@ -143,11 +143,50 @@ final class AssetPreviewLoadPlanTests: XCTestCase {
             for: .lightweight,
             requestURL: url,
             isVisible: true
-        )).image === lightweight)
+        )).image === display)
         XCTAssertTrue(try XCTUnwrap(presentation.variant(
             for: .display,
             requestURL: url,
             isVisible: true
         )).image === display)
+    }
+
+    @MainActor
+    func testResolvedCardDoesNotReadScrollStateOrScheduleMoreWork() {
+        let url = URL(fileURLWithPath: "/tmp/resolved-preview.png")
+        var presentation = AssetPreviewPresentation()
+        presentation.publish(
+            AssetPreviewVariant(image: NSImage(size: NSSize(width: 800, height: 500)),
+                                decodedForMaxPixel: 800),
+            quality: .display, for: url
+        )
+        var scrollReads = 0
+        func scrolling() -> Bool {
+            scrollReads += 1; return true
+        }
+        XCTAssertNil(presentation.refinementMaxPixel(
+            maxPixel: 800, loadsProgressively: true, isVisible: true,
+            requestURL: url, isScrolling: scrolling()
+        ))
+        XCTAssertEqual(scrollReads, 0)
+    }
+
+    @MainActor
+    func testUnresolvedCardDefersRefinementUntilIdle() {
+        let url = URL(fileURLWithPath: "/tmp/entering-preview.png")
+        var presentation = AssetPreviewPresentation()
+        presentation.publish(
+            AssetPreviewVariant(image: NSImage(size: NSSize(width: 160, height: 100)),
+                                decodedForMaxPixel: 160),
+            quality: .lightweight, for: url
+        )
+        XCTAssertNil(presentation.refinementMaxPixel(
+            maxPixel: 800, loadsProgressively: true, isVisible: true,
+            requestURL: url, isScrolling: true
+        ))
+        XCTAssertEqual(presentation.refinementMaxPixel(
+            maxPixel: 800, loadsProgressively: true, isVisible: true,
+            requestURL: url, isScrolling: false
+        ), 800)
     }
 }

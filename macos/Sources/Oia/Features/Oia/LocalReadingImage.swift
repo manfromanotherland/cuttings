@@ -27,7 +27,7 @@ struct LocalReadingImage: View {
             if let image = presentedImage {
                 Image(nsImage: image)
                     .resizable()
-                    .interpolation(loadsProgressively && isScrolling ? .low : .high)
+                    .interpolation(.high)
                     .aspectRatio(imageAspectRatio(image), contentMode: contentMode)
             } else {
                 placeholder
@@ -58,11 +58,8 @@ struct LocalReadingImage: View {
 
     private var presentedImage: NSImage? {
         guard isVisible else { return nil }
-        let quality: AssetPreviewQuality = loadsProgressively && isScrolling
-            ? .lightweight
-            : .display
         return presentation.variant(
-            for: quality,
+            for: .display,
             requestURL: assetRequest?.url,
             isVisible: true
         )?.image
@@ -87,12 +84,13 @@ struct LocalReadingImage: View {
         )
     }
 
-    private var refinementPlan: AssetPreviewLoadPlan {
-        AssetPreviewLoadPlan(
+    private var refinementMaxPixel: CGFloat? {
+        presentation.refinementMaxPixel(
             maxPixel: maxPixel,
             loadsProgressively: loadsProgressively,
             isVisible: isVisible,
-            isScrolling: isVisible ? isScrolling : false
+            requestURL: assetRequest?.url,
+            isScrolling: isScrolling
         )
     }
 
@@ -107,7 +105,7 @@ struct LocalReadingImage: View {
 
     private var refinementTaskID: LoadTaskID {
         let request = assetRequest
-        let refinementMaxPixel = refinementPlan.refinementMaxPixel
+        let refinementMaxPixel = refinementMaxPixel
         let lightweightIsReady = if let request, let refinementMaxPixel {
             presentation.contains(
                 .lightweight,
@@ -149,6 +147,17 @@ private extension LocalReadingImage {
 
         let quality: AssetPreviewQuality = loadsProgressively ? .lightweight : .display
         presentation.reset(for: request.url)
+        // Re-entering a warm card should not replay the lightweight stage.
+        if loadsProgressively {
+            let displayKey = decodeKey(request, maxPixel: maxPixel)
+            if presentation.contains(.display, atLeastMaxPixel: maxPixel, for: request.url) {
+                return
+            }
+            if let cached = AssetPreviewImageCache.shared.entry(for: displayKey) {
+                presentation.publish(cached, quality: .display, for: request.url)
+                return
+            }
+        }
         guard !presentation.contains(
             quality,
             atLeastMaxPixel: initialMaxPixel,
@@ -194,7 +203,7 @@ private extension LocalReadingImage {
     private func loadDisplayVariant() async {
         guard refinementTaskID.prerequisiteIsReady,
               let request = assetRequest,
-              let refinementMaxPixel = refinementPlan.refinementMaxPixel
+              let refinementMaxPixel
         else { return }
 
         do {

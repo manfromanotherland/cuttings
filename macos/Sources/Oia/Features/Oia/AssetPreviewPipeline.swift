@@ -12,6 +12,7 @@ final class BoardScrollState {
     func setScrolling(_ isScrolling: Bool) {
         guard self.isScrolling != isScrolling else { return }
         self.isScrolling = isScrolling
+        PerformanceTrace.scrollPhaseChanged(isScrolling)
     }
 }
 
@@ -134,6 +135,8 @@ struct AssetPreviewPresentation {
             display = variant
         }
         failed = false
+        PerformanceTrace.increment("image_publications")
+        PerformanceTrace.event("ImagePublished")
     }
 
     mutating func markFailed(for requestURL: URL?) {
@@ -142,17 +145,36 @@ struct AssetPreviewPresentation {
     }
 
     func variant(
-        for quality: AssetPreviewQuality,
+        for _: AssetPreviewQuality,
         requestURL: URL?,
         isVisible: Bool
     ) -> AssetPreviewVariant? {
         guard isVisible, self.requestURL == requestURL else { return nil }
-        return switch quality {
-        case .lightweight:
-            lightweight
-        case .display:
-            display ?? lightweight
-        }
+        // Quality describes work we may schedule, not a reason to replace an
+        // already displayed bitmap when a scroll gesture begins.
+        return display ?? lightweight
+    }
+
+    /// The autoclosure deliberately avoids observing scroll phase once this
+    /// asset is resolved. Finished cards then leave the phase invalidation graph.
+    func refinementMaxPixel(
+        maxPixel: CGFloat,
+        loadsProgressively: Bool,
+        isVisible: Bool,
+        requestURL: URL?,
+        isScrolling: @autoclosure () -> Bool
+    ) -> CGFloat? {
+        guard isVisible, loadsProgressively, let requestURL else { return nil }
+        let idlePlan = AssetPreviewLoadPlan(
+            maxPixel: maxPixel,
+            loadsProgressively: true,
+            isVisible: true,
+            isScrolling: false
+        )
+        guard let target = idlePlan.refinementMaxPixel,
+              !contains(.display, atLeastMaxPixel: target, for: requestURL)
+        else { return nil }
+        return isScrolling() ? nil : target
     }
 
     func contains(
