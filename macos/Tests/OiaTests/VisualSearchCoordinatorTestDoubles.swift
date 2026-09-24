@@ -31,13 +31,19 @@ actor CoordinatorFakeVisualCore: VisualSearchCore {
     }
 
     func pendingVisualAnalysis(
-        analyzerVersion _: String,
-        limit _: UInt32
+        analyzerVersion _: String, limit: UInt32, afterReadingID: String?
     ) async throws -> PendingVisualAnalysis {
         if failsPendingAnalysis {
             throw CoordinatorVisualCoreError.failed
         }
-        return PendingVisualAnalysis(tasks: tasks, hydratedCount: hydratedCount)
+        let bound = min(2, max(1, Int(limit)))
+        let window = Array(tasks.sorted { $0.readingID < $1.readingID }
+            .filter { afterReadingID == nil || $0.readingID > afterReadingID! }.prefix(bound))
+        return PendingVisualAnalysis(
+            tasks: window,
+            hydratedCount: afterReadingID == nil ? hydratedCount : 0,
+            nextReadingID: window.count == bound ? window.last?.readingID : nil
+        )
     }
 
     func completeVisualAnalysis(
@@ -172,7 +178,8 @@ actor CoordinatorGenerationCore: VisualSearchCore {
 
     func pendingVisualAnalysis(
         analyzerVersion _: String,
-        limit _: UInt32
+        limit _: UInt32,
+        afterReadingID _: String?
     ) async throws -> PendingVisualAnalysis {
         pendingReadCount += 1
         return PendingVisualAnalysis(tasks: [], hydratedCount: 0)

@@ -148,6 +148,7 @@ targets:
       - path: Sources/Oia/Platform/VisualAnalysis
       - path: Sources/Oia/Bridge/VisualSearchBridging.swift
       - path: Sources/Oia/State/VisualSearchCoordinator.swift
+      - path: Sources/Oia/State/InteractionIdleGate.swift
       - path: GeneratedBindings
         optional: true   # populated by `make bindings`
     dependencies:

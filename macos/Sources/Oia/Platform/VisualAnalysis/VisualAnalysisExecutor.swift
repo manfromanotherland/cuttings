@@ -24,6 +24,7 @@ actor VisualAnalysisExecutor {
         defer { release() }
 
         try Task.checkCancellation()
+        try await InteractionIdleGate.shared.waitUntilIdle()
         return try await Task.detached(priority: .utility, operation: operation).value
     }
 

@@ -16,7 +16,8 @@ actor CoordinatorHydrationRaceCore: VisualSearchCore {
 
     func pendingVisualAnalysis(
         analyzerVersion _: String,
-        limit _: UInt32
+        limit _: UInt32,
+        afterReadingID _: String?
     ) async throws -> PendingVisualAnalysis {
         pendingReadCount += 1
         if pendingReadCount == 1 {
@@ -80,7 +81,8 @@ actor CoordinatorQueuedHydrationCore: VisualSearchCore {
 
     func pendingVisualAnalysis(
         analyzerVersion _: String,
-        limit _: UInt32
+        limit _: UInt32,
+        afterReadingID _: String?
     ) async throws -> PendingVisualAnalysis {
         let count = hydratedCounts.isEmpty ? 0 : hydratedCounts.removeFirst()
         return PendingVisualAnalysis(tasks: [], hydratedCount: count)
@@ -111,7 +113,8 @@ actor CoordinatorCompletionRaceCore: VisualSearchCore {
 
     func pendingVisualAnalysis(
         analyzerVersion _: String,
-        limit _: UInt32
+        limit _: UInt32,
+        afterReadingID _: String?
     ) async throws -> PendingVisualAnalysis {
         pendingReadCount += 1
         if pendingReadCount == 1 {

@@ -4,6 +4,23 @@ import Foundation
 import XCTest
 
 final class VisualSearchCoordinatorTests: XCTestCase {
+    func testReconciliationReachesLaterPagesAfterAnAnalysisFailure() async throws {
+        let tasks = ["a", "b", "c", "d", "e"].map {
+            makeTask(readingID: $0, filename: "\($0).jpg", analyzerVersion: "vision-2")
+        }
+        let core = CoordinatorFakeVisualCore(tasks: tasks)
+        let analyzer = CoordinatorFakeAnalyzer(responses: Dictionary(uniqueKeysWithValues: tasks.map {
+            ($0.fileURL.path, $0.readingID == "a" ? .transientFailure : .permanentlyUnsupported)
+        }))
+        let coordinator = makeCoordinator(spotlight: CoordinatorFakeSpotlight(), analyzer: analyzer)
+        let result = try await coordinator.reconcile(core: core)
+        XCTAssertEqual(result.analyzedCount, 4)
+        let completions = await core.recordedCompletions()
+        XCTAssertEqual(Set(completions.map(\.task.readingID)), Set(["b", "c", "d", "e"]))
+        let paths = await analyzer.recordedPaths()
+        XCTAssertEqual(Set(paths), Set(tasks.map(\.fileURL.path)))
+    }
+
     func testCandidatesReuseNormalizedQueryAndPreserveDeduplicatedRankOrder() async throws {
         let spotlight = CoordinatorFakeSpotlight(
             searchResults: ["reading-b", "", "reading-a", "reading-b", "reading-c", "reading-a"]

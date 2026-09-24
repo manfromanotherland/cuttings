@@ -156,6 +156,19 @@ pub struct FfiPendingVisualAnalysis {
 }
 
 #[derive(uniffi::Record)]
+pub struct FfiVisualAssetsBatch {
+    pub assets: Vec<FfiVisualAsset>,
+    pub next_reading_id: Option<String>,
+}
+
+#[derive(uniffi::Record)]
+pub struct FfiVisualAnalysisBatch {
+    pub tasks: Vec<FfiVisualAnalysisTask>,
+    pub hydrated_count: u32,
+    pub next_reading_id: Option<String>,
+}
+
+#[derive(uniffi::Record)]
 pub struct FfiVisualLabel {
     pub identifier: String,
     pub confidence: f64,
@@ -625,7 +638,9 @@ impl Database {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let ids = crate::scanner::reading_ids_for_changed_paths(&lib, &changed_paths);
         let Some(ids) = ids.filter(|_| self.scan_initialized.load(Ordering::Acquire)) else {
-            return self.sync(library_path);
+            return self
+                .sync(library_path)
+                .map(|changed| changed.max(u32::from(!changed_paths.is_empty())));
         };
         if ids.is_empty() {
             return Ok(0);
@@ -650,7 +665,56 @@ impl Database {
         previous.extend(new_scan);
         // Cache pruning belongs to the next visual reconciliation, rather than
         // walking every cached image for a one-reading filesystem event.
-        Ok(diffs.len() as u32)
+        Ok(
+            (diffs.len() as u32).max(u32::from(crate::scanner::changed_paths_include_assets(
+                &lib,
+                &changed_paths,
+            ))),
+        )
+    }
+
+    /// Safely enumerate current preview assets for Core Spotlight donation.
+    pub fn current_visual_assets_batch(
+        &self,
+        library_path: String,
+        after_reading_id: Option<String>,
+        limit: u32,
+    ) -> Result<FfiVisualAssetsBatch, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let limit = limit.clamp(1, 64) as usize;
+        let _io = self.visual_cache_io.lock().unwrap();
+        let (active, candidates) = {
+            let conn = self.conn.lock().unwrap();
+            (
+                if after_reading_id.is_none() {
+                    Some(crate::visual_index::active_visual_hashes(&conn).map_err(e)?)
+                } else {
+                    None
+                },
+                crate::visual_index::visual_asset_candidate_batch(
+                    &conn,
+                    after_reading_id.as_deref(),
+                    limit,
+                )
+                .map_err(e)?,
+            )
+        };
+        let next_reading_id =
+            (candidates.len() == limit).then(|| candidates.last().unwrap().0.clone());
+        if let Some(active) = active {
+            crate::visual_index::prune_visual_cache_files(&self.visual_cache_root, &active)
+                .map_err(e)?;
+        }
+        let assets =
+            crate::visual_index::stage_visual_assets(candidates, &lib, &self.visual_cache_root)
+                .map_err(e)?
+                .into_iter()
+                .map(Into::into)
+                .collect();
+        Ok(FfiVisualAssetsBatch {
+            assets,
+            next_reading_id,
+        })
     }
 
     /// Safely enumerate current preview assets for Core Spotlight donation.
@@ -672,6 +736,42 @@ impl Database {
         crate::visual_index::stage_visual_assets(candidates, &lib, &self.visual_cache_root)
             .map_err(e)
             .map(|assets| assets.into_iter().map(Into::into).collect())
+    }
+
+    /// Return at most `limit` immutable staged snapshots not cached for this
+    /// analyzer version. Exact analysis hits are applied without being retried.
+    pub fn pending_visual_analysis_batch(
+        &self,
+        library_path: String,
+        analyzer_version: String,
+        after_reading_id: Option<String>,
+        limit: u32,
+    ) -> Result<FfiVisualAnalysisBatch, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let _io = self.visual_cache_io.lock().unwrap();
+        let (candidates, hydrated_count, next_reading_id) = {
+            let conn = self.conn.lock().unwrap();
+            crate::visual_index::pending_visual_candidate_batch(
+                &conn,
+                &analyzer_version,
+                after_reading_id.as_deref(),
+                limit.clamp(1, 64) as usize,
+            )
+            .map_err(e)?
+        };
+        let pending = crate::visual_index::stage_visual_analysis(
+            candidates,
+            hydrated_count,
+            &lib,
+            &self.visual_cache_root,
+            &analyzer_version,
+        )
+        .map_err(e)?;
+        Ok(FfiVisualAnalysisBatch {
+            tasks: pending.tasks.into_iter().map(Into::into).collect(),
+            hydrated_count: hydrated_count as u32,
+            next_reading_id,
+        })
     }
 
     /// Return at most `limit` immutable staged snapshots not cached for this
@@ -1257,6 +1357,111 @@ mod tests {
     }
 
     #[test]
+    fn visual_asset_batches_stage_only_the_requested_window() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let mut expected = Vec::new();
+        for image in 0..5 {
+            expected.push(
+                database
+                    .import_image(
+                        library_path.clone(),
+                        format!("image-{image}").into_bytes(),
+                        "image/png".into(),
+                        format!("Image {image}"),
+                    )
+                    .unwrap()
+                    .id,
+            );
+        }
+        expected.sort();
+        let staged = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&staged);
+        let first = crate::visual_index::with_visual_io_test_hook(
+            move || {
+                counter.fetch_add(1, Ordering::Relaxed);
+            },
+            || database.current_visual_assets_batch(library_path.clone(), None, 2),
+        )
+        .unwrap();
+        assert_eq!(
+            staged.load(Ordering::Relaxed),
+            2,
+            "pagination must bound filesystem work, not just truncate the result"
+        );
+        let mut actual: Vec<_> = first
+            .assets
+            .into_iter()
+            .map(|asset| asset.reading_id)
+            .collect();
+        let mut cursor = first.next_reading_id;
+        while let Some(after) = cursor {
+            let batch = database
+                .current_visual_assets_batch(library_path.clone(), Some(after), 2)
+                .unwrap();
+            assert!(batch.assets.len() <= 2);
+            actual.extend(batch.assets.into_iter().map(|asset| asset.reading_id));
+            cursor = batch.next_reading_id;
+        }
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn pending_visual_batches_advance_past_unreadable_assets() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let library = LibraryRoot::new(library_dir.path()).unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let mut ids = Vec::new();
+        for image in ["broken", "available"] {
+            ids.push(
+                database
+                    .import_image(
+                        library_path.clone(),
+                        image.as_bytes().to_vec(),
+                        "image/png".into(),
+                        image.into(),
+                    )
+                    .unwrap()
+                    .id,
+            );
+        }
+        ids.sort();
+        let first = database.get_reading_row(ids[0].clone()).unwrap().unwrap();
+        std::fs::remove_file(
+            library
+                .reading_dir(&ids[0])
+                .join(first.preview_asset.unwrap()),
+        )
+        .unwrap();
+        let skipped = database
+            .pending_visual_analysis_batch(library_path.clone(), "test-v1".into(), None, 1)
+            .unwrap();
+        assert!(skipped.tasks.is_empty());
+        assert_eq!(
+            skipped.next_reading_id,
+            Some(ids[0].clone()),
+            "a failed stage must still advance the scan cursor"
+        );
+        let next = database
+            .pending_visual_analysis_batch(
+                library_path,
+                "test-v1".into(),
+                skipped.next_reading_id,
+                1,
+            )
+            .unwrap();
+        assert_eq!(next.tasks.len(), 1);
+        assert_eq!(next.tasks[0].reading_id, ids[1]);
+    }
+
+    #[test]
     fn a_scanned_snapshot_cannot_overwrite_a_later_tag_edit() {
         use std::{sync::mpsc, thread, time::Duration};
         let library_dir = tempfile::TempDir::new().unwrap();
@@ -1379,6 +1584,43 @@ mod tests {
     }
 
     #[test]
+    fn path_sync_indexes_external_body_edits_without_rewriting_frontmatter() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let library = LibraryRoot::new(library_dir.path()).unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let imported = database
+            .import_text(
+                library_path.clone(),
+                "initialbodyword".into(),
+                Some("External editor".into()),
+            )
+            .unwrap();
+        let article = library.article_path(&imported.id);
+        let original = std::fs::read_to_string(&article).unwrap();
+        let (frontmatter, _) = original.split_once("\n---\n").unwrap();
+        let replacement = format!("{frontmatter}\n---\n\nreplacementbodyword\n");
+        std::fs::write(&article, replacement).unwrap();
+        let search = |query: &str| {
+            let mut options = list_options(FfiView::All);
+            options.query = Some(query.into());
+            database.list_readings(options).unwrap()
+        };
+        assert!(search("replacementbodyword").is_empty());
+        assert_eq!(
+            database
+                .sync_paths(library_path, vec![article.display().to_string()])
+                .unwrap(),
+            1
+        );
+        let matches = search("replacementbodyword");
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].id, imported.id);
+    }
+
+    #[test]
     fn path_sync_recovers_a_new_session_and_ambiguous_ancestor_events() {
         let library_dir = tempfile::TempDir::new().unwrap();
         let index_dir = tempfile::TempDir::new().unwrap();
@@ -1416,6 +1658,45 @@ mod tests {
             1
         );
         assert!(reopened.get_reading_row(first.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn path_sync_invalidates_replaced_video_bytes_without_hashing_the_movie() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let source = index_dir.path().join("movie.mp4");
+        std::fs::write(&source, b"original local movie").unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let imported = database
+            .import_video_file(
+                library_path.clone(),
+                source.display().to_string(),
+                "video/mp4".into(),
+                "Movie".into(),
+            )
+            .unwrap();
+        let row = database
+            .get_reading_row(imported.id.clone())
+            .unwrap()
+            .unwrap();
+        assert!(row.preview_asset.is_none());
+        let library = LibraryRoot::new(library_dir.path()).unwrap();
+        let movie = library.reading_dir(&imported.id).join(
+            row.media_url
+                .unwrap()
+                .strip_prefix("cuttings-asset:")
+                .unwrap(),
+        );
+        std::fs::write(&movie, b"replacement local movie").unwrap();
+        assert!(
+            database
+                .sync_paths(library_path, vec![movie.display().to_string()])
+                .unwrap()
+                > 0,
+            "asset events must invalidate presentation even when indexed metadata is unchanged"
+        );
     }
 
     #[test]

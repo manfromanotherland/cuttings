@@ -116,11 +116,7 @@ pub(crate) fn scan_reading_ids(
         let directory = library.reading_dir(id);
         // Match the full scanner: never traverse a symlinked bucket or reading
         // directory supplied by a filesystem event.
-        if !directory
-            .parent()
-            .is_some_and(|parent| is_real_directory(parent))
-            || !is_real_directory(&directory)
-        {
+        if !directory.parent().is_some_and(is_real_directory) || !is_real_directory(&directory) {
             continue;
         }
         if let Some(reading) = scan_reading_directory(library, &directory)? {
@@ -128,6 +124,19 @@ pub(crate) fn scan_reading_ids(
         }
     }
     Ok(readings)
+}
+
+/// Preview hashes cannot describe every reader asset or posterless movie.
+/// Filesystem events invalidate those cached presentations without reading
+/// entire movie/image contents solely to manufacture an index-row change.
+pub(crate) fn changed_paths_include_assets(library: &LibraryRoot, paths: &[String]) -> bool {
+    paths.iter().any(|path| {
+        Path::new(path)
+            .strip_prefix(library.articles_dir())
+            .ok()
+            .and_then(|relative| relative.components().nth(2))
+            .is_some_and(|component| component.as_os_str() == "assets")
+    })
 }
 
 fn is_real_directory(path: &Path) -> bool {
@@ -249,7 +258,7 @@ pub(crate) fn inspect_media_aspect_ratio(
     }
 }
 
-/// Diff two snapshots, using body hash, frontmatter metadata, and note presence
+/// Diff two snapshots, using body text, frontmatter metadata, and note presence
 /// as change signals.
 ///
 /// Items present in `new` but absent in `old` → `Added`.
@@ -267,6 +276,7 @@ pub fn diff(old: &[ScannedReading], new: &[ScannedReading]) -> Vec<ScanDiff> {
             None => diffs.push(ScanDiff::Added(reading.clone())),
             Some(old_reading)
                 if old_reading.source_hash != reading.source_hash
+                    || old_reading.body != reading.body
                     || old_reading.metadata != reading.metadata
                     || old_reading.has_note != reading.has_note
                     || old_reading.visual_asset != reading.visual_asset

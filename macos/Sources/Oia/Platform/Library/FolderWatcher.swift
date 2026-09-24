@@ -82,6 +82,7 @@ final class FolderWatcher: @unchecked Sendable {
 
         let flags = FSEventStreamCreateFlags(
             kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents
+                | kFSEventStreamCreateFlagWatchRoot
         )
         let callback: FSEventStreamCallback = { _, info, count, eventPaths, eventFlags, _ in
             guard let info else { return }

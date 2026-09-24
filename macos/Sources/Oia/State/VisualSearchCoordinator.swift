@@ -85,7 +85,7 @@ actor VisualSearchCoordinator {
         self.analyzer = analyzer
         self.analyzerVersion = analyzerVersion
         self.spotlight = spotlight
-        self.analysisBatchSize = max(1, analysisBatchSize)
+        self.analysisBatchSize = min(64, max(1, analysisBatchSize))
     }
 
     /// Reconcile Spotlight and Vision/colour analysis without blocking app boot.
@@ -161,6 +161,7 @@ actor VisualSearchCoordinator {
     ) async -> VisualSearchSpotlightOutcome {
         guard !Task.isCancelled else { return .cancelled }
         do {
+            try await InteractionIdleGate.shared.waitUntilIdle()
             let result = try await spotlight.reconcile(assets)
             guard !Task.isCancelled else { return .cancelled }
             return VisualSearchSpotlightOutcome(
@@ -204,26 +205,23 @@ actor VisualSearchCoordinator {
     private func analyzePendingAssets(
         with core: any VisualSearchCore, generation: UInt64
     ) async throws {
-        let pending = try await core.pendingVisualAnalysis(
-            analyzerVersion: analyzerVersion,
-            limit: .max
-        )
-        if pending.hydratedCount > 0 {
-            unpublishedHydratedCount += pending.hydratedCount
-            analysisPublicationToken &+= 1
-        }
-        try ensureCurrentReconciliation(generation)
-
-        let batchSize = Int(analysisBatchSize)
-        for start in stride(from: 0, to: pending.tasks.count, by: batchSize) {
+        var cursor: String?
+        repeat {
             try ensureCurrentReconciliation(generation)
-            let end = min(start + batchSize, pending.tasks.count)
-            try await analyze(
-                Array(pending.tasks[start ..< end]),
-                with: core,
-                generation: generation
+            let pending = try await core.pendingVisualAnalysis(
+                analyzerVersion: analyzerVersion,
+                limit: analysisBatchSize,
+                afterReadingID: cursor
             )
-        }
+            if pending.hydratedCount > 0 {
+                unpublishedHydratedCount += pending.hydratedCount
+                analysisPublicationToken &+= 1
+            }
+            try ensureCurrentReconciliation(generation)
+            try await InteractionIdleGate.shared.waitUntilIdle()
+            try await analyze(pending.tasks, with: core, generation: generation)
+            cursor = pending.nextReadingID
+        } while cursor != nil
         try Task.checkCancellation()
     }
 

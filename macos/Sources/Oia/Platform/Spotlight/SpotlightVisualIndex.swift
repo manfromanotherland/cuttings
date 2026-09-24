@@ -158,6 +158,7 @@ private extension SpotlightVisualIndex {
         var failedReadingIDs = Set<String>()
         for upsert in plan.upserts where upsert.needsThumbnail {
             do {
+                try await InteractionIdleGate.shared.waitUntilIdle()
                 try await renderThumbnail(for: upsert)
                 try requireCurrentReconciliation(generation)
             } catch {
@@ -185,13 +186,18 @@ private extension SpotlightVisualIndex {
     }
 
     func apply(_ commit: SpotlightReconciliationCommit, generation: Int) async throws {
-        for chunk in commit.upserts.map(makeSearchableItem).chunked(maximumCount: 100) {
+        for start in stride(from: 0, to: commit.upserts.count, by: 100) {
+            try await InteractionIdleGate.shared.waitUntilIdle()
             try requireCurrentReconciliation(generation)
+            let end = min(start + 100, commit.upserts.count)
+            let chunk = commit.upserts[start ..< end].map(makeSearchableItem)
             try await indexSearchableItems(chunk)
             try requireCurrentReconciliation(generation)
         }
         let deletedIdentifiers = commit.deletedReadingIDs.map(Self.itemIdentifier)
         for chunk in deletedIdentifiers.chunked(maximumCount: 100) {
+            try await InteractionIdleGate.shared.waitUntilIdle()
+            try requireCurrentReconciliation(generation)
             try await deleteSearchableItems(withIdentifiers: chunk)
             try requireCurrentReconciliation(generation)
         }

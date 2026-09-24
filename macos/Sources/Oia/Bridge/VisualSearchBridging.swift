@@ -15,6 +15,13 @@ struct VisualAnalysisWorkItem: Equatable, Sendable {
 struct PendingVisualAnalysis: Equatable, Sendable {
     let tasks: [VisualAnalysisWorkItem]
     let hydratedCount: Int
+    let nextReadingID: String?
+
+    init(tasks: [VisualAnalysisWorkItem], hydratedCount: Int, nextReadingID: String? = nil) {
+        self.tasks = tasks
+        self.hydratedCount = hydratedCount
+        self.nextReadingID = nextReadingID
+    }
 }
 
 struct VisualSearchReconciliation: Equatable, Sendable {
@@ -94,7 +101,7 @@ struct VisualAnalysisCompletion: Equatable, Sendable {
 /// The narrow bridge surface needed by background visual indexing.
 protocol VisualSearchCore: Sendable {
     func pendingVisualAnalysis(
-        analyzerVersion: String, limit: UInt32
+        analyzerVersion: String, limit: UInt32, afterReadingID: String?
     ) async throws -> PendingVisualAnalysis
     @discardableResult func completeVisualAnalysis(
         task: VisualAnalysisWorkItem, result: VisualAnalysisCompletion
@@ -128,6 +135,13 @@ extension PendingVisualAnalysis {
     init(_ pending: FfiPendingVisualAnalysis) {
         tasks = pending.tasks.map(VisualAnalysisWorkItem.init)
         hydratedCount = Int(pending.hydratedCount)
+        nextReadingID = nil
+    }
+
+    init(_ batch: FfiVisualAnalysisBatch) {
+        tasks = batch.tasks.map(VisualAnalysisWorkItem.init)
+        hydratedCount = Int(batch.hydratedCount)
+        nextReadingID = batch.nextReadingId
     }
 }
 

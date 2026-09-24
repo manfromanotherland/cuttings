@@ -540,19 +540,31 @@ pub(crate) type VisualAssetCandidate = (String, String, String, String);
 pub(crate) fn current_visual_asset_candidates(
     conn: &Connection,
 ) -> Result<Vec<VisualAssetCandidate>> {
+    visual_asset_candidate_batch(conn, None, i64::MAX as usize)
+}
+
+pub(crate) fn visual_asset_candidate_batch(
+    conn: &Connection,
+    after_reading_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<VisualAssetCandidate>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, visual_asset_path, visual_asset_hash FROM readings
-         WHERE visual_asset_path IS NOT NULL AND visual_asset_hash IS NOT NULL ORDER BY id",
+         WHERE id > ?1 AND visual_asset_path IS NOT NULL AND visual_asset_hash IS NOT NULL
+         ORDER BY id LIMIT ?2",
     )?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        })?
+        .query_map(
+            params![after_reading_id.unwrap_or(""), limit as i64],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            },
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(rows)
@@ -680,6 +692,53 @@ pub(crate) fn stage_visual_analysis(
         tasks: pending,
         hydrated_count,
     })
+}
+
+/// Walk a bounded window of reading identities, including cache hits and
+/// unreadable assets. Advancing over that window prevents failed media from
+/// starving later work and keeps hydration inside the same small DB budget.
+pub(crate) fn pending_visual_candidate_batch(
+    conn: &Connection,
+    analyzer_version: &str,
+    after_reading_id: Option<&str>,
+    limit: usize,
+) -> Result<(Vec<VisualAssetCandidate>, usize, Option<String>)> {
+    if analyzer_version.trim().is_empty() {
+        bail!("analyzer version must not be blank");
+    }
+    let transaction = conn.unchecked_transaction()?;
+    let rows = visual_asset_candidate_batch(conn, after_reading_id, limit)?;
+    let next = (rows.len() == limit).then(|| rows.last().unwrap().0.clone());
+    let mut pending = Vec::new();
+    let mut hydrated = 0;
+    for (id, title, path, hash) in rows {
+        let cached: Option<(String, Option<String>)> = conn
+            .query_row(
+                "SELECT CASE WHEN supported=1 THEN visual_terms ELSE '' END,
+                    CASE WHEN supported=1 THEN predominant_color ELSE NULL END
+             FROM visual_analysis WHERE content_hash=?1 AND analyzer_version=?2",
+                params![hash, analyzer_version],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        if let Some((terms, color)) = cached {
+            hydrated += conn.execute(
+                "UPDATE readings SET visual_analyzer_version=?2, visual_terms=?3, predominant_color=?4
+                 WHERE id=?1 AND visual_analyzer_version IS NOT ?2",
+                params![id, analyzer_version, terms, color],
+            )?;
+        } else {
+            let first: Option<String> = conn.query_row(
+                "SELECT MIN(id) FROM readings WHERE visual_asset_hash=?1 AND visual_asset_path IS NOT NULL",
+                [&hash], |row| row.get(0),
+            )?;
+            if first.as_deref() == Some(id.as_str()) {
+                pending.push((id, title, path, hash));
+            }
+        }
+    }
+    transaction.commit()?;
+    Ok((pending, hydrated, next))
 }
 
 /// Complete a task only if the same safe path still contains the same bytes.

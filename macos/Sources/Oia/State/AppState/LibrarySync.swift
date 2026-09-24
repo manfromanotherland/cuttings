@@ -55,7 +55,7 @@ extension AppState {
             guard session == librarySessionGeneration,
                   activeCoreID == bridgeID,
                   !Task.isCancelled else { return }
-            if changed > 0 {
+            if changed > 0 || changes.requiresFullScan {
                 await refresh()
                 scheduleVisualSearchReconciliation()
             }

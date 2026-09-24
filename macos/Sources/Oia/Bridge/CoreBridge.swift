@@ -42,12 +42,14 @@ actor CoreBridge {
     }
 
     func pendingVisualAnalysis(
-        analyzerVersion: String, limit: UInt32
+        analyzerVersion: String, limit: UInt32, afterReadingID: String? = nil
     ) async throws -> PendingVisualAnalysis {
-        try await Self.background { [database, libraryPath] in
-            try PendingVisualAnalysis(database.pendingVisualAnalysis(
+        try await InteractionIdleGate.shared.waitUntilIdle()
+        return try await Self.background { [database, libraryPath] in
+            try PendingVisualAnalysis(database.pendingVisualAnalysisBatch(
                 libraryPath: libraryPath,
                 analyzerVersion: analyzerVersion,
+                afterReadingId: afterReadingID,
                 limit: limit
             ))
         }
@@ -67,9 +69,19 @@ actor CoreBridge {
     }
 
     func currentVisualAssets() async throws -> [VisualAssetSnapshot] {
-        try await Self.background { [database, libraryPath] in
-            try database.currentVisualAssets(libraryPath: libraryPath).map(VisualAssetSnapshot.init)
-        }
+        var assets: [VisualAssetSnapshot] = []
+        var cursor: String?
+        repeat {
+            try await InteractionIdleGate.shared.waitUntilIdle()
+            let after = cursor
+            let batch = try await Self.background { [database, libraryPath] in
+                try database.currentVisualAssetsBatch(libraryPath: libraryPath, afterReadingId: after, limit: 16)
+            }
+            try Task.checkCancellation()
+            assets.append(contentsOf: batch.assets.map(VisualAssetSnapshot.init))
+            cursor = batch.nextReadingId
+        } while cursor != nil
+        return assets
     }
 
     /// Filesystem work can wait on external storage. Release the interactive

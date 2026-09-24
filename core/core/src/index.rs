@@ -61,6 +61,21 @@ fn migrate(conn: &Connection) -> Result<()> {
     if version < 8 {
         migrate_v8(conn)?;
     }
+    if version < 9 {
+        migrate_v9(conn)?;
+    }
+    Ok(())
+}
+
+/// Pending analysis deduplicates readings by asset hash. Bound those lookups
+/// (and result fan-out updates) by hash rather than searching all reading IDs.
+fn migrate_v9(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "BEGIN;
+         CREATE INDEX readings_visual_asset_hash_id_idx ON readings(visual_asset_hash, id);
+         PRAGMA user_version = 9;
+         COMMIT;",
+    )?;
     Ok(())
 }
 
@@ -399,7 +414,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         // readings table exists
         let count: i64 = conn
@@ -466,6 +481,25 @@ mod tests {
     }
 
     #[test]
+    fn visual_asset_identity_lookup_is_bounded_by_the_content_hash() {
+        let directory = TempDir::new().unwrap();
+        let connection = open(&directory.path().join("index.db")).unwrap();
+        let mut statement = connection
+            .prepare(
+                "EXPLAIN QUERY PLAN SELECT MIN(id) FROM readings
+             WHERE visual_asset_hash=?1 AND visual_asset_path IS NOT NULL",
+            )
+            .unwrap();
+        let plan: Vec<String> = statement
+            .query_map(["same-image"], |row| row.get(3))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(plan.iter().any(|detail| detail.contains("visual_asset_hash=?")),
+            "candidate deduplication must seek by hash instead of searching unrelated readings: {plan:?}");
+    }
+
+    #[test]
     fn v7_indexes_existing_readings_without_changing_board_order() {
         let dir = TempDir::new().unwrap();
         let db_path = dir.path().join("index.db");
@@ -495,7 +529,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         let mut stmt = conn
             .prepare("SELECT id FROM readings ORDER BY saved_at DESC, id DESC")
@@ -659,7 +693,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
         assert_eq!(projected, None);
     }
 
@@ -691,7 +725,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         let values: (String, Option<String>, Option<String>) = conn
             .query_row(
@@ -733,7 +767,7 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         let values: (i64, i64, String) = conn
             .query_row(

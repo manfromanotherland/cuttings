@@ -11,11 +11,24 @@ extension EnvironmentValues {
 @MainActor
 @Observable
 final class BoardScrollState {
-    var isScrolling = false
+    private(set) var isScrolling = false
+    private let interactionSourceID = UUID()
+    private let interactionGate: InteractionIdleGate
+
+    init(interactionGate: InteractionIdleGate = .shared) {
+        self.interactionGate = interactionGate
+    }
+
+    deinit {
+        let gate = interactionGate
+        let sourceID = interactionSourceID
+        Task { @MainActor in gate.setScrolling(false, sourceID: sourceID) }
+    }
 
     func setScrolling(_ isScrolling: Bool) {
         guard self.isScrolling != isScrolling else { return }
         self.isScrolling = isScrolling
+        interactionGate.setScrolling(isScrolling, sourceID: interactionSourceID)
         PerformanceTrace.scrollPhaseChanged(isScrolling)
     }
 }
