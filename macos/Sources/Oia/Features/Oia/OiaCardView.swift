@@ -78,7 +78,11 @@ struct OiaCardView: View {
         cardContent(in: size)
             .frame(width: size.width, height: size.height, alignment: .topLeading)
             .background {
-                cardShape.fill(.thinMaterial)
+                if PerformanceTrace.disableMaterials {
+                    cardShape.fill(Color(nsColor: .controlBackgroundColor))
+                } else {
+                    cardShape.fill(.thinMaterial)
+                }
 
                 if let palette = OiaTheme.articlePalette(for: row) {
                     cardShape.fill(palette.background.color.opacity(0.15))

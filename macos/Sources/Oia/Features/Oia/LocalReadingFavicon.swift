@@ -38,7 +38,8 @@ struct LocalReadingFavicon: View {
     }
 
     private var loadKey: String {
-        "\(libraryURL?.path ?? ""):\(row.id):\(row.faviconAsset ?? ""):\(Int(maxPixel)):\(isVisible):\(contentGeneration)"
+        "\(libraryURL?.path ?? ""):\(row.id):\(row.faviconAsset ?? "")"
+            + ":\(Int(maxPixel)):\(isVisible):\(contentGeneration)"
     }
 
     private var assetURL: URL? {

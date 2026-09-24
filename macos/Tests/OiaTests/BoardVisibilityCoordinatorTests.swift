@@ -66,8 +66,8 @@ final class BoardVisibilityCoordinatorTests: XCTestCase {
         )
     }
 
-    private func viewport(y: Double) -> LayoutRect {
-        LayoutRect(x: 0, y: y, width: 100, height: 100)
+    private func viewport(y offset: Double) -> LayoutRect {
+        LayoutRect(x: 0, y: offset, width: 100, height: 100)
     }
 }
 
@@ -75,7 +75,9 @@ private final class ChangeCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
 
-    var value: Int { lock.withLock { count } }
+    var value: Int {
+        lock.withLock { count }
+    }
 
     func increment() {
         lock.withLock { count += 1 }
