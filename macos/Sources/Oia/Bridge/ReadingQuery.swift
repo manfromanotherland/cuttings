@@ -41,3 +41,55 @@ extension ReadingQuery {
         )
     }
 }
+
+/// Delivers one captured search generation. The native client supplies its
+/// generation guard; the Rust query owns filtering and combined relevance.
+enum ReadingSnapshotDelivery {
+    @MainActor
+    static func load<Rows>(
+        textFirst: Bool = true,
+        fetch: @MainActor ([String]) async throws -> Rows,
+        semanticCandidates: (@MainActor () async throws -> [String])?,
+        isCurrent: @MainActor () -> Bool,
+        publish: @MainActor (Rows, Bool) -> Void
+    ) async throws -> Bool {
+        guard isCurrent() else { return false }
+        // Reconciliation of an already displayed semantic query keeps its
+        // membership stable until one complete replacement is available.
+        if !textFirst, let semanticCandidates {
+            guard let candidates = await optionalCandidates(semanticCandidates),
+                  isCurrent() else { return false }
+            let rows = try await fetch(candidates)
+            guard isCurrent() else { return false }
+            publish(rows, !candidates.isEmpty)
+            return true
+        }
+        let rows = try await fetch([])
+        guard isCurrent() else { return false }
+        publish(rows, false)
+        guard let semanticCandidates, isCurrent() else { return isCurrent() }
+
+        guard let candidates = await optionalCandidates(semanticCandidates),
+              isCurrent() else { return false }
+        guard !candidates.isEmpty else { return true }
+
+        let enriched = try await fetch(candidates)
+        guard isCurrent() else { return false }
+        publish(enriched, true)
+        return true
+    }
+
+    @MainActor
+    private static func optionalCandidates(
+        _ load: @MainActor () async throws -> [String]
+    ) async -> [String]? {
+        do {
+            return try await load()
+        } catch is CancellationError {
+            return nil
+        } catch {
+            // Spotlight is optional. Its failure must not hide local results.
+            return []
+        }
+    }
+}

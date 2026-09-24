@@ -8,7 +8,6 @@ private struct ReadingSnapshotContext {
     let generation: UInt64
     let scope: LibraryScope
     let search: String?
-    let semanticCandidateIDs: [String]
 }
 
 enum ReadingLoadResult: Equatable {
@@ -52,7 +51,10 @@ extension AppState {
             // field is still focused. Preserve an unavailable focused card for
             // this reload so the state update cannot disturb the field editor and
             // let a global shortcut fire instead of editing the search term.
-            _ = await loadReadings(resetSelectionIfMissing: !isEditingText)
+            _ = await loadReadings(
+                resetSelectionIfMissing: !isEditingText,
+                preferImmediateTextResults: true
+            )
         }
     }
 
@@ -66,50 +68,23 @@ extension AppState {
     /// virtualizes card views, so the app never waits for a trailing page.
     private func fetchReadings(
         _ core: any CoreBridging,
-        context: ReadingSnapshotContext
+        context: ReadingSnapshotContext,
+        semanticCandidateIDs: [String]
     ) async throws -> [ReadingRow] {
         let query = ReadingQuery.boardSnapshot(
             scope: context.scope,
             search: context.search,
-            semanticCandidateIDs: context.semanticCandidateIDs
+            semanticCandidateIDs: semanticCandidateIDs
         )
         return try await core.listReadings(query)
     }
 
-    private func makeSnapshotContext(
-        includeSemanticSearch: Bool
-    ) async -> ReadingSnapshotContext? {
+    private func makeSnapshotContext() -> ReadingSnapshotContext {
         readingLoadGeneration &+= 1
-        let generation = readingLoadGeneration
-        let scope = activeScope
-        let search = activeQuery
-
-        let semanticCandidateIDs: [String]
-        if includeSemanticSearch {
-            do {
-                semanticCandidateIDs = try await loadSemanticCandidateIDs(for: search)
-            } catch is CancellationError {
-                // A newer Spotlight generation or reading load superseded this
-                // snapshot. Do not mistake cancellation for zero semantic hits.
-                return nil
-            } catch {
-                // Core Spotlight is an optional enhancement. A genuine query
-                // failure still leaves Rust text/label/colour search available.
-                semanticCandidateIDs = []
-            }
-        } else {
-            semanticCandidateIDs = []
-        }
-
-        guard generation == readingLoadGeneration,
-              scope == activeScope,
-              search == activeQuery,
-              !Task.isCancelled else { return nil }
         return ReadingSnapshotContext(
-            generation: generation,
-            scope: scope,
-            search: search,
-            semanticCandidateIDs: semanticCandidateIDs
+            generation: readingLoadGeneration,
+            scope: activeScope,
+            search: activeQuery
         )
     }
 
@@ -139,27 +114,40 @@ extension AppState {
     @discardableResult
     func loadReadings(
         resetSelectionIfMissing: Bool = true,
-        includeSemanticSearch: Bool = true
+        includeSemanticSearch: Bool = true,
+        preferImmediateTextResults: Bool = false
     ) async -> ReadingLoadResult {
+        guard !Task.isCancelled else { return .superseded }
         guard let core else { return .failed }
-        guard let context = await makeSnapshotContext(
-            includeSemanticSearch: includeSemanticSearch
-        ) else { return .superseded }
+        let context = makeSnapshotContext()
+        let semanticCandidates: (@MainActor () async throws -> [String])?
+        if includeSemanticSearch, context.search != nil, visualSearchCoordinator != nil {
+            semanticCandidates = { try await self.loadSemanticCandidateIDs(for: context.search) }
+        } else {
+            semanticCandidates = nil
+        }
         do {
-            let rows = try await fetchReadings(core, context: context)
-            guard isCurrent(context) else { return .superseded }
-            readings = rows
-            if libraryContentRefreshPending {
-                libraryContentRefreshPending = false
-                libraryContentGeneration &+= 1
-            }
-            TestHooks.recordStartupEvent("readings")
+            let completed = try await ReadingSnapshotDelivery.load(
+                textFirst: preferImmediateTextResults,
+                fetch: { candidates in
+                    try await self.fetchReadings(core, context: context, semanticCandidateIDs: candidates)
+                },
+                semanticCandidates: semanticCandidates,
+                isCurrent: { self.isCurrent(context) },
+                publish: { rows, _ in self.publishReadings(rows) }
+            )
+            guard completed, isCurrent(context) else { return .superseded }
 
+            // A text-only first result must not discard a selected semantic hit
+            // that is still awaiting optional enrichment. Reconcile once the
+            // captured query has finished, against its final published rows.
             if !boardSelection.selectedIDs.isEmpty || boardSelection.focusedID != nil {
-                boardSelection.reconcile(
-                    with: rows.map(\.id),
+                var selection = boardSelection
+                selection.reconcile(
+                    with: readings.map(\.id),
                     preserveUnavailableFocus: !resetSelectionIfMissing
                 )
+                if selection != boardSelection { boardSelection = selection }
             }
             return .published
         } catch {
@@ -169,6 +157,20 @@ extension AppState {
             }
             return .superseded
         }
+    }
+
+    private func publishReadings(_ rows: [ReadingRow]) {
+        // Reconciliation often confirms exactly the rows already displayed.
+        // Keep their observation identity stable instead of invalidating the
+        // board and detail hierarchy with an equal whole-array assignment.
+        if readings != rows { readings = rows }
+        // Body or same-path asset bytes can change while every row field stays
+        // equal. Content invalidation remains independent of row publication.
+        if libraryContentRefreshPending {
+            libraryContentRefreshPending = false
+            libraryContentGeneration &+= 1
+        }
+        TestHooks.recordStartupEvent("readings")
     }
 
     // ── Filter metadata ───────────────────────────────────────────────────
@@ -183,7 +185,8 @@ extension AppState {
             kind: nil, scope: .all, tag: nil, query: nil
         ) else { return }
         guard session == librarySessionGeneration else { return }
-        filters.tags = counts.tags.map { TagCount($0) }
+        let tags = counts.tags.map { TagCount($0) }
+        if filters.tags != tags { filters.tags = tags }
     }
 
     /// Reload the board after its scope changes. The global tag vocabulary only
