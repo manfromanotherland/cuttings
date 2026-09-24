@@ -26,7 +26,7 @@ struct OiaLibraryView: View {
     @State var quickLookURL: URL?
     @State private var searchPresented = false
     @FocusState var boardFocused: Bool
-    @FocusState var searchFocused: Bool
+    @FocusState private var searchFocused: Bool
     var body: some View {
         NavigationStack {
             deletionSurface
@@ -137,7 +137,7 @@ extension OiaLibraryView {
     private var detailSurface: some View {
         if appState.isFocusMode {
             board
-        } else {
+        } else if searchPresented {
             board
                 .searchable(
                     text: searchQuery,
@@ -152,6 +152,9 @@ extension OiaLibraryView {
                     }
                 }
                 .toolbar { boardToolbar }
+        } else {
+            board
+                .toolbar { boardToolbar }
         }
     }
 
@@ -164,6 +167,15 @@ extension OiaLibraryView {
 
             ToolbarItem(placement: .principal) {
                 boardFilterPicker
+            }
+
+            if !searchPresented {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: focusSearch) {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
+                    .help("Search (\(ShortcutCatalog.focusSearch.display))")
+                }
             }
         }
     }
