@@ -6,9 +6,10 @@ import Foundation
 // ── Incremental sync (FSEvents) ─────────────────────────────────────────────
 
 extension AppState {
-    private func requestWatcherSync(session: UInt64) {
+    private func requestWatcherSync(session: UInt64, change: FolderWatcher.Change = .full) {
         guard session == librarySessionGeneration else { return }
         watcherSyncPending = true
+        watcherChanges.merge(change)
         scheduleWatcherSyncIfNeeded(session: session)
     }
 
@@ -21,9 +22,11 @@ extension AppState {
               activeCoreID == ObjectIdentifier(bridge) else { return }
 
         watcherSyncPending = false
+        let changes = watcherChanges
+        watcherChanges = FolderWatcher.Change()
         watcherSyncTask = Task(priority: .utility) { @MainActor [weak self] in
             guard let self else { return }
-            await sync(using: bridge, session: session)
+            await sync(using: bridge, session: session, changes: changes)
             finishWatcherSync(session: session)
         }
     }
@@ -34,17 +37,21 @@ extension AppState {
         scheduleWatcherSyncIfNeeded(session: session)
     }
 
-    private func sync(using bridge: CoreBridge, session: UInt64) async {
+    private func sync(using bridge: CoreBridge, session: UInt64, changes: FolderWatcher.Change) async {
         guard session == librarySessionGeneration,
               activeCoreID == ObjectIdentifier(bridge),
               !Task.isCancelled else { return }
         let bridgeID = ObjectIdentifier(bridge)
-        await processInbox(using: bridge, session: session)
+        let savedInboxItems = await processInbox(using: bridge, session: session)
         guard session == librarySessionGeneration,
               activeCoreID == bridgeID,
               !Task.isCancelled else { return }
         do {
-            let changed = try await bridge.sync()
+            let changed: UInt32 = if changes.requiresFullScan || savedInboxItems {
+                try await bridge.sync()
+            } else {
+                try await bridge.sync(paths: Array(changes.paths))
+            }
             guard session == librarySessionGeneration,
                   activeCoreID == bridgeID,
                   !Task.isCancelled else { return }
@@ -62,7 +69,7 @@ extension AppState {
         }
     }
 
-    private func processInbox(using bridge: CoreBridge, session: UInt64) async {
+    private func processInbox(using bridge: CoreBridge, session: UInt64) async -> Bool {
         isProcessingInbox = true
         beginLibraryWrite()
         defer {
@@ -75,7 +82,7 @@ extension AppState {
             let report = try await bridge.processInbox()
             guard session == librarySessionGeneration,
                   activeCoreID == ObjectIdentifier(bridge),
-                  !Task.isCancelled else { return }
+                  !Task.isCancelled else { return false }
             inboxPendingCount = report.pending
             inboxIssues = report.issues
             inboxError = nil
@@ -86,15 +93,17 @@ extension AppState {
                     : "Saved \(report.saved) items from Inbox"
                 presentSaveNotice(message, systemImage: "checkmark.circle.fill")
             }
+            return report.saved > 0
         } catch {
             guard session == librarySessionGeneration,
                   activeCoreID == ObjectIdentifier(bridge),
-                  !Task.isCancelled else { return }
+                  !Task.isCancelled else { return false }
             // A broken Inbox must not prevent ordinary library reconciliation.
             // Keep persistent feedback beside its controls instead of showing
             // the same modal error on every provider event.
             inboxError = error.localizedDescription
             scheduleInboxRetry(session: session, pending: 0)
+            return false
         }
     }
 
@@ -138,9 +147,9 @@ extension AppState {
         // runs while we still hold the strong reference, so the release it
         // triggers can't deallocate the watcher mid-teardown.
         watcher?.invalidate()
-        watcher = FolderWatcher(libraryPath: libraryPath) { [weak self] in
+        watcher = FolderWatcher(libraryPath: libraryPath) { [weak self] change in
             Task { @MainActor [weak self] in
-                self?.requestWatcherSync(session: session)
+                self?.requestWatcherSync(session: session, change: change)
             }
         }
     }
@@ -152,7 +161,7 @@ extension AppState {
     ) {
         guard session == librarySessionGeneration else { return }
         watcher?.invalidate()
-        watcher = FolderWatcher(libraryPath: libraryURL.path) { [weak self] in
+        watcher = FolderWatcher(libraryPath: libraryURL.path) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.retryFullRebuildWhenReady(
                     libraryURL: libraryURL,

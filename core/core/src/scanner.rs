@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-use std::{collections::HashMap, path::PathBuf, time::SystemTime};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Component, Path, PathBuf},
+    time::SystemTime,
+};
 
 use anyhow::Result;
 
@@ -60,95 +64,160 @@ pub fn scan_library(library: &LibraryRoot) -> Result<Vec<ScannedReading>> {
             if !reading_dir.file_type()?.is_dir() {
                 continue; // ignore stray files sitting directly in a bucket
             }
-            let path = reading_dir.path().join("article.md");
-            let file_meta = match std::fs::metadata(&path) {
-                Ok(m) => m,
-                Err(_) => continue, // a folder without an article.md is not a reading
-            };
-
-            let modified_at = file_meta.modified()?;
-            let content = match std::fs::read_to_string(&path) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("scanner: skipping {}: {e}", path.display());
-                    continue;
-                }
-            };
-            let reading = match parse_reading(&content) {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("scanner: skipping {}: {e}", path.display());
-                    continue;
-                }
-            };
-
-            // The folder's location must match the reading's own identity:
-            // `articles/<prefix>/<id>/`. If an external edit or sync drops an
-            // article whose frontmatter id disagrees with its folder (or bucket),
-            // skip it rather than index it — otherwise the index would point a
-            // reading at a folder that `delete_reading` and asset resolution
-            // (both keyed on the id) would not agree with.
-            if reading_dir.path() != library.reading_dir(&reading.metadata.id) {
-                eprintln!(
-                    "scanner: skipping {}: folder does not match frontmatter id {}",
-                    path.display(),
-                    reading.metadata.id
-                );
-                continue;
+            if let Some(reading) = scan_reading_directory(library, &reading_dir.path())? {
+                results.push(reading);
             }
-
-            let visual_asset =
-                reading
-                    .metadata
-                    .preview_asset
-                    .as_deref()
-                    .and_then(|relative_path| {
-                        let inspected = if matches!(
-                            reading.metadata.kind,
-                            crate::ReadingKind::Article | crate::ReadingKind::Image
-                        ) {
-                            crate::visual_index::inspect_image_asset(
-                                library,
-                                &reading.metadata.id,
-                                relative_path,
-                            )
-                        } else {
-                            crate::visual_index::inspect_asset(
-                                library,
-                                &reading.metadata.id,
-                                relative_path,
-                            )
-                        };
-                        match inspected {
-                            Ok(asset) => Some(asset),
-                            Err(error) => {
-                                eprintln!(
-                                    "scanner: ignoring unsafe preview for {}: {error}",
-                                    reading.metadata.id
-                                );
-                                None
-                            }
-                        }
-                    });
-
-            let media_aspect_ratio =
-                inspect_media_aspect_ratio(library, &reading.metadata, visual_asset.as_ref());
-
-            results.push(ScannedReading {
-                id: reading.metadata.id.clone(),
-                source_hash: reading.metadata.source_hash.clone(),
-                modified_at,
-                path,
-                has_note: note_file_exists(library, &reading.metadata.id),
-                visual_asset,
-                media_aspect_ratio,
-                metadata: reading.metadata,
-                body: reading.body,
-            });
         }
     }
 
     Ok(results)
+}
+
+/// Resolve precise file events into reading folders. Ancestor/root/unknown
+/// events deliberately request a full scan; no event can create a path escape.
+pub(crate) fn reading_ids_for_changed_paths(
+    library: &LibraryRoot,
+    paths: &[String],
+) -> Option<HashSet<String>> {
+    let mut ids = HashSet::new();
+    for path in paths {
+        let relative = Path::new(path).strip_prefix(library.path()).ok()?;
+        let parts = relative
+            .components()
+            .map(|component| match component {
+                Component::Normal(value) => value.to_str(),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        match parts.first().copied() {
+            Some("inbox") => {} // Inbox ingestion separately requests reconciliation after saving.
+            Some("articles") if parts.len() >= 3 => {
+                let id = parts[2];
+                if id.len() < 2
+                    || !id.bytes().all(|value| value.is_ascii_alphanumeric())
+                    || parts[1] != &id[..2]
+                {
+                    return None;
+                }
+                ids.insert(id.to_string());
+            }
+            _ => return None,
+        }
+    }
+    Some(ids)
+}
+
+pub(crate) fn scan_reading_ids(
+    library: &LibraryRoot,
+    ids: &HashSet<String>,
+) -> Result<Vec<ScannedReading>> {
+    let mut readings = Vec::new();
+    for id in ids {
+        let directory = library.reading_dir(id);
+        // Match the full scanner: never traverse a symlinked bucket or reading
+        // directory supplied by a filesystem event.
+        if !directory
+            .parent()
+            .is_some_and(|parent| is_real_directory(parent))
+            || !is_real_directory(&directory)
+        {
+            continue;
+        }
+        if let Some(reading) = scan_reading_directory(library, &directory)? {
+            readings.push(reading);
+        }
+    }
+    Ok(readings)
+}
+
+fn is_real_directory(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+}
+
+fn scan_reading_directory(
+    library: &LibraryRoot,
+    directory: &Path,
+) -> Result<Option<ScannedReading>> {
+    let path = directory.join("article.md");
+    let file_meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(_) => return Ok(None), // a folder without an article.md is not a reading
+    };
+
+    let modified_at = file_meta.modified()?;
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("scanner: skipping {}: {e}", path.display());
+            return Ok(None);
+        }
+    };
+    let reading = match parse_reading(&content) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("scanner: skipping {}: {e}", path.display());
+            return Ok(None);
+        }
+    };
+
+    // The folder's location must match the reading's own identity:
+    // `articles/<prefix>/<id>/`. If an external edit or sync drops an
+    // article whose frontmatter id disagrees with its folder (or bucket),
+    // skip it rather than index it — otherwise the index would point a
+    // reading at a folder that `delete_reading` and asset resolution
+    // (both keyed on the id) would not agree with.
+    if directory != library.reading_dir(&reading.metadata.id) {
+        eprintln!(
+            "scanner: skipping {}: folder does not match frontmatter id {}",
+            path.display(),
+            reading.metadata.id
+        );
+        return Ok(None);
+    }
+
+    let visual_asset = reading
+        .metadata
+        .preview_asset
+        .as_deref()
+        .and_then(|relative_path| {
+            let inspected = if matches!(
+                reading.metadata.kind,
+                crate::ReadingKind::Article | crate::ReadingKind::Image
+            ) {
+                crate::visual_index::inspect_image_asset(
+                    library,
+                    &reading.metadata.id,
+                    relative_path,
+                )
+            } else {
+                crate::visual_index::inspect_asset(library, &reading.metadata.id, relative_path)
+            };
+            match inspected {
+                Ok(asset) => Some(asset),
+                Err(error) => {
+                    eprintln!(
+                        "scanner: ignoring unsafe preview for {}: {error}",
+                        reading.metadata.id
+                    );
+                    None
+                }
+            }
+        });
+
+    let media_aspect_ratio =
+        inspect_media_aspect_ratio(library, &reading.metadata, visual_asset.as_ref());
+
+    Ok(Some(ScannedReading {
+        id: reading.metadata.id.clone(),
+        source_hash: reading.metadata.source_hash.clone(),
+        modified_at,
+        path,
+        has_note: note_file_exists(library, &reading.metadata.id),
+        visual_asset,
+        media_aspect_ratio,
+        metadata: reading.metadata,
+        body: reading.body,
+    }))
 }
 
 pub(crate) fn inspect_media_aspect_ratio(

@@ -10,7 +10,10 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use crate::{
@@ -523,6 +526,8 @@ impl From<FfiListOptions> for ListOptions {
 pub struct Database {
     conn: Mutex<rusqlite::Connection>,
     last_scan: Mutex<Vec<ScannedReading>>,
+    reconciliation: Mutex<()>,
+    scan_initialized: AtomicBool,
     visual_cache_root: PathBuf,
     // Staging/pruning may wait on slow storage. Serialize those operations
     // separately so interactive database reads never wait on their filesystem I/O.
@@ -540,6 +545,8 @@ impl Database {
         Ok(Arc::new(Self {
             conn: Mutex::new(conn),
             last_scan: Mutex::new(Vec::new()),
+            reconciliation: Mutex::new(()),
+            scan_initialized: AtomicBool::new(false),
             visual_cache_root,
             visual_cache_io: Mutex::new(()),
         }))
@@ -552,6 +559,7 @@ impl Database {
     /// Call this on first launch or after the library folder is replaced.
     /// Stores the resulting scan snapshot so `sync` can diff against it.
     pub fn rebuild(&self, library_path: String) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let scan = crate::scan_library(&lib).map_err(e)?;
         {
@@ -560,6 +568,7 @@ impl Database {
         }
         self.prune_visual_cache()?;
         *self.last_scan.lock().unwrap() = scan;
+        self.scan_initialized.store(true, Ordering::Release);
         Ok(())
     }
 
@@ -568,10 +577,31 @@ impl Database {
     ///
     /// Call this on subsequent launches or when a file-system watch fires.
     pub fn sync(&self, library_path: String) -> Result<u32, CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let new_scan = crate::scan_library(&lib).map_err(e)?;
-        let old_scan = self.last_scan.lock().unwrap().clone();
-        let diffs = crate::diff(&old_scan, &new_scan);
+        let mut diffs = {
+            let old_scan = self.last_scan.lock().unwrap();
+            crate::diff(&old_scan, &new_scan)
+        };
+        if !self.scan_initialized.load(Ordering::Acquire) {
+            // A reopened Database has no previous filesystem snapshot. Rows
+            // that disappeared while it was closed still need removal from
+            // the persistent disposable index on its first reconciliation.
+            let present: std::collections::HashSet<_> =
+                new_scan.iter().map(|reading| reading.id.as_str()).collect();
+            let conn = self.conn.lock().unwrap();
+            let mut statement = conn.prepare("SELECT id FROM readings").map_err(e)?;
+            for id in statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(e)?
+            {
+                let id = id.map_err(e)?;
+                if !present.contains(id.as_str()) {
+                    diffs.push(crate::scanner::ScanDiff::Removed(id));
+                }
+            }
+        }
         let count = diffs.len() as u32;
         if !diffs.is_empty() {
             {
@@ -581,7 +611,46 @@ impl Database {
             self.prune_visual_cache()?;
         }
         *self.last_scan.lock().unwrap() = new_scan;
+        self.scan_initialized.store(true, Ordering::Release);
         Ok(count)
+    }
+
+    /// Reconcile the reading folders affected by precise filesystem events.
+    /// An uninitialized snapshot or an ambiguous path falls back to a full scan.
+    pub fn sync_paths(
+        &self,
+        library_path: String,
+        changed_paths: Vec<String>,
+    ) -> Result<u32, CoreError> {
+        let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        let ids = crate::scanner::reading_ids_for_changed_paths(&lib, &changed_paths);
+        let Some(ids) = ids.filter(|_| self.scan_initialized.load(Ordering::Acquire)) else {
+            return self.sync(library_path);
+        };
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let _update = self.reconciliation.lock().unwrap();
+        let new_scan = crate::scanner::scan_reading_ids(&lib, &ids).map_err(e)?;
+        let diffs = {
+            let old_scan = self.last_scan.lock().unwrap();
+            let affected: Vec<_> = old_scan
+                .iter()
+                .filter(|reading| ids.contains(&reading.id))
+                .cloned()
+                .collect();
+            crate::diff(&affected, &new_scan)
+        };
+        {
+            let conn = self.conn.lock().unwrap();
+            crate::apply_diffs(&conn, &diffs).map_err(e)?;
+        }
+        let mut previous = self.last_scan.lock().unwrap();
+        previous.retain(|reading| !ids.contains(&reading.id));
+        previous.extend(new_scan);
+        // Cache pruning belongs to the next visual reconciliation, rather than
+        // walking every cached image for a one-reading filesystem event.
+        Ok(diffs.len() as u32)
     }
 
     /// Safely enumerate current preview assets for Core Spotlight donation.
@@ -840,6 +909,7 @@ impl Database {
     // ── Tags ──────────────────────────────────────────────────────────────
 
     pub fn add_tag(&self, library_path: String, id: String, tag: String) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::add_tag(&lib, &conn, &id, &tag).map_err(e)
@@ -851,6 +921,7 @@ impl Database {
         id: String,
         tag: String,
     ) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::remove_tag(&lib, &conn, &id, &tag).map_err(e)
@@ -865,6 +936,7 @@ impl Database {
         id: String,
         rating: u8,
     ) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::set_rating(&lib, &conn, &id, rating).map_err(e)
@@ -873,6 +945,7 @@ impl Database {
     // ── Status flags ──────────────────────────────────────────────────────
 
     pub fn set_read(&self, library_path: String, id: String, read: bool) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::set_read(&lib, &conn, &id, read).map_err(e)
@@ -884,6 +957,7 @@ impl Database {
         id: String,
         archived: bool,
     ) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::set_archived(&lib, &conn, &id, archived).map_err(e)
@@ -895,6 +969,7 @@ impl Database {
         id: String,
         favorite: bool,
     ) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::set_favorite(&lib, &conn, &id, favorite).map_err(e)
@@ -905,6 +980,7 @@ impl Database {
     /// Permanently delete a reading: its file, assets, and index row. Unlike
     /// `set_archived`, this cannot be undone.
     pub fn delete_reading(&self, library_path: String, id: String) -> Result<(), CoreError> {
+        let _update = self.reconciliation.lock().unwrap();
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let conn = self.conn.lock().unwrap();
         crate::delete_reading(&lib, &conn, &id).map_err(e)
@@ -1178,6 +1254,168 @@ mod tests {
                 "Available while indexing"
             );
         }
+    }
+
+    #[test]
+    fn a_scanned_snapshot_cannot_overwrite_a_later_tag_edit() {
+        use std::{sync::mpsc, thread, time::Duration};
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let id = database
+            .import_image(
+                library_path.clone(),
+                b"scan gate image".to_vec(),
+                "image/png".into(),
+                "Before".into(),
+            )
+            .unwrap()
+            .id;
+        let library = LibraryRoot::new(library_dir.path()).unwrap();
+        let article = library.article_path(&id);
+        std::fs::write(
+            &article,
+            std::fs::read_to_string(&article)
+                .unwrap()
+                .replace("Before", "External"),
+        )
+        .unwrap();
+
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let scanner_database = Arc::clone(&database);
+        let scanner_path = library_path.clone();
+        let scanner = thread::spawn(move || {
+            crate::visual_index::with_visual_io_test_hook(
+                move || {
+                    entered_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                },
+                || scanner_database.sync(scanner_path),
+            )
+        });
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        // Cached queries remain available while the filesystem scan is paused.
+        assert_eq!(
+            database.get_reading_row(id.clone()).unwrap().unwrap().title,
+            "Before"
+        );
+        let (edited_tx, edited_rx) = mpsc::channel();
+        let writer_database = Arc::clone(&database);
+        let writer_id = id.clone();
+        let writer = thread::spawn(move || {
+            edited_tx
+                .send(writer_database.add_tag(library_path, writer_id, "keep".into()))
+                .unwrap();
+        });
+        let early_edit = edited_rx.recv_timeout(Duration::from_millis(100));
+        release_tx.send(()).unwrap();
+        scanner.join().unwrap().unwrap();
+        writer.join().unwrap();
+        assert!(
+            early_edit.is_err(),
+            "file mutation raced ahead of an older scan snapshot"
+        );
+        edited_rx
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .unwrap();
+        let row = database.get_reading_row(id).unwrap().unwrap();
+        assert_eq!(row.title, "External");
+        assert_eq!(row.tags, ["keep"]);
+    }
+
+    #[test]
+    fn path_sync_only_reconciles_reported_readings_until_a_full_recovery_scan() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let library = LibraryRoot::new(library_dir.path()).unwrap();
+        let database =
+            Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+        let first = database
+            .import_text(
+                library_path.clone(),
+                "First body".into(),
+                Some("First".into()),
+            )
+            .unwrap();
+        let second = database
+            .import_text(
+                library_path.clone(),
+                "Second body".into(),
+                Some("Second".into()),
+            )
+            .unwrap();
+        let article = library.article_path(&first.id);
+        std::fs::write(
+            &article,
+            std::fs::read_to_string(&article)
+                .unwrap()
+                .replace("First", "Changed"),
+        )
+        .unwrap();
+        // This unreported deletion must be discovered by the explicit recovery
+        // scan, not by rereading every unrelated folder for the first event.
+        std::fs::remove_file(library.article_path(&second.id)).unwrap();
+        assert_eq!(
+            database
+                .sync_paths(library_path.clone(), vec![article.display().to_string()])
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            database.get_reading_row(first.id).unwrap().unwrap().title,
+            "Changed"
+        );
+        assert!(database
+            .get_reading_row(second.id.clone())
+            .unwrap()
+            .is_some());
+        assert_eq!(database.sync(library_path).unwrap(), 1);
+        assert!(database.get_reading_row(second.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn path_sync_recovers_a_new_session_and_ambiguous_ancestor_events() {
+        let library_dir = tempfile::TempDir::new().unwrap();
+        let index_dir = tempfile::TempDir::new().unwrap();
+        let library_path = library_dir.path().display().to_string();
+        let database_path = index_dir.path().join("index.db").display().to_string();
+        let library = LibraryRoot::new(library_dir.path()).unwrap();
+        let database = Database::open(database_path.clone()).unwrap();
+        let first = database
+            .import_text(library_path.clone(), "one".into(), Some("First".into()))
+            .unwrap();
+        let second = database
+            .import_text(library_path.clone(), "two".into(), Some("Second".into()))
+            .unwrap();
+        drop(database);
+        std::fs::remove_file(library.article_path(&second.id)).unwrap();
+        let reopened = Database::open(database_path).unwrap();
+        reopened
+            .sync_paths(
+                library_path.clone(),
+                vec![library.article_path(&first.id).display().to_string()],
+            )
+            .unwrap();
+        assert!(
+            reopened.get_reading_row(second.id).unwrap().is_none(),
+            "a fresh session must reconcile the whole index"
+        );
+        std::fs::remove_file(library.article_path(&first.id)).unwrap();
+        assert_eq!(
+            reopened
+                .sync_paths(
+                    library_path,
+                    vec![library.articles_dir().display().to_string()]
+                )
+                .unwrap(),
+            1
+        );
+        assert!(reopened.get_reading_row(first.id).unwrap().is_none());
     }
 
     #[test]

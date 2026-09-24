@@ -195,6 +195,7 @@ final class AppState {
     @ObservationIgnored var libraryContentRefreshPending = false
     @ObservationIgnored var watcherSyncTask: Task<Void, Never>?
     @ObservationIgnored var watcherSyncPending = false
+    @ObservationIgnored var watcherChanges = FolderWatcher.Change()
     @ObservationIgnored var inboxRetryTask: Task<Void, Never>?
     @ObservationIgnored var inboxRetryAttempt = 0
     var accessedURL: URL?

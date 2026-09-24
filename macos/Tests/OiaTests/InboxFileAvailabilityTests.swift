@@ -3,6 +3,24 @@
 import XCTest
 
 final class InboxFileAvailabilityTests: XCTestCase {
+    func testWatcherPreservesPrecisePathsAndEscalatesDroppedEvents() {
+        let first = FolderWatcher.Change.events(
+            paths: ["/library/articles/ab/abc/article.md"],
+            flags: [FSEventStreamEventFlags(kFSEventStreamEventFlagItemModified)]
+        )
+        XCTAssertEqual(first.paths, ["/library/articles/ab/abc/article.md"])
+        XCTAssertFalse(first.requiresFullScan)
+        let dropped = FolderWatcher.Change.events(
+            paths: ["/library/articles"],
+            flags: [FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped)]
+        )
+        var combined = first
+        combined.merge(dropped)
+        XCTAssertTrue(combined.requiresFullScan)
+        XCTAssertEqual(combined.paths.count, 2)
+        XCTAssertTrue(FolderWatcher.Change.events(paths: ["/library/articles"], flags: []).requiresFullScan)
+    }
+
     private var root: URL!
 
     override func setUpWithError() throws {

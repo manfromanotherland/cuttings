@@ -114,6 +114,7 @@ extension AppState {
             // Publish the existing board before starting any Inbox work. This
             // also picks up captures that arrived while Óia was closed.
             watcherSyncPending = true
+            watcherChanges.merge(.full)
             scheduleWatcherSyncIfNeeded(session: session)
         }
     }
@@ -123,6 +124,7 @@ extension AppState {
         watcher?.invalidate()
         watcher = nil
         watcherSyncPending = false
+        watcherChanges = FolderWatcher.Change()
         inboxRetryTask?.cancel()
         inboxRetryTask = nil
         inboxRetryAttempt = 0
@@ -311,6 +313,7 @@ extension AppState {
         watcher?.invalidate()
         watcher = nil
         watcherSyncPending = false
+        watcherChanges = FolderWatcher.Change()
         guard !hasUsableCachedLibrary else { return true }
 
         activeCoreID = nil

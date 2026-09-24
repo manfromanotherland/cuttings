@@ -9,11 +9,37 @@ import Foundation
 /// The FSEvents latency (0.5 s) coalesces rapid bursts into a single callback,
 /// so the caller doesn't need its own debounce.
 final class FolderWatcher: @unchecked Sendable {
+    struct Change: Equatable, Sendable {
+        var paths: Set<String> = []
+        var requiresFullScan = false
+
+        static let full = Change(requiresFullScan: true)
+
+        mutating func merge(_ other: Change) {
+            paths.formUnion(other.paths)
+            requiresFullScan = requiresFullScan || other.requiresFullScan
+        }
+
+        static func events(paths: [String], flags: [FSEventStreamEventFlags]) -> Change {
+            let recoveryFlags = FSEventStreamEventFlags(
+                kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagUserDropped
+                    | kFSEventStreamEventFlagKernelDropped | kFSEventStreamEventFlagEventIdsWrapped
+                    | kFSEventStreamEventFlagRootChanged | kFSEventStreamEventFlagMount
+                    | kFSEventStreamEventFlagUnmount
+            )
+            return Change(
+                paths: Set(paths),
+                requiresFullScan: paths.count != flags.count
+                    || flags.contains { $0 & recoveryFlags != 0 }
+            )
+        }
+    }
+
     private var stream: FSEventStreamRef?
     private let queue = DispatchQueue(label: "is.edmundo.cuttings.fsevents", qos: .utility)
-    private let onChange: @Sendable () -> Void
+    private let onChange: @Sendable (Change) -> Void
 
-    init(libraryPath: String, onChange: @escaping @Sendable () -> Void) {
+    init(libraryPath: String, onChange: @escaping @Sendable (Change) -> Void) {
         self.onChange = onChange
         start(paths: Self.watchPaths(libraryPath: libraryPath))
     }
@@ -57,9 +83,12 @@ final class FolderWatcher: @unchecked Sendable {
         let flags = FSEventStreamCreateFlags(
             kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents
         )
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+        let callback: FSEventStreamCallback = { _, info, count, eventPaths, eventFlags, _ in
             guard let info else { return }
-            Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue().fire()
+            let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] ?? []
+            let flags = Array(UnsafeBufferPointer(start: eventFlags, count: count))
+            Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue()
+                .onChange(Change.events(paths: paths, flags: flags))
         }
 
         stream = FSEventStreamCreate(
@@ -85,9 +114,5 @@ final class FolderWatcher: @unchecked Sendable {
         FSEventStreamInvalidate(stream)
         FSEventStreamRelease(stream)
         self.stream = nil
-    }
-
-    private func fire() {
-        onChange()
     }
 }

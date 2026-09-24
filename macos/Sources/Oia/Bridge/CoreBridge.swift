@@ -29,8 +29,16 @@ actor CoreBridge {
     }
 
     @discardableResult
-    func sync() throws -> UInt32 {
-        try database.sync(libraryPath: libraryPath)
+    func sync() async throws -> UInt32 {
+        try await Self.background { [database, libraryPath] in
+            try database.sync(libraryPath: libraryPath)
+        }
+    }
+
+    func sync(paths: [String]) async throws -> UInt32 {
+        try await Self.background { [database, libraryPath] in
+            try database.syncPaths(libraryPath: libraryPath, changedPaths: paths)
+        }
     }
 
     func pendingVisualAnalysis(
@@ -164,47 +172,59 @@ actor CoreBridge {
         }.value
     }
 
-    func importText(text: String, title: String?) throws -> FfiImportResult {
-        try database.importText(libraryPath: libraryPath, text: text, title: title)
+    func importText(text: String, title: String?) async throws -> FfiImportResult {
+        try await Self.background { [database, libraryPath] in
+            try database.importText(libraryPath: libraryPath, text: text, title: title)
+        }
     }
 
-    func importImage(data: Data, contentType: String, title: String) throws -> FfiImportResult {
-        try database.importImage(
-            libraryPath: libraryPath,
-            bytes: data,
-            contentType: contentType,
-            title: title
-        )
+    func importImage(data: Data, contentType: String, title: String) async throws -> FfiImportResult {
+        try await Self.background { [database, libraryPath] in
+            try database.importImage(
+                libraryPath: libraryPath,
+                bytes: data,
+                contentType: contentType,
+                title: title
+            )
+        }
     }
 
     /// The staged movie stays file-backed across the FFI boundary so large
     /// videos are never copied into a Swift or UniFFI byte buffer.
     func importVideoFile(
         filePath: String, contentType: String, title: String
-    ) throws -> FfiImportResult {
-        try database.importVideoFile(
-            libraryPath: libraryPath,
-            filePath: filePath,
-            contentType: contentType,
-            title: title
-        )
+    ) async throws -> FfiImportResult {
+        try await Self.background { [database, libraryPath] in
+            try database.importVideoFile(
+                libraryPath: libraryPath,
+                filePath: filePath,
+                contentType: contentType,
+                title: title
+            )
+        }
     }
 
     // ── Tags ──────────────────────────────────────────────────────────────
 
-    func addTag(id: String, tag: String) throws {
-        try database.addTag(libraryPath: libraryPath, id: id, tag: tag)
+    func addTag(id: String, tag: String) async throws {
+        try await Self.background { [database, libraryPath] in
+            try database.addTag(libraryPath: libraryPath, id: id, tag: tag)
+        }
     }
 
-    func removeTag(id: String, tag: String) throws {
-        try database.removeTag(libraryPath: libraryPath, id: id, tag: tag)
+    func removeTag(id: String, tag: String) async throws {
+        try await Self.background { [database, libraryPath] in
+            try database.removeTag(libraryPath: libraryPath, id: id, tag: tag)
+        }
     }
 
     // ── Deletion ──────────────────────────────────────────────────────────
 
     /// Permanently delete a reading (file, assets, and index row).
-    func deleteReading(id: String) throws {
-        try database.deleteReading(libraryPath: libraryPath, id: id)
+    func deleteReading(id: String) async throws {
+        try await Self.background { [database, libraryPath] in
+            try database.deleteReading(libraryPath: libraryPath, id: id)
+        }
     }
 
     // ── Highlights ────────────────────────────────────────────────────────
