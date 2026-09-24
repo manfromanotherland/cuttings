@@ -39,7 +39,7 @@ enum IndexCacheTrust {
                 && marker.inode == identity.inode
             return matches ? .trusted : .unavailable
         }
-        guard !TestHooks.isUITesting else { return .unavailable }
+        guard !TestHooks.isIsolatedRun else { return .unavailable }
 
         // One-time migration for indexes created before the ready marker
         // existed. The first successful rebuild binds future trust to this DB's

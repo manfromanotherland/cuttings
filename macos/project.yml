@@ -103,6 +103,8 @@ targets:
       - path: Sources/Oia/State/BoardSelection.swift
       - path: Sources/Oia/State/ReadingSort.swift
       - path: Sources/Oia/App/Shortcuts.swift
+      - path: Sources/Oia/App/TestHooks.swift
+      - path: Sources/Oia/App/PerformanceTrace.swift
       - path: Sources/Oia/Bridge/ReadingQuery.swift
       - path: Sources/Oia/Shared/Formatting/ReadingTime.swift
       - path: Sources/Oia/Features/Tags/TagRules.swift

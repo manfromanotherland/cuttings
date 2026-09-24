@@ -12,11 +12,14 @@ import Foundation
 /// still exercised.
 ///
 /// Every value-returning accessor yields `nil` unless the app was launched with
-/// `--ui-testing`, so a normal launch reads no environment overrides and behaves
+/// `--ui-testing` or `--performance-testing`, so a normal launch reads no overrides and behaves
 /// exactly as before — even if one of these variables happens to be set.
 enum TestHooks {
     /// True when the app was launched by the UI-test harness (passes `--ui-testing`).
     static let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+    /// Performance launches use the real board without the UI-test accessibility row probe.
+    static let isPerformanceTesting = ProcessInfo.processInfo.arguments.contains("--performance-testing")
+    static let isIsolatedRun = isUITesting || isPerformanceTesting
 
     /// Library folder to boot against, replacing the persisted bookmark.
     static var libraryPath: String? {
@@ -68,6 +71,10 @@ enum TestHooks {
     /// an events directory retains named snapshots for reconciliation checks.
     @MainActor
     static func recordStartupEvent(_ event: String, details: String? = nil) {
+        if isPerformanceTesting {
+            PerformanceTrace.recordStartupEvent(event)
+            return
+        }
         let contents = details ?? event
         if let path = env("OIA_TEST_STARTUP_EVENT_PATH") {
             try? contents.write(toFile: path, atomically: true, encoding: .utf8)
@@ -104,7 +111,7 @@ enum TestHooks {
     /// Reads an environment variable, but only in UI-testing mode, so a
     /// production build can never be redirected by a stray variable.
     private static func env(_ key: String) -> String? {
-        guard isUITesting,
+        guard isIsolatedRun,
               let value = ProcessInfo.processInfo.environment[key],
               !value.isEmpty
         else { return nil }

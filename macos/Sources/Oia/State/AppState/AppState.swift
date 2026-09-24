@@ -231,7 +231,7 @@ final class AppState {
         // step shows immediately with no reading-list flash.
         showExtensionSetup = defaults.bool(forKey: ExtensionSetupKey.pending)
 
-        if TestHooks.isUITesting {
+        if TestHooks.isIsolatedRun {
             // UI-testing: never resolve the persisted bookmark (leave the dev's
             // real library untouched). Boot the pinned temp library if one was
             // given; otherwise fall through to the onboarding screen.
@@ -256,7 +256,7 @@ final class AppState {
     private static func makeVisualSearchCoordinator() -> VisualSearchCoordinator? {
         // Never donate throwaway fixture IDs to the user's real Spotlight index
         // or introduce system-model timing into UI tests.
-        guard !TestHooks.isUITesting else { return nil }
+        guard !TestHooks.isIsolatedRun else { return nil }
         return VisualSearchCoordinator(
             analyzer: AppleVisualAnalyzer(),
             analyzerVersion: AppleVisualAnalyzer.analyzerVersion,

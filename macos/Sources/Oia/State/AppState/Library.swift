@@ -293,7 +293,7 @@ extension AppState {
     private func performPostReconciliationWork(libraryURL: URL, databasePath: String) {
         // Host-machine side effects are neutralized under UI testing so runs do
         // not touch the real machine's config or browser manifests.
-        if !TestHooks.isUITesting {
+        if !TestHooks.isIsolatedRun {
             writeLibraryPathConfig(libraryURL.path)
             NativeHostInstaller.install()
         }
