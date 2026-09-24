@@ -80,12 +80,60 @@ final class OiaCardTextMetricsTests: XCTestCase {
             ].joined(),
             String(repeating: "A deliberately long quote ", count: 100)
         ] {
+            let measured = metrics.quoteCardHeight(for: text, width: 403, cardSize: .extraLarge)
+            let rendered = renderedQuoteHeight(for: text, width: 403, cardSize: .extraLarge)
             XCTAssertEqual(
-                metrics.quoteCardHeight(for: text, width: 403),
-                renderedQuoteHeight(for: text, width: 403),
+                measured,
+                rendered,
                 accuracy: 0.5,
                 "Height mismatch for: \(text.prefix(32))"
             )
+        }
+    }
+
+    func testQuoteHeightMatchesTheRenderedStackAtEveryCardSize() {
+        let metrics = OiaCardTextMetrics()
+        let texts = [
+            "A short quote",
+            "Behind your image, below your words, above your thoughts, the silence of another world awaits.",
+            Array(repeating: "one full line", count: OiaCardTextMetrics.quoteLineLimit)
+                .joined(separator: "\n")
+        ]
+
+        for cardSize in CardSize.allCases {
+            let width = cardSize.minimumColumnWidth
+            for text in texts {
+                let measured = metrics.quoteCardHeight(for: text, width: width, cardSize: cardSize)
+                let rendered = renderedQuoteHeight(for: text, width: width, cardSize: cardSize)
+                XCTAssertEqual(
+                    measured,
+                    rendered,
+                    accuracy: 0.5,
+                    "Height mismatch for: \(cardSize.label), \(text.prefix(24))"
+                )
+            }
+        }
+    }
+
+    func testQuoteHeightCacheSeparatesCardSizesAtTheSameWidth() {
+        let text = Array(repeating: "one full line", count: OiaCardTextMetrics.quoteLineLimit)
+            .joined(separator: "\n")
+        let width: CGFloat = 403
+
+        for cardSizes in [
+            [CardSize.extraSmall, .extraLarge],
+            [CardSize.extraLarge, .extraSmall]
+        ] {
+            let metrics = OiaCardTextMetrics()
+            for cardSize in cardSizes {
+                let measured = metrics.quoteCardHeight(for: text, width: width, cardSize: cardSize)
+                let rendered = renderedQuoteHeight(for: text, width: width, cardSize: cardSize)
+                XCTAssertEqual(
+                    measured,
+                    rendered,
+                    accuracy: 0.5
+                )
+            }
         }
     }
 
@@ -95,12 +143,16 @@ final class OiaCardTextMetricsTests: XCTestCase {
         let sevenLines = Array(repeating: "one", count: 7).joined(separator: "\n")
 
         XCTAssertLessThanOrEqual(
-            metrics.quoteCardHeight(for: text, width: 403),
-            metrics.quoteCardHeight(for: text, width: 220)
+            metrics.quoteCardHeight(for: text, width: 403, cardSize: .extraLarge),
+            metrics.quoteCardHeight(for: text, width: 220, cardSize: .extraLarge)
         )
         XCTAssertGreaterThan(
-            metrics.quoteCardHeight(for: sevenLines, width: 403),
-            metrics.quoteCardHeight(for: "one two three", width: 403)
+            metrics.quoteCardHeight(for: sevenLines, width: 403, cardSize: .extraLarge),
+            metrics.quoteCardHeight(
+                for: "one two three",
+                width: 403,
+                cardSize: .extraLarge
+            )
         )
     }
 
@@ -108,11 +160,19 @@ final class OiaCardTextMetricsTests: XCTestCase {
         let metrics = OiaCardTextMetrics()
 
         XCTAssertEqual(OiaCardTextMetrics.quoteMinimumHeight, 300)
-        XCTAssertEqual(metrics.quoteCardHeight(for: "A short quote", width: 403), 300)
+        XCTAssertEqual(
+            metrics.quoteCardHeight(
+                for: "A short quote",
+                width: 403,
+                cardSize: .extraLarge
+            ),
+            300
+        )
         XCTAssertEqual(
             metrics.quoteCardHeight(
                 for: "To live is the rarest\nthing in the world.\nMost people exist,\nthat is all.",
-                width: 403
+                width: 403,
+                cardSize: .extraLarge
             ),
             300
         )
@@ -124,11 +184,13 @@ final class OiaCardTextMetricsTests: XCTestCase {
         let longer = String(repeating: "visible words ", count: 2000)
 
         XCTAssertEqual(
-            metrics.quoteCardHeight(for: long, width: 220),
-            metrics.quoteCardHeight(for: longer, width: 220)
+            metrics.quoteCardHeight(for: long, width: 220, cardSize: .extraLarge),
+            metrics.quoteCardHeight(for: longer, width: 220, cardSize: .extraLarge)
         )
     }
+}
 
+extension OiaCardTextMetricsTests {
     func testSocialPostHeightTracksTextWidthAndAttachmentRatio() {
         let metrics = OiaCardTextMetrics()
         let text = "A locally saved post keeps its text and media readable even after the source disappears."
@@ -218,11 +280,15 @@ final class OiaCardTextMetricsTests: XCTestCase {
         return ceil(NSHostingView(rootView: view).fittingSize.height)
     }
 
-    private func renderedQuoteHeight(for text: String, width: CGFloat) -> CGFloat {
+    private func renderedQuoteHeight(
+        for text: String,
+        width: CGFloat,
+        cardSize: CardSize
+    ) -> CGFloat {
         let view = VStack(alignment: .center, spacing: 0) {
             renderedQuoteMark("“")
             Text(text)
-                .font(Font(OiaCardTextMetrics.quoteFont))
+                .font(Font(OiaCardTextMetrics.quoteFont(for: cardSize)))
                 .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
                 .multilineTextAlignment(.center)
                 .lineLimit(OiaCardTextMetrics.quoteLineLimit)

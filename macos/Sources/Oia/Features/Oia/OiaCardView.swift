@@ -7,6 +7,7 @@ struct OiaCardView: View {
 
     let row: ReadingRow
     let isSelected: Bool
+    let cardSize: CardSize
     let playbackPositions: VideoPlaybackPositionStore
     var viewportSize: CGSize = .zero
     var displayScale: CGFloat = 1
@@ -207,7 +208,7 @@ struct OiaCardView: View {
             quoteMark("“")
 
             Text(quoteText)
-                .font(Font(OiaCardTextMetrics.quoteFont))
+                .font(Font(OiaCardTextMetrics.quoteFont(for: cardSize)))
                 .foregroundStyle(.primary)
                 .lineSpacing(OiaCardTextMetrics.quoteLineSpacing)
                 .multilineTextAlignment(.center)

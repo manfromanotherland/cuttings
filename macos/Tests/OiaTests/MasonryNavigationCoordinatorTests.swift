@@ -29,6 +29,37 @@ final class MasonryNavigationCoordinatorTests: XCTestCase {
     }
 
     @MainActor
+    func testRefreshesWhenOnlyConfigurationIDChanges() {
+        let coordinator = MasonryNavigationCoordinator<Double, Int>()
+        var estimationCount = 0
+
+        func update(configurationID: String) {
+            coordinator.updateIfNeeded(
+                elements: elements,
+                ids: ids,
+                configuration: MasonryNavigationConfiguration(
+                    layout: layout,
+                    containerWidth: 336,
+                    configurationID: configurationID
+                ),
+                estimatedHeight: { _, _ in
+                    estimationCount += 1
+                    return 100
+                }
+            )
+        }
+
+        update(configurationID: CardSize.small.rawValue)
+        XCTAssertEqual(estimationCount, elements.count)
+
+        update(configurationID: CardSize.small.rawValue)
+        XCTAssertEqual(estimationCount, elements.count)
+
+        update(configurationID: CardSize.large.rawValue)
+        XCTAssertEqual(estimationCount, elements.count * 2)
+    }
+
+    @MainActor
     private func update(
         _ coordinator: MasonryNavigationCoordinator<Double, Int>,
         ids: [Int],

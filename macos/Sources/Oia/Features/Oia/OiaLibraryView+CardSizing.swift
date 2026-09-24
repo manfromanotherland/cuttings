@@ -9,7 +9,11 @@ extension OiaLibraryView {
             return row.standaloneMediaHeight(for: width) ?? width
         case .quote:
             let text = row.excerpt.flatMap { $0.isEmpty ? nil : $0 } ?? row.displayTitle
-            return cardTextMetrics.quoteCardHeight(for: text, width: width)
+            return cardTextMetrics.quoteCardHeight(
+                for: text,
+                width: width,
+                cardSize: cardSize
+            )
         case .article:
             if let profile = row.socialPostProfile {
                 return cardTextMetrics.socialPostCardHeight(

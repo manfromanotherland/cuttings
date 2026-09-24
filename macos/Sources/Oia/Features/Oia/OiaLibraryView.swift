@@ -239,6 +239,7 @@ extension OiaLibraryView {
                         bottom: Self.boardSpacing,
                         trailing: Self.boardSpacing
                     ),
+                    configurationID: cardSize.rawValue,
                     position: $boardPosition,
                     navigationCoordinator: boardNavigation,
                     estimatedHeight: estimatedCardHeight,
@@ -246,6 +247,7 @@ extension OiaLibraryView {
                         OiaCardView(
                             row: row,
                             isSelected: appState.selectedIDs.contains(row.id),
+                            cardSize: cardSize,
                             playbackPositions: videoPlaybackPositions,
                             viewportSize: proxy.size,
                             displayScale: displayScale,

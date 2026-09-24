@@ -12,7 +12,7 @@ final class NewsreaderFontTests: XCTestCase {
 
     func testQuoteTypographyUsesTheBundledNewsreaderLightVariations() throws {
         try assertBundledNewsreader(
-            OiaCardTextMetrics.quoteFont,
+            OiaCardTextMetrics.quoteFont(for: .extraLarge),
             pointSize: 24,
             opticalSize: 24
         )
@@ -21,6 +21,19 @@ final class NewsreaderFontTests: XCTestCase {
             pointSize: 59,
             opticalSize: 6
         )
+    }
+
+    func testQuoteTypographyScalesWithCardSize() throws {
+        let pointSizes = CardSize.allCases.map(OiaCardTextMetrics.quotePointSize(for:))
+
+        XCTAssertEqual(pointSizes, [16, 18, 20, 22, 24])
+        for (cardSize, pointSize) in zip(CardSize.allCases, pointSizes) {
+            try assertBundledNewsreader(
+                OiaCardTextMetrics.quoteFont(for: cardSize),
+                pointSize: pointSize,
+                opticalSize: Double(pointSize)
+            )
+        }
     }
 
     func testNewsreaderContainsDistinctCurlyQuoteGlyphs() {
@@ -50,13 +63,21 @@ final class NewsreaderFontTests: XCTestCase {
         XCTAssertEqual(font.pointSize, pointSize)
         XCTAssertEqual(bundledURL.lastPathComponent, resourceName)
         XCTAssertEqual(fontURL(for: font)?.lastPathComponent, resourceName)
-        XCTAssertEqual(variationValue(for: weightAxis, in: font), 300)
-        XCTAssertEqual(variationValue(for: opticalSizeAxis, in: font), opticalSize)
+        XCTAssertEqual(resolvedVariationValue(for: weightAxis, in: font), 300)
+        XCTAssertEqual(resolvedVariationValue(for: opticalSizeAxis, in: font), opticalSize)
     }
 
-    private func variationValue(for axis: NSNumber, in font: NSFont) -> Double? {
+    private func resolvedVariationValue(for axis: NSNumber, in font: NSFont) -> Double? {
         let variations = CTFontCopyVariation(font as CTFont) as? [NSNumber: NSNumber]
-        return variations?[axis]?.doubleValue
+        if let explicitValue = variations?[axis]?.doubleValue {
+            return explicitValue
+        }
+
+        let axes = CTFontCopyVariationAxes(font as CTFont) as? [[CFString: Any]]
+        let definition = axes?.first { definition in
+            (definition[kCTFontVariationAxisIdentifierKey] as? NSNumber) == axis
+        }
+        return (definition?[kCTFontVariationAxisDefaultValueKey] as? NSNumber)?.doubleValue
     }
 
     private func fontURL(for font: NSFont) -> URL? {
