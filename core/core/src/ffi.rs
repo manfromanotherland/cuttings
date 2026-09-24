@@ -524,6 +524,9 @@ pub struct Database {
     conn: Mutex<rusqlite::Connection>,
     last_scan: Mutex<Vec<ScannedReading>>,
     visual_cache_root: PathBuf,
+    // Staging/pruning may wait on slow storage. Serialize those operations
+    // separately so interactive database reads never wait on their filesystem I/O.
+    visual_cache_io: Mutex<()>,
 }
 
 #[uniffi::export]
@@ -538,6 +541,7 @@ impl Database {
             conn: Mutex::new(conn),
             last_scan: Mutex::new(Vec::new()),
             visual_cache_root,
+            visual_cache_io: Mutex::new(()),
         }))
     }
 
@@ -550,9 +554,11 @@ impl Database {
     pub fn rebuild(&self, library_path: String) -> Result<(), CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let scan = crate::scan_library(&lib).map_err(e)?;
-        let conn = self.conn.lock().unwrap();
-        crate::reconcile::rebuild_scanned(&conn, &scan).map_err(e)?;
-        crate::visual_index::prune_visual_cache(&conn, &self.visual_cache_root).map_err(e)?;
+        {
+            let conn = self.conn.lock().unwrap();
+            crate::reconcile::rebuild_scanned(&conn, &scan).map_err(e)?;
+        }
+        self.prune_visual_cache()?;
         *self.last_scan.lock().unwrap() = scan;
         Ok(())
     }
@@ -568,9 +574,11 @@ impl Database {
         let diffs = crate::diff(&old_scan, &new_scan);
         let count = diffs.len() as u32;
         if !diffs.is_empty() {
-            let conn = self.conn.lock().unwrap();
-            crate::apply_diffs(&conn, &diffs).map_err(e)?;
-            crate::visual_index::prune_visual_cache(&conn, &self.visual_cache_root).map_err(e)?;
+            {
+                let conn = self.conn.lock().unwrap();
+                crate::apply_diffs(&conn, &diffs).map_err(e)?;
+            }
+            self.prune_visual_cache()?;
         }
         *self.last_scan.lock().unwrap() = new_scan;
         Ok(count)
@@ -582,8 +590,17 @@ impl Database {
         library_path: String,
     ) -> Result<Vec<FfiVisualAsset>, CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
-        let conn = self.conn.lock().unwrap();
-        crate::current_visual_assets(&conn, &lib, &self.visual_cache_root)
+        let _io = self.visual_cache_io.lock().unwrap();
+        let (active, candidates) = {
+            let conn = self.conn.lock().unwrap();
+            (
+                crate::visual_index::active_visual_hashes(&conn).map_err(e)?,
+                crate::visual_index::current_visual_asset_candidates(&conn).map_err(e)?,
+            )
+        };
+        crate::visual_index::prune_visual_cache_files(&self.visual_cache_root, &active)
+            .map_err(e)?;
+        crate::visual_index::stage_visual_assets(candidates, &lib, &self.visual_cache_root)
             .map_err(e)
             .map(|assets| assets.into_iter().map(Into::into).collect())
     }
@@ -597,13 +614,27 @@ impl Database {
         limit: u32,
     ) -> Result<FfiPendingVisualAnalysis, CoreError> {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
-        let conn = self.conn.lock().unwrap();
-        crate::pending_visual_analysis(
-            &conn,
+        let _io = self.visual_cache_io.lock().unwrap();
+        let (active, (candidates, hydrated_count)) = {
+            let conn = self.conn.lock().unwrap();
+            (
+                crate::visual_index::active_visual_hashes(&conn).map_err(e)?,
+                crate::visual_index::pending_visual_candidates(
+                    &conn,
+                    &analyzer_version,
+                    limit as usize,
+                )
+                .map_err(e)?,
+            )
+        };
+        crate::visual_index::prune_visual_cache_files(&self.visual_cache_root, &active)
+            .map_err(e)?;
+        crate::visual_index::stage_visual_analysis(
+            candidates,
+            hydrated_count,
             &lib,
             &self.visual_cache_root,
             &analyzer_version,
-            limit as usize,
         )
         .map_err(e)
         .map(|pending| FfiPendingVisualAnalysis {
@@ -623,8 +654,13 @@ impl Database {
         let lib = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
         let task = task.into();
         let result = result.into();
+        let Some(current) = crate::visual_index::verify_visual_analysis(&lib, &task).map_err(e)?
+        else {
+            return Ok(false);
+        };
         let conn = self.conn.lock().unwrap();
-        crate::complete_visual_analysis(&conn, &lib, &task, &result).map_err(e)
+        crate::visual_index::complete_verified_visual_analysis(&conn, &current, &task, &result)
+            .map_err(e)
     }
 
     // ── Imports ───────────────────────────────────────────────────────────
@@ -928,6 +964,17 @@ impl Database {
     }
 }
 
+impl Database {
+    fn prune_visual_cache(&self) -> Result<(), CoreError> {
+        let _io = self.visual_cache_io.lock().unwrap();
+        let active = {
+            let conn = self.conn.lock().unwrap();
+            crate::visual_index::active_visual_hashes(&conn).map_err(e)?
+        };
+        crate::visual_index::prune_visual_cache_files(&self.visual_cache_root, &active).map_err(e)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1056,6 +1103,81 @@ mod tests {
             std::fs::read(asset.absolute_file_path).unwrap(),
             b"ffi staged image"
         );
+    }
+
+    #[test]
+    fn visual_filesystem_work_does_not_block_reading_queries() {
+        use std::{sync::mpsc, thread, time::Duration};
+
+        for phase in [0, 1, 2] {
+            let library_dir = tempfile::TempDir::new().unwrap();
+            let index_dir = tempfile::TempDir::new().unwrap();
+            let database =
+                Database::open(index_dir.path().join("index.db").display().to_string()).unwrap();
+            let library_path = library_dir.path().display().to_string();
+            let imported = database
+                .import_image(
+                    library_path.clone(),
+                    b"slow staging image".to_vec(),
+                    "image/png".into(),
+                    "Available while indexing".into(),
+                )
+                .unwrap();
+            let completion_task = database
+                .pending_visual_analysis(library_path.clone(), "test-v1".into(), 1)
+                .unwrap()
+                .tasks
+                .pop()
+                .unwrap();
+            let (entered_tx, entered_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            let worker_database = Arc::clone(&database);
+            let worker = thread::spawn(move || {
+                crate::visual_index::with_visual_io_test_hook(
+                    move || {
+                        entered_tx.send(()).unwrap();
+                        release_rx.recv().unwrap();
+                    },
+                    || match phase {
+                        0 => worker_database
+                            .current_visual_assets(library_path)
+                            .map(|value| value.len()),
+                        1 => worker_database
+                            .pending_visual_analysis(library_path, "test-v1".into(), 1)
+                            .map(|value| value.tasks.len()),
+                        _ => worker_database
+                            .complete_visual_analysis(
+                                library_path,
+                                completion_task,
+                                FfiVisualAnalysisResult {
+                                    supported: false,
+                                    labels: vec![],
+                                    palette: vec![],
+                                },
+                            )
+                            .map(usize::from),
+                    },
+                )
+            });
+            entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            let (read_tx, read_rx) = mpsc::channel();
+            let reader = thread::spawn(move || {
+                read_tx.send(database.get_reading_row(imported.id)).unwrap();
+            });
+            let result = read_rx.recv_timeout(Duration::from_secs(1));
+            // Always release/join the workers before asserting a failed deadline.
+            release_tx.send(()).unwrap();
+            assert_eq!(worker.join().unwrap().unwrap(), 1);
+            reader.join().unwrap();
+            assert_eq!(
+                result
+                    .expect("reading query waited for filesystem staging")
+                    .unwrap()
+                    .unwrap()
+                    .title,
+                "Available while indexing"
+            );
+        }
     }
 
     #[test]

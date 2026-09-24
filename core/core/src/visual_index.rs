@@ -174,12 +174,20 @@ fn cleanup_stale_temps(directory: &rustix::fd::OwnedFd) -> Result<()> {
 /// readings projection. Only exact 64-hex cache names are eligible; temp files
 /// have their own cleanup path and unrelated files are left untouched.
 pub(crate) fn prune_visual_cache(conn: &Connection, root: &Path) -> Result<()> {
+    prune_visual_cache_files(root, &active_visual_hashes(conn)?)
+}
+
+pub(crate) fn active_visual_hashes(conn: &Connection) -> Result<HashSet<String>> {
     let mut stmt = conn.prepare(
         "SELECT DISTINCT visual_asset_hash FROM readings WHERE visual_asset_hash IS NOT NULL",
     )?;
     let active: HashSet<String> = stmt
         .query_map([], |row| row.get(0))?
         .collect::<rusqlite::Result<_>>()?;
+    Ok(active)
+}
+
+pub(crate) fn prune_visual_cache_files(root: &Path, active: &HashSet<String>) -> Result<()> {
     let directory = open_cache_directory(root)?;
     let mut changed = false;
     for entry in rustix::fs::Dir::read_from(&directory)? {
@@ -235,6 +243,12 @@ fn inspect_asset_inner(
     relative_path: &str,
     include_dimensions: bool,
 ) -> Result<VisualAsset> {
+    #[cfg(test)]
+    VISUAL_IO_TEST_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().as_mut() {
+            hook();
+        }
+    });
     let mut file = open_source_asset(library, reading_id, relative_path)?;
     let media_dimensions = include_dimensions
         .then(|| crate::media_dimensions::image_dimensions(&mut file))
@@ -366,6 +380,12 @@ fn staged_asset(
     relative_path: &str,
     content_hash: &str,
 ) -> Result<VisualAsset> {
+    #[cfg(test)]
+    VISUAL_IO_TEST_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().as_mut() {
+            hook();
+        }
+    });
     validate_content_hash(content_hash)?;
     let directory = open_cache_directory(cache_root)?;
     let target = content_hash;
@@ -437,6 +457,25 @@ fn staged_asset(
     ))
 }
 
+// A deterministic pause at the filesystem boundary lets the public Database
+// concurrency tests hold a slow disk operation without depending on disk speed.
+#[cfg(test)]
+thread_local! {
+    static VISUAL_IO_TEST_HOOK: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+        std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+pub(crate) fn with_visual_io_test_hook<T>(
+    hook: impl FnMut() + 'static,
+    work: impl FnOnce() -> T,
+) -> T {
+    VISUAL_IO_TEST_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+    let result = work();
+    VISUAL_IO_TEST_HOOK.with(|slot| *slot.borrow_mut() = None);
+    result
+}
+
 fn staged_asset_record(
     cache_root: &Path,
     reading_id: &str,
@@ -493,6 +532,14 @@ pub fn current_visual_assets(
     cache_root: &Path,
 ) -> Result<Vec<VisualAsset>> {
     prune_visual_cache(conn, cache_root)?;
+    stage_visual_assets(current_visual_asset_candidates(conn)?, library, cache_root)
+}
+
+pub(crate) type VisualAssetCandidate = (String, String, String, String);
+
+pub(crate) fn current_visual_asset_candidates(
+    conn: &Connection,
+) -> Result<Vec<VisualAssetCandidate>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, visual_asset_path, visual_asset_hash FROM readings
          WHERE visual_asset_path IS NOT NULL AND visual_asset_hash IS NOT NULL ORDER BY id",
@@ -508,6 +555,14 @@ pub fn current_visual_assets(
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
+    Ok(rows)
+}
+
+pub(crate) fn stage_visual_assets(
+    rows: Vec<VisualAssetCandidate>,
+    library: &LibraryRoot,
+    cache_root: &Path,
+) -> Result<Vec<VisualAsset>> {
     let mut assets = Vec::new();
     for (id, title, path, content_hash) in rows {
         match staged_asset(cache_root, library, &id, title, &path, &content_hash) {
@@ -526,10 +581,25 @@ pub fn pending_visual_analysis(
     analyzer_version: &str,
     limit: usize,
 ) -> Result<PendingVisualAnalysis> {
+    prune_visual_cache(conn, cache_root)?;
+    let (candidates, hydrated_count) = pending_visual_candidates(conn, analyzer_version, limit)?;
+    stage_visual_analysis(
+        candidates,
+        hydrated_count,
+        library,
+        cache_root,
+        analyzer_version,
+    )
+}
+
+pub(crate) fn pending_visual_candidates(
+    conn: &Connection,
+    analyzer_version: &str,
+    limit: usize,
+) -> Result<(Vec<VisualAssetCandidate>, usize)> {
     if analyzer_version.trim().is_empty() {
         bail!("analyzer version must not be blank");
     }
-    prune_visual_cache(conn, cache_root)?;
     let tx = conn.unchecked_transaction()?;
     // Exact cache hits need no file I/O: the indexed hash was produced by the
     // scanner's safe open, and completion also revalidated it. This makes
@@ -583,8 +653,17 @@ pub fn pending_visual_analysis(
         .collect::<rusqlite::Result<Vec<_>>>()?;
     drop(stmt);
     tx.commit()?;
-    let mut pending = Vec::new();
+    Ok((candidates, hydrated_count))
+}
 
+pub(crate) fn stage_visual_analysis(
+    candidates: Vec<VisualAssetCandidate>,
+    hydrated_count: usize,
+    library: &LibraryRoot,
+    cache_root: &Path,
+    analyzer_version: &str,
+) -> Result<PendingVisualAnalysis> {
+    let mut pending = Vec::new();
     for (id, title, path, content_hash) in candidates {
         match staged_asset(cache_root, library, &id, title, &path, &content_hash) {
             Ok(asset) => pending.push(VisualAnalysisTask {
@@ -611,14 +690,46 @@ pub fn complete_visual_analysis(
     task: &VisualAnalysisTask,
     result: &VisualAnalysisResult,
 ) -> Result<bool> {
+    let Some(current) = verify_visual_analysis(library, task)? else {
+        return Ok(false);
+    };
+    complete_verified_visual_analysis(conn, &current, task, result)
+}
+
+pub(crate) fn verify_visual_analysis(
+    library: &LibraryRoot,
+    task: &VisualAnalysisTask,
+) -> Result<Option<VisualAsset>> {
     if task.analyzer_version.trim().is_empty() {
         bail!("analyzer version must not be blank");
     }
-    let current = match inspect_asset(library, &task.reading_id, &task.relative_path) {
-        Ok(asset) if asset.content_hash == task.content_hash => asset,
-        Ok(_) | Err(_) => return Ok(false),
-    };
+    Ok(
+        match inspect_asset(library, &task.reading_id, &task.relative_path) {
+            Ok(asset) if asset.content_hash == task.content_hash => Some(asset),
+            Ok(_) | Err(_) => None,
+        },
+    )
+}
 
+pub(crate) fn complete_verified_visual_analysis(
+    conn: &Connection,
+    current: &VisualAsset,
+    task: &VisualAnalysisTask,
+    result: &VisualAnalysisResult,
+) -> Result<bool> {
+    // File verification happens before acquiring the DB mutex. A concurrent
+    // reconciliation may have advanced the index meanwhile; never restore the
+    // old asset identity or attach its analysis to a newer reading revision.
+    let tx = conn.unchecked_transaction()?;
+    let matches_index: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM readings WHERE id=?1
+         AND preview_asset=?2 AND visual_asset_hash=?3)",
+        params![task.reading_id, task.relative_path, task.content_hash],
+        |row| row.get(0),
+    )?;
+    if !matches_index {
+        return Ok(false);
+    }
     let normalized = if result.supported {
         normalize_result(result)?
     } else {
@@ -631,7 +742,6 @@ pub fn complete_visual_analysis(
     };
     let labels_json = serde_json::to_string(&normalized.labels)?;
     let palette_json = serde_json::to_string(&normalized.palette)?;
-    let tx = conn.unchecked_transaction()?;
     conn.execute(
         "INSERT INTO visual_analysis
          (content_hash, analyzer_version, supported, labels_json, palette_json,
@@ -654,7 +764,6 @@ pub fn complete_visual_analysis(
             normalized.predominant_color
         ],
     )?;
-    sync_asset_identity(conn, &current)?;
     conn.execute(
         "UPDATE readings SET visual_analyzer_version=?2, visual_terms=?3,
              predominant_color=?4
@@ -878,22 +987,6 @@ fn color_family(red: f64, green: f64, blue: f64) -> PredominantColor {
     } else {
         PredominantColor::Pink
     }
-}
-
-fn sync_asset_identity(conn: &Connection, asset: &VisualAsset) -> Result<()> {
-    conn.execute(
-        "UPDATE readings SET
-           visual_asset_path=?2,
-           visual_asset_hash=?3,
-           visual_analyzer_version=CASE
-             WHEN visual_asset_hash=?3 THEN visual_analyzer_version ELSE NULL END,
-           visual_terms=CASE WHEN visual_asset_hash=?3 THEN visual_terms ELSE '' END,
-           predominant_color=CASE
-             WHEN visual_asset_hash=?3 THEN predominant_color ELSE NULL END
-         WHERE id=?1 AND preview_asset=?2",
-        params![asset.reading_id, asset.relative_path, asset.content_hash],
-    )?;
-    Ok(())
 }
 
 /// Latest supported projection for a content hash, used while rebuilding the

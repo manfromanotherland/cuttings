@@ -35,27 +35,50 @@ actor CoreBridge {
 
     func pendingVisualAnalysis(
         analyzerVersion: String, limit: UInt32
-    ) throws -> PendingVisualAnalysis {
-        try PendingVisualAnalysis(database.pendingVisualAnalysis(
-            libraryPath: libraryPath,
-            analyzerVersion: analyzerVersion,
-            limit: limit
-        ))
+    ) async throws -> PendingVisualAnalysis {
+        try await Self.background { [database, libraryPath] in
+            try PendingVisualAnalysis(database.pendingVisualAnalysis(
+                libraryPath: libraryPath,
+                analyzerVersion: analyzerVersion,
+                limit: limit
+            ))
+        }
     }
 
     @discardableResult
     func completeVisualAnalysis(
         task: VisualAnalysisWorkItem, result: VisualAnalysisCompletion
-    ) throws -> Bool {
-        try database.completeVisualAnalysis(
-            libraryPath: libraryPath,
-            task: task.ffi,
-            result: result.ffi
-        )
+    ) async throws -> Bool {
+        try await Self.background { [database, libraryPath] in
+            try database.completeVisualAnalysis(
+                libraryPath: libraryPath,
+                task: task.ffi,
+                result: result.ffi
+            )
+        }
     }
 
-    func currentVisualAssets() throws -> [VisualAssetSnapshot] {
-        try database.currentVisualAssets(libraryPath: libraryPath).map(VisualAssetSnapshot.init)
+    func currentVisualAssets() async throws -> [VisualAssetSnapshot] {
+        try await Self.background { [database, libraryPath] in
+            try database.currentVisualAssets(libraryPath: libraryPath).map(VisualAssetSnapshot.init)
+        }
+    }
+
+    /// Filesystem work can wait on external storage. Release the interactive
+    /// actor while it runs; Rust keeps only short DB snapshots/commits locked.
+    private nonisolated static func background<Value: Sendable>(
+        _ operation: @escaping @Sendable () throws -> Value
+    ) async throws -> Value {
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .utility) {
+            try Task.checkCancellation()
+            return try operation()
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     // ── Query ─────────────────────────────────────────────────────────────
