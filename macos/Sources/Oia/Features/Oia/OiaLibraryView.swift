@@ -24,9 +24,8 @@ struct OiaLibraryView: View {
     @State private var boardScrollState = BoardScrollState()
     @State var pinchStartCardSize: CardSize?
     @State var quickLookURL: URL?
-    @State private var searchPresented = false
     @FocusState var boardFocused: Bool
-    @FocusState private var searchFocused: Bool
+    @FocusState var searchFocused: Bool
     var body: some View {
         NavigationStack {
             deletionSurface
@@ -137,31 +136,16 @@ extension OiaLibraryView {
     private var detailSurface: some View {
         if appState.isFocusMode {
             board
-        } else if #available(macOS 26.0, *) {
-            searchableBoard
-                .toolbar(removing: searchPresented ? nil : .search)
         } else {
-            searchableBoard
+            board
+                .searchable(
+                    text: searchQuery,
+                    placement: .toolbar,
+                    prompt: "Search Óia"
+                )
+                .searchFocused($searchFocused)
+                .toolbar { boardToolbar }
         }
-    }
-
-    private var searchableBoard: some View {
-        board
-            .searchable(
-                text: searchQuery,
-                isPresented: $searchPresented,
-                placement: .toolbar,
-                prompt: "Search Óia"
-            )
-            .searchFocused($searchFocused)
-            .onChange(of: searchFocused) { _, isFocused in
-                if !isFocused {
-                    withAnimation(.smooth(duration: 0.2)) {
-                        searchPresented = false
-                    }
-                }
-            }
-            .toolbar { boardToolbar }
     }
 
     @ToolbarContentBuilder
@@ -175,13 +159,8 @@ extension OiaLibraryView {
                 boardFilterPicker
             }
 
-            if #available(macOS 26.0, *), !searchPresented {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: focusSearch) {
-                        Label("Search", systemImage: "magnifyingglass")
-                    }
-                    .help("Search (\(ShortcutCatalog.focusSearch.display))")
-                }
+            ToolbarItem(placement: .primaryAction) {
+                Spacer()
             }
         }
     }
@@ -236,9 +215,6 @@ extension OiaLibraryView {
 
     func focusSearch() {
         guard presentedReading == nil, !appState.isFocusMode else { return }
-        withAnimation(.smooth(duration: 0.2)) {
-            searchPresented = true
-        }
         searchFocused = true
     }
 
