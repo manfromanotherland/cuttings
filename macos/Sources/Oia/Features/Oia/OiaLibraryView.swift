@@ -157,7 +157,7 @@ extension OiaLibraryView {
             .searchFocused($searchFocused)
             .toolbar { boardToolbar }
             .background {
-                CompactSearchToolbarConfiguration()
+                CompactSearchToolbarConfiguration(isSearchFocused: searchFocused)
                     .frame(width: 0, height: 0)
             }
     }

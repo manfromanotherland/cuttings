@@ -7,21 +7,25 @@ import SwiftUI
 /// `NSSearchToolbarItem`. AppKit still owns the field, focus, animation,
 /// cancel behavior, and expanded width.
 struct CompactSearchToolbarConfiguration: NSViewRepresentable {
+    let isSearchFocused: Bool
+
     func makeNSView(context _: Context) -> NSView {
-        SearchToolbarConfigurationView()
+        SearchToolbarConfigurationView(isSearchFocused: isSearchFocused)
     }
 
     func updateNSView(_ view: NSView, context _: Context) {
-        (view as? SearchToolbarConfigurationView)?.configureCurrentToolbar()
+        (view as? SearchToolbarConfigurationView)?.setSearchFocused(isSearchFocused)
     }
 
     @MainActor
     private final class SearchToolbarConfigurationView: NSView {
         private static let compactConstraintIdentifier =
             "is.edmundo.oia.search.compact-resting-width"
+        private var isSearchFocused: Bool
 
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
+        init(isSearchFocused: Bool) {
+            self.isSearchFocused = isSearchFocused
+            super.init(frame: .zero)
 
             NotificationCenter.default.addObserver(
                 self,
@@ -56,10 +60,15 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
             nil
         }
 
+        func setSearchFocused(_ isSearchFocused: Bool) {
+            self.isSearchFocused = isSearchFocused
+            configureCurrentToolbar()
+        }
+
         func configureCurrentToolbar() {
             window?.toolbar?.items
                 .compactMap { $0 as? NSSearchToolbarItem }
-                .forEach(Self.configure)
+                .forEach { configure($0) }
         }
 
         @objc private func toolbarWillAddItem(_ notification: Notification) {
@@ -71,24 +80,32 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
                 return
             }
 
-            Self.configure(item)
+            configure(item)
         }
 
-        private static func configure(_ item: NSSearchToolbarItem) {
+        private func configure(_ item: NSSearchToolbarItem) {
             let field = item.searchField
-            guard !field.constraints.contains(where: {
-                $0.identifier == compactConstraintIdentifier
-            }) else {
+            if let compactWidth = field.constraints.first(where: {
+                $0.identifier == Self.compactConstraintIdentifier
+            }) {
+                updatePriority(of: compactWidth)
                 return
             }
 
             let compactWidth = field.widthAnchor.constraint(equalTo: field.heightAnchor)
-            compactWidth.identifier = compactConstraintIdentifier
+            compactWidth.identifier = Self.compactConstraintIdentifier
             // AppKit's resting autoresizing width uses `.defaultHigh`. Prefer
-            // the compressed native representation by one point; an active
-            // NSSearchToolbarItem still expands itself to its preferred width.
-            compactWidth.priority = .init(rawValue: NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
+            // the compressed native representation by one point only while
+            // search is inactive. While focused, dropping this below AppKit's
+            // width lets the trailing item expand leftward without clipping.
+            updatePriority(of: compactWidth)
             compactWidth.isActive = true
+        }
+
+        private func updatePriority(of compactWidth: NSLayoutConstraint) {
+            compactWidth.priority = isSearchFocused
+                ? .defaultLow
+                : .init(rawValue: NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
         }
     }
 }
