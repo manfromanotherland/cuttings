@@ -7,7 +7,8 @@ extension OiaLibraryView {
         BoardSearchSuggestions(
             text: appState.searchQuery,
             tagCandidates: appState.filters.searchTagCandidates,
-            selectedTokens: appState.searchTokens
+            selectedTokens: appState.searchTokens,
+            includeVisualToken: appState.hasAvailableVisualSearchSuggestion
         )
     }
 

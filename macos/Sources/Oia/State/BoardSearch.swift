@@ -180,7 +180,8 @@ struct BoardSearchSuggestions: Equatable, Sendable {
     init(
         text: String,
         tagCandidates: [BoardSearchTagCandidate],
-        selectedTokens: [BoardSearchToken]
+        selectedTokens: [BoardSearchToken],
+        includeVisualToken: Bool = true
     ) {
         let value = BoardSearchNormalization.value(text)
         guard !value.isEmpty else {
@@ -219,7 +220,7 @@ struct BoardSearchSuggestions: Equatable, Sendable {
         tagTokens = matches
 
         let visual = BoardSearchToken(kind: .visual, value: value)
-        visualToken = selectedIDs.contains(visual.id) ? nil : visual
+        visualToken = includeVisualToken && !selectedIDs.contains(visual.id) ? visual : nil
     }
 }
 

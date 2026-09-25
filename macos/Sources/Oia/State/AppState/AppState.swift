@@ -87,12 +87,17 @@ final class AppState {
         }
     }
 
+    /// True only after the current draft has produced at least one result as
+    /// an exact visual token in the current board scope.
+    var hasAvailableVisualSearchSuggestion = false
+
     var activeSearchInput: BoardSearchInput {
         BoardSearchInput(text: searchQuery, tokens: searchTokens)
     }
 
     func clearSearch() {
         guard !searchQuery.isEmpty || !searchTokens.isEmpty else { return }
+        hasAvailableVisualSearchSuggestion = false
         searchQuery = ""
         searchTokens = []
     }

@@ -53,6 +53,9 @@ extension AppState {
     func searchDidChange() {
         searchTask?.cancel()
         invalidatePendingReadingLoads()
+        hasAvailableVisualSearchSuggestion = false
+        let input = activeSearchInput
+        let scope = activeScope
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
             guard let self, !Task.isCancelled else { return }
@@ -60,9 +63,20 @@ extension AppState {
             // field is still focused. Preserve an unavailable focused card for
             // this reload so the state update cannot disturb the field editor and
             // let a global shortcut fire instead of editing the search term.
-            _ = await loadReadings(
+            let result = await loadReadings(
                 resetSelectionIfMissing: !isEditingText,
                 preferImmediateTextResults: true
+            )
+            guard result == .published,
+                  !Task.isCancelled,
+                  input == activeSearchInput,
+                  scope == activeScope,
+                  let core
+            else { return }
+            hasAvailableVisualSearchSuggestion = await visualSuggestionExists(
+                for: input,
+                scope: scope,
+                core: core
             )
         }
     }
@@ -107,17 +121,45 @@ extension AppState {
             []
         }
 
-        var visualSets: [[String]] = []
-        for term in search.criteria.visualTerms {
-            try await visualSets.append(visualSearchCoordinator.candidates(
+        return ReadingSnapshotDelivery.Candidates(
+            text: text,
+            visual: try await loadVisualCandidateIDs(for: search.criteria.visualTerms)
+        )
+    }
+
+    private func loadVisualCandidateIDs(for terms: [String]) async throws -> [String] {
+        guard let visualSearchCoordinator else { return [] }
+        var candidateSets: [[String]] = []
+        for term in terms {
+            try await candidateSets.append(visualSearchCoordinator.candidates(
                 for: term,
                 limit: semanticCandidateLimit
             ))
         }
-        return ReadingSnapshotDelivery.Candidates(
-            text: text,
-            visual: VisualSemanticCandidateIntersection.ranked(visualSets)
+        return VisualSemanticCandidateIntersection.ranked(candidateSets)
+    }
+
+    private func visualSuggestionExists(
+        for input: BoardSearchInput,
+        scope: LibraryScope,
+        core: any CoreBridging
+    ) async -> Bool {
+        guard let draft = input.text else { return false }
+        let token = BoardSearchToken(kind: .visual, value: draft)
+        guard !input.criteria.semanticIdentity.contains(token.id) else { return false }
+
+        let visualTerms = input.criteria.visualTerms + [token.value]
+        let visualCandidates = (try? await loadVisualCandidateIDs(for: visualTerms)) ?? []
+        var query = ReadingQuery.boardSnapshot(
+            scope: scope,
+            search: nil,
+            tagTerms: input.criteria.tagTerms,
+            visualTerms: visualTerms,
+            semanticCandidateIDs: [],
+            visualSemanticCandidateIDs: visualCandidates
         )
+        query.limit = 1
+        return (try? await core.listReadings(query).isEmpty == false) ?? false
     }
 
     private func makeSemanticCandidateLoader(

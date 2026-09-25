@@ -134,6 +134,17 @@ final class BoardSearchTests: XCTestCase {
         XCTAssertNil(suggestions.visualToken)
     }
 
+    func testUnavailableVisualCompletionIsNotOffered() {
+        let suggestions = BoardSearchSuggestions(
+            text: "typography",
+            tagCandidates: [],
+            selectedTokens: [],
+            includeVisualToken: false
+        )
+
+        XCTAssertNil(suggestions.visualToken)
+    }
+
     func testTagSuggestionsPreserveExactStoredUnicodeForCoreMatching() {
         let decomposed = "Cafe\u{301}"
         let suggestions = BoardSearchSuggestions(
