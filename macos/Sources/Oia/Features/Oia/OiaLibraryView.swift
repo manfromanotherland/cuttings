@@ -142,6 +142,9 @@ extension OiaLibraryView {
 
     private var searchableBoard: some View {
         @Bindable var bindableAppState = appState
+        let isSearchExpanded = searchFocused
+            || !bindableAppState.searchQuery.isEmpty
+            || !bindableAppState.searchTokens.isEmpty
         return board
             .searchable(
                 text: $bindableAppState.searchQuery,
@@ -157,7 +160,7 @@ extension OiaLibraryView {
             .searchFocused($searchFocused)
             .toolbar { boardToolbar }
             .background {
-                CompactSearchToolbarConfiguration(isSearchFocused: searchFocused)
+                CompactSearchToolbarConfiguration(isSearchExpanded: isSearchExpanded)
                     .frame(width: 0, height: 0)
             }
     }

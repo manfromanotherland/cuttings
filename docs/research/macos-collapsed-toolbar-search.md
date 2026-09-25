@@ -10,7 +10,7 @@ Xcode 26 introduced the `SearchToolbarBehavior` type and the `searchToolbarBehav
 
 There is therefore still no named public force-minimize setting for a native macOS toolbar search item. `DefaultToolbarItem(kind: .search)` only repositions the system search item, and `ToolbarSpacer` only supplies fixed or flexible space; neither requests compact search behavior.
 
-For an always-compact resting state at a wide window size, an AppKit layout workaround can give the owned `NSSearchField` a square-width constraint just above AppKit's default-high resting-width constraint. The SDK header permits configuring the search field's width constraint. A priority of 751 selects the compressed representation at rest. While search is focused, that constraint must drop below AppKit's own width constraint so the toolbar item can claim its preferred width and keep its trailing edge fixed.
+For an always-compact resting state at a wide window size, an AppKit layout workaround can give the owned `NSSearchField` a square-width constraint just above AppKit's default-high resting-width constraint. The SDK header permits configuring the search field's width constraint. A priority of 751 selects the compressed representation at rest. While search is focused or retains text or tokens, that constraint must drop below AppKit's own width constraint so the toolbar item can claim its preferred width and keep its trailing edge fixed.
 
 ```swift
 let searchItem = NSSearchToolbarItem(
@@ -30,8 +30,8 @@ compactWidth.isActive = true
 // The default is 240 points; set this only if Óia needs another active width.
 searchItem.preferredWidthForSearchField = 240
 
-// Mirror the native field's focus state.
-compactWidth.priority = isSearchFocused
+// Mirror whether the native field should remain expanded.
+compactWidth.priority = isSearchExpanded
     ? .defaultLow
     : .init(rawValue: NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
 ```
@@ -40,11 +40,13 @@ In a hidden macOS 27 toolbar-level check using a 543-point window, that configur
 
 - inactive at priority 751: the native item is 36 × 36 at x = 499…535;
 - active while incorrectly leaving priority 751 in place: the field is 240 points at x = 397…637, clipped beyond the window's right edge;
-- active after lowering the compact constraint to `.defaultLow`: the field is 240 points at x = 295…535, retaining the same trailing edge and expanding leftward inside the window.
+- active after lowering the compact constraint to `.defaultLow`: the field is 240 points at x = 295…535, retaining the same trailing edge and expanding leftward inside the window;
+- nonempty after focus loss and token-only expanded intent at `.defaultLow`: the field remains fully visible at x = 293…533;
+- a nonempty field installed with expanded intent starts fully visible at x = 375…535 rather than overflowing.
 
 Use `beginSearchInteraction()` for Command-F and `endSearchInteraction()` for an explicit Escape command. `resignsFirstResponderWithCancel` defaults to `true`, so the field's native cancel action clears the query and gives up first responder, allowing the empty field to collapse. The item handles an ordinary click itself. Apple describes `beginSearchInteraction()` and `endSearchInteraction()` as the supported way to control search programmatically. [Begin interaction](https://developer.apple.com/documentation/appkit/nssearchtoolbaritem/beginsearchinteraction%28%29), [end interaction](https://developer.apple.com/documentation/appkit/nssearchtoolbaritem/endsearchinteraction%28%29), and [cancel behavior](https://developer.apple.com/documentation/appkit/nssearchtoolbaritem/resignsfirstresponderwithcancel).
 
-The earlier always-`.defaultLow` attempt lost to AppKit's priority-750 resting width and therefore remained expanded in Óia. Leaving the corrected priority-751 constraint dominant while focused created a different failure: the field drew at its expanded width without the toolbar reallocating that width, so it extended beyond the window and its visible geometry no longer matched the toolbar item's actionable region. Switching the same constraint between 751 at rest and `.defaultLow` while focused composes public APIs and uses the customization point called out by Apple's SDK header, but Apple does not document it as a formal always-minimized mode. Treat it as an isolated layout workaround, not a guaranteed semantic API, and check it manually in Óia on every supported macOS release. The native low-space collapse itself is the documented contract.
+The earlier always-`.defaultLow` attempt lost to AppKit's priority-750 resting width and therefore remained expanded in Óia. Leaving the corrected priority-751 constraint dominant while the native field was expanded created a different failure: the field drew at its expanded width without the toolbar reallocating that width, so it extended beyond the window and its visible geometry no longer matched the toolbar item's actionable region. Switching the same constraint between 751 only for the empty, unfocused rest state and `.defaultLow` while focused or retaining text or tokens composes public APIs and uses the customization point called out by Apple's SDK header, but Apple does not document it as a formal always-minimized mode. Treat it as an isolated layout workaround, not a guaranteed semantic API, and check it manually in Óia on every supported macOS release. The native low-space collapse itself is the documented contract.
 
 ## Why the SwiftUI attempts stayed expanded
 
@@ -119,6 +121,6 @@ Apple documents `.navigationBar` as the only supported placement. That placement
 
 ## Recommendation for Óia
 
-Use exactly one persistent `NSSearchToolbarItem`. Óia can keep `.searchable` as the owner of that native item and its query binding, then configure the generated item through the window toolbar when AppKit adds it. Apply the square-width constraint once, set it to priority 751 only while search is inactive, and lower it to `.defaultLow` while `.searchFocused` reports focus. AppKit continues to own clicking, Escape/cancel, focus loss, and the expansion animation. There is no need to replace the rest of the SwiftUI toolbar or add a second search control. Do not conditionally attach `.searchable`, use private SwiftUI symbols, or use spacing as an implicit compactness switch.
+Use exactly one persistent `NSSearchToolbarItem`. Óia can keep `.searchable` as the owner of that native item and its query binding, then configure the generated item through the window toolbar when AppKit adds it. Apply the square-width constraint once, set it to priority 751 only while search is empty and unfocused, and lower it to `.defaultLow` while `.searchFocused` reports focus or the binding retains text or tokens. AppKit continues to own clicking, Escape/cancel, focus loss, and the expansion animation. There is no need to replace the rest of the SwiftUI toolbar or add a second search control. Do not conditionally attach `.searchable`, use private SwiftUI symbols, or use spacing as an implicit compactness switch.
 
 This keeps the system control and animation while requesting a compact resting width. It still requires manual verification on macOS 15, 26, and 27 because Óia declares macOS 15 as its deployment target and the current product integration has not passed the requested visual behavior.

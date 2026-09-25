@@ -7,24 +7,24 @@ import SwiftUI
 /// `NSSearchToolbarItem`. AppKit still owns the field, focus, animation,
 /// cancel behavior, and expanded width.
 struct CompactSearchToolbarConfiguration: NSViewRepresentable {
-    let isSearchFocused: Bool
+    let isSearchExpanded: Bool
 
     func makeNSView(context _: Context) -> NSView {
-        SearchToolbarConfigurationView(isSearchFocused: isSearchFocused)
+        SearchToolbarConfigurationView(isSearchExpanded: isSearchExpanded)
     }
 
     func updateNSView(_ view: NSView, context _: Context) {
-        (view as? SearchToolbarConfigurationView)?.setSearchFocused(isSearchFocused)
+        (view as? SearchToolbarConfigurationView)?.setSearchExpanded(isSearchExpanded)
     }
 
     @MainActor
     private final class SearchToolbarConfigurationView: NSView {
         private static let compactConstraintIdentifier =
             "is.edmundo.oia.search.compact-resting-width"
-        private var isSearchFocused: Bool
+        private var isSearchExpanded: Bool
 
-        init(isSearchFocused: Bool) {
-            self.isSearchFocused = isSearchFocused
+        init(isSearchExpanded: Bool) {
+            self.isSearchExpanded = isSearchExpanded
             super.init(frame: .zero)
 
             NotificationCenter.default.addObserver(
@@ -60,8 +60,8 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
             nil
         }
 
-        func setSearchFocused(_ isSearchFocused: Bool) {
-            self.isSearchFocused = isSearchFocused
+        func setSearchExpanded(_ isSearchExpanded: Bool) {
+            self.isSearchExpanded = isSearchExpanded
             configureCurrentToolbar()
         }
 
@@ -96,14 +96,15 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
             compactWidth.identifier = Self.compactConstraintIdentifier
             // AppKit's resting autoresizing width uses `.defaultHigh`. Prefer
             // the compressed native representation by one point only while
-            // search is inactive. While focused, dropping this below AppKit's
-            // width lets the trailing item expand leftward without clipping.
+            // search is collapsed. While focused or retaining search input,
+            // dropping this below AppKit's width lets the trailing item expand
+            // leftward without clipping.
             updatePriority(of: compactWidth)
             compactWidth.isActive = true
         }
 
         private func updatePriority(of compactWidth: NSLayoutConstraint) {
-            compactWidth.priority = isSearchFocused
+            compactWidth.priority = isSearchExpanded
                 ? .defaultLow
                 : .init(rawValue: NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
         }
