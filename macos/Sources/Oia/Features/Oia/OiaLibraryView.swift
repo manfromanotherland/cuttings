@@ -228,6 +228,7 @@ extension OiaLibraryView {
 
     func focusSearch() {
         guard presentedReading == nil, !appState.isFocusMode else { return }
+        CompactSearchToolbarConfiguration.beginSearchInteraction(in: NSApp.keyWindow)
         searchFocused = true
     }
 

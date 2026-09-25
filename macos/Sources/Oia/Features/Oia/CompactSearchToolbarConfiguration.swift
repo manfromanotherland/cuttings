@@ -9,6 +9,21 @@ import SwiftUI
 struct CompactSearchToolbarConfiguration: NSViewRepresentable {
     let isSearchExpanded: Bool
 
+    /// Give the toolbar its expanded allocation before moving focus to the field.
+    /// Focusing first lets AppKit draw the full field past the window's right edge
+    /// while the toolbar is still laid out at the compact width.
+    static func beginSearchInteraction(in window: NSWindow?) {
+        guard let item = window?.toolbar?.items
+            .compactMap({ $0 as? NSSearchToolbarItem }).first else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            context.allowsImplicitAnimation = false
+            SearchToolbarConfigurationView.expand(item, in: window)
+            item.beginSearchInteraction()
+            window?.displayIfNeeded()
+        }
+    }
+
     func makeNSView(context _: Context) -> NSView {
         SearchToolbarConfigurationView(isSearchExpanded: isSearchExpanded)
     }
@@ -22,6 +37,7 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
         private static let compactConstraintIdentifier =
             "is.edmundo.oia.search.compact-resting-width"
         private var isSearchExpanded: Bool
+        nonisolated(unsafe) private var mouseMonitor: Any?
 
         init(isSearchExpanded: Bool) {
             self.isSearchExpanded = isSearchExpanded
@@ -42,10 +58,29 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
 
         deinit {
             NotificationCenter.default.removeObserver(self)
+            if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
         }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+            mouseMonitor = nil
+            if window != nil {
+                mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) {
+                    [weak self] event in
+                    guard let self, event.window === self.window,
+                          let item = self.window?.toolbar?.items
+                            .compactMap({ $0 as? NSSearchToolbarItem }).first,
+                          !self.isSearchExpanded,
+                          item.searchField.bounds.contains(
+                            item.searchField.convert(event.locationInWindow, from: nil)
+                          ) else { return event }
+
+                    self.isSearchExpanded = true
+                    CompactSearchToolbarConfiguration.beginSearchInteraction(in: self.window)
+                    return nil
+                }
+            }
             configureCurrentToolbar()
 
             // SwiftUI can install its default search item after attaching the
@@ -129,6 +164,16 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
                 field.superview?.layoutSubtreeIfNeeded()
                 window?.contentView?.layoutSubtreeIfNeeded()
             }
+        }
+
+        static func expand(_ item: NSSearchToolbarItem, in window: NSWindow?) {
+            let field = item.searchField
+            guard let compactWidth = field.constraints.first(where: {
+                $0.identifier == compactConstraintIdentifier
+            }) else { return }
+            compactWidth.priority = .defaultLow
+            window?.contentView?.superview?.layoutSubtreeIfNeeded()
+            window?.displayIfNeeded()
         }
     }
 }
