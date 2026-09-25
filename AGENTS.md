@@ -139,7 +139,11 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 **Commit as you go.** After each coherent change, run the relevant checks and commit the
 completed work without waiting for a separate request. Before handing back a task, commit all
 completed changes belonging to it unless the user explicitly asks to leave them uncommitted.
-Keep commits focused, exclude unrelated work, and report any checks that could not run.
+Keep commits small and focused: one logical change per commit, with its directly related tests
+and documentation. Separate unrelated fixes, refactors, and formatting; keep cross-component
+contract changes atomic. Each commit should be independently understandable and leave the
+project in a working state. Stage only task-related changes and report any checks that could
+not run.
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
