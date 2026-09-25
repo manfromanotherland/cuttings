@@ -34,6 +34,9 @@ struct OiaLibraryView: View {
                     overlay
                 }
         }
+        .sheet(isPresented: tagSheetPresented) {
+            tagPicker
+        }
         .environment(\.assetContentGeneration, appState.libraryContentGeneration)
         .focusedSceneValue(\.boardActions, focusedBoardActions)
         .quickLookPreview($quickLookURL)
@@ -106,15 +109,8 @@ extension OiaLibraryView {
             }
     }
 
-    private var presentedSurface: some View {
-        reactiveSurface
-            .sheet(isPresented: tagSheetPresented) {
-                tagPicker
-            }
-    }
-
     private var deletionSurface: some View {
-        presentedSurface
+        reactiveSurface
             .confirmationDialog(
                 deleteDialogTitle,
                 isPresented: deleteDialogPresented,

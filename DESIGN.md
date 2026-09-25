@@ -170,9 +170,20 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
   post detail with selectable text and every ordered local attachment. Images show the local asset aspect-fit.
   Videos show the local poster and source/media actions without silently downloading a stream.
   Quotes show the full selected text natively.
-- Metadata lives in an optional trailing Inspector toggled from the standard toolbar, not a
-  permanent sidebar. It uses a compact native form for origin, saved date, tags, and relevant
-  local/direct-media paths. Tags, origin, and delete actions live in the toolbar and its More menu.
+- Metadata lives in a floating trailing Inspector, shown by default and toggled from the standard
+  toolbar. Its visibility is a per-device preference. A 320 pt panel uses a 20 pt continuous corner
+  radius, 24 pt exterior space, and a content-height native Liquid Glass surface. It scrolls within
+  short windows; the filmstrip spans the full window below it. macOS 15 uses system material, and
+  Reduce Transparency uses an opaque system surface.
+- **Discover** separates **Your tags** from **In this image**, with a small adjacent information
+  button explaining locally recognised suggestions. Tags and attributes are native capsule glass
+  buttons. Attributes search the library; editing tags uses the existing optimistic tag picker.
+  Up to five distinct colours appear as closely spaced circles with glass rims and accurate colour
+  centres. Selecting one starts `colour:#RRGGBB` search, ranked by perceptual shade similarity.
+- **Details** shows friendly local format, display-oriented dimensions, size and save date. Internal
+  asset schemes and hashed filenames never appear. The source appears once as a hostname followed
+  by ↗; its complete URL is available on hover or through Copy source URL. Analysis and missing-file
+  states never prevent access to source or tags. Tags, origin and delete remain available in the toolbar.
 
 ### Content states
 

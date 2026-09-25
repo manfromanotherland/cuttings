@@ -70,8 +70,9 @@ pub struct ListOptions {
     pub since: Option<String>,
     /// ISO-8601 upper bound on `saved_at` (inclusive).
     pub until: Option<String>,
-    /// Full-text query. When set, rows are filtered through the FTS index;
-    /// `None` is a plain listing.
+    /// Full-text query, or `colour:#RRGGBB` for perceptually similar palette
+    /// clusters. `None` is a plain listing. Relevance ranks shade matches by
+    /// distance; platform semantic candidates cannot widen a colour query.
     pub query: Option<String>,
     /// Restrict to the stable colour family derived by the Rust core.
     pub predominant_color: Option<PredominantColor>,
@@ -258,6 +259,11 @@ impl ResolvedSearch {
     /// view and sibling facets determine phrase fallback, while the later count
     /// queries may still ignore their own facet axis when presenting choices.
     pub(crate) fn resolve_scoped(conn: &Connection, scope: &CountScope) -> Result<Self> {
+        if let Some(color) = scope.query.as_deref().and_then(crate::color_search::parse) {
+            return Ok(Self::Semantic(serde_json::to_string(
+                &crate::color_search::matching_ids(conn, &color)?,
+            )?));
+        }
         Ok(match scope.query.as_deref() {
             None => Self::Unfiltered,
             Some(q) => match crate::search::match_query(q, |phrase| {
@@ -543,6 +549,11 @@ pub fn sidebar_counts(conn: &Connection, scope: &CountScope) -> Result<SidebarCo
 /// `SortField::Relevance`. Otherwise this is a plain listing over the `readings`
 /// table.
 pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
+    if let Some(color) = opts.query.as_deref().and_then(crate::color_search::parse) {
+        let mut color_options = opts.clone();
+        color_options.semantic_candidate_ids = crate::color_search::matching_ids(conn, &color)?;
+        return list_readings_search(conn, &color_options, None);
+    }
     // A present query means "search" — even whitespace/punctuation-only input,
     // which matches nothing rather than falling back to the full listing.
     if let Some(query) = opts.query.as_deref() {

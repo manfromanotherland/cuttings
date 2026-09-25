@@ -2,6 +2,7 @@
 
 uniffi::setup_scaffolding!();
 
+mod color_search;
 mod delete;
 pub mod ffi;
 mod frontmatter;
@@ -11,6 +12,7 @@ mod images;
 pub mod inbox;
 pub mod index;
 mod ingest;
+pub mod inspector;
 pub mod instagram;
 pub mod list;
 mod locking;

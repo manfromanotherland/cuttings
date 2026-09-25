@@ -152,6 +152,12 @@ actor CoreBridge {
         try database.getBody(id: id)
     }
 
+    func getReadingInspector(id: String) async throws -> ReadingInspector? {
+        try await Self.background { [database, libraryPath] in
+            try database.getReadingInspector(libraryPath: libraryPath, id: id)
+        }
+    }
+
     // ── Imports ───────────────────────────────────────────────────────────
 
     /// Inbox ingestion only writes library files, not the database. Release

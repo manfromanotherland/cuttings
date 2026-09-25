@@ -21,6 +21,7 @@ protocol CoreBridging: VisualSearchCore {
     ) async throws -> FfiSidebarCounts
     func getReadingRow(id: String) async throws -> FfiReadingRow?
     func getBody(id: String) async throws -> String?
+    func getReadingInspector(id: String) async throws -> ReadingInspector?
 
     func importLink(url: String) async throws -> FfiImportResult
     func processInbox() async throws -> FfiInboxReport

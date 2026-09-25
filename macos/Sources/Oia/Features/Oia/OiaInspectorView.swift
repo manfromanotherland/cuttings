@@ -1,160 +1,183 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Foundation
 import SwiftUI
 
-/// Optional metadata inspector for the Finder-style gallery detail. The gallery
-/// remains the primary interface; this pane uses the platform's compact form
-/// hierarchy when someone asks for more information.
+/// Optional facts load independently of the board. The material follows the
+/// content; the surrounding scroll area stays clear.
 struct OiaInspectorView: View {
+    @Environment(AppState.self) private var appState
     let row: ReadingRow
     var onEditTags: () -> Void
+    var onSearch: (String) -> Void
+
+    @State private var tab: InspectorTab = .discover
+    @State private var inspector: ReadingInspector?
+    @State private var loadedID: String?
+    @State private var failed = false
+    @State private var showsAnalysisInfo = false
+    @State private var retry = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            heading
-            Divider()
-            detailsForm
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                heading
+                InspectorTabs(selection: $tab)
+                if tab == .discover {
+                    discover
+                } else {
+                    InspectorDetails(row: row, inspector: currentInspector, failed: failed)
+                }
+            }
+            .font(.system(size: 13))
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(InspectorSurface())
+            .padding(.bottom, 24)
+            .padding(.horizontal, 1)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .accessibilityIdentifier(A11y.Inspector.panel)
+        .task(id: loadID) { await load() }
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(row.displayTitle)
-                .font(.title2.weight(.semibold))
-                .lineLimit(4)
-                .textSelection(.enabled)
-
-            HStack(spacing: 6) {
-                Label(row.kind.singularLabel, systemImage: row.kind.symbol)
-                Text("·")
-                Text(savedDate)
-            }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
-    }
-
-    private var detailsForm: some View {
-        Form {
-            LabeledContent("Source") {
-                sourceValue
-            }
-
-            LabeledContent("Tags") {
-                tagsValue
-            }
-
-            if !row.canonicalUrl.isEmpty, row.canonicalUrl != row.url {
-                LabeledContent("Canonical URL") {
-                    selectableValue(row.canonicalUrl)
-                }
-            }
-
-            if row.sourceURL != nil,
-               let mediaURL = row.mediaUrl,
-               row.kind == .image || row.kind == .video
-            {
-                LabeledContent(mediaURL.hasPrefix("oia-video:") ? "Playback" : "Media") {
-                    if mediaURL.hasPrefix("oia-video:") {
-                        Text("Open the source page to play this browser stream.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        selectableValue(mediaURL)
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    @ViewBuilder
-    private var sourceValue: some View {
-        if let url = row.sourceURL {
-            VStack(alignment: .leading, spacing: 5) {
-                Button {
-                    ReadingLink.open(url)
-                } label: {
-                    Label(row.displaySite ?? "Open Source", systemImage: "arrow.up.right.square")
-                }
-                .buttonStyle(.link)
-
-                Text(row.url)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Saved locally", systemImage: "internaldrive")
-                Text("Clipboard or local file")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var tagsValue: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text(row.displayTitle)
+                .font(.system(size: 16, weight: .semibold))
+                .lineLimit(3)
+                .help(row.displayTitle)
+                .textSelection(.enabled)
+            InspectorSource(row: row)
+            Text("Saved \(InspectorDetails.savedDate(row.savedAt))")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var discover: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            tags
+            if let data = currentInspector {
+                if !data.colors.isEmpty { colors(data.colors) }
+                if !data.labels.isEmpty { labels(data.labels) }
+                if !data.analysisAvailable, row.previewAsset != nil {
+                    status("Image attributes aren’t available yet.")
+                } else if data.analysisAvailable, data.labels.isEmpty, data.colors.isEmpty {
+                    status("No image attributes found.")
+                }
+            } else if failed {
+                VStack(alignment: .leading, spacing: 8) {
+                    status("Image attributes couldn’t be loaded.")
+                    InspectorPill("Try again") { retry += 1 }
+                }
+            } else {
+                ProgressView().controlSize(.small)
+                    .accessibilityLabel("Loading image attributes")
+            }
+        }
+    }
+
+    private var tags: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                sectionTitle("Your tags")
+                Spacer()
+                InspectorPill(row.tags.isEmpty ? "Add" : "Edit", symbol: "plus", action: onEditTags)
+                    .accessibilityLabel("Edit tags")
+                    .accessibilityIdentifier(A11y.Inspector.editTags)
+            }
             if row.tags.isEmpty {
-                Text("None")
-                    .foregroundStyle(.secondary)
+                status("Add tags to make this yours.")
             } else {
                 FlowLayout(spacing: 6) {
                     ForEach(row.tags, id: \.self) { tag in
-                        Text("#\(tag)")
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.quaternary, in: Capsule())
+                        InspectorPill(tag) { onSearch(tag) }
+                            .help("Search for \(tag)")
                     }
                 }
             }
+        }
+    }
 
-            Button(action: onEditTags) {
-                Label("Edit tags…", systemImage: "tag")
+    private func colors(_ colors: [InspectorColor]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Colours")
+            HStack(spacing: 0) {
+                ForEach(colors, id: \.hex) { color in
+                    InspectorSwatch(color: color) { onSearch(color.searchQuery) }
+                }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .padding(.leading, -3)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func selectableValue(_ value: String) -> some View {
-        Text(value)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(3)
-            .truncationMode(.middle)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var savedDate: String {
-        guard let date = Self.parseISO8601(row.savedAt) else { return row.savedAt }
-        return date.formatted(date: .abbreviated, time: .omitted)
-    }
-
-    private static func parseISO8601(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: value) {
-            return date
+    private func labels(_ labels: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 5) {
+                sectionTitle("In this image")
+                Button { showsAnalysisInfo.toggle() } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("About image attributes")
+                .help("About image attributes")
+                .popover(isPresented: $showsAnalysisInfo) {
+                    Text("""
+                    Recognised on this Mac. Choose an attribute to search your library.
+                    These suggestions can be imperfect and don’t change your tags.
+                    """)
+                    .font(.callout)
+                    .padding(16)
+                    .frame(width: 270)
+                }
+            }
+            FlowLayout(spacing: 6) {
+                ForEach(labels, id: \.self) { label in
+                    InspectorPill(label.capitalized) { onSearch(label) }
+                        .help("Search for \(label)")
+                        .accessibilityIdentifier(A11y.Inspector.attribute(label))
+                }
+            }
         }
+    }
 
-        let standard = ISO8601DateFormatter()
-        standard.formatOptions = [.withInternetDateTime]
-        return standard.date(from: value)
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text).font(.system(size: 12, weight: .semibold))
+    }
+
+    private func status(_ text: String) -> some View {
+        Text(text).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var currentInspector: ReadingInspector? {
+        loadedID == loadID ? inspector : nil
+    }
+
+    private var loadID: String {
+        [
+            appState.libraryURL?.path ?? "", row.id,
+            String(appState.libraryContentGeneration), String(appState.visualAnalysisGeneration), String(retry)
+        ].joined(separator: ":")
+    }
+
+    private func load() async {
+        let request = loadID
+        let session = appState.librarySessionGeneration
+        failed = false
+        do {
+            let data = try await appState.core?.getReadingInspector(id: row.id)
+            guard !Task.isCancelled, request == loadID, session == appState.librarySessionGeneration else { return }
+            inspector = data
+            loadedID = request
+            failed = data == nil
+        } catch {
+            guard !Task.isCancelled, request == loadID, session == appState.librarySessionGeneration else { return }
+            loadedID = request
+            inspector = nil
+            failed = true
+        }
     }
 }

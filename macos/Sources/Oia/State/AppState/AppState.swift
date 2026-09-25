@@ -127,6 +127,7 @@ final class AppState {
     /// Detail views include it in their load identity so an already-open cached
     /// reading revalidates after reconciliation or an incremental sync.
     var libraryContentGeneration: UInt64 = 0
+    var visualAnalysisGeneration: UInt64 = 0
 
     var canChangeLibrary: Bool {
         !isReconcilingLibrary && !isSaving && activeLibraryWriteCount == 0

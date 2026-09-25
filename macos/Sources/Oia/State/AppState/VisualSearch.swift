@@ -71,6 +71,9 @@ extension AppState {
     }
 
     private func visualSearchDidFinish(_ result: VisualSearchReconciliation) async {
+        if result.changedCardPresentation {
+            visualAnalysisGeneration &+= 1
+        }
         guard result.shouldReloadReadings(
             hasActiveSearch: activeVisualSearchQuery != nil
         ) else { return }

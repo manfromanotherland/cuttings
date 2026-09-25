@@ -973,6 +973,20 @@ impl Database {
             .map(|opt| opt.map(|(row, _body)| row.into()))
     }
 
+    /// Read optional visual attributes and safe local file facts on demand.
+    pub fn get_reading_inspector(
+        &self,
+        library_path: String,
+        id: String,
+    ) -> Result<Option<crate::inspector::ReadingInspector>, CoreError> {
+        let snapshot = {
+            let conn = self.conn.lock().unwrap();
+            crate::inspector::Snapshot::read(&conn, &id).map_err(e)?
+        };
+        let library = LibraryRoot::new(Path::new(&library_path)).map_err(e)?;
+        Ok(snapshot.map(|snapshot| snapshot.inspect(&library)))
+    }
+
     /// Fetch the body text of a reading. Returns `None` if not found.
     pub fn get_body(&self, id: String) -> Result<Option<String>, CoreError> {
         let conn = self.conn.lock().unwrap();

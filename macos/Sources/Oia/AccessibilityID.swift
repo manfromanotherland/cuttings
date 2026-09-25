@@ -86,6 +86,16 @@ enum A11y {
         static let videoUnavailable = "detail.videoUnavailable"
     }
 
+    enum Inspector {
+        static let panel = "detail.inspector"
+        static let toggle = "detail.inspector.toggle"
+        static let tabs = "detail.inspector.tabs"
+        static let editTags = "detail.inspector.editTags"
+        static let file = "detail.inspector.file"
+        static let colorPrefix = "detail.inspector.colour."
+        static func attribute(_ label: String) -> String { "detail.inspector.attribute.\(label)" }
+    }
+
     /// ── Reader content ────────────────────────────────────────────────────────
     enum Reader {
         /// A tappable article image (figure). Shared by every figure in the

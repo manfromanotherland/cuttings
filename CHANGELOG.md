@@ -36,6 +36,10 @@ and versions track the app's `CFBundleShortVersionString`. See
 
 ### Changed
 
+- Card details now have a floating Liquid Glass inspector with Discover and Details tabs,
+  compact tag pills, clickable image attributes and closely spaced colour swatches. Swatches
+  search for similar shades; file details show readable metadata instead of internal asset URLs.
+
 - **Óia!** confirmations now name the saved item—such as an image, link, or
   quote—without repeating the product name in the notification.
 - The iOS Shortcut is now named **Óia!**. Direct image URLs shared from Safari

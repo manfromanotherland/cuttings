@@ -308,12 +308,12 @@ fn open_source_asset(
 }
 
 #[derive(Clone, Copy)]
-enum AssetBinding<'a> {
+pub(crate) enum AssetBinding<'a> {
     Preview(&'a str),
     Media(&'a str),
 }
 
-fn open_bound_asset(
+pub(crate) fn open_bound_asset(
     library: &LibraryRoot,
     reading_id: &str,
     relative_path: &str,
@@ -887,7 +887,7 @@ fn normalize_result(result: &VisualAnalysisResult) -> Result<NormalizedAnalysis>
     })
 }
 
-fn normalize_palette(palette: &[WeightedColor]) -> Result<Vec<WeightedColor>> {
+pub(crate) fn normalize_palette(palette: &[WeightedColor]) -> Result<Vec<WeightedColor>> {
     for sample in palette {
         validate_color(sample)?;
     }

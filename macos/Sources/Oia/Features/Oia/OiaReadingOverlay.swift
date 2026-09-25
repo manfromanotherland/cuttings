@@ -14,32 +14,34 @@ struct OiaReadingOverlay: View {
     var canMoveNext: Bool
     var onEditTags: () -> Void
 
-    @State private var showsInspector = false
+    @AppStorage("showsReadingInspector", store: AppDefaults.store) private var showsInspector = true
 
     var body: some View {
-        HSplitView {
-            gallery
-
-            if showsInspector {
-                OiaInspectorView(row: row, onEditTags: onEditTags)
-                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 420)
+        gallery
+            .background(Color(nsColor: .windowBackgroundColor))
+            .navigationTitle(row.displayTitle)
+            .navigationBarBackButtonHidden(true)
+            .toolbar { detailToolbar }
+            .focusedSceneValue(\.detailNavigationActions, detailNavigationActions)
+            .onExitCommand {
+                guard !appState.isEditingText else { return }
+                onClose()
             }
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .navigationTitle(row.displayTitle)
-        .navigationBarBackButtonHidden(true)
-        .toolbar { detailToolbar }
-        .focusedSceneValue(\.detailNavigationActions, detailNavigationActions)
-        .onExitCommand {
-            guard !appState.isEditingText else { return }
-            onClose()
-        }
     }
 
     private var gallery: some View {
         VStack(spacing: 0) {
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(alignment: .top, spacing: 0) {
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if showsInspector {
+                    OiaInspectorView(row: row, onEditTags: onEditTags, onSearch: searchFromInspector)
+                        .frame(width: 320)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             OiaGalleryStrip(
                 rows: rows,
@@ -114,6 +116,7 @@ struct OiaReadingOverlay: View {
                 )
             }
             .help(showsInspector ? "Hide inspector" : "Show inspector")
+            .accessibilityIdentifier(A11y.Inspector.toggle)
         }
     }
 
@@ -153,7 +156,7 @@ struct OiaReadingOverlay: View {
 
     private func mediaDetail(showsPlay: Bool) -> some View {
         ZStack {
-            Color(red: 0.08, green: 0.09, blue: 0.10)
+            Color(nsColor: .windowBackgroundColor)
             LocalReadingImage(
                 row: row, libraryURL: appState.libraryURL,
                 fallbackAspectRatio: showsPlay ? 16 / 9 : 4 / 3,
@@ -181,6 +184,16 @@ struct OiaReadingOverlay: View {
                     .foregroundStyle(.white)
                     .offset(x: 3)
             }
+    }
+
+    private func searchFromInspector(_ query: String) {
+        onClose()
+        appState.activeScope = .all
+        if appState.searchQuery == query {
+            appState.searchDidChange()
+        } else {
+            appState.searchQuery = query
+        }
     }
 
     @ViewBuilder
