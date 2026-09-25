@@ -136,6 +136,11 @@ These are load-bearing. Most architectural questions resolve by appealing to one
 
 ## Git commit message standards
 
+**Commit as you go.** After each coherent change, run the relevant checks and commit the
+completed work without waiting for a separate request. Before handing back a task, commit all
+completed changes belonging to it unless the user explicitly asks to leave them uncommitted.
+Keep commits focused, exclude unrelated work, and report any checks that could not run.
+
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
