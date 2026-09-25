@@ -84,7 +84,10 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
 
             let compactWidth = field.widthAnchor.constraint(equalTo: field.heightAnchor)
             compactWidth.identifier = compactConstraintIdentifier
-            compactWidth.priority = .defaultLow
+            // AppKit's resting autoresizing width uses `.defaultHigh`. Prefer
+            // the compressed native representation by one point; an active
+            // NSSearchToolbarItem still expands itself to its preferred width.
+            compactWidth.priority = .init(rawValue: NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
             compactWidth.isActive = true
         }
     }
