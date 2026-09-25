@@ -2,9 +2,8 @@
 
 import SwiftUI
 
-// Public Óia store listings do not exist yet. Shared by the onboarding
-// step (`ExtensionStep`) and the Settings › Extensions tab so both surfaces
-// stay honest until official URLs are available.
+// Public Óia store listings do not exist yet. Settings shows availability
+// until official URLs are available.
 
 /// Browser availability rows. These are deliberately non-interactive until the
 /// Óia extension has official store listings.

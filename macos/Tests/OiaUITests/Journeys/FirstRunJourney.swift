@@ -14,8 +14,6 @@ final class FirstRunJourney: UITestCase {
         XCTAssertFalse(app.byId(A11y.List.rows).exists, "No board before a library is chosen")
 
         onboarding.chooseLibrary()
-        XCTAssertTrue(onboarding.extensionContinueButton.waitExists(), "Extension step should follow the pick")
-        onboarding.continuePastExtensionStep()
 
         XCTAssertTrue(app.byId(A11y.List.rows).waitExists(), "Board should appear")
         XCTAssertTrue(list.waitForRowCount(1), "Welcome is the only seeded card")

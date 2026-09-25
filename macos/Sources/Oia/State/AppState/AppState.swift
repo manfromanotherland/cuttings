@@ -23,15 +23,6 @@ final class AppState {
         static let legacyRating = "selectedRating"
     }
 
-    private enum ExtensionSetupKey {
-        /// The step is owed but not yet dismissed — persisted so quitting mid-step
-        /// resumes on it.
-        static let pending = "extensionSetupPending"
-        /// The user has dismissed the step for good — persisted so it never shows
-        /// again, including when they later re-pick a library from Settings.
-        static let completed = "extensionSetupCompleted"
-    }
-
     /// ── Navigation state ──────────────────────────────────────────────────
     var libraryURL: URL?
 
@@ -41,21 +32,6 @@ final class AppState {
     /// itself neutral and prevents onboarding from flashing if restoration fails
     /// before that first frame.
     var isRestoringLibrary: Bool = false
-
-    /// Whether the extension-install step should show ahead of the main view (see
-    /// `ContentView`). Raised on a fresh library pick (`pickLibrary`) and cleared
-    /// only when the user taps "Continue" — never by boot — so quitting mid-step
-    /// and relaunching resumes on the step instead of dropping into the library.
-    ///
-    /// Persisted so the step survives a relaunch; `init` restores it. Only the
-    /// fresh-pick path raises it, so a library set up before this step existed (or
-    /// one already dismissed) never shows it. Assigning in `init` doesn't fire the
-    /// `didSet`, so restoring the flag doesn't re-write the same value.
-    var showExtensionSetup: Bool = false {
-        didSet {
-            AppDefaults.store.set(showExtensionSetup, forKey: ExtensionSetupKey.pending)
-        }
-    }
 
     var readings: [ReadingRow] = []
     var boardSelection = BoardSelection<String>()
@@ -227,11 +203,6 @@ final class AppState {
         defaults.removeObject(forKey: FilterDefaultsKey.legacyRating)
         searchQuery = defaults.string(forKey: FilterDefaultsKey.search) ?? ""
 
-        // Resume the extension-install step if the user quit before dismissing it.
-        // Set before the restore boot below so, once boot flips `libraryURL`, the
-        // step shows immediately with no reading-list flash.
-        showExtensionSetup = defaults.bool(forKey: ExtensionSetupKey.pending)
-
         if TestHooks.isIsolatedRun {
             // UI-testing: never resolve the persisted bookmark (leave the dev's
             // real library untouched). Boot the pinned temp library if one was
@@ -263,21 +234,5 @@ final class AppState {
             analyzerVersion: AppleVisualAnalyzer.analyzerVersion,
             spotlight: SpotlightVisualIndex()
         )
-    }
-
-    // ── Extension setup ─────────────────────────────────────────────────────────
-
-    /// Whether the user has finished the extension-install step. Once set it stays
-    /// set, so a later re-pick of the library (Settings › Change Library…) doesn't
-    /// resurface the step — it's a first-run-only prompt.
-    var hasCompletedExtensionSetup: Bool {
-        AppDefaults.store.bool(forKey: ExtensionSetupKey.completed)
-    }
-
-    /// Dismiss the extension-install step and remember it's done for good. Backs
-    /// the step's "Continue" button.
-    func completeExtensionSetup() {
-        AppDefaults.store.set(true, forKey: ExtensionSetupKey.completed)
-        showExtensionSetup = false
     }
 }

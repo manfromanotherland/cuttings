@@ -27,7 +27,7 @@ extension AppState {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.prompt = "Choose Library Folder"
-        panel.message = "Select or create a folder to store your articles."
+        panel.message = "Choose a folder for your library."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await pickLibrary(url: url) }
     }
@@ -45,20 +45,7 @@ extension AppState {
                 stopAccessing()
                 accessedURL = LibraryBookmark.resolve()
             }
-            // Raise the extension-install step before boot publishes the
-            // library, so the main view never flashes ahead of the first-run
-            // prompt. It appears only on first run; once dismissed, re-picking
-            // the library from Settings doesn't resurface it. Restoring
-            // a saved library on launch goes straight through `boot`, never here.
-            if !hasCompletedExtensionSetup {
-                showExtensionSetup = true
-            }
             await boot(url: url)
-            // Boot swallows its errors; if it couldn't open the library,
-            // `libraryURL` stays nil — drop the flag so a retry starts clean.
-            if libraryURL == nil {
-                showExtensionSetup = false
-            }
         } catch {
             self.error = error.localizedDescription
         }

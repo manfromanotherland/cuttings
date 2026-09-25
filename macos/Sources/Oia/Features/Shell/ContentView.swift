@@ -9,7 +9,7 @@ struct ContentView: View {
         @Bindable var appState = appState
         Group {
             if isOnboarding {
-                // Both onboarding steps run in a sheet (below); keep a neutral
+                // Onboarding runs in a sheet (below); keep a neutral
                 // backdrop under it so the main UI never peeks around the sheet.
                 OnboardingBackdrop()
             } else if appState.libraryURL != nil {
@@ -22,11 +22,10 @@ struct ContentView: View {
                 OnboardingBackdrop()
             }
         }
-        // First-run onboarding as one non-dismissible sheet spanning both steps
-        // (see `OnboardingFlow`): step 1 is left only by choosing a folder, and the
-        // sheet stays up through the extension step until "Continue".
+        // Choosing a library dismisses this first-run sheet.
         .sheet(isPresented: onboardingSheet) {
-            OnboardingFlow()
+            ChooseLibraryStep()
+                .frame(width: 560, height: 340)
                 .interactiveDismissDisabled()
         }
         // Attached at the root so ⌘/ works from any screen.
@@ -40,11 +39,9 @@ struct ContentView: View {
         }
     }
 
-    /// Whether first-run onboarding should be showing: the folder pick (no library
-    /// yet, and not mid-restore) or the extension step that follows it. Restoring a
-    /// saved library on launch never trips this — those users go straight to boot.
+    /// Show the folder picker only when no library is configured or restoring.
     private var isOnboarding: Bool {
-        appState.showExtensionSetup || (appState.libraryURL == nil && !appState.isRestoringLibrary)
+        appState.libraryURL == nil && !appState.isRestoringLibrary
     }
 
     /// Drives the onboarding sheet from `isOnboarding`. Read-only: the flow is
@@ -76,8 +73,7 @@ private struct RestoringView: View {
 private struct OnboardingBackdrop: View {
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "books.vertical")
-                .font(.system(size: 56))
+            OiaEye()
             Text("Óia")
                 .font(.title2)
         }
@@ -86,53 +82,20 @@ private struct OnboardingBackdrop: View {
     }
 }
 
-// ── Onboarding flow ───────────────────────────────────────────────────────────
-// The two first-run steps in one fixed-size sheet: choosing a library folder, then
-// the browser-extension pointer. Both steps share the same size so the sheet never
-// resizes; the wizard-style push animates the hand-off when `showExtensionSetup`
-// flips (raised by the folder pick, cleared by "Continue").
-
-private struct OnboardingFlow: View {
-    @Environment(AppState.self) private var appState
-
-    var body: some View {
-        ZStack {
-            if appState.showExtensionSetup {
-                ExtensionStep()
-                    .transition(.push(from: .trailing))
-            } else {
-                ChooseLibraryStep()
-                    .transition(.push(from: .trailing))
-            }
-        }
-        .frame(width: 560, height: 380)
-        .animation(.easeInOut(duration: 0.35), value: appState.showExtensionSetup)
-    }
-}
-
-/// Step 1: pick the library folder. Has no dismiss affordance — the only way
-/// forward is choosing a folder, which raises the extension step.
+/// Choose a library folder to open the board.
 private struct ChooseLibraryStep: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "tray.and.arrow.down")
-                .font(.system(size: 64))
+            OiaEye()
                 .foregroundStyle(.secondary)
             Text("Welcome to Óia")
                 .font(.title)
                 .accessibilityIdentifier(A11y.Onboarding.title)
-            Text("Choose an existing library folder or create a new one.")
+            Text("Choose a folder for your library.\nYour saves stay on your Mac.")
                 .foregroundStyle(.secondary)
-            Text(
-                "Your saved pages live here as plain files you own — pick a folder you can "
-                    + "back up or sync, and Óia keeps your whole library in it."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: 360)
+                .multilineTextAlignment(.center)
             Button("Choose Library…") {
                 appState.chooseLibrary()
             }
@@ -145,44 +108,13 @@ private struct ChooseLibraryStep: View {
     }
 }
 
-/// Step 2: explain the browser extension while public store listings are deferred.
-/// "Continue" clears `showExtensionSetup`, dismissing the sheet.
-private struct ExtensionStep: View {
-    @Environment(AppState.self) private var appState
-
+/// Exact eye vector from Figma's “eye final” (10:248), shared with the app icon.
+private struct OiaEye: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "puzzlepiece.extension")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.secondary)
-                Text("Add the browser extension")
-                    .font(.title)
-                    .accessibilityIdentifier(A11y.Onboarding.extensionTitle)
-                Text(
-                    "The extension saves pages and clips straight into your library. "
-                        + "Public store listings are coming soon."
-                )
-                .foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 8) {
-                ExtensionStoreLinks()
-            }
-
-            Button("Continue") {
-                appState.completeExtensionSetup()
-            }
-            .keyboardShortcut(.defaultAction)
-            .accessibilityIdentifier(A11y.Onboarding.extensionContinue)
-            // Centered under the content, matching the folder-pick step's button.
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .frame(maxWidth: 460, alignment: .leading)
-        .padding(40)
-        // Fill the sheet so the block sits centered — vertically like step 1.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Let users copy the links rather than retype them.
-        .textSelection(.enabled)
+        Image("OiaEye")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 96, height: 96)
+            .accessibilityHidden(true)
     }
 }
