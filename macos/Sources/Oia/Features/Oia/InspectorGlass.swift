@@ -104,30 +104,21 @@ struct InspectorSwatch: View {
     let color: InspectorColor
     var action: () -> Void
 
+    @State private var isHovered = false
+
     private var fill: Color { Color(red: color.red, green: color.green, blue: color.blue) }
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                if #available(macOS 26.0, *) {
-                    Circle().fill(.clear).frame(width: 34, height: 34)
-                        .glassEffect(.clear.interactive(), in: Circle())
+            Circle().fill(fill).frame(width: 30, height: 30)
+                .overlay {
+                    Circle().strokeBorder(.primary.opacity(isHovered ? 0.35 : 0.12), lineWidth: 1)
                 }
-                Circle().fill(fill).frame(width: 30, height: 30)
-                    .overlay {
-                        Circle().strokeBorder(
-                            LinearGradient(
-                                colors: [.white.opacity(0.65), .black.opacity(0.12)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                    }
-            }
-            .frame(width: 36, height: 38)
-            .contentShape(Circle())
+                .frame(width: 36, height: 38)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
         .help("Search similar colours · \(color.hex)")
         .accessibilityLabel("Search colours similar to \(color.hex)")
         .accessibilityIdentifier(A11y.Inspector.colorPrefix + color.hex)

@@ -178,8 +178,9 @@ cards organize into masonry columns**. The surrounding mymind branding and chrom
 - **Discover** separates **Your tags** from **In this image**, with a small adjacent information
   button explaining locally recognised suggestions. Tags and attributes are native capsule glass
   buttons. Attributes search the library; editing tags uses the existing optimistic tag picker.
-  Up to five distinct colours appear as closely spaced circles with glass rims and accurate colour
-  centres. Selecting one starts `colour:#RRGGBB` search, ranked by perceptual shade similarity.
+  Up to five distinct colours appear as closely spaced flat circles with a subtle outline. Their
+  fills stay colour-accurate; hovering strengthens only the outline. Selecting one starts
+  `colour:#RRGGBB` search, ranked by perceptual shade similarity.
 - **Details** shows friendly local format, display-oriented dimensions, size and save date. Internal
   asset schemes and hashed filenames never appear. The source appears once as a hostname followed
   by ↗; its complete URL is available on hover or through Copy source URL. Analysis and missing-file
