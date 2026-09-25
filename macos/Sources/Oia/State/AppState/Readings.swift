@@ -2,12 +2,21 @@
 
 import Foundation
 
+struct BoardQueryContext: Hashable {
+    let scope: LibraryScope
+    let search: String?
+}
+
 /// One immutable board snapshot. Scope, search, and Spotlight ranking remain
 /// coherent while the complete matching result is loaded.
 private struct ReadingSnapshotContext {
     let generation: UInt64
     let scope: LibraryScope
     let search: String?
+
+    var boardContext: BoardQueryContext {
+        BoardQueryContext(scope: scope, search: search)
+    }
 }
 
 enum ReadingLoadResult: Equatable {
@@ -134,7 +143,7 @@ extension AppState {
                 },
                 semanticCandidates: semanticCandidates,
                 isCurrent: { self.isCurrent(context) },
-                publish: { rows, _ in self.publishReadings(rows) }
+                publish: { rows, _ in self.publishReadings(rows, context: context) }
             )
             guard completed, isCurrent(context) else { return .superseded }
 
@@ -159,7 +168,11 @@ extension AppState {
         }
     }
 
-    private func publishReadings(_ rows: [ReadingRow]) {
+    private func publishReadings(_ rows: [ReadingRow], context: ReadingSnapshotContext) {
+        let boardContext = context.boardContext
+        if publishedBoardContext != boardContext {
+            publishedBoardContext = boardContext
+        }
         // Reconciliation often confirms exactly the rows already displayed.
         // Keep their observation identity stable instead of invalidating the
         // board and detail hierarchy with an equal whole-array assignment.

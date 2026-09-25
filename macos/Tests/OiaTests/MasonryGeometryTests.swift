@@ -11,23 +11,33 @@ final class MasonryGeometryTests: XCTestCase {
         let ratio: Double
     }
 
+    private struct ResultSet {
+        let context: Int
+        let items: [Item]
+    }
+
     @MainActor
     private final class PositionModel: ObservableObject {
+        @Published var resultSet: ResultSet
         @Published var position = LazyLayoutPosition<Int>()
+
+        init(items: [Item]) {
+            resultSet = ResultSet(context: 0, items: items)
+        }
     }
 
     private struct PositionedBoard: View {
         @ObservedObject var model: PositionModel
-        let items: [Item]
         let built: Box<Set<Int>>
 
         var body: some View {
             LazyMasonryBoard(
-                items,
+                model.resultSet.items,
                 id: \.id,
                 minimumColumnWidth: CardSize.small.minimumColumnWidth,
                 spacing: 18,
                 contentInsets: EdgeInsets(top: 12, leading: 18, bottom: 18, trailing: 18),
+                scrollResetID: model.resultSet.context,
                 position: $model.position,
                 estimatedHeight: { item, width in width / item.ratio },
                 content: { item in
@@ -182,8 +192,8 @@ final class MasonryGeometryTests: XCTestCase {
     func testPositionBindingScrollsToAnUnmaterializedCard() {
         let items = makeItems(5000)
         let built = Box<Set<Int>>([])
-        let model = PositionModel()
-        let board = PositionedBoard(model: model, items: items, built: built)
+        let model = PositionModel(items: items)
+        let board = PositionedBoard(model: model, built: built)
 
         let (window, materialized) = host(board) { !built.value.isEmpty }
         defer { window.close() }
@@ -197,6 +207,39 @@ final class MasonryGeometryTests: XCTestCase {
         }
 
         XCTAssertTrue(built.value.contains(items.count - 1))
+    }
+
+    @MainActor
+    func testNewResultContextStartsAtTopWhenTheOldAnchorMovesToTheBottom() {
+        let initialItems = makeItems(5000)
+        let retainedAnchor = initialItems[4000]
+        let searchResults = makeItems(499).map { item in
+            Item(id: item.id + 10000, ratio: item.ratio)
+        } + [retainedAnchor]
+        let built = Box<Set<Int>>([])
+        let model = PositionModel(items: initialItems)
+        let board = PositionedBoard(model: model, built: built)
+
+        let (window, materialized) = host(board) { !built.value.isEmpty }
+        defer { window.close() }
+        XCTAssertTrue(materialized)
+
+        model.position.scrollTo(id: retainedAnchor.id, anchor: .top)
+        let scrollDeadline = Date().addingTimeInterval(5)
+        while !built.value.contains(retainedAnchor.id), Date() < scrollDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertTrue(built.value.contains(retainedAnchor.id))
+
+        built.value.removeAll()
+        model.resultSet = ResultSet(context: 1, items: searchResults)
+        let updateDeadline = Date().addingTimeInterval(5)
+        while built.value.isEmpty, Date() < updateDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+
+        XCTAssertTrue(built.value.contains(searchResults.first?.id ?? 0))
+        XCTAssertFalse(built.value.contains(searchResults.last?.id ?? 0))
     }
 }
 

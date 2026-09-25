@@ -238,6 +238,7 @@ extension OiaLibraryView {
                         trailing: Self.boardSpacing
                     ),
                     configurationID: cardSize.rawValue,
+                    scrollResetID: appState.publishedBoardContext,
                     geometryKey: { AnyHashable($0.boardGeometryKey) },
                     position: $boardPosition,
                     navigationCoordinator: boardNavigation,

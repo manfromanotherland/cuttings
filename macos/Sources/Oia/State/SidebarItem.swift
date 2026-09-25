@@ -5,7 +5,7 @@ import Foundation
 /// The durable scopes exposed by the board toolbar. Read, archive, and rating
 /// metadata remains in the file format for compatibility but no longer
 /// participates in browsing.
-enum LibraryScope: String, CaseIterable, Identifiable {
+enum LibraryScope: String, CaseIterable, Hashable, Identifiable {
     case all, media, articles, links, quotes
 
     var id: String {

@@ -34,6 +34,10 @@ final class AppState {
     var isRestoringLibrary: Bool = false
 
     var readings: [ReadingRow] = []
+    /// The scope and normalized query that produced `readings`. This changes
+    /// only when a result set for a new board context is actually published, so
+    /// same-query enrichment and ordinary refreshes preserve the scroll position.
+    var publishedBoardContext = BoardQueryContext(scope: .all, search: nil)
     var boardSelection = BoardSelection<String>()
 
     /// The focused card remains the compatibility-facing selection for Gallery

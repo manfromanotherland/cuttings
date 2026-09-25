@@ -220,6 +220,9 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
     private let spacing: CGFloat
     private let contentInsets: EdgeInsets
     private let configurationID: AnyHashable
+    /// A new result context gets a fresh native scroll container. Ordinary
+    /// mutations keep this stable so LazyLayoutKit can preserve their anchor.
+    private let scrollResetID: AnyHashable
     private let geometryKey: ((Element) -> AnyHashable)?
     private let position: Binding<LazyLayoutPosition<ID>>?
     private let navigationCoordinator: MasonryNavigationCoordinator<Element, ID>?
@@ -233,6 +236,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         spacing: CGFloat = 18,
         contentInsets: EdgeInsets = .init(),
         configurationID: AnyHashable = 0,
+        scrollResetID: AnyHashable = 0,
         geometryKey: ((Element) -> AnyHashable)? = nil,
         position: Binding<LazyLayoutPosition<ID>>? = nil,
         navigationCoordinator: MasonryNavigationCoordinator<Element, ID>? = nil,
@@ -246,6 +250,7 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         self.spacing = spacing
         self.contentInsets = contentInsets
         self.configurationID = configurationID
+        self.scrollResetID = scrollResetID
         self.geometryKey = geometryKey
         self.position = position
         self.navigationCoordinator = navigationCoordinator
@@ -292,5 +297,6 @@ struct LazyMasonryBoard<Element: Equatable, ID: Hashable & Sendable>: View {
         .onLayoutViewportChange { viewport in
             visibility.update(viewport: viewport)
         }
+        .id(scrollResetID)
     }
 }
