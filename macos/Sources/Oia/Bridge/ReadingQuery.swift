@@ -2,9 +2,10 @@
 
 import Foundation
 
-/// A reading-list query in app language: the composed kind/scope/tag filter, an
-/// optional full-text search, the sort, and result bounds. `CoreBridge` turns
-/// it into the core's compatible `FfiListOptions` at the bridge boundary.
+/// A reading-list query in app language: the composed kind/scope/tag filter,
+/// optional free text and scoped search terms, the sort, and result bounds.
+/// `CoreBridge` turns it into the core's compatible `FfiListOptions` at the
+/// bridge boundary.
 struct ReadingQuery {
     var kind: ReadingKind?
     var scope: LibraryScope
@@ -12,6 +13,11 @@ struct ReadingQuery {
     var ascending: Bool
     var tag: String?
     var search: String?
+    /// Exact saved tags that must all belong to the same reading.
+    var tagTerms: [String]
+    /// Derived labels/colours that must all belong to the same reading's
+    /// current visual analysis.
+    var visualTerms: [String]
     /// Core Spotlight's best-first semantic matches for `search`. The Rust
     /// core merges these candidates with its own text/label/colour results so
     /// filters and relevance ordering stay one coherent query.
@@ -26,15 +32,20 @@ extension ReadingQuery {
     static func boardSnapshot(
         scope: LibraryScope,
         search: String?,
+        tagTerms: [String],
+        visualTerms: [String],
         semanticCandidateIDs: [String]
     ) -> Self {
-        Self(
+        let isSearching = search != nil || !tagTerms.isEmpty || !visualTerms.isEmpty
+        return Self(
             kind: nil,
             scope: scope,
-            sort: search == nil ? .savedAt : .relevance,
+            sort: isSearching ? .relevance : .savedAt,
             ascending: false,
             tag: nil,
             search: search,
+            tagTerms: tagTerms,
+            visualTerms: visualTerms,
             semanticCandidateIDs: semanticCandidateIDs,
             limit: .max,
             offset: 0

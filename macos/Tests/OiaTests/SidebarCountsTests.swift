@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Foundation
 import XCTest
 
 /// The lightweight filter state retained by the library board: available tags
@@ -17,9 +18,21 @@ final class LibraryFiltersTests: XCTestCase {
 
         XCTAssertEqual(filters.tags.map(\.tag), ["rust", "swift"])
         XCTAssertEqual(filters.tags.map(\.count), [3, 2])
+        XCTAssertEqual(filters.searchTagCandidates.map(\.token.value), ["rust", "swift"])
     }
 
-    func testTagIdentityIsTheTagName() {
-        XCTAssertEqual(TagCount(tag: "local-first", count: 7).id, "local-first")
+    func testTagIdentityUsesTheExactNameBytes() {
+        XCTAssertEqual(
+            TagCount(tag: "local-first", count: 7).id,
+            Data("local-first".utf8)
+        )
+    }
+
+    func testCanonicalUnicodeVariantsRemainDistinctSnapshots() {
+        let precomposed = TagCount(tag: "Café", count: 1)
+        let decomposed = TagCount(tag: "Cafe\u{301}", count: 1)
+
+        XCTAssertNotEqual(precomposed, decomposed)
+        XCTAssertNotEqual(precomposed.id, decomposed.id)
     }
 }

@@ -34,7 +34,7 @@ struct ContentView: View {
         }
         .onChange(of: appState.isFocusMode) { _, isFocus in
             if isFocus {
-                appState.searchQuery = ""
+                appState.clearSearch()
             }
         }
     }

@@ -116,6 +116,8 @@ actor CoreBridge {
             kind: query.kind?.ffiKind,
             since: nil, until: nil,
             query: query.search,
+            tagTerms: query.tagTerms,
+            visualTerms: query.visualTerms,
             predominantColor: nil,
             semanticCandidateIds: query.semanticCandidateIDs,
             limit: query.limit, offset: query.offset
@@ -138,6 +140,8 @@ actor CoreBridge {
             rating: nil,
             kind: kind?.ffiKind,
             query: query,
+            tagTerms: [],
+            visualTerms: [],
             predominantColor: nil,
             semanticCandidateIds: []
         )

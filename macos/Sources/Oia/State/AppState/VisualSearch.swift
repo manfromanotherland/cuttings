@@ -75,7 +75,7 @@ extension AppState {
             visualAnalysisGeneration &+= 1
         }
         guard result.shouldReloadReadings(
-            hasActiveSearch: activeVisualSearchQuery != nil
+            hasActiveSearch: hasSearchDependingOnVisualAnalysis
         ) else { return }
         let loadResult = await loadReadings(resetSelectionIfMissing: false)
         guard loadResult == .published else { return }
@@ -84,8 +84,8 @@ extension AppState {
         )
     }
 
-    private var activeVisualSearchQuery: String? {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return query.isEmpty ? nil : query
+    private var hasSearchDependingOnVisualAnalysis: Bool {
+        let search = activeSearchInput
+        return search.text != nil || search.hasVisualTerms
     }
 }

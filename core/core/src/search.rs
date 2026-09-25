@@ -44,6 +44,25 @@ fn and_query(tokens: &[String]) -> String {
         .join(" ")
 }
 
+/// Build one FTS predicate that requires every selected visual term in the
+/// derived `visual_terms` column. Each selected value is a completed token, so
+/// multiword values stay contiguous phrases and do not use type-ahead prefix
+/// matching.
+pub(crate) fn scoped_visual_query(terms: &[String]) -> Option<String> {
+    if terms.is_empty() {
+        return Some(String::new());
+    }
+    let mut queries = Vec::with_capacity(terms.len());
+    for term in terms {
+        let tokens = tokenize(term);
+        if tokens.is_empty() {
+            return None;
+        }
+        queries.push(format!("visual_terms : \"{}\"", tokens.join(" ")));
+    }
+    Some(queries.join(" AND "))
+}
+
 /// Build the FTS5 `MATCH` string for `query`, preferring an exact phrase and
 /// falling back to all-words-AND when the phrase matches nothing in the
 /// caller's active scope. Returns `None` when there's nothing searchable

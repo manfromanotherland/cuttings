@@ -130,11 +130,15 @@ final class ReadingQueryTests: XCTestCase {
             let query = ReadingQuery.boardSnapshot(
                 scope: scope,
                 search: "texture",
+                tagTerms: ["interiors"],
+                visualTerms: ["blue", "furniture"],
                 semanticCandidateIDs: ["first", "second"]
             )
 
             XCTAssertEqual(query.scope, scope)
             XCTAssertEqual(query.search, "texture")
+            XCTAssertEqual(query.tagTerms, ["interiors"])
+            XCTAssertEqual(query.visualTerms, ["blue", "furniture"])
             XCTAssertEqual(query.semanticCandidateIDs, ["first", "second"])
             XCTAssertEqual(query.limit, .max)
             XCTAssertEqual(query.offset, 0)
@@ -151,6 +155,8 @@ final class ReadingQueryTests: XCTestCase {
         let query = ReadingQuery.boardSnapshot(
             scope: .media,
             search: nil,
+            tagTerms: [],
+            visualTerms: [],
             semanticCandidateIDs: []
         )
 
@@ -159,6 +165,22 @@ final class ReadingQueryTests: XCTestCase {
         XCTAssertFalse(query.ascending)
         guard case .savedAt = query.sort else {
             return XCTFail("browsing should use saved-date ordering")
+        }
+    }
+
+    func testStructuredTermsUseSearchOrderingWithoutFreeText() {
+        let query = ReadingQuery.boardSnapshot(
+            scope: .all,
+            search: nil,
+            tagTerms: ["chairs"],
+            visualTerms: ["blue", "furniture"],
+            semanticCandidateIDs: []
+        )
+
+        XCTAssertEqual(query.tagTerms, ["chairs"])
+        XCTAssertEqual(query.visualTerms, ["blue", "furniture"])
+        guard case .relevance = query.sort else {
+            return XCTFail("structured search should use relevance ordering")
         }
     }
 }

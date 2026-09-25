@@ -254,6 +254,10 @@ pub struct FfiListOptions {
     pub since: Option<String>,
     pub until: Option<String>,
     pub query: Option<String>,
+    /// Exact tags that must all occur on the same reading.
+    pub tag_terms: Vec<String>,
+    /// Completed terms that must all occur in current supported visual analysis.
+    pub visual_terms: Vec<String>,
     pub predominant_color: Option<FfiPredominantColor>,
     /// Core Spotlight identifiers, ordered best-first for the same query.
     pub semantic_candidate_ids: Vec<String>,
@@ -261,11 +265,10 @@ pub struct FfiListOptions {
     pub offset: u32,
 }
 
-/// The active sidebar filters behind the faceted counts. All five compose as an
-/// intersection — the current search, selected smart view, selected tag,
-/// selected rating, and selected content kind (at most one of each, any may be
-/// unset; `view` defaults to `All`). Each count query ignores its own facet axis
-/// while kind always composes — see [`crate::list::CountScope`].
+/// The active board filters behind the faceted counts. Facets and every
+/// free-text or structured search term compose as an intersection. Each count
+/// query ignores its own facet axis while search terms and kind always compose
+/// — see [`crate::list::CountScope`].
 #[derive(uniffi::Record)]
 pub struct FfiCountScope {
     pub view: FfiView,
@@ -273,6 +276,8 @@ pub struct FfiCountScope {
     pub rating: Option<u8>,
     pub kind: Option<FfiReadingKind>,
     pub query: Option<String>,
+    pub tag_terms: Vec<String>,
+    pub visual_terms: Vec<String>,
     pub predominant_color: Option<FfiPredominantColor>,
     pub semantic_candidate_ids: Vec<String>,
 }
@@ -496,6 +501,8 @@ impl From<FfiCountScope> for CountScope {
             rating: s.rating,
             kind: s.kind.map(Into::into),
             query: s.query,
+            tag_terms: s.tag_terms,
+            visual_terms: s.visual_terms,
             predominant_color: s.predominant_color.map(Into::into),
             semantic_candidate_ids: s.semantic_candidate_ids,
         }
@@ -520,6 +527,8 @@ impl From<FfiListOptions> for ListOptions {
             since: o.since,
             until: o.until,
             query: o.query,
+            tag_terms: o.tag_terms,
+            visual_terms: o.visual_terms,
             predominant_color: o.predominant_color.map(Into::into),
             semantic_candidate_ids: o.semantic_candidate_ids,
             limit: o.limit as usize,
@@ -1190,6 +1199,8 @@ mod tests {
             since: None,
             until: None,
             query: None,
+            tag_terms: Vec::new(),
+            visual_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
             limit: 50,

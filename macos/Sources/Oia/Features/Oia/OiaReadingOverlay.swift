@@ -187,12 +187,19 @@ struct OiaReadingOverlay: View {
     }
 
     private func searchFromInspector(_ query: String) {
+        let token = BoardSearchToken(kind: .visual, value: query)
+        guard !token.value.isEmpty else { return }
+        let nextTokens = [token]
+        let searchChanged = appState.searchQuery != ""
+            || BoardSearchCriteria(tokens: appState.searchTokens)
+            != BoardSearchCriteria(tokens: nextTokens)
+
         onClose()
         appState.activeScope = .all
-        if appState.searchQuery == query {
+        appState.searchQuery = ""
+        appState.searchTokens = nextTokens
+        if !searchChanged {
             appState.searchDidChange()
-        } else {
-            appState.searchQuery = query
         }
     }
 

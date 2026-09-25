@@ -5,8 +5,8 @@ import SwiftUI
 extension OiaLibraryView {
     @ViewBuilder
     var emptyState: some View {
-        if !appState.searchQuery.isEmpty {
-            ContentUnavailableView.search(text: appState.searchQuery)
+        if appState.activeSearchInput.isActive {
+            ContentUnavailableView.search(text: activeSearchDescription)
                 .accessibilityIdentifier(A11y.List.searchEmptyState)
         } else if appState.activeScope != .all {
             ContentUnavailableView(
@@ -22,5 +22,11 @@ extension OiaLibraryView {
             }
             .accessibilityIdentifier(A11y.List.emptyState)
         }
+    }
+
+    private var activeSearchDescription: String {
+        let tokenValues = appState.activeSearchInput.criteria.tokens.map(\.value)
+        return (tokenValues + [appState.activeSearchInput.text].compactMap(\.self))
+            .joined(separator: " ")
     }
 }

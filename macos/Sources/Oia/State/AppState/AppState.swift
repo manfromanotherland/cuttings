@@ -19,6 +19,7 @@ final class AppState {
         static let scope = "activeScope"
         static let tag = "selectedTag"
         static let search = "searchQuery"
+        static let searchTokens = "searchTokens"
         static let legacyView = "activeView"
         static let legacyRating = "selectedRating"
     }
@@ -37,7 +38,10 @@ final class AppState {
     /// The scope and normalized query that produced `readings`. This changes
     /// only when a result set for a new board context is actually published, so
     /// same-query enrichment and ordinary refreshes preserve the scroll position.
-    var publishedBoardContext = BoardQueryContext(scope: .all, search: nil)
+    var publishedBoardContext = BoardQueryContext(
+        scope: .all,
+        search: BoardSearchInput(text: "", tokens: [])
+    )
     var boardSelection = BoardSelection<String>()
 
     /// The focused card remains the compatibility-facing selection for Gallery
@@ -71,6 +75,26 @@ final class AppState {
         didSet {
             AppDefaults.store.set(searchQuery, forKey: FilterDefaultsKey.search)
         }
+    }
+
+    /// Completed native search-field tokens. Their value and internal scope are
+    /// persisted with the draft query so reopening the app restores one coherent
+    /// search instead of silently widening it.
+    var searchTokens: [BoardSearchToken] = [] {
+        didSet {
+            guard let data = try? JSONEncoder().encode(searchTokens) else { return }
+            AppDefaults.store.set(data, forKey: FilterDefaultsKey.searchTokens)
+        }
+    }
+
+    var activeSearchInput: BoardSearchInput {
+        BoardSearchInput(text: searchQuery, tokens: searchTokens)
+    }
+
+    func clearSearch() {
+        guard !searchQuery.isEmpty || !searchTokens.isEmpty else { return }
+        searchQuery = ""
+        searchTokens = []
     }
 
     /// Pending debounced search reload. Each keystroke cancels the previous one
@@ -119,7 +143,7 @@ final class AppState {
     /// Global tag names used by each reading's tag editor.
     var filters = LibraryFilters()
 
-    // ── Status ────────────────────────────────────────────────────────────
+    /// ── Status ────────────────────────────────────────────────────────────
     var isLoading: Bool = false
     /// File reconciliation can continue after a trusted cached board is visible.
     /// Kept separate from `isLoading` so it never hides usable cached readings.
@@ -207,6 +231,11 @@ final class AppState {
         defaults.removeObject(forKey: FilterDefaultsKey.legacyView)
         defaults.removeObject(forKey: FilterDefaultsKey.legacyRating)
         searchQuery = defaults.string(forKey: FilterDefaultsKey.search) ?? ""
+        if let data = defaults.data(forKey: FilterDefaultsKey.searchTokens),
+           let tokens = try? JSONDecoder().decode([BoardSearchToken].self, from: data)
+        {
+            searchTokens = BoardSearchCriteria(tokens: tokens).tokens
+        }
 
         if TestHooks.isIsolatedRun {
             // UI-testing: never resolve the persisted bookmark (leave the dev's

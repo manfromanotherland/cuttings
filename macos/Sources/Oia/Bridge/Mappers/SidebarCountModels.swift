@@ -10,8 +10,22 @@ import Foundation
 struct TagCount: Identifiable, Equatable, Sendable {
     var tag: String
     var count: UInt64
-    var id: String {
-        tag
+    var id: Data {
+        ExactTagIdentity.bytes(tag)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.count == rhs.count && ExactTagIdentity.matches(lhs.tag, rhs.tag)
+    }
+}
+
+enum ExactTagIdentity {
+    static func bytes(_ value: String) -> Data {
+        Data(value.utf8)
+    }
+
+    static func matches(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.elementsEqual(rhs.utf8)
     }
 }
 

@@ -74,6 +74,12 @@ pub struct ListOptions {
     /// clusters. `None` is a plain listing. Relevance ranks shade matches by
     /// distance; platform semantic candidates cannot widen a colour query.
     pub query: Option<String>,
+    /// Exact tags that must all occur on the same reading. Unlike `tag`, these
+    /// are search terms rather than a single board facet selection.
+    pub tag_terms: Vec<String>,
+    /// Completed terms that must all occur in the reading's current supported
+    /// visual analysis. They never match title, body, site, or tags.
+    pub visual_terms: Vec<String>,
     /// Restrict to the stable colour family derived by the Rust core.
     pub predominant_color: Option<PredominantColor>,
     /// Ordered Core Spotlight candidates for the same query.
@@ -94,6 +100,8 @@ impl Default for ListOptions {
             since: None,
             until: None,
             query: None,
+            tag_terms: Vec::new(),
+            visual_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
             limit: 50,
@@ -181,12 +189,10 @@ pub struct SidebarCounts {
     pub ratings: Vec<(u8, u64)>,
 }
 
-/// The active sidebar filters that scope the faceted counts. All five fields
-/// compose as an intersection — the current search, the selected smart view, the
-/// selected tag, selected rating, and selected kind
-/// (`View ∩ Tag ∩ Rating ∩ Kind ∩ Search`). The UI
-/// lets at most one of each be active at a time, and any may be unset (`view`
-/// defaults to `All`, the unfiltered base; the rest to `None`).
+/// The active board filters that scope the faceted counts. The selected smart
+/// view, tag facet, rating, kind, and every free-text or structured search term
+/// compose as an intersection. A facet may be unset and the structured search
+/// vectors may be empty (`view` defaults to `All`, the unfiltered base).
 ///
 /// Each count query applies every field of the scope *except its own axis* — a
 /// facet never constrains itself, so its badges still show the alternatives you
@@ -211,6 +217,11 @@ pub struct CountScope {
     /// search; a present-but-unmatchable query scopes every count to zero,
     /// mirroring [`list_readings`].
     pub query: Option<String>,
+    /// Exact tag search terms. Every value must be present on the same reading.
+    pub tag_terms: Vec<String>,
+    /// Visual search terms. Every value must occur in the same current,
+    /// supported visual analysis.
+    pub visual_terms: Vec<String>,
     pub predominant_color: Option<PredominantColor>,
     pub semantic_candidate_ids: Vec<String>,
 }
@@ -223,6 +234,8 @@ impl Default for CountScope {
             rating: None,
             kind: None,
             query: None,
+            tag_terms: Vec::new(),
+            visual_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
         }
@@ -259,6 +272,9 @@ impl ResolvedSearch {
     /// view and sibling facets determine phrase fallback, while the later count
     /// queries may still ignore their own facet axis when presenting choices.
     pub(crate) fn resolve_scoped(conn: &Connection, scope: &CountScope) -> Result<Self> {
+        if crate::search::scoped_visual_query(&scope.visual_terms).is_none() {
+            return Ok(Self::Unmatchable);
+        }
         if let Some(color) = scope.query.as_deref().and_then(crate::color_search::parse) {
             return Ok(Self::Semantic(serde_json::to_string(
                 &crate::color_search::matching_ids(conn, &color)?,
@@ -302,6 +318,25 @@ fn phrase_exists_in_count_scope(
                AND (?3 IS NULL OR r.rating = ?3)
                AND (?4 IS NULL OR r.kind = ?4)
                AND (?5 IS NULL OR r.predominant_color = ?5)
+               AND (?6 = '' OR (
+                    EXISTS (
+                        SELECT 1 FROM visual_analysis a
+                        WHERE a.content_hash=r.visual_asset_hash
+                          AND a.analyzer_version=r.visual_analyzer_version
+                          AND a.supported=1
+                          AND a.visual_terms=r.visual_terms
+                    )
+                    AND r.rowid IN (
+                        SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?6
+                    )
+               ))
+               AND NOT EXISTS (
+                    SELECT 1 FROM json_each(?7) requested_tag
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM json_each(r.tags_json) reading_tag
+                        WHERE reading_tag.value = requested_tag.value
+                    )
+               )
          )"
     );
     conn.query_row(
@@ -311,11 +346,58 @@ fn phrase_exists_in_count_scope(
             scope.tag.as_deref(),
             scope.rating.map(i64::from),
             scope.kind.map(ReadingKind::as_str),
-            scope.predominant_color.map(PredominantColor::as_str)
+            scope.predominant_color.map(PredominantColor::as_str),
+            crate::search::scoped_visual_query(&scope.visual_terms).unwrap_or_default(),
+            serde_json::to_string(&scope.tag_terms)?
         ],
         |row| row.get(0),
     )
     .map_err(Into::into)
+}
+
+/// Append the structured search predicates shared by every count surface.
+/// They are search terms rather than facets, so no count axis may skip them.
+fn append_structured_count_clauses(
+    scope: &CountScope,
+    clauses: &mut Vec<String>,
+    vals: &mut Vec<Value>,
+) -> bool {
+    if !scope.tag_terms.is_empty() {
+        let tags_json = serde_json::to_string(&scope.tag_terms)
+            .expect("serializing a string vector cannot fail");
+        vals.push(Value::Text(tags_json));
+        clauses.push(format!(
+            "NOT EXISTS (
+                 SELECT 1 FROM json_each(?{}) requested_tag
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM json_each(readings.tags_json) reading_tag
+                     WHERE reading_tag.value = requested_tag.value
+                 )
+             )",
+            vals.len()
+        ));
+    }
+
+    let Some(visual_query) = crate::search::scoped_visual_query(&scope.visual_terms) else {
+        return false;
+    };
+    if !visual_query.is_empty() {
+        vals.push(Value::Text(visual_query));
+        clauses.push(format!(
+            "EXISTS (
+                 SELECT 1 FROM visual_analysis a
+                 WHERE a.content_hash=readings.visual_asset_hash
+                   AND a.analyzer_version=readings.visual_analyzer_version
+                   AND a.supported=1
+                   AND a.visual_terms=readings.visual_terms
+             )
+             AND readings.rowid IN (
+                 SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{}
+             )",
+            vals.len()
+        ));
+    }
+    true
 }
 
 /// Build the shared `WHERE` fragment (and its positional bind values) for a
@@ -366,6 +448,10 @@ pub(crate) fn count_where(
     if let Some(color) = scope.predominant_color {
         vals.push(Value::Text(color.as_str().to_string()));
         clauses.push(format!("readings.predominant_color = ?{}", vals.len()));
+    }
+
+    if !append_structured_count_clauses(scope, &mut clauses, &mut vals) {
+        return None;
     }
 
     // A search composes with every facet; the caller resolved it once so counts
@@ -477,6 +563,10 @@ pub(crate) fn pinned_count_filter(
         conds.push(format!("readings.predominant_color = ?{}", vals.len()));
     }
 
+    if !append_structured_count_clauses(scope, &mut conds, vals) {
+        conds.push("0".to_string());
+    }
+
     conds.join(" AND ")
 }
 
@@ -549,6 +639,9 @@ pub fn sidebar_counts(conn: &Connection, scope: &CountScope) -> Result<SidebarCo
 /// `SortField::Relevance`. Otherwise this is a plain listing over the `readings`
 /// table.
 pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<ReadingRow>> {
+    let Some(visual_query) = crate::search::scoped_visual_query(&opts.visual_terms) else {
+        return Ok(Vec::new());
+    };
     if let Some(color) = opts.query.as_deref().and_then(crate::color_search::parse) {
         let mut color_options = opts.clone();
         color_options.semantic_candidate_ids = crate::color_search::matching_ids(conn, &color)?;
@@ -586,7 +679,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     };
 
     // Optional filters use sentinel values (empty string / 0) so the SQL is
-    // always static with exactly 8 bound parameters — no dynamic param count.
+    // always static with exactly 10 bound parameters — no dynamic param count.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
@@ -606,6 +699,25 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
            AND (?6 = 0 OR rating = ?6)
            AND (?7 = '' OR kind = ?7)
            AND (?8 = '' OR predominant_color = ?8)
+           AND (?9 = '' OR (
+                EXISTS (
+                    SELECT 1 FROM visual_analysis a
+                    WHERE a.content_hash=readings.visual_asset_hash
+                      AND a.analyzer_version=readings.visual_analyzer_version
+                      AND a.supported=1
+                      AND a.visual_terms=readings.visual_terms
+                )
+                AND readings.rowid IN (
+                    SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?9
+                )
+           ))
+           AND NOT EXISTS (
+                SELECT 1 FROM json_each(?10) requested_tag
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM json_each(readings.tags_json) reading_tag
+                    WHERE reading_tag.value = requested_tag.value
+                )
+           )
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -622,6 +734,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
         .map(PredominantColor::as_str)
         .unwrap_or("");
 
+    let tag_terms_json = serde_json::to_string(&opts.tag_terms)?;
     let rows = stmt.query_map(
         params![
             opts.limit as i64,
@@ -631,7 +744,9 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
             until_val,
             rating_val,
             kind_val,
-            color_val
+            color_val,
+            visual_query,
+            tag_terms_json
         ],
         parse_row,
     )?;
@@ -663,6 +778,25 @@ fn phrase_exists_in_list_scope(
                AND (?5 = 0 OR r.rating = ?5)
                AND (?6 = '' OR r.kind = ?6)
                AND (?7 = '' OR r.predominant_color = ?7)
+               AND (?8 = '' OR (
+                    EXISTS (
+                        SELECT 1 FROM visual_analysis a
+                        WHERE a.content_hash=r.visual_asset_hash
+                          AND a.analyzer_version=r.visual_analyzer_version
+                          AND a.supported=1
+                          AND a.visual_terms=r.visual_terms
+                    )
+                    AND r.rowid IN (
+                        SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?8
+                    )
+               ))
+               AND NOT EXISTS (
+                    SELECT 1 FROM json_each(?9) requested_tag
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM json_each(r.tags_json) reading_tag
+                        WHERE reading_tag.value = requested_tag.value
+                    )
+               )
          )"
     );
     conn.query_row(
@@ -676,7 +810,9 @@ fn phrase_exists_in_list_scope(
             opts.kind.map(ReadingKind::as_str).unwrap_or(""),
             opts.predominant_color
                 .map(PredominantColor::as_str)
-                .unwrap_or("")
+                .unwrap_or(""),
+            crate::search::scoped_visual_query(&opts.visual_terms).unwrap_or_default(),
+            serde_json::to_string(&opts.tag_terms)?
         ],
         |row| row.get(0),
     )
@@ -778,6 +914,25 @@ fn list_readings_search(
            AND (?6 = 0 OR r.rating = ?6)
            AND (?7 = '' OR r.kind = ?7)
            AND (?8 = '' OR r.predominant_color = ?8)
+           AND (?11 = '' OR (
+                EXISTS (
+                    SELECT 1 FROM visual_analysis a
+                    WHERE a.content_hash=r.visual_asset_hash
+                      AND a.analyzer_version=r.visual_analyzer_version
+                      AND a.supported=1
+                      AND a.visual_terms=r.visual_terms
+                )
+                AND r.rowid IN (
+                    SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?11
+                )
+           ))
+           AND NOT EXISTS (
+                SELECT 1 FROM json_each(?12) requested_tag
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM json_each(r.tags_json) reading_tag
+                    WHERE reading_tag.value = requested_tag.value
+                )
+           )
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -805,6 +960,8 @@ fn list_readings_search(
             color_val,
             match_query.unwrap_or("\"__oia_no_text_match__\""),
             semantic_json,
+            crate::search::scoped_visual_query(&opts.visual_terms).unwrap_or_default(),
+            serde_json::to_string(&opts.tag_terms)?,
         ],
         parse_row,
     )?;
@@ -927,6 +1084,26 @@ mod tests {
         bytes.extend_from_slice(&2468_u32.to_be_bytes());
         bytes.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
         bytes
+    }
+
+    fn attach_visual_analysis(conn: &Connection, id: &str, visual_terms: &str) {
+        conn.execute(
+            "INSERT INTO visual_analysis
+                 (content_hash, analyzer_version, supported, labels_json, palette_json,
+                  visual_terms)
+             VALUES (?1, 'structured-search-test', 1, '[]', '[]', ?2)",
+            params![id, visual_terms],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE readings
+             SET visual_asset_hash=?1,
+                 visual_analyzer_version='structured-search-test',
+                 visual_terms=?2
+             WHERE id=?1",
+            params![id, visual_terms],
+        )
+        .unwrap();
     }
 
     #[test]
@@ -2192,5 +2369,261 @@ mod tests {
         .unwrap();
         let ids: std::collections::HashSet<_> = rows.into_iter().map(|row| row.id).collect();
         assert_eq!(ids, [text_id, visual_id].into());
+    }
+
+    #[test]
+    fn visual_terms_match_the_same_analysis_without_text_or_tag_false_positives() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let matching_id = new_id();
+        let mut matching = meta(
+            &matching_id,
+            "https://example.com/matching",
+            "Matching image",
+        );
+        matching.kind = ReadingKind::Image;
+        write_reading(&lib, matching, "unrelated".into()).unwrap();
+
+        let blue_only_id = new_id();
+        let mut blue_only = meta(&blue_only_id, "https://example.com/blue", "Blue image");
+        blue_only.kind = ReadingKind::Image;
+        write_reading(&lib, blue_only, "unrelated".into()).unwrap();
+
+        let furniture_only_id = new_id();
+        let mut furniture_only = meta(
+            &furniture_only_id,
+            "https://example.com/furniture",
+            "Furniture image",
+        );
+        furniture_only.kind = ReadingKind::Image;
+        write_reading(&lib, furniture_only, "unrelated".into()).unwrap();
+
+        let text_only_id = new_id();
+        write_reading(
+            &lib,
+            meta(
+                &text_only_id,
+                "https://example.com/text",
+                "Blue furniture in words",
+            ),
+            "blue furniture".into(),
+        )
+        .unwrap();
+
+        let tag_only_id = new_id();
+        let mut tag_only = meta(&tag_only_id, "https://example.com/tags", "Tagged only");
+        tag_only.tags = vec!["blue".into(), "furniture".into()];
+        write_reading(&lib, tag_only, "unrelated".into()).unwrap();
+
+        let stale_analysis_id = new_id();
+        let mut stale_analysis = meta(
+            &stale_analysis_id,
+            "https://example.com/stale",
+            "Stale analysis",
+        );
+        stale_analysis.kind = ReadingKind::Image;
+        write_reading(&lib, stale_analysis, "unrelated".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+        attach_visual_analysis(&conn, &matching_id, "blue furniture chair");
+        attach_visual_analysis(&conn, &blue_only_id, "blue sky");
+        attach_visual_analysis(&conn, &furniture_only_id, "furniture chair");
+        attach_visual_analysis(&conn, &stale_analysis_id, "blue furniture chair");
+        conn.execute(
+            "UPDATE readings SET visual_analyzer_version='replacement-version' WHERE id=?1",
+            params![stale_analysis_id],
+        )
+        .unwrap();
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                visual_terms: vec!["blue".into(), "furniture".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            [matching_id.as_str()]
+        );
+
+        let semantic_rows = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("semantic only".into()),
+                visual_terms: vec!["blue".into(), "furniture".into()],
+                semantic_candidate_ids: vec![
+                    text_only_id.clone(),
+                    tag_only_id.clone(),
+                    blue_only_id.clone(),
+                    furniture_only_id.clone(),
+                    stale_analysis_id.clone(),
+                    matching_id.clone(),
+                ],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            semantic_rows
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            [matching_id.as_str()]
+        );
+
+        let counts = view_counts(
+            &conn,
+            &CountScope {
+                query: Some("semantic only".into()),
+                visual_terms: vec!["blue".into(), "furniture".into()],
+                semantic_candidate_ids: vec![
+                    text_only_id,
+                    tag_only_id,
+                    blue_only_id,
+                    furniture_only_id,
+                    stale_analysis_id,
+                    matching_id,
+                ],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(counts.all, 1);
+    }
+
+    #[test]
+    fn exact_tag_terms_are_conjunctive_and_compose_with_visual_terms() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let matching_id = new_id();
+        let mut matching = meta(
+            &matching_id,
+            "https://example.com/matching",
+            "Matching image",
+        );
+        matching.kind = ReadingKind::Image;
+        matching.tags = vec!["inspiration".into(), "interiors".into()];
+        write_reading(&lib, matching, "unrelated".into()).unwrap();
+
+        let one_tag_id = new_id();
+        let mut one_tag = meta(&one_tag_id, "https://example.com/one-tag", "One tag");
+        one_tag.kind = ReadingKind::Image;
+        one_tag.tags = vec!["inspiration".into()];
+        write_reading(&lib, one_tag, "interiors appears only in text".into()).unwrap();
+
+        let wrong_visual_id = new_id();
+        let mut wrong_visual = meta(
+            &wrong_visual_id,
+            "https://example.com/wrong-visual",
+            "Wrong visual",
+        );
+        wrong_visual.kind = ReadingKind::Image;
+        wrong_visual.tags = vec!["inspiration".into(), "interiors".into()];
+        write_reading(&lib, wrong_visual, "blue furniture in text".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+        attach_visual_analysis(&conn, &matching_id, "blue furniture chair");
+        attach_visual_analysis(&conn, &one_tag_id, "blue furniture chair");
+        attach_visual_analysis(&conn, &wrong_visual_id, "blue sky");
+
+        let tagged = list_readings(
+            &conn,
+            &ListOptions {
+                tag_terms: vec!["inspiration".into(), "interiors".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            tagged
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<std::collections::HashSet<_>>(),
+            [matching_id.as_str(), wrong_visual_id.as_str()].into()
+        );
+
+        let rows = list_readings(
+            &conn,
+            &ListOptions {
+                tag_terms: vec!["inspiration".into(), "interiors".into()],
+                visual_terms: vec!["blue".into(), "furniture".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            [matching_id.as_str()]
+        );
+
+        let count_scope = CountScope {
+            tag_terms: vec!["inspiration".into(), "interiors".into()],
+            visual_terms: vec!["blue".into(), "furniture".into()],
+            ..Default::default()
+        };
+        assert_eq!(view_counts(&conn, &count_scope).unwrap().all, 1);
+        let counts = sidebar_counts(&conn, &count_scope).unwrap();
+        assert_eq!(
+            counts
+                .tags
+                .iter()
+                .find(|(tag, _)| tag == "inspiration")
+                .map(|(_, count)| *count),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn free_text_phrase_fallback_is_resolved_inside_the_structured_scope() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let in_scope_id = new_id();
+        let mut in_scope = meta(&in_scope_id, "https://example.com/in-scope", "In scope");
+        in_scope.kind = ReadingKind::Image;
+        write_reading(&lib, in_scope, "alpha appears before unrelated beta".into()).unwrap();
+
+        let phrase_outside_scope_id = new_id();
+        let mut phrase_outside_scope = meta(
+            &phrase_outside_scope_id,
+            "https://example.com/outside-scope",
+            "Outside scope",
+        );
+        phrase_outside_scope.kind = ReadingKind::Image;
+        write_reading(&lib, phrase_outside_scope, "exact alpha beta phrase".into()).unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+        attach_visual_analysis(&conn, &in_scope_id, "blue furniture chair");
+        attach_visual_analysis(&conn, &phrase_outside_scope_id, "red landscape");
+
+        let options = ListOptions {
+            query: Some("alpha beta".into()),
+            visual_terms: vec!["blue".into(), "furniture".into()],
+            ..Default::default()
+        };
+        let rows = list_readings(&conn, &options).unwrap();
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            [in_scope_id.as_str()]
+        );
+
+        assert_eq!(
+            view_counts(
+                &conn,
+                &CountScope {
+                    query: options.query,
+                    visual_terms: options.visual_terms,
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .all,
+            1
+        );
     }
 }

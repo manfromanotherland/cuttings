@@ -80,7 +80,8 @@ host, and macOS app.
 |------|------------|
 | Tag | User-defined label stored in a reading's frontmatter. Tags organize readings and are indexed by search. |
 | Board scope | Exactly one toolbar selection: All, Media, Articles, Links, or Quotes. Media combines image and video readings; Articles excludes lightweight links; Links selects lightweight article placeholders. |
-| Board filter | The selected board scope and optional search query, applied as an intersection to the board. |
+| Board filter | The selected board scope, free-text query, and any scoped search terms, applied as one intersection to the board. |
+| Search token | A native search-field pill created from a suggestion. A tag token means an exact saved tag; a visual token means a derived label or colour found in the same reading's current visual analysis. Tokens narrow one another by intersection. |
 | All | The unfiltered board scope. It includes every saved item, including files carrying a legacy `archived: true` value. |
 | Legacy state field | `read_at`, `archived`, `favorite`, or `rating` in a format-v1 file. The core preserves these for compatibility; the current macOS app does not display or mutate them. |
 | Board selection | The transient set of cards selected on the macOS board. A plain click or arrow move replaces it; Shift-click or Shift-arrow extends it from an anchor. Board actions such as delete apply to the complete set. |
@@ -126,7 +127,8 @@ host, and macOS app.
 | Reader | Main article reading surface in the macOS app. It renders Markdown natively and supports local assets, text selection, highlights, and typography settings. |
 | Card board | Full-width mixed masonry presentation of reading rows for the active board scope and search query. |
 | Reading list | Legacy name for the old row-based macOS presentation and for the core listing API; the current user-facing home is the card board. |
-| Search | Full-text query over indexed reading title, content, and tags. |
+| Search | A free-text query over indexed reading title, content, tags, and derived visual terms, optionally narrowed by exact tag or visual search tokens. Free text remains broad; scoped tokens keep their own meaning. |
+| Visual search term | A disposable index value derived from local image analysis, such as a detected label or colour family. It is not a user tag and is never written to the reading file. |
 | Board order | Fixed card-board ordering: newest saved first while browsing and relevance while searching. |
 | Optimistic UI | UI pattern where local state changes immediately, then the core write and refresh reconcile against persisted truth. |
 | Refresh | UI reload from the core/index after a mutation, sync, filter change, or search change. |

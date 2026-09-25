@@ -3,13 +3,6 @@
 import SwiftUI
 
 extension OiaLibraryView {
-    var searchQuery: Binding<String> {
-        Binding(
-            get: { appState.searchQuery },
-            set: { appState.searchQuery = $0 }
-        )
-    }
-
     var scopeSelection: Binding<LibraryScope> {
         Binding(
             get: { appState.activeScope },

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Foundation
 import XCTest
 
 /// Filter/highlight mappers are the single crossing from the FFI boundary DTOs
@@ -9,7 +10,7 @@ final class FilterMapperTests: XCTestCase {
         let tagCount = TagCount(FfiTagCount(tag: "rust", count: 7))
         XCTAssertEqual(tagCount.tag, "rust")
         XCTAssertEqual(tagCount.count, 7)
-        XCTAssertEqual(tagCount.id, "rust")
+        XCTAssertEqual(tagCount.id, Data("rust".utf8))
     }
 
     func testHighlightRowMapsFields() {

@@ -4,15 +4,15 @@ import Foundation
 
 struct BoardQueryContext: Hashable {
     let scope: LibraryScope
-    let search: String?
+    let search: BoardSearchInput
 }
 
-/// One immutable board snapshot. Scope, search, and Spotlight ranking remain
-/// coherent while the complete matching result is loaded.
+/// One immutable board snapshot. Scope, free text, structured terms, and
+/// Spotlight ranking remain coherent while the complete result is loaded.
 private struct ReadingSnapshotContext {
     let generation: UInt64
     let scope: LibraryScope
-    let search: String?
+    let search: BoardSearchInput
 
     var boardContext: BoardQueryContext {
         BoardQueryContext(scope: scope, search: search)
@@ -67,12 +67,6 @@ extension AppState {
         }
     }
 
-    /// The full-text query for the current search box, or nil when it's empty.
-    private var activeQuery: String? {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return query.isEmpty ? nil : query
-    }
-
     /// Every reading in one immutable scope/search snapshot. LazyLayoutKit
     /// virtualizes card views, so the app never waits for a trailing page.
     private func fetchReadings(
@@ -82,7 +76,9 @@ extension AppState {
     ) async throws -> [ReadingRow] {
         let query = ReadingQuery.boardSnapshot(
             scope: context.scope,
-            search: context.search,
+            search: context.search.text,
+            tagTerms: context.search.criteria.tagTerms,
+            visualTerms: context.search.criteria.visualTerms,
             semanticCandidateIDs: semanticCandidateIDs
         )
         return try await core.listReadings(query)
@@ -93,7 +89,7 @@ extension AppState {
         return ReadingSnapshotContext(
             generation: readingLoadGeneration,
             scope: activeScope,
-            search: activeQuery
+            search: activeSearchInput
         )
     }
 
@@ -105,10 +101,20 @@ extension AppState {
         )
     }
 
+    private func makeSemanticCandidateLoader(
+        for context: ReadingSnapshotContext,
+        includeSemanticSearch: Bool
+    ) -> (@MainActor () async throws -> [String])? {
+        guard includeSemanticSearch,
+              context.search.text != nil,
+              visualSearchCoordinator != nil else { return nil }
+        return { try await self.loadSemanticCandidateIDs(for: context.search.text) }
+    }
+
     private func isCurrent(_ context: ReadingSnapshotContext) -> Bool {
         context.generation == readingLoadGeneration
             && context.scope == activeScope
-            && context.search == activeQuery
+            && context.search == activeSearchInput
             && !Task.isCancelled
     }
 
@@ -129,12 +135,10 @@ extension AppState {
         guard !Task.isCancelled else { return .superseded }
         guard let core else { return .failed }
         let context = makeSnapshotContext()
-        let semanticCandidates: (@MainActor () async throws -> [String])?
-        if includeSemanticSearch, context.search != nil, visualSearchCoordinator != nil {
-            semanticCandidates = { try await self.loadSemanticCandidateIDs(for: context.search) }
-        } else {
-            semanticCandidates = nil
-        }
+        let semanticCandidates = makeSemanticCandidateLoader(
+            for: context,
+            includeSemanticSearch: includeSemanticSearch
+        )
         do {
             let completed = try await ReadingSnapshotDelivery.load(
                 textFirst: preferImmediateTextResults,
@@ -156,7 +160,9 @@ extension AppState {
                     with: readings.map(\.id),
                     preserveUnavailableFocus: !resetSelectionIfMissing
                 )
-                if selection != boardSelection { boardSelection = selection }
+                if selection != boardSelection {
+                    boardSelection = selection
+                }
             }
             return .published
         } catch {
@@ -176,7 +182,9 @@ extension AppState {
         // Reconciliation often confirms exactly the rows already displayed.
         // Keep their observation identity stable instead of invalidating the
         // board and detail hierarchy with an equal whole-array assignment.
-        if readings != rows { readings = rows }
+        if readings != rows {
+            readings = rows
+        }
         // Body or same-path asset bytes can change while every row field stays
         // equal. Content invalidation remains independent of row publication.
         if libraryContentRefreshPending {
@@ -199,7 +207,9 @@ extension AppState {
         ) else { return }
         guard session == librarySessionGeneration else { return }
         let tags = counts.tags.map { TagCount($0) }
-        if filters.tags != tags { filters.tags = tags }
+        if filters.tags != tags {
+            filters = LibraryFilters(tags: tags)
+        }
     }
 
     /// Reload the board after its scope changes. The global tag vocabulary only

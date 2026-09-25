@@ -28,12 +28,16 @@ extension AppState {
     /// pushed the row out of the current filter, slide it out and advance the
     /// selection to an adjacent row in the *same* render tick — one motion, not
     /// an in-place icon flip followed a beat later by the row jumping away. A
-    /// no-op when the row still matches. Skipped during search, whose FTS
-    /// predicate is not mirrored in Swift.
+    /// no-op when the row still matches. Free-text and visual predicates are
+    /// not mirrored in Swift, but a failed scope or exact-tag predicate is
+    /// sufficient to know the complete AND query can no longer match.
     private func advancePastFilteredRow(id: String) {
-        guard searchQuery.isEmpty,
-              let index = readings.firstIndex(where: { $0.id == id }),
-              !rowMatchesCurrentFilter(readings[index]) else { return }
+        guard let index = readings.firstIndex(where: { $0.id == id }) else { return }
+        let row = readings[index]
+        let matchesRequiredTags = activeSearchInput.criteria.tagTerms.allSatisfy { requiredTag in
+            row.tags.contains { ExactTagIdentity.matches($0, requiredTag) }
+        }
+        guard !rowMatchesCurrentFilter(row) || !matchesRequiredTags else { return }
         withAnimation {
             boardSelection.remove([id], from: readings.map(\.id))
             readings.remove(at: index)
@@ -100,7 +104,9 @@ extension AppState {
         // Mirror the core: trim, dedup on exact match, append (no sort/lowercase),
         // so the optimistic chip lands in the same place the reload confirms.
         let tag = tag.trimmingCharacters(in: .whitespaces)
-        if let old = readings.first(where: { $0.id == id }), !old.tags.contains(tag) {
+        if let old = readings.first(where: { $0.id == id }),
+           !old.tags.contains(where: { ExactTagIdentity.matches($0, tag) })
+        {
             var updated = old
             updated.tags.append(tag)
             applyOptimistic(old, updated)
@@ -113,9 +119,11 @@ extension AppState {
         guard let core else { return }
         beginLibraryWrite()
         defer { endLibraryWrite() }
-        if let old = readings.first(where: { $0.id == id }), old.tags.contains(tag) {
+        if let old = readings.first(where: { $0.id == id }),
+           old.tags.contains(where: { ExactTagIdentity.matches($0, tag) })
+        {
             var updated = old
-            updated.tags.removeAll { $0 == tag }
+            updated.tags.removeAll { ExactTagIdentity.matches($0, tag) }
             applyOptimistic(old, updated)
             advancePastFilteredRow(id: id)
         }

@@ -52,7 +52,7 @@ private struct SearchQueryChangeModifier: ViewModifier {
     @Environment(AppState.self) private var appState
 
     func body(content: Content) -> some View {
-        content.onChange(of: appState.searchQuery) { _, _ in
+        content.onChange(of: appState.activeSearchInput) { _, _ in
             appState.searchDidChange()
         }
     }
@@ -136,19 +136,30 @@ extension OiaLibraryView {
         if appState.isFocusMode {
             board
         } else {
-            board
-                .searchable(
-                    text: searchQuery,
-                    placement: .toolbar,
-                    prompt: "Search Óia"
-                )
-                .searchFocused($searchFocused)
-                .toolbar { boardToolbar }
-                .background {
-                    CompactSearchToolbarConfiguration()
-                        .frame(width: 0, height: 0)
-                }
+            searchableBoard
         }
+    }
+
+    private var searchableBoard: some View {
+        @Bindable var bindableAppState = appState
+        return board
+            .searchable(
+                text: $bindableAppState.searchQuery,
+                tokens: $bindableAppState.searchTokens,
+                placement: .toolbar,
+                prompt: "Search Óia"
+            ) { token in
+                Text(token.displayValue)
+            }
+            .searchSuggestions {
+                nativeSearchSuggestions
+            }
+            .searchFocused($searchFocused)
+            .toolbar { boardToolbar }
+            .background {
+                CompactSearchToolbarConfiguration()
+                    .frame(width: 0, height: 0)
+            }
     }
 
     @ToolbarContentBuilder
