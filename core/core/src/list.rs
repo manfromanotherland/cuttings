@@ -70,7 +70,7 @@ pub struct ListOptions {
     pub since: Option<String>,
     /// ISO-8601 upper bound on `saved_at` (inclusive).
     pub until: Option<String>,
-    /// Full-text query, or `colour:#RRGGBB` for perceptually similar palette
+    /// Full-text query, or `#RRGGBB` / `colour:#RRGGBB` for perceptually similar palette
     /// clusters. `None` is a plain listing. Relevance ranks shade matches by
     /// distance; platform semantic candidates cannot widen a colour query.
     pub query: Option<String>,
