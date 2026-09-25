@@ -12,12 +12,12 @@ final class ReadingQueryTests: XCTestCase {
         let completed = try await ReadingSnapshotDelivery.load(
             textFirst: false,
             fetch: { candidates in
-                queries.append(candidates)
-                return ["text"] + candidates
+                queries.append(candidates.text)
+                return ["text"] + candidates.text
             },
             semanticCandidates: {
                 XCTAssertTrue(publications.isEmpty)
-                return ["semantic"]
+                return .init(text: ["semantic"])
             },
             isCurrent: { true },
             publish: { rows, _ in publications.append(rows) }
@@ -47,7 +47,7 @@ final class ReadingQueryTests: XCTestCase {
         var queryCount = 0
         let completed = try await ReadingSnapshotDelivery.load(
             fetch: { _ in queryCount += 1; return ["text"] },
-            semanticCandidates: { [] },
+            semanticCandidates: { .empty },
             isCurrent: { true },
             publish: { _, _ in }
         )
@@ -64,7 +64,7 @@ final class ReadingQueryTests: XCTestCase {
             fetch: { _ in queryCount += 1; return ["text"] },
             semanticCandidates: {
                 current = false
-                return ["stale semantic"]
+                return .init(text: ["stale semantic"])
             },
             isCurrent: { current },
             publish: { rows, _ in publications.append(rows) }
@@ -81,7 +81,7 @@ final class ReadingQueryTests: XCTestCase {
         var semanticStarted = false
         let completed = try await ReadingSnapshotDelivery.load(
             fetch: { _ in current = false; return ["stale text"] },
-            semanticCandidates: { semanticStarted = true; return [] },
+            semanticCandidates: { semanticStarted = true; return .empty },
             isCurrent: { current },
             publish: { rows, _ in publications.append(rows) }
         )
@@ -109,12 +109,12 @@ final class ReadingQueryTests: XCTestCase {
         var queries: [[String]] = []
         let completed = try await ReadingSnapshotDelivery.load(
             fetch: { candidates in
-                queries.append(candidates)
+                queries.append(candidates.text)
                 return candidates.isEmpty ? ["text"] : ["text", "semantic"]
             },
             semanticCandidates: {
                 XCTAssertEqual(publications, [["text"]])
-                return ["semantic"]
+                return .init(text: ["semantic"])
             },
             isCurrent: { true },
             publish: { rows, _ in publications.append(rows) }
@@ -132,7 +132,8 @@ final class ReadingQueryTests: XCTestCase {
                 search: "texture",
                 tagTerms: ["interiors"],
                 visualTerms: ["blue", "furniture"],
-                semanticCandidateIDs: ["first", "second"]
+                semanticCandidateIDs: ["first", "second"],
+                visualSemanticCandidateIDs: ["visual"]
             )
 
             XCTAssertEqual(query.scope, scope)
@@ -140,6 +141,7 @@ final class ReadingQueryTests: XCTestCase {
             XCTAssertEqual(query.tagTerms, ["interiors"])
             XCTAssertEqual(query.visualTerms, ["blue", "furniture"])
             XCTAssertEqual(query.semanticCandidateIDs, ["first", "second"])
+            XCTAssertEqual(query.visualSemanticCandidateIDs, ["visual"])
             XCTAssertEqual(query.limit, .max)
             XCTAssertEqual(query.offset, 0)
             XCTAssertFalse(query.ascending)
@@ -157,7 +159,8 @@ final class ReadingQueryTests: XCTestCase {
             search: nil,
             tagTerms: [],
             visualTerms: [],
-            semanticCandidateIDs: []
+            semanticCandidateIDs: [],
+            visualSemanticCandidateIDs: []
         )
 
         XCTAssertEqual(query.scope, .media)
@@ -174,7 +177,8 @@ final class ReadingQueryTests: XCTestCase {
             search: nil,
             tagTerms: ["chairs"],
             visualTerms: ["blue", "furniture"],
-            semanticCandidateIDs: []
+            semanticCandidateIDs: [],
+            visualSemanticCandidateIDs: []
         )
 
         XCTAssertEqual(query.tagTerms, ["chairs"])
@@ -182,5 +186,14 @@ final class ReadingQueryTests: XCTestCase {
         guard case .relevance = query.sort else {
             return XCTFail("structured search should use relevance ordering")
         }
+    }
+
+    func testVisualSemanticCandidatesRequireEveryTermOnTheSameImage() {
+        let candidates = VisualSemanticCandidateIntersection.ranked([
+            ["blue-only", "same-image", "same-image"],
+            ["furniture-only", "same-image"]
+        ])
+
+        XCTAssertEqual(candidates, ["same-image"])
     }
 }

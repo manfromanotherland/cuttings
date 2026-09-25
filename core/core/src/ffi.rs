@@ -261,6 +261,8 @@ pub struct FfiListOptions {
     pub predominant_color: Option<FfiPredominantColor>,
     /// Core Spotlight identifiers, ordered best-first for the same query.
     pub semantic_candidate_ids: Vec<String>,
+    /// Core Spotlight identifiers matched from structured visual terms.
+    pub visual_semantic_candidate_ids: Vec<String>,
     pub limit: u32,
     pub offset: u32,
 }
@@ -280,6 +282,7 @@ pub struct FfiCountScope {
     pub visual_terms: Vec<String>,
     pub predominant_color: Option<FfiPredominantColor>,
     pub semantic_candidate_ids: Vec<String>,
+    pub visual_semantic_candidate_ids: Vec<String>,
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -505,6 +508,7 @@ impl From<FfiCountScope> for CountScope {
             visual_terms: s.visual_terms,
             predominant_color: s.predominant_color.map(Into::into),
             semantic_candidate_ids: s.semantic_candidate_ids,
+            visual_semantic_candidate_ids: s.visual_semantic_candidate_ids,
         }
     }
 }
@@ -531,6 +535,7 @@ impl From<FfiListOptions> for ListOptions {
             visual_terms: o.visual_terms,
             predominant_color: o.predominant_color.map(Into::into),
             semantic_candidate_ids: o.semantic_candidate_ids,
+            visual_semantic_candidate_ids: o.visual_semantic_candidate_ids,
             limit: o.limit as usize,
             offset: o.offset as usize,
         }
@@ -1203,6 +1208,7 @@ mod tests {
             visual_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
+            visual_semantic_candidate_ids: Vec::new(),
             limit: 50,
             offset: 0,
         }

@@ -196,6 +196,35 @@ final class SpotlightThumbnailManifestTests: XCTestCase {
         XCTAssertEqual(try store.load(), .present(manifest))
     }
 
+    func testVisualSpotlightDonationDoesNotIndexReadingMetadata() {
+        let thumbnail = URL(fileURLWithPath: "/tmp/metadata-title-only.png")
+        let attributes = SpotlightVisualMetadata.attributes(
+            thumbnailURL: thumbnail
+        )
+
+        XCTAssertEqual(attributes.title, "Saved image")
+        XCTAssertEqual(attributes.displayName, "Saved image")
+        XCTAssertNil(attributes.textContent)
+        XCTAssertNil(attributes.keywords)
+        XCTAssertEqual(attributes.thumbnailURL, thumbnail)
+    }
+
+    func testVisualSpotlightQueryEnablesSemanticImageMatching() {
+        let context = SpotlightVisualQueryContext.make(limit: 42)
+
+        XCTAssertFalse(context.disableSemanticSearch)
+        XCTAssertTrue(context.enableRankedResults)
+        XCTAssertEqual(context.maxResultCount, 42)
+        XCTAssertEqual(context.maxRankedResultCount, 42)
+        XCTAssertEqual(
+            context.filterQueries,
+            [
+                "domainIdentifier=\"\(SpotlightVisualIndex.domainIdentifier)\"",
+                "contentTypeTree=\"public.image\""
+            ]
+        )
+    }
+
     private func makeAsset(
         id: String,
         hash: String,

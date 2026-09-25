@@ -84,6 +84,10 @@ pub struct ListOptions {
     pub predominant_color: Option<PredominantColor>,
     /// Ordered Core Spotlight candidates for the same query.
     pub semantic_candidate_ids: Vec<String>,
+    /// Core Spotlight candidates produced from the structured visual terms.
+    /// These are kept separate from free-text candidates so metadata matches
+    /// can never widen an "In this image" token.
+    pub visual_semantic_candidate_ids: Vec<String>,
     pub limit: usize,
     pub offset: usize,
 }
@@ -104,6 +108,7 @@ impl Default for ListOptions {
             visual_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
+            visual_semantic_candidate_ids: Vec::new(),
             limit: 50,
             offset: 0,
         }
@@ -224,6 +229,7 @@ pub struct CountScope {
     pub visual_terms: Vec<String>,
     pub predominant_color: Option<PredominantColor>,
     pub semantic_candidate_ids: Vec<String>,
+    pub visual_semantic_candidate_ids: Vec<String>,
 }
 
 impl Default for CountScope {
@@ -238,6 +244,7 @@ impl Default for CountScope {
             visual_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
+            visual_semantic_candidate_ids: Vec::new(),
         }
     }
 }
@@ -319,16 +326,19 @@ fn phrase_exists_in_count_scope(
                AND (?4 IS NULL OR r.kind = ?4)
                AND (?5 IS NULL OR r.predominant_color = ?5)
                AND (?6 = '' OR (
-                    EXISTS (
-                        SELECT 1 FROM visual_analysis a
-                        WHERE a.content_hash=r.visual_asset_hash
-                          AND a.analyzer_version=r.visual_analyzer_version
-                          AND a.supported=1
-                          AND a.visual_terms=r.visual_terms
+                    (
+                        EXISTS (
+                            SELECT 1 FROM visual_analysis a
+                            WHERE a.content_hash=r.visual_asset_hash
+                              AND a.analyzer_version=r.visual_analyzer_version
+                              AND a.supported=1
+                              AND a.visual_terms=r.visual_terms
+                        )
+                        AND r.rowid IN (
+                            SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?6
+                        )
                     )
-                    AND r.rowid IN (
-                        SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?6
-                    )
+                    OR r.id IN (SELECT value FROM json_each(?8))
                ))
                AND NOT EXISTS (
                     SELECT 1 FROM json_each(?7) requested_tag
@@ -348,7 +358,8 @@ fn phrase_exists_in_count_scope(
             scope.kind.map(ReadingKind::as_str),
             scope.predominant_color.map(PredominantColor::as_str),
             crate::search::scoped_visual_query(&scope.visual_terms).unwrap_or_default(),
-            serde_json::to_string(&scope.tag_terms)?
+            serde_json::to_string(&scope.tag_terms)?,
+            serde_json::to_string(&scope.visual_semantic_candidate_ids)?
         ],
         |row| row.get(0),
     )
@@ -383,18 +394,30 @@ fn append_structured_count_clauses(
     };
     if !visual_query.is_empty() {
         vals.push(Value::Text(visual_query));
+        let visual_query_index = vals.len();
+        vals.push(Value::Text(
+            serde_json::to_string(&scope.visual_semantic_candidate_ids)
+                .expect("serializing a string vector cannot fail"),
+        ));
+        let visual_semantic_index = vals.len();
         clauses.push(format!(
-            "EXISTS (
-                 SELECT 1 FROM visual_analysis a
-                 WHERE a.content_hash=readings.visual_asset_hash
-                   AND a.analyzer_version=readings.visual_analyzer_version
-                   AND a.supported=1
-                   AND a.visual_terms=readings.visual_terms
-             )
-             AND readings.rowid IN (
-                 SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{}
-             )",
-            vals.len()
+            "(
+                 (
+                     EXISTS (
+                         SELECT 1 FROM visual_analysis a
+                         WHERE a.content_hash=readings.visual_asset_hash
+                           AND a.analyzer_version=readings.visual_analyzer_version
+                           AND a.supported=1
+                           AND a.visual_terms=readings.visual_terms
+                     )
+                     AND readings.rowid IN (
+                         SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?{visual_query_index}
+                     )
+                 )
+                 OR readings.id IN (
+                     SELECT value FROM json_each(?{visual_semantic_index})
+                 )
+             )"
         ));
     }
     true
@@ -679,7 +702,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     };
 
     // Optional filters use sentinel values (empty string / 0) so the SQL is
-    // always static with exactly 10 bound parameters — no dynamic param count.
+    // always static with exactly 11 bound parameters — no dynamic param count.
     let sql = format!(
         "SELECT id, title, url, canonical_url, author, site, saved_at,
                 (read_at IS NOT NULL), archived, favorite, excerpt, word_count, lang, tags_json,
@@ -700,16 +723,19 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
            AND (?7 = '' OR kind = ?7)
            AND (?8 = '' OR predominant_color = ?8)
            AND (?9 = '' OR (
-                EXISTS (
-                    SELECT 1 FROM visual_analysis a
-                    WHERE a.content_hash=readings.visual_asset_hash
-                      AND a.analyzer_version=readings.visual_analyzer_version
-                      AND a.supported=1
-                      AND a.visual_terms=readings.visual_terms
+                (
+                    EXISTS (
+                        SELECT 1 FROM visual_analysis a
+                        WHERE a.content_hash=readings.visual_asset_hash
+                          AND a.analyzer_version=readings.visual_analyzer_version
+                          AND a.supported=1
+                          AND a.visual_terms=readings.visual_terms
+                    )
+                    AND readings.rowid IN (
+                        SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?9
+                    )
                 )
-                AND readings.rowid IN (
-                    SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?9
-                )
+                OR readings.id IN (SELECT value FROM json_each(?11))
            ))
            AND NOT EXISTS (
                 SELECT 1 FROM json_each(?10) requested_tag
@@ -746,7 +772,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
             kind_val,
             color_val,
             visual_query,
-            tag_terms_json
+            tag_terms_json,
+            serde_json::to_string(&opts.visual_semantic_candidate_ids)?
         ],
         parse_row,
     )?;
@@ -779,16 +806,19 @@ fn phrase_exists_in_list_scope(
                AND (?6 = '' OR r.kind = ?6)
                AND (?7 = '' OR r.predominant_color = ?7)
                AND (?8 = '' OR (
-                    EXISTS (
-                        SELECT 1 FROM visual_analysis a
-                        WHERE a.content_hash=r.visual_asset_hash
-                          AND a.analyzer_version=r.visual_analyzer_version
-                          AND a.supported=1
-                          AND a.visual_terms=r.visual_terms
+                    (
+                        EXISTS (
+                            SELECT 1 FROM visual_analysis a
+                            WHERE a.content_hash=r.visual_asset_hash
+                              AND a.analyzer_version=r.visual_analyzer_version
+                              AND a.supported=1
+                              AND a.visual_terms=r.visual_terms
+                        )
+                        AND r.rowid IN (
+                            SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?8
+                        )
                     )
-                    AND r.rowid IN (
-                        SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?8
-                    )
+                    OR r.id IN (SELECT value FROM json_each(?10))
                ))
                AND NOT EXISTS (
                     SELECT 1 FROM json_each(?9) requested_tag
@@ -812,7 +842,8 @@ fn phrase_exists_in_list_scope(
                 .map(PredominantColor::as_str)
                 .unwrap_or(""),
             crate::search::scoped_visual_query(&opts.visual_terms).unwrap_or_default(),
-            serde_json::to_string(&opts.tag_terms)?
+            serde_json::to_string(&opts.tag_terms)?,
+            serde_json::to_string(&opts.visual_semantic_candidate_ids)?
         ],
         |row| row.get(0),
     )
@@ -915,16 +946,19 @@ fn list_readings_search(
            AND (?7 = '' OR r.kind = ?7)
            AND (?8 = '' OR r.predominant_color = ?8)
            AND (?11 = '' OR (
-                EXISTS (
-                    SELECT 1 FROM visual_analysis a
-                    WHERE a.content_hash=r.visual_asset_hash
-                      AND a.analyzer_version=r.visual_analyzer_version
-                      AND a.supported=1
-                      AND a.visual_terms=r.visual_terms
+                (
+                    EXISTS (
+                        SELECT 1 FROM visual_analysis a
+                        WHERE a.content_hash=r.visual_asset_hash
+                          AND a.analyzer_version=r.visual_analyzer_version
+                          AND a.supported=1
+                          AND a.visual_terms=r.visual_terms
+                    )
+                    AND r.rowid IN (
+                        SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?11
+                    )
                 )
-                AND r.rowid IN (
-                    SELECT rowid FROM readings_fts WHERE readings_fts MATCH ?11
-                )
+                OR r.id IN (SELECT value FROM json_each(?13))
            ))
            AND NOT EXISTS (
                 SELECT 1 FROM json_each(?12) requested_tag
@@ -962,6 +996,7 @@ fn list_readings_search(
             semantic_json,
             crate::search::scoped_visual_query(&opts.visual_terms).unwrap_or_default(),
             serde_json::to_string(&opts.tag_terms)?,
+            serde_json::to_string(&opts.visual_semantic_candidate_ids)?,
         ],
         parse_row,
     )?;
@@ -2493,6 +2528,79 @@ mod tests {
         )
         .unwrap();
         assert_eq!(counts.all, 1);
+    }
+
+    #[test]
+    fn visual_completion_uses_visual_candidates_not_text_metadata() {
+        let (dir, conn) = setup();
+        let lib = make_library(&dir);
+
+        let image_content_id = new_id();
+        let mut image_content = meta(
+            &image_content_id,
+            "https://example.com/image-content",
+            "Untitled image",
+        );
+        image_content.kind = ReadingKind::Image;
+        write_reading(&lib, image_content, "unrelated".into()).unwrap();
+
+        let image_title_id = new_id();
+        let mut image_title = meta(
+            &image_title_id,
+            "https://example.com/image-title",
+            "Ceramics annual",
+        );
+        image_title.kind = ReadingKind::Image;
+        write_reading(&lib, image_title, "unrelated".into()).unwrap();
+
+        let article_text_id = new_id();
+        write_reading(
+            &lib,
+            meta(&article_text_id, "https://example.com/article", "Article"),
+            "A short history of ceramics".into(),
+        )
+        .unwrap();
+
+        rebuild(&conn, &lib).unwrap();
+        attach_visual_analysis(&conn, &image_content_id, "document screenshot");
+        attach_visual_analysis(&conn, &image_title_id, "portrait people");
+
+        let typed = list_readings(
+            &conn,
+            &ListOptions {
+                query: Some("ceramics".into()),
+                semantic_candidate_ids: vec![image_content_id.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let typed_ids: std::collections::HashSet<_> = typed.into_iter().map(|row| row.id).collect();
+        assert_eq!(
+            typed_ids,
+            [
+                image_content_id.clone(),
+                image_title_id.clone(),
+                article_text_id.clone(),
+            ]
+            .into()
+        );
+
+        let visual = list_readings(
+            &conn,
+            &ListOptions {
+                visual_terms: vec!["Ceramics".into()],
+                // Free-text candidates can contain metadata hits and must not
+                // satisfy a structured visual token.
+                semantic_candidate_ids: vec![image_title_id, article_text_id],
+                // The image-only Spotlight query recognises the actual pixels.
+                visual_semantic_candidate_ids: vec![image_content_id.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let visual_ids: std::collections::HashSet<_> =
+            visual.into_iter().map(|row| row.id).collect();
+        assert_eq!(visual_ids, [image_content_id].into());
     }
 
     #[test]

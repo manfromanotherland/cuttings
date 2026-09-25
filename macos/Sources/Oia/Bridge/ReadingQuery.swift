@@ -22,8 +22,28 @@ struct ReadingQuery {
     /// core merges these candidates with its own text/label/colour results so
     /// filters and relevance ordering stay one coherent query.
     var semanticCandidateIDs: [String]
+    /// Core Spotlight matches for the structured visual terms. Keeping these
+    /// separate prevents a free-text metadata hit from satisfying an
+    /// "In this image" token.
+    var visualSemanticCandidateIDs: [String]
     var limit: UInt32
     var offset: UInt32
+}
+
+/// Intersects per-term Spotlight rankings without losing the stable order of
+/// the first term. A reading must be recognised for every selected visual term,
+/// so `[blue] [furniture]` can never combine evidence from different images.
+enum VisualSemanticCandidateIntersection {
+    static func ranked(_ candidateSets: [[String]]) -> [String] {
+        guard let first = candidateSets.first else { return [] }
+        let remaining = candidateSets.dropFirst().map(Set.init)
+        var seen = Set<String>()
+        return first.filter { candidate in
+            !candidate.isEmpty
+                && seen.insert(candidate).inserted
+                && remaining.allSatisfy { $0.contains(candidate) }
+        }
+    }
 }
 
 extension ReadingQuery {
@@ -34,7 +54,8 @@ extension ReadingQuery {
         search: String?,
         tagTerms: [String],
         visualTerms: [String],
-        semanticCandidateIDs: [String]
+        semanticCandidateIDs: [String],
+        visualSemanticCandidateIDs: [String]
     ) -> Self {
         let isSearching = search != nil || !tagTerms.isEmpty || !visualTerms.isEmpty
         return Self(
@@ -47,6 +68,7 @@ extension ReadingQuery {
             tagTerms: tagTerms,
             visualTerms: visualTerms,
             semanticCandidateIDs: semanticCandidateIDs,
+            visualSemanticCandidateIDs: visualSemanticCandidateIDs,
             limit: .max,
             offset: 0
         )
@@ -56,11 +78,22 @@ extension ReadingQuery {
 /// Delivers one captured search generation. The native client supplies its
 /// generation guard; the Rust query owns filtering and combined relevance.
 enum ReadingSnapshotDelivery {
+    struct Candidates: Equatable, Sendable {
+        var text: [String] = []
+        var visual: [String] = []
+
+        static let empty = Candidates()
+
+        var isEmpty: Bool {
+            text.isEmpty && visual.isEmpty
+        }
+    }
+
     @MainActor
     static func load<Rows>(
         textFirst: Bool = true,
-        fetch: @MainActor ([String]) async throws -> Rows,
-        semanticCandidates: (@MainActor () async throws -> [String])?,
+        fetch: @MainActor (Candidates) async throws -> Rows,
+        semanticCandidates: (@MainActor () async throws -> Candidates)?,
         isCurrent: @MainActor () -> Bool,
         publish: @MainActor (Rows, Bool) -> Void
     ) async throws -> Bool {
@@ -75,7 +108,7 @@ enum ReadingSnapshotDelivery {
             publish(rows, !candidates.isEmpty)
             return true
         }
-        let rows = try await fetch([])
+        let rows = try await fetch(.empty)
         guard isCurrent() else { return false }
         publish(rows, false)
         guard let semanticCandidates, isCurrent() else { return isCurrent() }
@@ -92,15 +125,15 @@ enum ReadingSnapshotDelivery {
 
     @MainActor
     private static func optionalCandidates(
-        _ load: @MainActor () async throws -> [String]
-    ) async -> [String]? {
+        _ load: @MainActor () async throws -> Candidates
+    ) async -> Candidates? {
         do {
             return try await load()
         } catch is CancellationError {
             return nil
         } catch {
             // Spotlight is optional. Its failure must not hide local results.
-            return []
+            return .empty
         }
     }
 }

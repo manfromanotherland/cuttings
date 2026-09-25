@@ -120,6 +120,7 @@ actor CoreBridge {
             visualTerms: query.visualTerms,
             predominantColor: nil,
             semanticCandidateIds: query.semanticCandidateIDs,
+            visualSemanticCandidateIds: query.visualSemanticCandidateIDs,
             limit: query.limit, offset: query.offset
         )
         return try database.listReadings(opts: opts).map(ReadingRow.init)
@@ -143,7 +144,8 @@ actor CoreBridge {
             tagTerms: [],
             visualTerms: [],
             predominantColor: nil,
-            semanticCandidateIds: []
+            semanticCandidateIds: [],
+            visualSemanticCandidateIds: []
         )
         return try database.sidebarCounts(scope: ffiScope)
     }

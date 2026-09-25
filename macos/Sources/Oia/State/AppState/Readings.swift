@@ -72,14 +72,15 @@ extension AppState {
     private func fetchReadings(
         _ core: any CoreBridging,
         context: ReadingSnapshotContext,
-        semanticCandidateIDs: [String]
+        candidates: ReadingSnapshotDelivery.Candidates
     ) async throws -> [ReadingRow] {
         let query = ReadingQuery.boardSnapshot(
             scope: context.scope,
             search: context.search.text,
             tagTerms: context.search.criteria.tagTerms,
             visualTerms: context.search.criteria.visualTerms,
-            semanticCandidateIDs: semanticCandidateIDs
+            semanticCandidateIDs: candidates.text,
+            visualSemanticCandidateIDs: candidates.visual
         )
         return try await core.listReadings(query)
     }
@@ -93,22 +94,40 @@ extension AppState {
         )
     }
 
-    private func loadSemanticCandidateIDs(for search: String?) async throws -> [String] {
-        guard let search, let visualSearchCoordinator else { return [] }
-        return try await visualSearchCoordinator.candidates(
-            for: search,
-            limit: semanticCandidateLimit
+    private func loadSearchCandidateIDs(
+        for search: BoardSearchInput
+    ) async throws -> ReadingSnapshotDelivery.Candidates {
+        guard let visualSearchCoordinator else { return .empty }
+        let text: [String] = if let query = search.text {
+            try await visualSearchCoordinator.candidates(
+                for: query,
+                limit: semanticCandidateLimit
+            )
+        } else {
+            []
+        }
+
+        var visualSets: [[String]] = []
+        for term in search.criteria.visualTerms {
+            try await visualSets.append(visualSearchCoordinator.candidates(
+                for: term,
+                limit: semanticCandidateLimit
+            ))
+        }
+        return ReadingSnapshotDelivery.Candidates(
+            text: text,
+            visual: VisualSemanticCandidateIntersection.ranked(visualSets)
         )
     }
 
     private func makeSemanticCandidateLoader(
         for context: ReadingSnapshotContext,
         includeSemanticSearch: Bool
-    ) -> (@MainActor () async throws -> [String])? {
+    ) -> (@MainActor () async throws -> ReadingSnapshotDelivery.Candidates)? {
         guard includeSemanticSearch,
-              context.search.text != nil,
+              context.search.text != nil || context.search.criteria.hasVisualTerms,
               visualSearchCoordinator != nil else { return nil }
-        return { try await self.loadSemanticCandidateIDs(for: context.search.text) }
+        return { try await self.loadSearchCandidateIDs(for: context.search) }
     }
 
     private func isCurrent(_ context: ReadingSnapshotContext) -> Bool {
@@ -143,7 +162,7 @@ extension AppState {
             let completed = try await ReadingSnapshotDelivery.load(
                 textFirst: preferImmediateTextResults,
                 fetch: { candidates in
-                    try await self.fetchReadings(core, context: context, semanticCandidateIDs: candidates)
+                    try await self.fetchReadings(core, context: context, candidates: candidates)
                 },
                 semanticCandidates: semanticCandidates,
                 isCurrent: { self.isCurrent(context) },

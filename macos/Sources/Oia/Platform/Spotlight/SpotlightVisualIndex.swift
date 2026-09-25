@@ -4,6 +4,39 @@ import CoreSpotlight
 import Foundation
 import UniformTypeIdentifiers
 
+enum SpotlightVisualMetadata {
+    /// The private Spotlight domain exists only to query the pixels. Apple
+    /// recommends a title and display name for every searchable item, so use a
+    /// neutral value rather than reading metadata that could incorrectly
+    /// satisfy an "In this image" token.
+    static func attributes(thumbnailURL: URL) -> CSSearchableItemAttributeSet {
+        let attributes = CSSearchableItemAttributeSet(contentType: .png)
+        attributes.title = "Saved image"
+        attributes.displayName = "Saved image"
+        attributes.contentURL = thumbnailURL
+        attributes.thumbnailURL = thumbnailURL
+        attributes.domainIdentifier = SpotlightVisualIndex.domainIdentifier
+        return attributes
+    }
+}
+
+enum SpotlightVisualQueryContext {
+    static func make(limit: Int) -> CSUserQueryContext {
+        let context = CSUserQueryContext()
+        context.enableRankedResults = true
+        context.disableSemanticSearch = false
+        context.maxResultCount = limit
+        context.maxRankedResultCount = limit
+        context.maxSuggestionCount = 0
+        context.fetchAttributes = ["domainIdentifier"]
+        context.filterQueries = [
+            "domainIdentifier=\"\(SpotlightVisualIndex.domainIdentifier)\"",
+            "contentTypeTree=\"\(UTType.image.identifier)\""
+        ]
+        return context
+    }
+}
+
 /// A private, rebuildable semantic-media mirror for Óia images.
 ///
 /// Source library URLs are opened only while a derived, oriented sRGB
@@ -220,14 +253,7 @@ private extension SpotlightVisualIndex {
     }
 
     func makeQueryContext(limit: Int) -> CSUserQueryContext {
-        let context = CSUserQueryContext()
-        context.enableRankedResults = true
-        context.maxResultCount = limit
-        context.maxRankedResultCount = limit
-        context.maxSuggestionCount = 0
-        context.fetchAttributes = ["domainIdentifier"]
-        context.filterQueries = ["domainIdentifier=\"\(Self.domainIdentifier)\""]
-        return context
+        SpotlightVisualQueryContext.make(limit: limit)
     }
 
     func collectItems(from userQuery: CSUserQuery) async throws -> [CSUserQuery.Item] {
@@ -263,11 +289,7 @@ private extension SpotlightVisualIndex {
             upsert.thumbnailFilename,
             isDirectory: false
         )
-        let attributes = CSSearchableItemAttributeSet(contentType: .png)
-        attributes.title = upsert.asset.displayTitle ?? "Saved item"
-        attributes.contentURL = thumbnailURL
-        attributes.thumbnailURL = thumbnailURL
-        attributes.domainIdentifier = Self.domainIdentifier
+        let attributes = SpotlightVisualMetadata.attributes(thumbnailURL: thumbnailURL)
 
         let item = CSSearchableItem(
             uniqueIdentifier: Self.itemIdentifier(upsert.asset.readingID),
