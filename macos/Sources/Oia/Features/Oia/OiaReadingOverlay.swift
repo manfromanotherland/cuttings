@@ -187,16 +187,22 @@ struct OiaReadingOverlay: View {
     }
 
     private func searchFromInspector(_ query: String) {
-        let token = BoardSearchToken(kind: .visual, value: query)
-        guard !token.value.isEmpty else { return }
-        let nextTokens = [token]
-        let searchChanged = appState.searchQuery != ""
+        let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        // Palette matching is a dedicated core query, not a visual-label term.
+        // Keep swatches on that path; labels still become scoped search pills.
+        let lowercasedValue = value.lowercased()
+        let isColorQuery = lowercasedValue.hasPrefix("colour:#")
+            || lowercasedValue.hasPrefix("color:#")
+        let nextQuery = isColorQuery ? value : ""
+        let nextTokens = isColorQuery ? [] : [BoardSearchToken(kind: .visual, value: value)]
+        let searchChanged = appState.searchQuery != nextQuery
             || BoardSearchCriteria(tokens: appState.searchTokens)
             != BoardSearchCriteria(tokens: nextTokens)
 
         onClose()
         appState.activeScope = .all
-        appState.searchQuery = ""
+        appState.searchQuery = nextQuery
         appState.searchTokens = nextTokens
         if !searchChanged {
             appState.searchDidChange()
