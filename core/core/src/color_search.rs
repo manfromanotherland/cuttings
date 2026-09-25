@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use rusqlite::Connection;
+use std::collections::HashSet;
 
 use crate::WeightedColor;
 
@@ -74,6 +75,32 @@ pub(crate) fn matching_ids(conn: &Connection, color: &WeightedColor) -> Result<V
     }
     matches.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
     Ok(matches.into_iter().map(|(id, _)| id).collect())
+}
+
+/// Each selected swatch must match the same reading. Preserve the first
+/// palette's distance ordering while intersecting subsequent swatches.
+pub(crate) fn matching_ids_for_terms(
+    conn: &Connection,
+    terms: &[String],
+) -> Result<Option<Vec<String>>> {
+    let mut matches: Option<Vec<String>> = None;
+    for term in terms {
+        let Some(color) = parse(&format!("colour:{term}")) else {
+            return Ok(Some(Vec::new()));
+        };
+        let ids = matching_ids(conn, &color)?;
+        match &mut matches {
+            Some(existing) => {
+                let ids: HashSet<_> = ids.into_iter().collect();
+                existing.retain(|id| ids.contains(id));
+            }
+            None => matches = Some(ids),
+        }
+        if matches.as_ref().is_some_and(Vec::is_empty) {
+            break;
+        }
+    }
+    Ok(matches)
 }
 
 pub(crate) const MIN_COVERAGE: f64 = 0.03;
@@ -187,5 +214,50 @@ mod tests {
         ] {
             assert!(parse(invalid).is_none());
         }
+    }
+
+    #[test]
+    fn color_tokens_filter_text_results_and_intersect() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let conn = crate::open_index(&temp.path().join("index.db")).unwrap();
+        for (id, color) in [("green", "#42C878"), ("blue", "#1234DB")] {
+            conn.execute(
+                "INSERT INTO readings (id,title,url,canonical_url,saved_at,source_hash,kind,visual_asset_hash,visual_analyzer_version) VALUES (?1,'Chair',?1,?1,'2026-09-25','','image',?1,'test')",
+                [id],
+            ).unwrap();
+            let palette =
+                serde_json::to_string(&vec![parse(&format!("colour:{color}")).unwrap()]).unwrap();
+            conn.execute(
+                "INSERT INTO visual_analysis (content_hash,analyzer_version,supported,labels_json,palette_json,visual_terms,completed_at) VALUES (?1,'test',1,'[]',?2,'','2026-09-25')",
+                rusqlite::params![id, palette],
+            ).unwrap();
+        }
+        let options = ListOptions {
+            query: Some("chair".into()),
+            color_terms: vec!["#42C878".into()],
+            sort: SortField::Relevance,
+            ..Default::default()
+        };
+        let rows = crate::list_readings(&conn, &options).unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+            ["green"]
+        );
+
+        let color_only = ListOptions {
+            color_terms: vec!["#42C878".into()],
+            ..Default::default()
+        };
+        let rows = crate::list_readings(&conn, &color_only).unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+            ["green"]
+        );
+
+        let no_match = ListOptions {
+            color_terms: vec!["#42C878".into(), "#1234DB".into()],
+            ..Default::default()
+        };
+        assert!(crate::list_readings(&conn, &no_match).unwrap().is_empty());
     }
 }

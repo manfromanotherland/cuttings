@@ -18,6 +18,8 @@ struct ReadingQuery {
     /// Derived labels/colours that must all belong to the same reading's
     /// current visual analysis.
     var visualTerms: [String]
+    /// Exact palette colors, combined with the other terms by AND.
+    var colorTerms: [String]
     /// Core Spotlight's best-first semantic matches for `search`. The Rust
     /// core merges these candidates with its own text/label/colour results so
     /// filters and relevance ordering stay one coherent query.
@@ -54,10 +56,11 @@ extension ReadingQuery {
         search: String?,
         tagTerms: [String],
         visualTerms: [String],
+        colorTerms: [String] = [],
         semanticCandidateIDs: [String],
         visualSemanticCandidateIDs: [String]
     ) -> Self {
-        let isSearching = search != nil || !tagTerms.isEmpty || !visualTerms.isEmpty
+        let isSearching = search != nil || !tagTerms.isEmpty || !visualTerms.isEmpty || !colorTerms.isEmpty
         return Self(
             kind: nil,
             scope: scope,
@@ -67,6 +70,7 @@ extension ReadingQuery {
             search: search,
             tagTerms: tagTerms,
             visualTerms: visualTerms,
+            colorTerms: colorTerms,
             semanticCandidateIDs: semanticCandidateIDs,
             visualSemanticCandidateIDs: visualSemanticCandidateIDs,
             limit: .max,

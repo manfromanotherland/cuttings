@@ -188,6 +188,24 @@ final class ReadingQueryTests: XCTestCase {
         }
     }
 
+    func testColorTokenUsesSearchOrderingWithoutVisibleQueryText() {
+        let query = ReadingQuery.boardSnapshot(
+            scope: .all,
+            search: nil,
+            tagTerms: [],
+            visualTerms: [],
+            colorTerms: ["#42C878"],
+            semanticCandidateIDs: [],
+            visualSemanticCandidateIDs: []
+        )
+
+        XCTAssertNil(query.search)
+        XCTAssertEqual(query.colorTerms, ["#42C878"])
+        guard case .relevance = query.sort else {
+            return XCTFail("color tokens should use search ordering")
+        }
+    }
+
     func testVisualSemanticCandidatesRequireEveryTermOnTheSameImage() {
         let candidates = VisualSemanticCandidateIntersection.ranked([
             ["blue-only", "same-image", "same-image"],

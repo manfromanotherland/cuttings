@@ -258,6 +258,8 @@ pub struct FfiListOptions {
     pub tag_terms: Vec<String>,
     /// Completed terms that must all occur in current supported visual analysis.
     pub visual_terms: Vec<String>,
+    /// Palette colors selected as search tokens, encoded as #RRGGBB.
+    pub color_terms: Vec<String>,
     pub predominant_color: Option<FfiPredominantColor>,
     /// Core Spotlight identifiers, ordered best-first for the same query.
     pub semantic_candidate_ids: Vec<String>,
@@ -533,6 +535,7 @@ impl From<FfiListOptions> for ListOptions {
             query: o.query,
             tag_terms: o.tag_terms,
             visual_terms: o.visual_terms,
+            color_terms: o.color_terms,
             predominant_color: o.predominant_color.map(Into::into),
             semantic_candidate_ids: o.semantic_candidate_ids,
             visual_semantic_candidate_ids: o.visual_semantic_candidate_ids,
@@ -1206,6 +1209,7 @@ mod tests {
             query: None,
             tag_terms: Vec::new(),
             visual_terms: Vec::new(),
+            color_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
             visual_semantic_candidate_ids: Vec::new(),

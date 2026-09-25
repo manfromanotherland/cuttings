@@ -17,6 +17,23 @@ final class BoardSearchTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(BoardSearchToken.self, from: encoded), tag)
     }
 
+    func testColorTokenKeepsOnlyTheHexAndComposesWithOtherTerms() {
+        let color = BoardSearchToken(kind: .color, value: "colour:#42c878")
+        let criteria = BoardSearchCriteria(tokens: [
+            color,
+            BoardSearchToken(kind: .visual, value: "furniture"),
+            BoardSearchToken(kind: .tag, value: "interiors")
+        ])
+
+        XCTAssertEqual(color.displayValue, "#42C878")
+        XCTAssertEqual(criteria.colorTerms, ["#42C878"])
+        XCTAssertEqual(criteria.visualTerms, ["furniture"])
+        XCTAssertEqual(criteria.tagTerms, ["interiors"])
+        XCTAssertTrue(BoardSearchCriteria(tokens: [
+            BoardSearchToken(kind: .color, value: "#42c878"), color
+        ]).tokens.count == 1)
+    }
+
     func testCriteriaDropsEmptyAndDuplicateTermsButKeepsKindsDistinct() {
         let criteria = BoardSearchCriteria(tokens: [
             BoardSearchToken(kind: .visual, value: " furniture "),

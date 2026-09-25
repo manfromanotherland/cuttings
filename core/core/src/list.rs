@@ -80,6 +80,8 @@ pub struct ListOptions {
     /// Completed terms that must all occur in the reading's current supported
     /// visual analysis. They never match title, body, site, or tags.
     pub visual_terms: Vec<String>,
+    /// Palette colors selected as search tokens, combined by AND.
+    pub color_terms: Vec<String>,
     /// Restrict to the stable colour family derived by the Rust core.
     pub predominant_color: Option<PredominantColor>,
     /// Ordered Core Spotlight candidates for the same query.
@@ -106,6 +108,7 @@ impl Default for ListOptions {
             query: None,
             tag_terms: Vec::new(),
             visual_terms: Vec::new(),
+            color_terms: Vec::new(),
             predominant_color: None,
             semantic_candidate_ids: Vec::new(),
             visual_semantic_candidate_ids: Vec::new(),
@@ -665,24 +668,39 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
     let Some(visual_query) = crate::search::scoped_visual_query(&opts.visual_terms) else {
         return Ok(Vec::new());
     };
+    let color_ids = crate::color_search::matching_ids_for_terms(conn, &opts.color_terms)?;
+    if color_ids.as_ref().is_some_and(Vec::is_empty) {
+        return Ok(Vec::new());
+    }
+    let color_ids_json = color_ids
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?
+        .unwrap_or_default();
     if let Some(color) = opts.query.as_deref().and_then(crate::color_search::parse) {
         let mut color_options = opts.clone();
         color_options.semantic_candidate_ids = crate::color_search::matching_ids(conn, &color)?;
-        return list_readings_search(conn, &color_options, None);
+        return list_readings_search(conn, &color_options, None, &color_ids_json);
     }
     // A present query means "search" — even whitespace/punctuation-only input,
     // which matches nothing rather than falling back to the full listing.
     if let Some(query) = opts.query.as_deref() {
         return match crate::search::match_query(query, |phrase| {
-            phrase_exists_in_list_scope(conn, opts, phrase)
+            phrase_exists_in_list_scope(conn, opts, phrase, &color_ids_json)
         })? {
             Some(match_query) => {
                 let match_query = crate::search::with_visual_fallback(query, &match_query);
-                list_readings_search(conn, opts, Some(&match_query))
+                list_readings_search(conn, opts, Some(&match_query), &color_ids_json)
             }
             None if opts.semantic_candidate_ids.is_empty() => Ok(Vec::new()),
-            None => list_readings_search(conn, opts, None),
+            None => list_readings_search(conn, opts, None, &color_ids_json),
         };
+    }
+
+    if let Some(color_ids) = color_ids {
+        let mut color_options = opts.clone();
+        color_options.semantic_candidate_ids = color_ids;
+        return list_readings_search(conn, &color_options, None, &color_ids_json);
     }
 
     let view_clause = view_clause(opts.view);
@@ -744,6 +762,7 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
                     WHERE reading_tag.value = requested_tag.value
                 )
            )
+           AND (?12 = '' OR readings.id IN (SELECT value FROM json_each(?12)))
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -773,7 +792,8 @@ pub fn list_readings(conn: &Connection, opts: &ListOptions) -> Result<Vec<Readin
             color_val,
             visual_query,
             tag_terms_json,
-            serde_json::to_string(&opts.visual_semantic_candidate_ids)?
+            serde_json::to_string(&opts.visual_semantic_candidate_ids)?,
+            color_ids_json,
         ],
         parse_row,
     )?;
@@ -788,6 +808,7 @@ fn phrase_exists_in_list_scope(
     conn: &Connection,
     opts: &ListOptions,
     phrase: &str,
+    color_ids_json: &str,
 ) -> Result<bool> {
     let view_clause = view_clause(opts.view);
     let sql = format!(
@@ -827,6 +848,7 @@ fn phrase_exists_in_list_scope(
                         WHERE reading_tag.value = requested_tag.value
                     )
                )
+               AND (?11 = '' OR r.id IN (SELECT value FROM json_each(?11)))
          )"
     );
     conn.query_row(
@@ -843,7 +865,8 @@ fn phrase_exists_in_list_scope(
                 .unwrap_or(""),
             crate::search::scoped_visual_query(&opts.visual_terms).unwrap_or_default(),
             serde_json::to_string(&opts.tag_terms)?,
-            serde_json::to_string(&opts.visual_semantic_candidate_ids)?
+            serde_json::to_string(&opts.visual_semantic_candidate_ids)?,
+            color_ids_json,
         ],
         |row| row.get(0),
     )
@@ -888,6 +911,7 @@ fn list_readings_search(
     conn: &Connection,
     opts: &ListOptions,
     match_query: Option<&str>,
+    color_ids_json: &str,
 ) -> Result<Vec<ReadingRow>> {
     let view_clause = view_clause(opts.view);
     let dir = if opts.ascending { "ASC" } else { "DESC" };
@@ -967,6 +991,7 @@ fn list_readings_search(
                     WHERE reading_tag.value = requested_tag.value
                 )
            )
+           AND (?14 = '' OR r.id IN (SELECT value FROM json_each(?14)))
          ORDER BY {order}
          LIMIT ?1 OFFSET ?2"
     );
@@ -997,6 +1022,7 @@ fn list_readings_search(
             crate::search::scoped_visual_query(&opts.visual_terms).unwrap_or_default(),
             serde_json::to_string(&opts.tag_terms)?,
             serde_json::to_string(&opts.visual_semantic_candidate_ids)?,
+            color_ids_json,
         ],
         parse_row,
     )?;

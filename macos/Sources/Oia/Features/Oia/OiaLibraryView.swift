@@ -152,7 +152,17 @@ extension OiaLibraryView {
                 placement: .toolbar,
                 prompt: "Search Óia"
             ) { token in
-                Text(token.displayValue)
+                if token.kind == .color,
+                   let palette = CardThemePalette(themeColor: token.value)
+                {
+                    Text(token.displayValue)
+                        .foregroundStyle(palette.foreground.color)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(palette.background.color, in: Capsule())
+                } else {
+                    Text(token.displayValue)
+                }
             }
             .searchSuggestions {
                 nativeSearchSuggestions

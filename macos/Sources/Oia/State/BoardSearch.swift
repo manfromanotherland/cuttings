@@ -10,6 +10,7 @@ struct BoardSearchToken: Identifiable, Hashable, Codable, Sendable {
     enum Kind: String, Codable, Sendable {
         case tag
         case visual
+        case color
     }
 
     /// Stable SwiftUI identity derived from search meaning rather than creation
@@ -34,12 +35,21 @@ struct BoardSearchToken: Identifiable, Hashable, Codable, Sendable {
     /// `value` for the core predicate even when an externally-authored tag has
     /// surrounding whitespace or decomposed Unicode.
     var displayValue: String {
-        BoardSearchNormalization.value(value)
+        kind == .color ? value : BoardSearchNormalization.value(value)
     }
 
     init(kind: Kind, value: String) {
         self.kind = kind
-        self.value = kind == .tag ? value : BoardSearchNormalization.value(value)
+        switch kind {
+        case .tag:
+            self.value = value
+        case .visual:
+            self.value = BoardSearchNormalization.value(value)
+        case .color:
+            let hex = BoardSearchNormalization.value(value).split(separator: ":").last.map(String.init) ?? ""
+            self.value = hex.count == 7 && hex.first == "#"
+                && UInt64(hex.dropFirst(), radix: 16) != nil ? hex.uppercased() : ""
+        }
     }
 
     private var identityValue: String {
@@ -101,6 +111,10 @@ struct BoardSearchCriteria: Hashable, Sendable {
 
     var visualTerms: [String] {
         tokens.compactMap { $0.kind == .visual ? $0.value : nil }
+    }
+
+    var colorTerms: [String] {
+        tokens.compactMap { $0.kind == .color ? $0.value : nil }
     }
 
     var isActive: Bool {
