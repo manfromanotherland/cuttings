@@ -4,8 +4,8 @@ import AppKit
 import SwiftUI
 
 /// Supplies a compact resting width to SwiftUI's native
-/// `NSSearchToolbarItem`. AppKit still owns the field, focus, animation,
-/// cancel behavior, and expanded width.
+/// `NSSearchToolbarItem`. AppKit still owns the field, focus, cancel behavior,
+/// and expanded width.
 struct CompactSearchToolbarConfiguration: NSViewRepresentable {
     let isSearchExpanded: Bool
 
@@ -88,7 +88,7 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
             if let compactWidth = field.constraints.first(where: {
                 $0.identifier == Self.compactConstraintIdentifier
             }) {
-                updatePriority(of: compactWidth)
+                updatePriority(of: compactWidth, in: field)
                 return
             }
 
@@ -99,14 +99,36 @@ struct CompactSearchToolbarConfiguration: NSViewRepresentable {
             // search is collapsed. While focused or retaining search input,
             // dropping this below AppKit's width lets the trailing item expand
             // leftward without clipping.
-            updatePriority(of: compactWidth)
+            compactWidth.priority = desiredPriority
             compactWidth.isActive = true
         }
 
-        private func updatePriority(of compactWidth: NSLayoutConstraint) {
-            compactWidth.priority = isSearchExpanded
+        private var desiredPriority: NSLayoutConstraint.Priority {
+            isSearchExpanded
                 ? .defaultLow
                 : .init(rawValue: NSLayoutConstraint.Priority.defaultHigh.rawValue + 1)
+        }
+
+        private func updatePriority(
+            of compactWidth: NSLayoutConstraint,
+            in field: NSSearchField
+        ) {
+            let priority = desiredPriority
+            guard compactWidth.priority != priority else { return }
+
+            // SwiftUI updates this representable inside the search field's own
+            // focus transaction. Letting the priority change inherit that
+            // transaction makes two width animations fight: the field first
+            // draws beyond its toolbar allocation, then the toolbar catches
+            // up. Resolve the public constraint change synchronously so focus
+            // is immediate and no intermediate frame can be clipped.
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                context.allowsImplicitAnimation = false
+                compactWidth.priority = priority
+                field.superview?.layoutSubtreeIfNeeded()
+                window?.contentView?.layoutSubtreeIfNeeded()
+            }
         }
     }
 }
